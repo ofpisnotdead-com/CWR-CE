@@ -1,9 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
 
-using namespace Poseidon;
 #include <climits>
 #include <Poseidon/Foundation/Containers/Array.hpp>
 #include <Poseidon/Network/WireBounds.hpp>
+
+using namespace Poseidon;
 
 // Decode-check primitives for the table-driven dispatcher (RC2/RC3 closure).
 // These are the seam migrated message handlers route wire-read counts/lengths/

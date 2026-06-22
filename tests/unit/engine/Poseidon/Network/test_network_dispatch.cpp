@@ -1,8 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
-
-using namespace Poseidon;
 #include <Poseidon/Network/NetworkServerDispatch.hpp>
 #include <Poseidon/Network/NetworkMsgFormat.hpp>
+
+using namespace Poseidon;
 
 // The table-driven dispatcher's foundation (strangler-fig migration of the
 // ~1935-line NetworkServer::OnMessage switch). These guard the seam itself:

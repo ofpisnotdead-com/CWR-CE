@@ -5,6 +5,8 @@
 #ifndef __ENGINE_GL33_HPP
 #define __ENGINE_GL33_HPP
 
+#include <Poseidon/Core/Types.hpp>
+
 using namespace Poseidon;
 class TextureGL33;
 class TextBankGL33;
@@ -18,7 +20,6 @@ class TextBankGL33;
 #include <vector>
 #include <Poseidon/Foundation/Containers/Array.hpp>
 #include <Poseidon/Foundation/Containers/StaticArray.hpp>
-#include <Poseidon/Core/Types.hpp>
 #include <Poseidon/Graphics/Core/Engine.hpp>
 #include <Poseidon/Graphics/Core/TLVertex.hpp>
 #include <Poseidon/Graphics/Rendering/RenderPassDescriptor.hpp>

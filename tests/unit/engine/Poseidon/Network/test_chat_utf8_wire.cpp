@@ -1,9 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 
-using namespace Poseidon;
-
 #include <Poseidon/Network/NetworkMessages.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
+
+using namespace Poseidon;
 
 // MP chat carries text as an NDTString field (ChatMessage::text),
 // serialized with NCTNone — raw bytes + NUL on write, bytes-until-NUL on read.

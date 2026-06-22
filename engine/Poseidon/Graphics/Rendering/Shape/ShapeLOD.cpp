@@ -26,7 +26,7 @@ namespace Poseidon
 {
 Object* NewObject(Poseidon::Foundation::RString typeName, Poseidon::Foundation::RString shapeName);
 }
-Object* NewProxyObject(Poseidon::Foundation::RString shapeName);
+Poseidon::Object* NewProxyObject(Poseidon::Foundation::RString shapeName);
 
 namespace Poseidon
 {

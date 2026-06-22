@@ -1,12 +1,13 @@
 #include <catch2/catch_test_macros.hpp>
 
-using namespace Poseidon;
 #include <climits>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <Poseidon/Network/RateLimit.hpp>
 #include <Poseidon/Network/WireBounds.hpp>
+
+using namespace Poseidon;
 
 // Transport-layer hardening for the dispatch redesign (network-security-gaps.md
 // N-SEC-10/12/13/14/16). The transport handlers can't be unit-instantiated without
