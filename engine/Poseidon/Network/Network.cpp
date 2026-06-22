@@ -586,54 +586,7 @@ RString ClientInfoObject::GetDebugName() const
 
 // static (nonregistered) messages
 
-// network message indices for PlayerMessage class
-class IndicesPlayer : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int player;
-    int name;
-    int server;
-
-    IndicesPlayer();
-    NetworkMessageIndices* Clone() const override { return new IndicesPlayer; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesPlayer::IndicesPlayer()
-{
-    player = -1;
-    name = -1;
-    server = -1;
-}
-
-void IndicesPlayer::Scan(NetworkMessageFormatBase* format){SCAN(player) SCAN(name) SCAN(server)}
-
-// Create network message indices for PlayerMessage class
-NetworkMessageIndices* GetIndicesPlayer()
-{
-    return new IndicesPlayer();
-}
-
-NetworkMessageFormat& PlayerMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("player", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Unique ID of client (player)"));
-    format.Add("name", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Player's name"));
-    format.Add("server", NDTBool, NCTNone, DEFVALUE(bool, false),
-               DOC_MSG("Bot client (running in the same process as server)"));
-    return format;
-}
-
-TMError PlayerMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesPlayer*>(ctx.GetIndices()))
-    const IndicesPlayer* indices = static_cast<const IndicesPlayer*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->player, player))
-    TMCHECK(ctx.IdxTransfer(indices->name, name))
-    TMCHECK(ctx.IdxTransfer(indices->server, server))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(Player, PLAYER_MSG)
 
 // network message indices for NetworkMessageQueue class
 class IndicesMessages : public NetworkMessageIndices
