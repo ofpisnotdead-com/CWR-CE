@@ -273,7 +273,10 @@ void NetworkServer::OnCreatePlayer(int player, bool botClient, const char* name)
         }
     }
 
-    PlayerMessage msg(player, pInfo->name, server);
+    PlayerMessage msg;
+    msg._player = player;
+    msg._name = pInfo->name;
+    msg._server = server;
     SendMsg(player, &msg, NMFGuaranteed);
 
     // JIP: send current server state so client knows to show role selection
