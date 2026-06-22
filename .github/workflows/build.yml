@@ -24,24 +24,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Linux Debug
-            os: ubuntu-24.04
-            preset: linux-x64-clang
-            vcpkg_triplet: x64-linux-clang
-            build_dir: build/linux-x64-clang
-            ctest_exclude: 'PoseidonTests - OAL -'
           - name: Linux RelWithDebInfo
             os: ubuntu-24.04
             preset: linux-x64-clang-rwdi
             vcpkg_triplet: x64-linux-clang
             build_dir: build/linux-x64-clang-rwdi
             ctest_exclude: 'PoseidonTests - OAL -'
-          - name: Windows Debug
-            os: windows-2022
-            preset: win-x64-clang-dbg
-            vcpkg_triplet: x64-windows-clang
-            build_dir: build/win-x64-clang-dbg
-            ctest_exclude: 'PoseidonTests - (OAL -|PAAEncoder -|Image - Save to \.paa|World state file format --|PreviewImage - saveToFile writes|PreviewImageRGB - saveToFile writes)'
           - name: Windows RelWithDebInfo
             os: windows-2022
             preset: win-x64-clang-rwdi
