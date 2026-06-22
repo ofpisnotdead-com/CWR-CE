@@ -2356,7 +2356,8 @@ void StudioApp::renderPreviewPanel(float, float, float w, float h)
                     float scale = std::min(avail.x / (float)previewTexW, avail.y / (float)previewTexH);
                     if (scale > 1.0f)
                         scale = 1.0f;
-                    ImGui::Image(ImTextureRef((ImTextureID)previewTexture), ImVec2(previewTexW * scale, previewTexH * scale));
+                    ImGui::Image(ImTextureRef((ImTextureID)previewTexture),
+                                 ImVec2(previewTexW * scale, previewTexH * scale));
                 }
                 else
                 {
@@ -2419,7 +2420,8 @@ void StudioApp::renderPreviewPanel(float, float, float w, float h)
                     float scale = std::min(avail.x / (float)previewTexW, avail.y / (float)previewTexH);
                     if (scale > 1.0f)
                         scale = 1.0f;
-                    ImGui::Image(ImTextureRef((ImTextureID)previewTexture), ImVec2(previewTexW * scale, previewTexH * scale));
+                    ImGui::Image(ImTextureRef((ImTextureID)previewTexture),
+                                 ImVec2(previewTexW * scale, previewTexH * scale));
                 }
                 else
                 {

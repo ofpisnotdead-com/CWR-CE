@@ -94,9 +94,8 @@ TEST_CASE("Legacy RESOURCE.BIN font names still resolve (back-compat)", "[font][
         const char* name;
         const char* ttf;
     } cases[] = {
-        {"steelfishb48", "cwr_title.ttf"},    {"tahomab12", "cwr_body.ttf"},
-        {"couriernewb64", "cwr_mono.ttf"},    {"garamond64", "cwr_serif.ttf"},
-        {"audreyshandi48", "cwr_hand.ttf"},
+        {"steelfishb48", "cwr_title.ttf"}, {"tahomab12", "cwr_body.ttf"},      {"couriernewb64", "cwr_mono.ttf"},
+        {"garamond64", "cwr_serif.ttf"},   {"audreyshandi48", "cwr_hand.ttf"},
     };
     for (const auto& c : cases)
     {

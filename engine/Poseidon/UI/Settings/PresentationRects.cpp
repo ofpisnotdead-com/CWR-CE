@@ -105,8 +105,8 @@ bool ParseRectKind(const char* name, RectKind& out)
         return false;
 
     const RectKind all[] = {
-        RectKind::PhysicalViewport, RectKind::Logical2DViewport, RectKind::Safe4x3,      RectKind::Safe16x9,
-        RectKind::Safe21x9,         RectKind::HudSafe16x9,      RectKind::HudSafe21x9,  RectKind::TitleSafe16x9,
+        RectKind::PhysicalViewport, RectKind::Logical2DViewport, RectKind::Safe4x3,     RectKind::Safe16x9,
+        RectKind::Safe21x9,         RectKind::HudSafe16x9,       RectKind::HudSafe21x9, RectKind::TitleSafe16x9,
     };
     for (RectKind kind : all)
     {

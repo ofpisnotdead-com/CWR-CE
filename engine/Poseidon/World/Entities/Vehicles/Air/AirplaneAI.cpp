@@ -552,7 +552,9 @@ void AirplaneAuto::DetectControlMode() const
                                                UALookLeft,     UALookCenter, UALookRight,
                                                UALookLeftUp,   UALookUp,     UALookRightUp};
     static const UserAction thrustActions[] = {
-        UAMoveForward, UAMoveBack, UAMoveFastForward,
+        UAMoveForward,
+        UAMoveBack,
+        UAMoveFastForward,
         // UAMoveUp,UAMoveDown,
     };
 
@@ -678,8 +680,7 @@ void AirplaneAuto::KeyboardPilot(AIUnit* unit, float deltaT)
 
         Vector3Val relSpeed = ModelSpeed();
 
-        float forward = input.GetAction(ctx, UAMoveForward) * 0.5f +
-                        input.GetAction(ctx, UAMoveFastForward) -
+        float forward = input.GetAction(ctx, UAMoveForward) * 0.5f + input.GetAction(ctx, UAMoveFastForward) -
                         input.GetAction(ctx, UAMoveBack) * 0.5f;
 
         if (forward < 0.1)

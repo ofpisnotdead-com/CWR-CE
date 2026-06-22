@@ -393,8 +393,7 @@ TEST_CASE("AspectRatio ResolveLive: manual flat_quad drives world + FOV (no stre
     CHECK(s.uiBottomRightX == Catch::Approx(0.75f));
 }
 
-TEST_CASE("AspectRatio ResolveLive: clamp centers the 2D UI in the selected HUD band",
-          "[Settings][AspectRatio][Live]")
+TEST_CASE("AspectRatio ResolveLive: clamp centers the 2D UI in the selected HUD band", "[Settings][AspectRatio][Live]")
 {
     const int w = 3840, h = 1080; // 32:9
 

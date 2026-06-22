@@ -267,8 +267,9 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
                                   : "Use --help-full for advanced user options.");
         else
             app.footer(
-                serverRole ? "Use --help-full for advanced server options. Use --help --dev for developer and test options."
-                           : "Use --help-full for advanced user options. Use --help --dev for developer and test options.");
+                serverRole
+                    ? "Use --help-full for advanced server options. Use --help --dev for developer and test options."
+                    : "Use --help-full for advanced user options. Use --help --dev for developer and test options.");
 
         app.allow_windows_style_options();
 
@@ -392,9 +393,9 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
                    !serverRole);
 
         std::string rankingLogStr;
-        showOption(multiplayerGroup->add_option("--ranking", rankingLogStr,
-                                                "Legacy ranking upload endpoint (host:port)"),
-                   CliHelpVisibility::Full, serverRole);
+        showOption(
+            multiplayerGroup->add_option("--ranking", rankingLogStr, "Legacy ranking upload endpoint (host:port)"),
+            CliHelpVisibility::Full, serverRole);
 
         showOption(multiplayerGroup
                        ->add_option("--mp-auto-start", _mpAutoStart,
@@ -894,8 +895,9 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
         if (exitCode != 0)
         {
             const char* usageHint = BuildInfo::ReleaseBuild
-                ? "Use --help for basic usage or --help-full for advanced usage"
-                : "Use --help for basic usage, --help-full for advanced usage, or --help --dev for developer options";
+                                        ? "Use --help for basic usage or --help-full for advanced usage"
+                                        : "Use --help for basic usage, --help-full for advanced usage, or --help --dev "
+                                          "for developer options";
 #ifdef _WIN32
             std::string errorMsg = "\nCommand-line error: " + std::string(e.what()) + "\n\n" + usageHint + "\n\n";
             WriteCliText(STD_ERROR_HANDLE, stderr, errorMsg);

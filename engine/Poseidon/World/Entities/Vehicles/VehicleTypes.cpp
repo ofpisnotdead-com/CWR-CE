@@ -540,8 +540,8 @@ EntityAI* NewVehicle(EntityAIType* type, RString shapeName, bool fullCreate)
     type->VehicleAddRef();
     if (!type->GetShape() && VehicleSimulationRequiresModel(simName))
     {
-        LOG_ERROR(World, "Cannot create '{}': simulation '{}' requires a loadable model",
-                  (const char*)type->GetName(), (const char*)simName);
+        LOG_ERROR(World, "Cannot create '{}': simulation '{}' requires a loadable model", (const char*)type->GetName(),
+                  (const char*)simName);
         type->VehicleRelease();
         return nullptr;
     }

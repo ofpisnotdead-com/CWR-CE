@@ -533,8 +533,8 @@ void HelicopterAuto::KeyboardPilot(AIUnit* unit, float deltaT)
                 _pilotSpeedHelper = false;
                 _bankWanted = -0.5 * (input.GetAction(ctx, UATurnRight) - input.GetAction(ctx, UATurnLeft));
 
-                float forward = input.GetAction(ctx, UAMoveForward) +
-                                input.GetAction(ctx, UAMoveFastForward) * 2 - input.GetAction(ctx, UAMoveBack);
+                float forward = input.GetAction(ctx, UAMoveForward) + input.GetAction(ctx, UAMoveFastForward) * 2 -
+                                input.GetAction(ctx, UAMoveBack);
 
                 float dive = Direction().Y() - _rotorDive;
 
@@ -562,8 +562,7 @@ void HelicopterAuto::KeyboardPilot(AIUnit* unit, float deltaT)
                 }
                 _pilotSpeedHelper = true;
 
-                float forward = input.GetAction(ctx, UAMoveForward) * 0.5f +
-                                input.GetAction(ctx, UAMoveFastForward) -
+                float forward = input.GetAction(ctx, UAMoveForward) * 0.5f + input.GetAction(ctx, UAMoveFastForward) -
                                 input.GetAction(ctx, UAMoveBack) * 0.5f;
 
                 _pilotSpeed[0] = (input.GetAction(ctx, UATurnRight) - input.GetAction(ctx, UATurnLeft)) * 3;

@@ -110,7 +110,8 @@ TEST_CASE("Release builds reject --dev before help or option registration", "[de
 
     const std::string parseBody = ExtractFunctionBody(src, "void AppConfig::ParseCommandLine");
     REQUIRE_FALSE(parseBody.empty());
-    REQUIRE(parseBody.find("BuildInfo::ReleaseBuild && ContainsCliArg(normalizedArgs, \"--dev\")") != std::string::npos);
+    REQUIRE(parseBody.find("BuildInfo::ReleaseBuild && ContainsCliArg(normalizedArgs, \"--dev\")") !=
+            std::string::npos);
     REQUIRE(parseBody.find("\"--dev is not supported in release builds\"") != std::string::npos);
 
     const size_t releaseGuard = parseBody.find("BuildInfo::ReleaseBuild && ContainsCliArg(normalizedArgs, \"--dev\")");

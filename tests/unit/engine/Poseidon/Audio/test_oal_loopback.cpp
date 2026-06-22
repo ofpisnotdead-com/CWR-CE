@@ -23,8 +23,8 @@ namespace
 bool AudioDiagnosticsEnabled()
 {
     const char* value = std::getenv("POSEIDON_TEST_LOG");
-    return value && value[0] && std::strcmp(value, "0") != 0 && std::strcmp(value, "false") != 0
-        && std::strcmp(value, "off") != 0;
+    return value && value[0] && std::strcmp(value, "0") != 0 && std::strcmp(value, "false") != 0 &&
+           std::strcmp(value, "off") != 0;
 }
 } // namespace
 
@@ -623,8 +623,8 @@ TEST_CASE("Streaming ring absorbs a typical frame hitch without underrun", "[Aud
                 gap = 0;
         }
         if (diagnostics)
-            std::printf("  hitch=%4dms  underran=%d  maxSilenceGap=%5d samples (%.0f ms)\n", hitchMs,
-                        underran ? 1 : 0, maxGap, 1000.0 * maxGap / dev.sampleRate);
+            std::printf("  hitch=%4dms  underran=%d  maxSilenceGap=%5d samples (%.0f ms)\n", hitchMs, underran ? 1 : 0,
+                        maxGap, 1000.0 * maxGap / dev.sampleRate);
         alSourceStop(src);
         alSourcei(src, AL_BUFFER, 0);
         alDeleteSources(1, &src);

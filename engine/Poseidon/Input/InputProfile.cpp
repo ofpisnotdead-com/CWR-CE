@@ -17,7 +17,7 @@ bool IsLegacyGamepadCode(int packedCode)
     const int dev = packedCode & INPUT_DEVICE_MASK;
     return dev == INPUT_DEVICE_STICK || dev == INPUT_DEVICE_STICK_AXIS || dev == INPUT_DEVICE_STICK_POV;
 }
-}
+} // namespace
 
 void InputProfile::Bind(UserAction action, InputCode code)
 {

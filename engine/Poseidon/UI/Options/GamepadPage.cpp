@@ -37,9 +37,9 @@ ContextList ContextsForCategory(ControlsCategory cat)
     static constexpr InputContext pilot[] = {InputContext::HeliPilot, InputContext::PlanePilot};
     static constexpr InputContext gunner[] = {InputContext::TankGunner, InputContext::Gunner};
     static constexpr InputContext common[] = {
-        InputContext::Menu,       InputContext::Infantry,  InputContext::CarDriver, InputContext::TankDriver,
+        InputContext::Menu,       InputContext::Infantry,  InputContext::CarDriver,  InputContext::TankDriver,
         InputContext::TankGunner, InputContext::HeliPilot, InputContext::PlanePilot, InputContext::ShipDriver,
-        InputContext::Gunner,     InputContext::Spectator, InputContext::Map,       InputContext::Chat,
+        InputContext::Gunner,     InputContext::Spectator, InputContext::Map,        InputContext::Chat,
         InputContext::Editor,
     };
 
@@ -68,8 +68,7 @@ bool IsGamepadCode(int packedCode)
 bool IsFreelookDirection(UserAction action)
 {
     return action == UALookLeft || action == UALookRight || action == UALookUp || action == UALookDown ||
-           action == UALookLeftUp || action == UALookRightUp || action == UALookLeftDown ||
-           action == UALookRightDown;
+           action == UALookLeftUp || action == UALookRightUp || action == UALookLeftDown || action == UALookRightDown;
 }
 
 void ReplaceGamepadBindings(InputProfile& profile, UserAction action, const std::vector<InputBinding>& replacements)
@@ -87,14 +86,8 @@ void ReplaceGamepadBindings(InputProfile& profile, UserAction action, const std:
         profile.Bind(action, binding);
 }
 
-void BindAxisPair(InputProfile& profile,
-                  UserAction negativeY,
-                  UserAction positiveY,
-                  UserAction negativeX,
-                  UserAction positiveX,
-                  int xAxis,
-                  int yAxis,
-                  InputCode modifier = InputCode{})
+void BindAxisPair(InputProfile& profile, UserAction negativeY, UserAction positiveY, UserAction negativeX,
+                  UserAction positiveX, int xAxis, int yAxis, InputCode modifier = InputCode{})
 {
     ReplaceGamepadBindings(profile, negativeY,
                            {InputBinding(InputCode::GamepadAx(yAxis), modifier, ActivationMode::OnHold, -1.0f)});
@@ -193,9 +186,8 @@ bool GamepadPage::IsActionVisible(UserAction action, ControlsCategory category) 
 {
     if (IsMovementGroup(action, category) || IsAimGroup(action, category) || IsFreelookGroup(action))
         return true;
-    if (category == ControlsCategoryOnFoot &&
-        (action == UAMoveBack || action == UAMoveLeft || action == UAMoveRight || action == UAAimUp ||
-         action == UAAimDown || action == UAAimLeft))
+    if (category == ControlsCategoryOnFoot && (action == UAMoveBack || action == UAMoveLeft || action == UAMoveRight ||
+                                               action == UAAimUp || action == UAAimDown || action == UAAimLeft))
         return false;
     if (category == ControlsCategoryGunner && (action == UAAimUp || action == UAAimDown || action == UAAimLeft))
         return false;
@@ -233,11 +225,7 @@ const char* GamepadPage::BindingDisplayOverride(UserAction action, ControlsCateg
     return nullptr;
 }
 
-bool GamepadPage::ApplyCaptureOverride(ControlsCategory category,
-                                       UserAction action,
-                                       int,
-                                       int packedCode,
-                                       int modifier)
+bool GamepadPage::ApplyCaptureOverride(ControlsCategory category, UserAction action, int, int packedCode, int modifier)
 {
     const int baseAxis = AxisPairBase(packedCode);
     if (baseAxis < 0)

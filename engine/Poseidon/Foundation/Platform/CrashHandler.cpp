@@ -266,7 +266,7 @@ void captureBuildId()
         {
             for (int i = 0; i < info->dlpi_phnum; i++)
             {
-                const ElfW(Phdr)& ph = info->dlpi_phdr[i];
+                const ElfW(Phdr) & ph = info->dlpi_phdr[i];
                 if (ph.p_type != PT_NOTE)
                     continue;
                 auto addr = info->dlpi_addr + ph.p_vaddr;
@@ -330,9 +330,7 @@ void InstallCrashHandler(const char* crashDir)
     ss.ss_flags = 0;
     sigaltstack(&ss, nullptr);
 
-    struct sigaction sa
-    {
-    };
+    struct sigaction sa{};
     sa.sa_sigaction = handler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_SIGINFO | SA_ONSTACK | SA_RESETHAND;

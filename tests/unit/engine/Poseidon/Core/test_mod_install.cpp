@@ -116,7 +116,7 @@ TEST_CASE("GetModInstallStatus treats a versionless install as Installed", "[mod
 TEST_CASE("ScanLocalMods detects a mod folder with no '@' prefix", "[mods][scan]")
 {
     const auto root = MakeTempDir();
-    MakeModFolder(root, "CSLA", {"addons"});            // bare name — the bug: never listed
+    MakeModFolder(root, "CSLA", {"addons"});        // bare name — the bug: never listed
     MakeModFolder(root, "@fixturemod", {"addons"}); // classic '@' name still works
 
     const auto mods = ScanLocalMods(root.string());
@@ -124,7 +124,7 @@ TEST_CASE("ScanLocalMods detects a mod folder with no '@' prefix", "[mods][scan]
     // Sorted by display name: "CSLA" < "fixturemod".
     CHECK(mods[0].modId == "CSLA"); // id is the folder name verbatim (the mount path uses it)
     CHECK(mods[0].folderName == "CSLA");
-    CHECK(mods[0].name == "CSLA");  // no '@' to trim
+    CHECK(mods[0].name == "CSLA"); // no '@' to trim
     CHECK(mods[1].modId == "@fixturemod");
     CHECK(mods[1].folderName == "@fixturemod");
     CHECK(mods[1].name == "fixturemod"); // '@' trimmed for display only

@@ -142,4 +142,3 @@ TEST_CASE("ParseFXY lowercases font name", "[font][parser]")
     REQUIRE(fxy.valid());
     CHECK(fxy.name == "tahomab24");
 }
-

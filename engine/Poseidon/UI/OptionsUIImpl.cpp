@@ -2012,7 +2012,7 @@ void DisplayOptions::OnButtonClicked(int idc)
             shell->PushPage(std::make_unique<ControlsPage>());
             CreateChild(shell);
         }
-            break;
+        break;
         case IDC_OPTIONS_DIFFICULTY:
             CreateChild(new DisplayDifficulty(this, _enableSimulation));
             break;

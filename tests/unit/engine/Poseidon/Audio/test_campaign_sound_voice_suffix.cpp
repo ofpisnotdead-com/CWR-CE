@@ -25,23 +25,14 @@ struct ScopedVoiceLanguage
         SetSelectedVoiceLanguage(lang);
     }
 
-    ~ScopedVoiceLanguage()
-    {
-        SetSelectedVoiceLanguage(previous.c_str());
-    }
+    ~ScopedVoiceLanguage() { SetSelectedVoiceLanguage(previous.c_str()); }
 };
 
 struct ScopedBaseDirectory
 {
-    explicit ScopedBaseDirectory(const char* dir)
-    {
-        SetBaseDirectory(RString(dir));
-    }
+    explicit ScopedBaseDirectory(const char* dir) { SetBaseDirectory(RString(dir)); }
 
-    ~ScopedBaseDirectory()
-    {
-        SetBaseDirectory(RString(""));
-    }
+    ~ScopedBaseDirectory() { SetBaseDirectory(RString("")); }
 };
 } // namespace
 

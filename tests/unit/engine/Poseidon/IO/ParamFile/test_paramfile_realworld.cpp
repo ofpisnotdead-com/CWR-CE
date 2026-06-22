@@ -391,7 +391,8 @@ TEST_CASE("ParamFile - Basic soldier config", "[paramfile][realworld][units]")
                              "    class SyntheticSoldierWest : Man {\n"
                              "        displayName = \"US Soldier\";\n"
                              "        weapons[] = {\"SyntheticRifle\", \"Throw\", \"Put\"};\n"
-                             "        magazines[] = {\"SyntheticMagazine\", \"SyntheticMagazine\", \"SyntheticMagazine\", \"SyntheticMagazine\", \"HandGrenade\"};\n"
+                             "        magazines[] = {\"SyntheticMagazine\", \"SyntheticMagazine\", "
+                             "\"SyntheticMagazine\", \"SyntheticMagazine\", \"HandGrenade\"};\n"
                              "    };\n"
                              "};\n";
 
@@ -430,26 +431,27 @@ TEST_CASE("ParamFile - Weapon configuration", "[paramfile][realworld][weapons]")
 
     SECTION("CfgWeapons with rifle definition")
     {
-        const char* config = "class CfgWeapons {\n"
-                             "    class Default {};\n"
-                             "    class Rifle : Default {\n"
-                             "        scope = 0;\n"
-                             "        type = 1;\n"
-                             "        reloadTime = 0.1;\n"
-                             "        magazineReloadTime = 3.0;\n"
-                             "    };\n"
-                             "    class SyntheticRifle : Rifle {\n"
-                             "        scope = 2;\n"
-                             "        displayName = \"SyntheticRifle\";\n"
-                             "        model = \"\\Synthetic\\weapons\\SyntheticMagazine\\SyntheticRifle.p3d\";\n"
-                             "        picture = \"\\Synthetic\\weapons\\SyntheticMagazine\\equip_SyntheticRifle.paa\";\n"
-                             "        magazines[] = {\"SyntheticMagazine\"};\n"
-                             "        reloadTime = 0.1;\n"
-                             "        magazineReloadTime = 3.6;\n"
-                             "        recoil = \"SyntheticRifleRecoil\";\n"
-                             "        recoilProne = \"SyntheticRifleRecoilProne\";\n"
-                             "    };\n"
-                             "};\n";
+        const char* config =
+            "class CfgWeapons {\n"
+            "    class Default {};\n"
+            "    class Rifle : Default {\n"
+            "        scope = 0;\n"
+            "        type = 1;\n"
+            "        reloadTime = 0.1;\n"
+            "        magazineReloadTime = 3.0;\n"
+            "    };\n"
+            "    class SyntheticRifle : Rifle {\n"
+            "        scope = 2;\n"
+            "        displayName = \"SyntheticRifle\";\n"
+            "        model = \"\\Synthetic\\weapons\\SyntheticMagazine\\SyntheticRifle.p3d\";\n"
+            "        picture = \"\\Synthetic\\weapons\\SyntheticMagazine\\equip_SyntheticRifle.paa\";\n"
+            "        magazines[] = {\"SyntheticMagazine\"};\n"
+            "        reloadTime = 0.1;\n"
+            "        magazineReloadTime = 3.6;\n"
+            "        recoil = \"SyntheticRifleRecoil\";\n"
+            "        recoilProne = \"SyntheticRifleRecoilProne\";\n"
+            "    };\n"
+            "};\n";
 
         ParamFile pf;
         QIStream in(config, strlen(config));
@@ -855,7 +857,8 @@ TEST_CASE("ParamFile - Property deletion pattern", "[paramfile][realworld][addon
         const char* config = "class CfgVehicles {\n"
                              "    class SyntheticSoldierWest {\n"
                              "        weapons[] = {\"SyntheticRifle\", \"HandGrenade\", \"Binocular\"};\n"
-                             "        magazines[] = {\"SyntheticMagazine\", \"SyntheticMagazine\", \"SyntheticMagazine\", \"HandGrenade\"};\n"
+                             "        magazines[] = {\"SyntheticMagazine\", \"SyntheticMagazine\", "
+                             "\"SyntheticMagazine\", \"HandGrenade\"};\n"
                              "    };\n"
                              "    class SyntheticUnarmed : SyntheticSoldierWest {\n"
                              "        weapons[] = {};\n"
@@ -1243,7 +1246,8 @@ TEST_CASE("ParamFile - Load vehicle config fixture", "[paramfile][realworld][fix
         // Verify synthetic utility helicopter
         const ParamClass* complex_vehicle = cfg->GetClass("SyntheticHeli");
         REQUIRE(complex_vehicle != nullptr);
-        REQUIRE(std::string(complex_vehicle->FindEntry("displayName")->GetValue().Data()) == "Synthetic Utility Helicopter");
+        REQUIRE(std::string(complex_vehicle->FindEntry("displayName")->GetValue().Data()) ==
+                "Synthetic Utility Helicopter");
 
         const ParamClass* complex_vehicleTurrets = complex_vehicle->GetClass("Turrets");
         REQUIRE(complex_vehicleTurrets != nullptr);

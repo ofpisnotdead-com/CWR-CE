@@ -10,7 +10,7 @@ namespace
 {
 AspectRatio::DisplayStyle s_style = AspectRatio::Modern;
 AspectRatio::UltrawideClamp s_clamp = AspectRatio::Clamp21x9;
-}
+} // namespace
 
 void SetPolicy(AspectRatio::DisplayStyle style, AspectRatio::UltrawideClamp clamp)
 {

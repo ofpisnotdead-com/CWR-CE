@@ -74,7 +74,7 @@ bool DoEditorChildControllerUiAction(ControlsContainer* display, Poseidon::Contr
     }
     return false;
 }
-}
+} // namespace
 
 #include <Poseidon/World/Terrain/Landscape.hpp>
 #include <Poseidon/World/Terrain/Visibility.hpp>

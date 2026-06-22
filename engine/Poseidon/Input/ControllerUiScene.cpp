@@ -29,8 +29,7 @@ ControllerUiSection ModalButtonsSection(int ownerIdc)
 ControllerUiSection SpatialCursorSection(int ownerIdc)
 {
     return {ControllerSectionKind::SpatialCursor,
-            CtrlNav | CtrlConfirm | CtrlCancel | CtrlPointer | CtrlEditorMode | CtrlPreview | CtrlDelete,
-            ownerIdc};
+            CtrlNav | CtrlConfirm | CtrlCancel | CtrlPointer | CtrlEditorMode | CtrlPreview | CtrlDelete, ownerIdc};
 }
 
 ControllerUiSection TextFieldSection(int ownerIdc)

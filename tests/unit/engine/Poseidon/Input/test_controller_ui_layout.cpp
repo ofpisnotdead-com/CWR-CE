@@ -11,7 +11,7 @@ Foundation::UITime TestTime(float seconds)
 {
     return Foundation::UITime(static_cast<int>(seconds * 1000.0f));
 }
-}
+} // namespace
 
 TEST_CASE("Controller UI menu layout maps controller actions to keyboard equivalents", "[input][controller-ui]")
 {
@@ -144,19 +144,16 @@ TEST_CASE("Controller UI browser scenes use scene-specific secondary prompts", "
     ControllerUiScene multiplayer;
     multiplayer.kind = ControllerSceneKind::Multiplayer;
     multiplayer.activeSection = PagerSection();
-    multiplayer.sceneCapabilities =
-        multiplayer.activeSection.capabilities | CtrlPreview | CtrlDelete | CtrlEditorMode;
+    multiplayer.sceneCapabilities = multiplayer.activeSection.capabilities | CtrlPreview | CtrlDelete | CtrlEditorMode;
 
     REQUIRE(ControllerUiSceneAccepts(multiplayer, ControllerUiAction::Preview));
     REQUIRE(ControllerUiSceneAccepts(multiplayer, ControllerUiAction::Delete));
     REQUIRE(ControllerUiSceneAccepts(multiplayer, ControllerUiAction::PreviousTab));
-    REQUIRE(BuildControllerPromptString(multiplayer) ==
-            "A Select|B Back|LT/RT Page|LB/RB Source|X Refresh|Y Filter");
+    REQUIRE(BuildControllerPromptString(multiplayer) == "A Select|B Back|LT/RT Page|LB/RB Source|X Refresh|Y Filter");
 
     ControllerUiScene mods = multiplayer;
     mods.kind = ControllerSceneKind::ModsCatalog;
-    REQUIRE(BuildControllerPromptString(mods) ==
-            "A Select|B Back|LT/RT Page|LB/RB Source|X Apply|Y Filter");
+    REQUIRE(BuildControllerPromptString(mods) == "A Select|B Back|LT/RT Page|LB/RB Source|X Apply|Y Filter");
 }
 
 TEST_CASE("Controller UI gameplay scene only accepts pause at UI layer", "[input][controller-ui]")

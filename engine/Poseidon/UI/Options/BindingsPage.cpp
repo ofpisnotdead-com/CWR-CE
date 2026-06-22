@@ -56,9 +56,9 @@ ContextList ContextsForCategory(ControlsCategory cat)
     static constexpr InputContext pilot[] = {InputContext::HeliPilot, InputContext::PlanePilot};
     static constexpr InputContext gunner[] = {InputContext::TankGunner, InputContext::Gunner};
     static constexpr InputContext common[] = {
-        InputContext::Menu,       InputContext::Infantry,  InputContext::CarDriver, InputContext::TankDriver,
+        InputContext::Menu,       InputContext::Infantry,  InputContext::CarDriver,  InputContext::TankDriver,
         InputContext::TankGunner, InputContext::HeliPilot, InputContext::PlanePilot, InputContext::ShipDriver,
-        InputContext::Gunner,     InputContext::Spectator, InputContext::Map,       InputContext::Chat,
+        InputContext::Gunner,     InputContext::Spectator, InputContext::Map,        InputContext::Chat,
         InputContext::Editor,
     };
 
@@ -107,17 +107,13 @@ void RebindProfile(InputProfile& profile, UserAction action, const std::vector<I
 void RemoveBindingFromProfile(InputProfile& profile, UserAction action, int packedCode, int modifier)
 {
     std::vector<InputBinding> bindings = profile.GetBindingEntries(action);
-    bindings.erase(std::remove_if(bindings.begin(), bindings.end(),
-                                  [packedCode, modifier](const InputBinding& binding)
+    bindings.erase(std::remove_if(bindings.begin(), bindings.end(), [packedCode, modifier](const InputBinding& binding)
                                   { return BindingMatches(binding, packedCode, modifier); }),
                    bindings.end());
     RebindProfile(profile, action, bindings);
 }
 
-void ApplyBindingToProfile(InputProfile& profile,
-                           UserAction action,
-                           int visibleSlot,
-                           InputBinding binding,
+void ApplyBindingToProfile(InputProfile& profile, UserAction action, int visibleSlot, InputBinding binding,
                            const std::function<bool(int)>& deviceFilter)
 {
     std::vector<InputBinding> bindings = profile.GetBindingEntries(action);

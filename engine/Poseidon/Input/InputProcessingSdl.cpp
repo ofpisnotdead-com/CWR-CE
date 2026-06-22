@@ -111,7 +111,7 @@ static void DispatchControllerUiDispatch(const ControllerUiDispatch& dispatch)
 static bool IsControllerPointerAction(ControllerUiAction action)
 {
     return action == ControllerUiAction::PrimaryDown || action == ControllerUiAction::PrimaryUp ||
-        action == ControllerUiAction::PrimaryClick;
+           action == ControllerUiAction::PrimaryClick;
 }
 
 void SDLInput_BufferUICharEvent(const char* text)
@@ -460,10 +460,10 @@ void ProcessJoystick_SDL()
     const float dzTrigger = GInput.gamepad.deadzoneTrigger;
 
     // ---- Left stick → vehicle analog axes + infantry WASD injection ----
-    float lx = sGamepad ? ApplyDeadzone(SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f, dzStick)
-                        : 0.0f;
-    float ly = sGamepad ? ApplyDeadzone(SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f, dzStick)
-                        : 0.0f;
+    float lx =
+        sGamepad ? ApplyDeadzone(SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f, dzStick) : 0.0f;
+    float ly =
+        sGamepad ? ApplyDeadzone(SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f, dzStick) : 0.0f;
     if (hasSyntheticLeftStick)
     {
         lx = syntheticLx;
@@ -478,10 +478,10 @@ void ProcessJoystick_SDL()
         GInput.gamepad.moveLastActive = Glob.uiTime;
 
     // ---- Right stick → camera look (direct cursorMoved injection) ----
-    float rx = sGamepad ? ApplyDeadzone(SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f, dzStick)
-                        : 0.0f;
-    float ry = sGamepad ? ApplyDeadzone(SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f, dzStick)
-                        : 0.0f;
+    float rx =
+        sGamepad ? ApplyDeadzone(SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f, dzStick) : 0.0f;
+    float ry =
+        sGamepad ? ApplyDeadzone(SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f, dzStick) : 0.0f;
     CircleToSquare(rx, ry);
 
     GInput.gamepad.stickAxis[3] = rx;

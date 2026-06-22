@@ -63,8 +63,8 @@ TEST_CASE("ModelRenderer: Rendered quad view has grid dividers", "[Graphics][Mod
 
 TEST_CASE("ModelRenderer: Multiple ODOL fixtures render successfully", "[Graphics][ModelRenderer]")
 {
-    const char* fixtures[] = {"p3d/simple_tree.p3d", "p3d/proxy_structure.p3d", "p3d/multi_lod_vehicle.p3d", "p3d/sky_plane.p3d",
-                              "p3d/crew_proxy.p3d"};
+    const char* fixtures[] = {"p3d/simple_tree.p3d", "p3d/proxy_structure.p3d", "p3d/multi_lod_vehicle.p3d",
+                              "p3d/sky_plane.p3d", "p3d/crew_proxy.p3d"};
     for (auto f : fixtures)
     {
         INFO("fixture: " << f);

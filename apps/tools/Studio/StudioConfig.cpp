@@ -9,7 +9,7 @@ namespace Poseidon
 struct IntField
 {
     const char* name;
-    int StudioConfig::*ptr;
+    int StudioConfig::* ptr;
 };
 
 static const IntField intFields[] = {

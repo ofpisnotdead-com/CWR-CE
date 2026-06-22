@@ -305,7 +305,7 @@ void DetectStringtableLanguages(const QFBank& bank, MissionLanguageDetector::Mis
     DetectStringtableLanguages(stream, info);
 }
 
-void DetectHtmlLanguages(RString root, const char* stem, bool MissionLanguageDetector::MissionLanguageFlags::*member,
+void DetectHtmlLanguages(RString root, const char* stem, bool MissionLanguageDetector::MissionLanguageFlags::* member,
                          MissionLanguageDetector::MissionLanguageInfo& info)
 {
     const bool hasGeneric = HasGenericHtml(root, stem);
@@ -318,7 +318,7 @@ void DetectHtmlLanguages(RString root, const char* stem, bool MissionLanguageDet
 }
 
 void DetectHtmlLanguages(const QFBank& bank, const char* stem,
-                         bool MissionLanguageDetector::MissionLanguageFlags::*member,
+                         bool MissionLanguageDetector::MissionLanguageFlags::* member,
                          MissionLanguageDetector::MissionLanguageInfo& info)
 {
     const bool hasGeneric = HasGenericHtml(bank, stem);

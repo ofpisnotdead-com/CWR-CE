@@ -1035,7 +1035,8 @@ bool UnitWeaponsInfo::IsMagazineUsable(const MagazineType* type)
         }
     }
     Ref<const WeaponType> always[2] = {
-        WeaponTypes.New("Throw"), WeaponTypes.New("Put"),
+        WeaponTypes.New("Throw"),
+        WeaponTypes.New("Put"),
         //		WeaponTypes.New("PipeBomb")
     };
     for (int i = 0; i < sizeof(always) / sizeof(*always); i++)

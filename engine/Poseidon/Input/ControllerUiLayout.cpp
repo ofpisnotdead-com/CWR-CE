@@ -7,7 +7,7 @@ namespace
 {
 constexpr float kFirstRepeatDelay = 0.333f;
 constexpr float kRepeatDelay = 0.085f;
-}
+} // namespace
 
 ControllerUiDispatch ControllerMenuUiLayout::Map(ControllerUiAction action) const
 {
@@ -145,7 +145,7 @@ ControllerUiRepeater::RepeatState& ControllerUiRepeater::StateFor(ControllerUiAc
 bool ControllerUiRepeater::IsDirection(ControllerUiAction action)
 {
     return action == ControllerUiAction::NavigateUp || action == ControllerUiAction::NavigateDown ||
-        action == ControllerUiAction::NavigateLeft || action == ControllerUiAction::NavigateRight;
+           action == ControllerUiAction::NavigateLeft || action == ControllerUiAction::NavigateRight;
 }
 
 } // namespace Poseidon

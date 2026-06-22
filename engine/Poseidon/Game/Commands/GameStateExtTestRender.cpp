@@ -127,10 +127,10 @@ GameValue TriGpadButton(const GameState* state, GameValuePar arg)
     // would otherwise wipe a direct GInput write before the consumer reads it.
     InputSubsystem::Instance().SetSyntheticStickButton(i, true);
     if (i == 0)
-        SDLInput_BufferControllerUiAction(
-            GWorld && GWorld->IsEditorControllerUiActive() ? ControllerUiAction::PrimaryClick
-                                                           : ControllerUiAction::Confirm,
-            true); // A -> confirm in menus, primary click in editor
+        SDLInput_BufferControllerUiAction(GWorld && GWorld->IsEditorControllerUiActive()
+                                              ? ControllerUiAction::PrimaryClick
+                                              : ControllerUiAction::Confirm,
+                                          true); // A -> confirm in menus, primary click in editor
     else if (i == 1)
         SDLInput_BufferControllerUiAction(ControllerUiAction::Cancel, true); // B -> cancel/back in menus
     else if (i == 2)

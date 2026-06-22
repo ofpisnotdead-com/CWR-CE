@@ -32,7 +32,8 @@ TEST_CASE("ShadowInspect: synthetic proxy fixture casts a non-trivial ground sha
     REQUIRE(r.shadowedFraction < 0.70f);
 }
 
-TEST_CASE("ShadowInspect: an overhead light_disc casts a tighter shadow than a low light_disc", "[Graphics][ShadowInspect]")
+TEST_CASE("ShadowInspect: an overhead light_disc casts a tighter shadow than a low light_disc",
+          "[Graphics][ShadowInspect]")
 {
     const char* path = GET_FIXTURE("p3d/proxy_structure.p3d");
 

@@ -416,7 +416,8 @@ TEST_CASE("ShadowMath cascade: turning the camera keeps the texel density consta
     Vec3 up{0.0f, 1.0f, 0.0f};
     Vec3 eye{0.0f, 3.0f, 0.0f};
 
-    Mat4 vpA = ComputeCascadeLightVP(light_disc, up, CameraInvVP(eye, {0.0f, 0.0f, -25.0f}, up), 0.0f, 1.0f, res, 30.0f);
+    Mat4 vpA =
+        ComputeCascadeLightVP(light_disc, up, CameraInvVP(eye, {0.0f, 0.0f, -25.0f}, up), 0.0f, 1.0f, res, 30.0f);
     Vec3 ctrB = YawAbout({0.0f, 0.0f, -25.0f}, eye, 0.6f);
     Mat4 vpB = ComputeCascadeLightVP(light_disc, up, CameraInvVP(eye, ctrB, up), 0.0f, 1.0f, res, 30.0f);
 

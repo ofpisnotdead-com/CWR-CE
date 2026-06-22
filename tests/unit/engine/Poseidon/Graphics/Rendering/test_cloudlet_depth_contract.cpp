@@ -86,8 +86,7 @@ TEST_CASE("Cloudlet billboard shapes never write depth", "[Graphics][Effects][Cl
 TEST_CASE("CloudletSource::Load applies no-depth billboard flags to synthetic billboard",
           "[Graphics][Effects][Cloudlet]")
 {
-    const std::filesystem::path billboard =
-        RepoRoot() / "tests" / "fixtures" / "p3d" / "flat_quad.p3d";
+    const std::filesystem::path billboard = RepoRoot() / "tests" / "fixtures" / "p3d" / "flat_quad.p3d";
     REQUIRE(std::filesystem::exists(billboard));
 
     ParamFile pf = ParseConfig("class CloudletsMissile\n"

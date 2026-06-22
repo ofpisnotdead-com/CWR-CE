@@ -2357,9 +2357,9 @@ void NetworkClient::EstimateBandwidth(int& nMsgMax, int& nBytesMax)
 #if _ENABLE_CHEATS
         if (outputLogs)
             LOG_DEBUG(Network, "Client: Limit ({}, {})", nBytesMax, nMsgMax);
-            /*
-                if (outputDiags == 1) sprintf(output + strlen(output), "Limit (%d, %d); ", nBytesMax, nMsgMax);
-            */
+        /*
+            if (outputDiags == 1) sprintf(output + strlen(output), "Limit (%d, %d); ", nBytesMax, nMsgMax);
+        */
 #endif
     }
 }

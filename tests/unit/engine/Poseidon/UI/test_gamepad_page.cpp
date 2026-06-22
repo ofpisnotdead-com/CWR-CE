@@ -104,11 +104,7 @@ const InputBinding* FindGamepadBinding(const InputProfile& profile, UserAction a
     return nullptr;
 }
 
-void CheckAxisBinding(const InputProfile& profile,
-                      UserAction action,
-                      int axis,
-                      float scale,
-                      int modifier = -1)
+void CheckAxisBinding(const InputProfile& profile, UserAction action, int axis, float scale, int modifier = -1)
 {
     const InputBinding* binding = FindGamepadBinding(profile, action, axis);
     REQUIRE(binding != nullptr);

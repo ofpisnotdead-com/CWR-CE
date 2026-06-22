@@ -1007,7 +1007,7 @@ bool DisplayMultiplayer::BeginModdedJoin(const SessionInfo& info)
         {
             for (const auto& m : mods)
                 catalog.Add(Poseidon::ModCatalogEntry(Poseidon::ModId(m.modId), m.name, m.downloadUrl, m.sizeBytes,
-                                                       m.folderName));
+                                                      m.folderName));
         }
     }
 
@@ -1022,8 +1022,7 @@ bool DisplayMultiplayer::BeginModdedJoin(const SessionInfo& info)
         active.emplace_back(m.catalogId.empty() ? m.id : m.catalogId);
 
     const Poseidon::ServerModList required((const char*)info.mod, info.equalModRequired);
-    const Poseidon::ServerModResolution res =
-        Poseidon::ServerModResolver(installed, active).Resolve(required, catalog);
+    const Poseidon::ServerModResolution res = Poseidon::ServerModResolver(installed, active).Resolve(required, catalog);
 
     // Already-mounted check: does the engine's current mount path already equal the
     // server's required set resolved to disk?

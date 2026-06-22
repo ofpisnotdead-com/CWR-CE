@@ -645,7 +645,8 @@ void DrawInputContextDiagnostics()
                 InputContextName(cached), DebugBool(GWorld->PlayerManual()), DebugBool(GWorld->HasMap()),
                 DebugBool(GWorld->HasOptions()));
     const ControlsCategory settingsCategory = DebugSettingsCategoryForContext(liveWorld);
-    ImGui::Text("Settings: %s", settingsCategory == ControlsCategoryCount ? "<none>" : GetControlsCategoryName(settingsCategory));
+    ImGui::Text("Settings: %s",
+                settingsCategory == ControlsCategoryCount ? "<none>" : GetControlsCategoryName(settingsCategory));
     ImGui::Text("Resolved: %s | %s", static_cast<const char*>(DebugObjectName(resolution.transport)),
                 InputSeatContextName(resolution.seat));
     ImGui::Text("Player: %s", static_cast<const char*>(DebugObjectName(player)));
@@ -653,8 +654,8 @@ void DrawInputContextDiagnostics()
     ImGui::Text("Camera: %s", static_cast<const char*>(DebugObjectName(GWorld->CameraOn())));
 
     const InputContext ctx = resolution.context;
-    ImGui::Text("Actions [%s]: F %.2f B %.2f L %.2f R %.2f Up %.2f Dn %.2f TL %.2f TR %.2f",
-                InputContextName(ctx), input.GetAction(ctx, UAMoveForward, true), input.GetAction(ctx, UAMoveBack, true),
+    ImGui::Text("Actions [%s]: F %.2f B %.2f L %.2f R %.2f Up %.2f Dn %.2f TL %.2f TR %.2f", InputContextName(ctx),
+                input.GetAction(ctx, UAMoveForward, true), input.GetAction(ctx, UAMoveBack, true),
                 input.GetAction(ctx, UAMoveLeft, true), input.GetAction(ctx, UAMoveRight, true),
                 input.GetAction(ctx, UAMoveUp, true), input.GetAction(ctx, UAMoveDown, true),
                 input.GetAction(ctx, UATurnLeft, true), input.GetAction(ctx, UATurnRight, true));

@@ -694,8 +694,8 @@ TEST_CASE("Advanced product PBO follows addon acceptance rules", "[game][gameSta
 
     SECTION("accepted without encryption requirement")
     {
-        const auto bankPath = CreateTempAddonBank("poseidon_advanced_product_ok", "UnitTestGeneratedAdvancedAddon", properties,
-                                                  std::size(properties), false);
+        const auto bankPath = CreateTempAddonBank("poseidon_advanced_product_ok", "UnitTestGeneratedAdvancedAddon",
+                                                  properties, std::size(properties), false);
         Ref<AddonAcceptanceContext> context = new AddonAcceptanceContext{productList, false};
         QFBank bank;
         REQUIRE(bank.open(RString(bankPath.string().substr(0, bankPath.string().size() - 4).c_str()),
@@ -712,8 +712,9 @@ TEST_CASE("Advanced product PBO follows addon acceptance rules", "[game][gameSta
 
     SECTION("rejected when encryption metadata is required")
     {
-        const auto bankPath = CreateTempAddonBank("poseidon_advanced_product_needs_encryption", "UnitTestGeneratedAdvancedAddon",
-                                                  properties, std::size(properties), false);
+        const auto bankPath =
+            CreateTempAddonBank("poseidon_advanced_product_needs_encryption", "UnitTestGeneratedAdvancedAddon",
+                                properties, std::size(properties), false);
         Ref<AddonAcceptanceContext> context = new AddonAcceptanceContext{productList, true};
         QFBank bank;
         REQUIRE(bank.open(RString(bankPath.string().substr(0, bankPath.string().size() - 4).c_str()),

@@ -1645,8 +1645,7 @@ Poseidon::ControllerUiScene Display::GetControllerUiScene() const
             scene.activeSection = Poseidon::PagerSection();
             scene.sceneCapabilities = scene.activeSection.capabilities;
             if (IDD() == IDD_MULTIPLAYER)
-                scene.sceneCapabilities |=
-                    Poseidon::CtrlPreview | Poseidon::CtrlDelete | Poseidon::CtrlEditorMode;
+                scene.sceneCapabilities |= Poseidon::CtrlPreview | Poseidon::CtrlDelete | Poseidon::CtrlEditorMode;
             break;
         case IDD_FILTER:
         case IDD_PASSWORD:
@@ -1667,9 +1666,8 @@ Poseidon::ControllerUiScene Display::GetControllerUiScene() const
         case IDD_MODS:
             scene.kind = Poseidon::ControllerSceneKind::ModsCatalog;
             scene.activeSection = Poseidon::PagerSection();
-            scene.sceneCapabilities =
-                scene.activeSection.capabilities |
-                Poseidon::CtrlPreview | Poseidon::CtrlDelete | Poseidon::CtrlEditorMode;
+            scene.sceneCapabilities = scene.activeSection.capabilities | Poseidon::CtrlPreview | Poseidon::CtrlDelete |
+                                      Poseidon::CtrlEditorMode;
             break;
         case IDD_MODS_DOWNLOAD:
             scene.kind = Poseidon::ControllerSceneKind::DownloadModal;

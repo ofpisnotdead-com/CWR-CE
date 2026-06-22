@@ -52,9 +52,9 @@ ContextList ContextsForCategory(ControlsCategory cat)
     static constexpr InputContext pilot[] = {InputContext::HeliPilot, InputContext::PlanePilot};
     static constexpr InputContext gunner[] = {InputContext::TankGunner, InputContext::Gunner};
     static constexpr InputContext common[] = {
-        InputContext::Menu,       InputContext::Infantry,  InputContext::CarDriver, InputContext::TankDriver,
+        InputContext::Menu,       InputContext::Infantry,  InputContext::CarDriver,  InputContext::TankDriver,
         InputContext::TankGunner, InputContext::HeliPilot, InputContext::PlanePilot, InputContext::ShipDriver,
-        InputContext::Gunner,     InputContext::Spectator, InputContext::Map,       InputContext::Chat,
+        InputContext::Gunner,     InputContext::Spectator, InputContext::Map,        InputContext::Chat,
         InputContext::Editor,
     };
 
@@ -445,12 +445,8 @@ static float QueryProfileAction(const Input& in, const InputProfile& profile, Us
     return sum;
 }
 
-static bool QueryProfileActionToDo(Input& in,
-                                   const InputProfile& profile,
-                                   UserAction action,
-                                   bool& actionDone,
-                                   bool reset,
-                                   bool checkFocus)
+static bool QueryProfileActionToDo(Input& in, const InputProfile& profile, UserAction action, bool& actionDone,
+                                   bool reset, bool checkFocus)
 {
     if (actionDone && in.actionDone[action])
         return false;
@@ -559,7 +555,6 @@ void InputSubsystem::ComputeMovementState()
         moveLeft_ += GetAction(UAMoveLeft, true);
         moveRight_ += GetAction(UAMoveRight, true);
     }
-
 }
 
 void InputSubsystem::SyncToGInput()
@@ -985,14 +980,14 @@ float InputSubsystem::GetKey(int packedKey, bool checkFocus) const
 {
     const int value = InputBindingValue(packedKey);
     return InputBindingIsDoubleTap(packedKey) ? QueryDoubleTapKey(GInput, value, checkFocus)
-                                             : QueryKey(GInput, value, checkFocus);
+                                              : QueryKey(GInput, value, checkFocus);
 }
 
 bool InputSubsystem::GetKeyToDo(int packedKey, bool reset, bool checkFocus)
 {
     const int value = InputBindingValue(packedKey);
     return InputBindingIsDoubleTap(packedKey) ? QueryDoubleTapKeyToDo(GInput, value, reset, checkFocus)
-                                             : QueryKeyToDo(GInput, value, reset, checkFocus);
+                                              : QueryKeyToDo(GInput, value, reset, checkFocus);
 }
 
 int InputSubsystem::CheatActivated() const
