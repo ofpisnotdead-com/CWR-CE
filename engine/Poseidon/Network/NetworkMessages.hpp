@@ -337,6 +337,11 @@ DECLARE_NET_MESSAGE(PublicExec, PUBLICEXEC_MSG)
 
 DECLARE_NET_MESSAGE(RemoteExec, REMOTEEXEC_MSG)
 
+#define ADD_SMOKE_SOURCE_MSG(XX) \
+  XX(OLink<Object>, object, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle that has smoke added to it"), IdxTransferRef)
+
+DECLARE_NET_MESSAGE(AddSmokeSource, ADD_SMOKE_SOURCE_MSG)
+
 // Text chat message
 struct ChatMessage : public NetworkSimpleObject
 {

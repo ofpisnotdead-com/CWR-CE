@@ -169,6 +169,7 @@ class NetworkManager : public INetworkManager
     void AskForActivateMine(Mine* mine, bool activate) override;
     void AskForInflameFire(Fireplace* fireplace, bool fire) override;
     void AskForAnimationPhase(Entity* vehicle, RString animation, float phase) override;
+    void AddSmokeSource(Object* obj) override;
     void CopyUnitInfo(Person* from, Person* to) override;
 
     RespawnMode GetRespawnMode() const override;

@@ -168,7 +168,9 @@ DEFINE_ENUM_END(TMError)
 	XX(FORMAT_SIMPLE, Dummy, AskForAnimationPhase, "Ask vehicle for user defined animation.", Ask) \
 	XX(FORMAT_SIMPLE, Dummy, IncomingMissile, "Transfer message about fired missile to other clients.", Broadcast) \
 	XX(FORMAT_SIMPLE, Dummy, PublicExec, "Transfers command to exec.", Broadcast) \
-	XX(FORMAT_SIMPLE, Dummy, RemoteExec, "Targeted remote code execution with JIP support.", Broadcast)
+	XX(FORMAT_SIMPLE, Dummy, RemoteExec, "Targeted remote code execution with JIP support.", Broadcast) \
+	XX(FORMAT_SIMPLE, Dummy, AddSmokeSource, "Add smoke on a destroyed vehicle.", Broadcast)
+
 
 #define NMT_DEFINE_ENUM(macro, class, name, description, group) NMT##name,
 

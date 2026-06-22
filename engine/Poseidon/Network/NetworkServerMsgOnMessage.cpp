@@ -547,6 +547,7 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         case NMTCopyUnitInfo:
         case NMTVehicleDamaged:
         case NMTIncomingMissile:
+        case NMTAddSmokeSource:
             // send to all except from (state Play expected)
             for (int i = 0; i < _players.Size(); i++)
             {

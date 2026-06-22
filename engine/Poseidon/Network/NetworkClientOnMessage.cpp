@@ -1604,6 +1604,17 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             }
         }
         break;
+        case NMTAddSmokeSource:
+        {
+            AddSmokeSourceMessage info;
+            info.TransferMsg(ctx);
+
+            if (info._object)
+            {
+                info._object->AddSmokeSource();
+            }
+        }
+        break;
         case NMTCopyUnitInfo:
         {
             CopyUnitInfoMessage copy;

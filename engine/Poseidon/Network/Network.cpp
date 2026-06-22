@@ -1072,6 +1072,8 @@ DEFINE_NET_MESSAGE(PublicExec, PUBLICEXEC_MSG)
 
 DEFINE_NET_MESSAGE(RemoteExec, REMOTEEXEC_MSG)
 
+DEFINE_NET_MESSAGE(AddSmokeSource, ADD_SMOKE_SOURCE_MSG)
+
 IndicesChat::IndicesChat()
 {
     channel = -1;

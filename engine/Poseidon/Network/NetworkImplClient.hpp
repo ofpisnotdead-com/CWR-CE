@@ -296,6 +296,8 @@ class NetworkClient : public NetworkComponent
     void AskForInflameFire(Fireplace* fireplace, bool fire);
     // Ask vehicle for user defined animation
     void AskForAnimationPhase(Entity* vehicle, RString animation, float phase);
+    // Add smoke source to destroyed object
+    void AddSmokeSource(Object* obj);
     // Copy unit info from one person to other
     void CopyUnitInfo(Person* from, Person* to);
     // Returns respawn mode
