@@ -16,49 +16,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Linux system packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            autoconf-archive \
-            automake \
-            clang \
-            libtool \
-            pkg-config \
-            libgl1-mesa-dev \
-            libx11-dev \
-            libxext-dev \
-            libxrandr-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libxtst-dev \
-            libxinerama-dev \
-            libxkbcommon-dev \
-            libwayland-dev \
-            wayland-protocols
-
       - name: Setup LLVM and Clang
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: '21'
           arch: 'x64'
 
-      - name: Setup CMake and Ninja
-        uses: lukka/get-cmake@latest
-
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgJsonGlob: 'vcpkg.json'
-
-      - name: Configure
-        run: >
-          cmake
-          --preset linux-x64-clang
-          -DCMAKE_C_COMPILER_LAUNCHER=
-          -DCMAKE_CXX_COMPILER_LAUNCHER=
-          -DCLANG_FORMAT_EXE="$(which clang-format)"
-
       - name: Check C++ formatting
-        run: cmake --build build/linux-x64-clang --target Format
+        run: |
+          clang-format --version
+          {
+            git ls-files 'apps/*.cpp' 'engine/*.cpp' 'tests/*.cpp'
+            git ls-files 'apps/tools/Studio/StudioApp.hpp'
+            git ls-files 'apps/tools/Studio/StudioConfig.hpp'
+            git ls-files 'apps/tools/Tools/SDLPreview.hpp'
+            git ls-files 'apps/tools/Tools/commands/*.hpp'
+            git ls-files 'tests/unit/engine/Poseidon/Asset/Formats/BISFramework/test_helpers.hpp'
+            git ls-files 'tests/unit/engine/Poseidon/Support/test_fixtures.hpp'
+            git ls-files 'tests/unit/engine/Poseidon/Support/test_stubs.hpp'
+            git ls-files 'tests/unit/engine/Poseidon/test_fixtures.hpp'
+          } | sort -u \
+            | grep -v -E '(^|/)pch\.(cpp|hpp)$' \
+            | grep -v -E '^tests/fixtures/' \
+            | grep -v -E '^engine/(PoseidonFormats|PoseidonGL33|PoseidonOpenAL)/' \
+            | grep -v -E '^engine/Random/randomGen\.cpp$' \
+            | grep -v -E '^engine/Poseidon/Foundation/(Algorithms/(Crc|Crc32)|Common/(ConsoleUtils_(posix|win)|GamePaths|Platform|PlatformPaths_(posix|win))|Enums/EnumNames|Framework/AppFrame|Strings/(Mbcs|StrFormat))\.cpp$' \
+            | grep -v -E '^tests/unit/apps/Server/test_simulate\.cpp$' \
+            | grep -v -E '^tests/unit/engine/Poseidon/Asset/Formats/P3D/test_p3d_header\.cpp$' \
+            | xargs clang-format --dry-run --Werror
