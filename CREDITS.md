@@ -37,8 +37,8 @@ Thanks to the community testers:
 - Vojtěch "snw" Chaloupka
 - Spez
 
-The community release authors continue independently at
-<https://github.com/ofpisnotdead-com/CWR-CE>.
+The community continuation welcomes pull requests, ideas, fixes, ports, tests,
+and documentation work in this repository.
 
 ## Third-party software
 
