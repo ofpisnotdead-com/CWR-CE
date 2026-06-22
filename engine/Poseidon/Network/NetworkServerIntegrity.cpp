@@ -794,7 +794,7 @@ void NetworkServer::OnPlayerDestroy(int dpid)
         }
     }
     LogoutMessage logout;
-    logout.dpnid = dpid;
+    logout._dpnid = dpid;
     for (int i = 0; i < _identities.Size(); i++)
     {
         if (_identities[i].dpnid == dpid)
@@ -852,7 +852,7 @@ void NetworkServer::OnPlayerDestroy(int dpid)
     {
         NotifyMasterServerStateChanged();
         NetworkClient* client = _parent->GetClient();
-        NET_ERROR(client && client->GetPlayer() != logout.dpnid);
+        NET_ERROR(client && client->GetPlayer() != logout._dpnid);
         // send new identity to bot client
         SendMsg(client->GetPlayer(), &logout, NMFGuaranteed);
     }

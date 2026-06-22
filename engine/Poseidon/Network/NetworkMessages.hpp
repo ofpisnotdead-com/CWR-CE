@@ -185,19 +185,10 @@ struct ChangeGameState : public NetworkSimpleObject
 };
 
 // Message sent to all players when some player logged out from game
-struct LogoutMessage : public NetworkSimpleObject
-{
-	// logged out player
-	int dpnid;
+#define LOGOUT_MSG(XX) \
+	XX(int, dpnid, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of client (player)"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTLogout;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(Logout,LOGOUT_MSG)
 
 #define PUB_VAR_MSG(XX) \
 	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Variable name"), IdxTransfer) \

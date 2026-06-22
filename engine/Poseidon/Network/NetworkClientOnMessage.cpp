@@ -562,7 +562,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             logout.TransferMsg(ctx);
             for (int i = 0; i < _identities.Size(); i++)
             {
-                if (_identities[i].dpnid == logout.dpnid)
+                if (_identities[i].dpnid == logout._dpnid)
                 {
                     _identities.Delete(i);
                     break;
