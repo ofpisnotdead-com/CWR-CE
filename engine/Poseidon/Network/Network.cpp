@@ -660,45 +660,8 @@ TMError ChangeGameState::TransferMsg(NetworkMessageContext& ctx)
     return TMOK;
 }
 
-// network message indices for LogoutMessage class
-class IndicesLogout : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int dpnid;
-
-    IndicesLogout();
-    NetworkMessageIndices* Clone() const override { return new IndicesLogout; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesLogout::IndicesLogout()
-{
-    dpnid = -1;
-}
-
-void IndicesLogout::Scan(NetworkMessageFormatBase* format){SCAN(dpnid)}
-
-// Create network message indices for LogoutMessage class
-NetworkMessageIndices* GetIndicesLogout()
-{
-    return new IndicesLogout();
-}
-
-NetworkMessageFormat& LogoutMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("dpnid", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of client (player)"));
-    return format;
-}
-
-TMError LogoutMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesLogout*>(ctx.GetIndices()))
-    const IndicesLogout* indices = static_cast<const IndicesLogout*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->dpnid, (int&)dpnid))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(Logout, LOGOUT_MSG)
+DEFINE_GET_INDICES(Logout)
 
 // network message indices for MissionHeader class
 class IndicesMissionHeader : public NetworkMessageIndices
