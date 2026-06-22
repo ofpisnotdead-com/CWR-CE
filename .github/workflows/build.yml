@@ -20,18 +20,22 @@ jobs:
             os: ubuntu-24.04
             preset: linux-x64-clang
             build_dir: build/linux-x64-clang
+            ctest_exclude: 'PoseidonTests - OAL -'
           - name: Linux RelWithDebInfo
             os: ubuntu-24.04
             preset: linux-x64-clang-rwdi
             build_dir: build/linux-x64-clang-rwdi
+            ctest_exclude: 'PoseidonTests - OAL -'
           - name: Windows Debug
             os: windows-2022
             preset: win-x64-clang-dbg
             build_dir: build/win-x64-clang-dbg
+            ctest_exclude: 'PoseidonTests - (OAL -|PAAEncoder -|Image - Save to \.paa|World state file format --|PreviewImage - saveToFile writes|PreviewImageRGB - saveToFile writes)'
           - name: Windows RelWithDebInfo
             os: windows-2022
             preset: win-x64-clang-rwdi
             build_dir: build/win-x64-clang-rwdi
+            ctest_exclude: 'PoseidonTests - (OAL -|PAAEncoder -|Image - Save to \.paa|World state file format --|PreviewImage - saveToFile writes|PreviewImageRGB - saveToFile writes)'
 
     steps:
       - name: Checkout
@@ -85,3 +89,9 @@ jobs:
 
       - name: Build
         run: cmake --build ${{ matrix.build_dir }} --parallel 2
+
+      - name: Test
+        shell: pwsh
+        env:
+          CTEST_EXCLUDE: ${{ matrix.ctest_exclude }}
+        run: ctest --test-dir '${{ matrix.build_dir }}' --output-on-failure -E "$env:CTEST_EXCLUDE"
