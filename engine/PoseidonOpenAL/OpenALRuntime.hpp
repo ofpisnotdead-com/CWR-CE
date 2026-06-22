@@ -143,6 +143,13 @@ inline bool TryLoadModule()
         SetError("OpenAL32.dll is not available");
         return false;
     }
+#elif __APPLE__
+    ModuleHandle() = dlopen("libopenal.dylib", RTLD_NOW | RTLD_LOCAL);
+    if (ModuleHandle() == nullptr)
+    {
+        SetError("libopenal.dylib is not available");
+        return false;
+    }
 #else
     ModuleHandle() = dlopen("libopenal.so.1", RTLD_NOW | RTLD_LOCAL);
     if (ModuleHandle() == nullptr)

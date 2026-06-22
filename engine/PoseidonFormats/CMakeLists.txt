@@ -20,6 +20,13 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     target_compile_features(PoseidonFormatsDLL PRIVATE cxx_std_20)
     if(WIN32)
         target_link_libraries(PoseidonFormatsDLL PRIVATE Poseidon winmm)
+    elseif(APPLE)
+        set_target_properties(PoseidonFormatsDLL PROPERTIES
+            POSITION_INDEPENDENT_CODE ON
+        )
+        target_link_libraries(PoseidonFormatsDLL PRIVATE
+            Poseidon
+        )
     else()
         # On Linux, statically linked dependencies need PIC. Use -Bsymbolic
         # and link only what's needed from the engine libraries.

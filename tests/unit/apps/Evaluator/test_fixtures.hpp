@@ -7,6 +7,9 @@
 #include <limits.h>
 #ifndef MAX_PATH
 #define MAX_PATH PATH_MAX
+#if __APPLE__
+#include <mach-o/dyld.h>
+#endif
 #endif
 #endif
 #include <stdio.h>
@@ -32,7 +35,12 @@ inline const char* GetExecutableDirectory()
         }
 #else
         char exePath[MAX_PATH];
+#if __APPLE__
+        uint32_t len = sizeof(exePath) - 1;
+        _NSGetExecutablePath(exePath, &len);
+#else
         ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+#endif
         if (len > 0)
         {
             exePath[len] = '\0';
