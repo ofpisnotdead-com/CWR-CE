@@ -409,9 +409,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             PlayerMessage playerMsg;
             playerMsg.TransferMsg(ctx);
-            _player = playerMsg.player;
+            _player = playerMsg._player;
             //{ DEDICATED SERVER SUPPORT
-            if (playerMsg.server)
+            if (playerMsg._server)
             {
                 break; // do not create identity for server
             }
@@ -423,7 +423,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             identity.version = MP_VERSION_ACTUAL;
             RString GetPublicKey();
             identity.id = GetPublicKey();
-            identity.name = playerMsg.name; // name is changed by server
+            identity.name = playerMsg._name; // name is changed by server
             identity.face = Glob.header.playerFace;
             identity.glasses = Glob.header.playerGlasses;
             identity.speaker = Glob.header.playerSpeaker;
