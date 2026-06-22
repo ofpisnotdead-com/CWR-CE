@@ -1554,7 +1554,12 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
                 if (doEcho)
                 {
                     RefArray<NetworkObject> dummy;
-                    ChatMessage msg(CCGlobal, nullptr, dummy, "", echo);
+                    ChatMessage msg;
+                    msg._channel = CCGlobal;
+                    msg._sender = nullptr;
+                    msg._units = dummy;
+                    msg._name = "";
+                    msg._text = echo;
                     for (int i = 0; i < _players.Size(); i++)
                     {
                         if (_players[i].state >= NGSCreate)

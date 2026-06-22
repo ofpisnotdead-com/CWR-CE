@@ -1649,13 +1649,13 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             ChatMessage chat;
             chat.TransferMsg(ctx);
-            if (chat.sender)
+            if (chat._sender)
             {
-                GChatList.Add((ChatChannel)chat.channel, chat.sender, chat.text, false, true);
+                GChatList.Add((ChatChannel)chat._channel, chat._sender, chat._text, false, true);
             }
             else
             {
-                GChatList.Add((ChatChannel)chat.channel, chat.name, chat.text, false, true);
+                GChatList.Add((ChatChannel)chat._channel, chat._name, chat._text, false, true);
             }
             if (_chatSound.name.GetLength() > 0)
             {
@@ -1678,22 +1678,22 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 break;
             }
-            if (chat.channel != CCGlobal && !FindUnit(GWorld->GetRealPlayer(), chat.units))
+            if (chat._channel != CCGlobal && !FindUnit(GWorld->GetRealPlayer(), chat._units))
             {
                 break;
             }
-            GChatList.Add((ChatChannel)chat.channel, chat.sender, chat.text, false, false);
-            if (chat.sender && chat.sentence.Size() > 0)
+            GChatList.Add((ChatChannel)chat._channel, chat._sender, chat._text, false, false);
+            if (chat._sender && chat._sentence.Size() > 0)
             {
                 AIUnit* unit = soldier->Brain();
                 if (!unit)
                 {
                     break;
                 }
-                RadioChannel* channel = FindChannel(unit, chat.channel);
+                RadioChannel* channel = FindChannel(unit, chat._channel);
                 if (channel)
                 {
-                    chat.sentence.Say(channel, chat.sender->GetSpeaker());
+                    chat._sentence.Say(channel, chat._sender->GetSpeaker());
                 }
             }
         }
@@ -1707,26 +1707,26 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 break;
             }
-            if (chat.channel != CCGlobal && !FindUnit(GWorld->GetRealPlayer(), chat.units))
+            if (chat._channel != CCGlobal && !FindUnit(GWorld->GetRealPlayer(), chat._units))
             {
                 break;
             }
-            if (chat.wave.GetLength() > 0)
+            if (chat._wave.GetLength() > 0)
             {
                 AIUnit* unit = soldier->Brain();
                 if (!unit)
                 {
                     break;
                 }
-                RadioChannel* channel = FindChannel(unit, chat.channel);
+                RadioChannel* channel = FindChannel(unit, chat._channel);
                 if (channel)
                 {
                     RString player;
-                    if (chat.wave[0] == '#' && chat.sender)
+                    if (chat._wave[0] == '#' && chat._sender)
                     {
-                        player = chat.sender->GetPerson()->GetInfo()._name;
+                        player = chat._sender->GetPerson()->GetInfo()._name;
                     }
-                    channel->Say(chat.wave, chat.sender, chat.senderName, player, 2.0);
+                    channel->Say(chat._wave, chat._sender, chat._senderName, player, 2.0);
                 }
             }
         }
