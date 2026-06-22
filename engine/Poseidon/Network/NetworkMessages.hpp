@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Poseidon/Network/MessageFactory.hpp>
 #include <Poseidon/Network/Network.hpp>
 #include <Poseidon/Audio/Speaker.hpp>
 #include <Poseidon/AI/Path/ArcadeWaypoint.hpp>
@@ -159,27 +160,12 @@ class RefNetworkDataWithFormat: public RefNetworkData
 // Info about player sent by server to player itself
 // Sent to a player after the DPN_MSGID_CREATE_PLAYER system message arrives at the server.
 // Carries info the player itself does not know.
-struct PlayerMessage : public NetworkSimpleObject
-{
-	// DirectPlay ID of player
-	int player;
-	// name of player (some suffix can be added in case of duplicity of names)
-	RString name;
-//{ DEDICATED SERVER SUPPORT
-	// bot client on dedicated server
-	bool server;
+#define PLAYER_MSG(XX) \
+	XX(int, player, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Unique ID of client (player)"), IdxTransfer) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Player's name"), IdxTransfer) \
+	XX(bool, server, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Bot client (running in the same process as server)"), IdxTransfer)
 
-	PlayerMessage() {player = 0; server = false;}
-	PlayerMessage(int p, RString n, bool s) {player = p; name = n; server = s;}
-//}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTPlayer;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(Player, PLAYER_MSG)
 
 // Message sent by server whenever game state changes (see NetworkGameState)
 // Also sent by a client whenever the player is ready (confirms something in a dialog).
@@ -212,8 +198,6 @@ struct LogoutMessage : public NetworkSimpleObject
 	);
 	TMError TransferMsg(NetworkMessageContext &ctx) override;
 };
-
-#include <Poseidon/Network/MessageFactory.hpp>
 
 #define PUB_VAR_MSG(XX) \
 	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Variable name"), IdxTransfer) \
