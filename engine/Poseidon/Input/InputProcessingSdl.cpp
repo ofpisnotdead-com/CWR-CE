@@ -392,7 +392,15 @@ static void BufferControllerFaceAndShoulderIntents(bool suppressConfirm)
     if (!suppressConfirm && GInput.gamepad.stickButtonsToDo[0])
         SDLInput_BufferControllerUiAction(ControllerUiAction::Confirm, true);
     if (GInput.gamepad.stickButtonsToDo[1])
+    {
+        if (GWorld && GWorld->GetCameraEffect())
+        {
+            DWORD now = GlobalTickCount();
+            SDLInput_BufferKeyEvent(SDL_SCANCODE_ESCAPE, true, now);
+            SDLInput_BufferKeyEvent(SDL_SCANCODE_ESCAPE, false, now + 1);
+        }
         SDLInput_BufferControllerUiAction(ControllerUiAction::Cancel, true);
+    }
     if (GInput.gamepad.stickButtonsToDo[2])
         SDLInput_BufferControllerUiAction(ControllerUiAction::Preview, false);
     if (GInput.gamepad.stickButtonsToDo[3])

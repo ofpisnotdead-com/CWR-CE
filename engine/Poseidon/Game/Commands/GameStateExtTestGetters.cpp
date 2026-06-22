@@ -458,6 +458,11 @@ GameValue TriGetInputContext(const GameState* /*state*/)
     }
 }
 
+GameValue TriGetCameraEffectActive(const GameState* /*state*/)
+{
+    return GameValue(static_cast<float>(GWorld && GWorld->GetCameraEffect() ? 1 : 0));
+}
+
 // Called from GameStateExtTestAudio.cpp's INIT_MODULE to force this TU into
 // the link when building PoseidonGame (where no other game code references
 // the TriGet* family directly).
@@ -501,6 +506,7 @@ INIT_MODULE(GameStateExtTestGetters, 3)
     GGameState.NewNularOp(GameNular(GameString, "triGetInputContext", TriGetInputContext));
     GGameState.NewNularOp(GameNular(GameString, "triGetCommandMenuOpen", TriGetCommandMenuOpen));
     GGameState.NewNularOp(GameNular(GameString, "triGetDevPanelVisible", TriGetDevPanelVisible));
+    GGameState.NewNularOp(GameNular(GameScalar, "triGetCameraEffectActive", TriGetCameraEffectActive));
 
     // Options
     GGameState.NewNularOp(GameNular(GameString, "triGetLanguage", TriGetLanguage));

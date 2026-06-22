@@ -109,6 +109,7 @@ using Poseidon::Foundation::MemoryUsed;
 using Poseidon::Foundation::Time;
 
 extern void SDLInput_BufferControllerUiAction(Poseidon::ControllerUiAction action, bool menuFallback);
+extern void SDLInput_BufferKeyEvent(SDL_Scancode sc, bool down, DWORD timestamp);
 
 /// triGpadButton <index> — synthesize a gamepad button-press event
 /// for harness tests. Also injects the matching controller UI action for
@@ -132,7 +133,15 @@ GameValue TriGpadButton(const GameState* state, GameValuePar arg)
                                               : ControllerUiAction::Confirm,
                                           true); // A -> confirm in menus, primary click in editor
     else if (i == 1)
+    {
+        if (GWorld && GWorld->GetCameraEffect())
+        {
+            DWORD now = GlobalTickCount();
+            SDLInput_BufferKeyEvent(SDL_SCANCODE_ESCAPE, true, now);
+            SDLInput_BufferKeyEvent(SDL_SCANCODE_ESCAPE, false, now + 1);
+        }
         SDLInput_BufferControllerUiAction(ControllerUiAction::Cancel, true); // B -> cancel/back in menus
+    }
     else if (i == 2)
         SDLInput_BufferControllerUiAction(ControllerUiAction::Preview, false);
     else if (i == 3)
