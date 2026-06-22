@@ -7,6 +7,14 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+env:
+  CCACHE_BASEDIR: ${{ github.workspace }}
+  CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+  CCACHE_NOHASHDIR: true
+
 jobs:
   build:
     name: ${{ matrix.name }}
@@ -19,21 +27,25 @@ jobs:
           - name: Linux Debug
             os: ubuntu-24.04
             preset: linux-x64-clang
+            vcpkg_triplet: x64-linux-clang
             build_dir: build/linux-x64-clang
             ctest_exclude: 'PoseidonTests - OAL -'
           - name: Linux RelWithDebInfo
             os: ubuntu-24.04
             preset: linux-x64-clang-rwdi
+            vcpkg_triplet: x64-linux-clang
             build_dir: build/linux-x64-clang-rwdi
             ctest_exclude: 'PoseidonTests - OAL -'
           - name: Windows Debug
             os: windows-2022
             preset: win-x64-clang-dbg
+            vcpkg_triplet: x64-windows-clang
             build_dir: build/win-x64-clang-dbg
             ctest_exclude: 'PoseidonTests - (OAL -|PAAEncoder -|Image - Save to \.paa|World state file format --|PreviewImage - saveToFile writes|PreviewImageRGB - saveToFile writes)'
           - name: Windows RelWithDebInfo
             os: windows-2022
             preset: win-x64-clang-rwdi
+            vcpkg_triplet: x64-windows-clang
             build_dir: build/win-x64-clang-rwdi
             ctest_exclude: 'PoseidonTests - (OAL -|PAAEncoder -|Image - Save to \.paa|World state file format --|PreviewImage - saveToFile writes|PreviewImageRGB - saveToFile writes)'
 
@@ -72,20 +84,43 @@ jobs:
           arch: 'x64'
           directory: 'C:\Program Files\LLVM'
 
+      - name: Setup compiler cache
+        uses: hendrikmuhs/ccache-action@v1.2.23
+        with:
+          variant: ccache
+          key: ${{ runner.os }}-${{ matrix.preset }}-pch
+          max-size: 1G
+
       - name: Setup CMake and Ninja
         uses: lukka/get-cmake@latest
 
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: .vcpkg-bincache/${{ matrix.vcpkg_triplet }}
+          key: vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/vcpkg-triplets/**', 'cmake/vcpkg-overlay-ports/**') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-
+
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
+        env:
+          VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-bincache/${{ matrix.vcpkg_triplet }},readwrite
+          VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-bincache/${{ matrix.vcpkg_triplet }}
+          VCPKG_DEFAULT_TRIPLET: ${{ matrix.vcpkg_triplet }}
+          VCPKG_INSTALLED_DIR: ${{ github.workspace }}/${{ matrix.build_dir }}/vcpkg_installed
+          VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/cmake/vcpkg-overlay-ports
+          VCPKG_OVERLAY_TRIPLETS: ${{ github.workspace }}/cmake/vcpkg-triplets
         with:
+          runVcpkgInstall: true
           vcpkgJsonGlob: 'vcpkg.json'
 
       - name: Configure
         run: >
           cmake
           --preset ${{ matrix.preset }}
-          -DCMAKE_C_COMPILER_LAUNCHER=
-          -DCMAKE_CXX_COMPILER_LAUNCHER=
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
         run: cmake --build ${{ matrix.build_dir }} --parallel 2
