@@ -2046,6 +2046,32 @@ void NetworkClient::AddSmokeSource(Object* obj)
     SendMsg(&msg, NMFGuaranteed);
 }
 
+void NetworkClient::AskForGunnerHidden(Transport* vehicle, float hidden)
+{
+    if (_state < NGSPlay)
+    {
+        return;
+    }
+
+    AskForGunnerHiddenMessage msg;
+    msg._vehicle = vehicle;
+    msg._hidden = hidden;
+    SendMsg(&msg, NMFGuaranteed);
+}
+
+void NetworkClient::AskForCommanderHidden(Transport* vehicle, float hidden)
+{
+    if (_state < NGSPlay)
+    {
+        return;
+    }
+
+    AskForCommanderHiddenMessage msg;
+    msg._vehicle = vehicle;
+    msg._hidden = hidden;
+    SendMsg(&msg, NMFGuaranteed);
+}
+
 void NetworkClient::CopyUnitInfo(Person* from, Person* to)
 {
     CopyUnitInfoMessage msg;

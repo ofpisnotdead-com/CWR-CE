@@ -169,7 +169,9 @@ DEFINE_ENUM_END(TMError)
 	XX(FORMAT_SIMPLE, Dummy, IncomingMissile, "Transfer message about fired missile to other clients.", Broadcast) \
 	XX(FORMAT_SIMPLE, Dummy, PublicExec, "Transfers command to exec.", Broadcast) \
 	XX(FORMAT_SIMPLE, Dummy, RemoteExec, "Targeted remote code execution with JIP support.", Broadcast) \
-	XX(FORMAT_SIMPLE, Dummy, AddSmokeSource, "Add smoke on a destroyed vehicle.", Broadcast)
+	XX(FORMAT_SIMPLE, Dummy, AddSmokeSource, "Add smoke on a destroyed vehicle.", Broadcast) \
+	XX(FORMAT_SIMPLE, Dummy, AskForGunnerHidden, "Ask vehicle for gunner hidden value.", Ask) \
+	XX(FORMAT_SIMPLE, Dummy, AskForCommanderHidden, "Ask vehicle for commander hidden value.", Ask)
 
 
 #define NMT_DEFINE_ENUM(macro, class, name, description, group) NMT##name,

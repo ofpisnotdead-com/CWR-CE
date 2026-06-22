@@ -170,6 +170,8 @@ class NetworkManager : public INetworkManager
     void AskForInflameFire(Fireplace* fireplace, bool fire) override;
     void AskForAnimationPhase(Entity* vehicle, RString animation, float phase) override;
     void AddSmokeSource(Object* obj) override;
+    void AskForGunnerHidden(Transport* vehicle, float hidden) override;
+    void AskForCommanderHidden(Transport* vehicle, float hidden) override;
     void CopyUnitInfo(Person* from, Person* to) override;
 
     RespawnMode GetRespawnMode() const override;

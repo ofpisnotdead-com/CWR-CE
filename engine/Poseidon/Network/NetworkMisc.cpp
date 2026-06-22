@@ -2354,6 +2354,22 @@ void NetworkManager::AddSmokeSource(Object* obj)
     }
 }
 
+void NetworkManager::AskForGunnerHidden(Transport* vehicle, float hidden)
+{
+    if (_client)
+    {
+        _client->AskForGunnerHidden(vehicle, hidden);
+    }
+}
+
+void NetworkManager::AskForCommanderHidden(Transport* vehicle, float hidden)
+{
+    if (_client)
+    {
+        _client->AskForCommanderHidden(vehicle, hidden);
+    }
+}
+
 void NetworkManager::CopyUnitInfo(Person* from, Person* to)
 {
     if (_client)

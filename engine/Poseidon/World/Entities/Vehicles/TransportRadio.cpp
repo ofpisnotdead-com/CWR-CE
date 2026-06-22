@@ -1799,6 +1799,8 @@ IndicesUpdateTransport::IndicesUpdateTransport()
     comFireTarget = -1;
     lock = -1;
     driverHiddenWanted = -1;
+    gunnerHiddenWanted = -1;
+    commanderHiddenWanted = -1;
     fuel = -1;
     engineOff = -1;
 }
@@ -1815,6 +1817,8 @@ void IndicesUpdateTransport::Scan(NetworkMessageFormatBase* format)
     SCAN(comFireTarget)
     SCAN(lock)
     SCAN(driverHiddenWanted)
+    SCAN(gunnerHiddenWanted)
+    SCAN(commanderHiddenWanted)
     SCAN(fuel);
     SCAN(engineOff);
 }
@@ -1850,6 +1854,12 @@ NetworkMessageFormat& Transport::CreateFormat(NetworkMessageClass cls, NetworkMe
                        ET_NOT_EQUAL, ERR_COEF_MODE);
             format.Add("driverHiddenWanted", NDTFloat, NCTFloat0To1, DEFVALUE(float, 0),
                        DOC_MSG("Wanted position of (tank) driver - inside / outside"), ET_NOT_EQUAL,
+                       ERR_COEF_VALUE_MAJOR);
+            format.Add("gunnerHiddenWanted", NDTFloat, NCTFloat0To1, DEFVALUE(float, 0),
+                       DOC_MSG("Wanted position of (tank) gunner - inside / outside"), ET_NOT_EQUAL,
+                       ERR_COEF_VALUE_MAJOR);
+            format.Add("commanderHiddenWanted", NDTFloat, NCTFloat0To1, DEFVALUE(float, 0),
+                       DOC_MSG("Wanted position of (tank) commander - inside / outside"), ET_NOT_EQUAL,
                        ERR_COEF_VALUE_MAJOR);
             format.Add("fuel", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Current amount of fuel"), ET_ABS_DIF,
                        ERR_COEF_VALUE_MINOR);
@@ -2124,6 +2134,8 @@ TMError Transport::TransferMsg(NetworkMessageContext& ctx)
                 }
                 ITRANSF_ENUM(lock)
                 ITRANSF(driverHiddenWanted)
+                ITRANSF(gunnerHiddenWanted)
+                ITRANSF(commanderHiddenWanted)
                 if (ctx.IsSending())
                 {
                     ITRANSF(engineOff)
@@ -2192,6 +2204,8 @@ float Transport::CalculateError(NetworkMessageContext& ctx)
 
             ICALCERR_NEQ(int, lock, ERR_COEF_STRUCTURE)
             ICALCERR_ABSDIF(float, driverHiddenWanted, ERR_COEF_VALUE_MAJOR)
+            ICALCERR_ABSDIF(float, gunnerHiddenWanted, ERR_COEF_VALUE_MAJOR)
+            ICALCERR_ABSDIF(float, commanderHiddenWanted, ERR_COEF_VALUE_MAJOR)
             ICALCERR_ABSDIF(float, fuel, ERR_COEF_VALUE_MINOR)
             ICALCERR_NEQ(bool, engineOff, ERR_COEF_MODE)
         }

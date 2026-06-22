@@ -342,6 +342,18 @@ DECLARE_NET_MESSAGE(RemoteExec, REMOTEEXEC_MSG)
 
 DECLARE_NET_MESSAGE(AddSmokeSource, ADD_SMOKE_SOURCE_MSG)
 
+#define ASK_FOR_GUNNER_HIDDEN_MSG(XX) \
+  XX(OLink<Transport>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which gunner is in"), IdxTransferRef) \
+  XX(float, hidden, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted position of (tank) gunner - inside / outside"), IdxTransfer)
+
+DECLARE_NET_MESSAGE(AskForGunnerHidden, ASK_FOR_GUNNER_HIDDEN_MSG)
+
+#define ASK_FOR_COMMANDER_HIDDEN_MSG(XX) \
+  XX(OLink<Transport>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which commander is in"), IdxTransferRef) \
+  XX(float, hidden, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted position of (tank) commander - inside / outside"), IdxTransfer)
+
+DECLARE_NET_MESSAGE(AskForCommanderHidden, ASK_FOR_COMMANDER_HIDDEN_MSG)
+
 // Text chat message
 struct ChatMessage : public NetworkSimpleObject
 {

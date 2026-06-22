@@ -685,15 +685,29 @@ void Transport::HidePerson(Person* person, float hide)
 {
     if (person == Commander())
     {
-        HideCommander(hide);
+        if (IsLocal())
+        {
+            HideCommander(hide);
+        }
+        else
+        {
+            GetNetworkManager().AskForCommanderHidden(this, hide);
+        }
     }
     else if (person == Driver())
     {
-        HideDriver(hide);
+        HideDriver(hide); //driver is always local
     }
     else if (person == Gunner())
     {
-        HideGunner(hide);
+        if (IsLocal())
+        {
+            HideGunner(hide);
+        }
+        else
+        {
+            GetNetworkManager().AskForGunnerHidden(this, hide);
+        }
     }
 }
 
