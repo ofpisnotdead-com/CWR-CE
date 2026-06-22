@@ -209,10 +209,10 @@ void NetworkServer::DebugAsk(RString str, int from, bool fullAccess)
         DebugAnswer(RString("Debug: version ") + versionText);
 
         ChatMessage chat;
-        chat.channel = CCGlobal;
-        chat.text = RString("Server Version: ") + versionText;
-        chat.sender = nullptr;
-        chat.name = "";
+        chat._channel = CCGlobal;
+        chat._text = RString("Server Version: ") + versionText;
+        chat._sender = nullptr;
+        chat._name = "";
         SendMsg(from, &chat, NMFGuaranteed);
         return;
     }
@@ -991,10 +991,10 @@ void NetworkServer::SimulateDS()
         if (info.motdIndex >= 0 && Glob.uiTime >= info.motdTime)
         {
             ChatMessage chat;
-            chat.channel = CCGlobal;
-            chat.text = _motd[info.motdIndex];
-            chat.sender = nullptr;
-            chat.name = "";
+            chat._channel = CCGlobal;
+            chat._text = _motd[info.motdIndex];
+            chat._sender = nullptr;
+            chat._name = "";
             SendMsg(info.dpid, &chat, NMFGuaranteed);
 
             info.motdIndex++;

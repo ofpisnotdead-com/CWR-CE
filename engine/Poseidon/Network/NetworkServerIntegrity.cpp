@@ -614,7 +614,12 @@ NetworkPlayerInfo* NetworkServer::OnPlayerCreate(int dpid, const char* name)
         RString message =
             BuildNetworkServerPlayerMessage((const char*)LocalizeString(IDS_MP_CONNECTING), (const char*)info.name);
         RefArray<NetworkObject> dummy;
-        ChatMessage msg(CCGlobal, nullptr, dummy, "", message);
+        ChatMessage msg;
+        msg._channel = CCGlobal;
+        msg._sender = nullptr;
+        msg._units = dummy;
+        msg._name = "";
+        msg._text = message;
         for (int i = 0; i < _players.Size(); i++)
         {
             if (_players[i].state >= NGSCreate)

@@ -2048,19 +2048,32 @@ void NetworkClient::CopyUnitInfo(Person* from, Person* to)
 
 void NetworkClient::Chat(int channel, RString text)
 {
-    ChatMessage msg(channel, GetLocalPlayerName(), text);
+    ChatMessage msg;
+    msg._channel = channel;
+    msg._name = GetLocalPlayerName();
+    msg._text = text;
     SendMsg(&msg, NMFGuaranteed | GetChatPriority());
 }
 
 void NetworkClient::Chat(int channel, AIUnit* sender, RefArray<NetworkObject>& units, RString text)
 {
-    ChatMessage msg(channel, sender, units, GetLocalPlayerName(), text);
+    ChatMessage msg;
+    msg._channel = channel;
+    msg._sender = sender;
+    msg._units = units;
+    msg._name = GetLocalPlayerName();
+    msg._text = text;
     SendMsg(&msg, NMFGuaranteed | GetChatPriority());
 }
 
 void NetworkClient::Chat(int channel, RString sender, RefArray<NetworkObject>& units, RString text)
 {
-    ChatMessage msg(channel, nullptr, units, sender, text);
+    ChatMessage msg;
+    msg._channel = channel;
+    msg._sender = nullptr;
+    msg._units = units;
+    msg._name = sender;
+    msg._text = text;
     SendMsg(&msg, NMFGuaranteed | GetChatPriority());
 }
 
@@ -2068,11 +2081,11 @@ void NetworkClient::RadioChat(int channel, AIUnit* sender, RefArray<NetworkObjec
                               RadioSentence& sentence)
 {
     RadioChatMessage msg;
-    msg.channel = channel;
-    msg.sender = sender;
-    msg.units = units;
-    msg.text = text;
-    msg.sentence = sentence;
+    msg._channel = channel;
+    msg._sender = sender;
+    msg._units = units;
+    msg._text = text;
+    msg._sentence = sentence;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -2080,11 +2093,11 @@ void NetworkClient::RadioChatWave(int channel, RefArray<NetworkObject>& units, R
                                   RString senderName)
 {
     RadioChatWaveMessage msg;
-    msg.channel = channel;
-    msg.units = units;
-    msg.wave = wave;
-    msg.sender = sender;
-    msg.senderName = senderName;
+    msg._channel = channel;
+    msg._units = units;
+    msg._wave = wave;
+    msg._sender = sender;
+    msg._senderName = senderName;
     SendMsg(&msg, NMFGuaranteed);
 }
 

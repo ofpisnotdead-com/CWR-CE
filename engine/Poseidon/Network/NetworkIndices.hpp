@@ -410,54 +410,6 @@ public:
 	void Scan(NetworkMessageFormatBase *format) override;
 };
 
-// network message indices for ChatMessage class
-class IndicesChat : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int channel;
-	int sender;
-	int units;
-	int name;
-	int text;
-
-	IndicesChat();
-	NetworkMessageIndices *Clone() const override {return new IndicesChat;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for RadioChatMessage class
-class IndicesRadioChat : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int channel;
-	int sender;
-	int units;
-	int text;
-	int sentence;
-
-	IndicesRadioChat();
-	NetworkMessageIndices *Clone() const override {return new IndicesRadioChat;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for RadioChatWaveMessage class
-class IndicesRadioChatWave : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int channel;
-	int units;
-	int wave;
-	int sender;
-	int senderName;
-
-	IndicesRadioChatWave();
-	NetworkMessageIndices *Clone() const override {return new IndicesRadioChatWave;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
 // network message indices for SetVoiceChannelMessage class
 class IndicesSetVoiceChannel : public NetworkMessageIndices
 {

@@ -312,81 +312,32 @@ DECLARE_NET_MESSAGE(PublicExec, PUBLICEXEC_MSG)
 
 DECLARE_NET_MESSAGE(RemoteExec, REMOTEEXEC_MSG)
 
-// Text chat message
-struct ChatMessage : public NetworkSimpleObject
-{
-	// chat channel
-	int channel;
-	// sender unit
-	AIUnit *sender;
-	// receiving units
-	RefArray<NetworkObject> units;
-	// sender name
-	RString name;
-	// chat text
-	RString text;
+#define CHAT_MSG(XX) \
+	XX(int, channel, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Radio channel"), IdxTransfer) \
+	XX(OLink<AIUnit>, sender, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Sender unit"), IdxTransferRef) \
+	XX(RefArray<NetworkObject>, units, NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("List of receiving units"), IdxTransferRefs) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Sender name"), IdxTransfer) \
+	XX(RString, text, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Message content"), IdxTransfer)
 
-	ChatMessage() {channel = 0; sender = nullptr;}
-	ChatMessage(int ch, RString n, RString txt)
-	{channel = ch; sender = nullptr; name = n; text = txt;}
-	ChatMessage(int ch, AIUnit *se, RefArray<NetworkObject> &u, RString n, RString txt)
-	{channel = ch; sender = se; units = u; name = n; text = txt;}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTChat;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(Chat, CHAT_MSG)
 
-// Radio chat message (radio message sent over network)
-struct RadioChatMessage : public NetworkSimpleObject
-{
-	// chat channel
-	int channel;
-	// sender unit
-	AIUnit *sender;
-	// receiving units
-	RefArray<NetworkObject> units;
-	// chat text
-	RString text;
-	// radio sentence (array of words) to say
-	RadioSentence sentence;
+#define RADIO_CHAT_MSG(XX) \
+	XX(int, channel, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Radio channel"), IdxTransfer) \
+	XX(OLink<AIUnit>, sender, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Sender unit"), IdxTransferRef) \
+	XX(RefArray<NetworkObject>, units, NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("List of receiving units"), IdxTransferRefs) \
+	XX(RString, text, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Content of message (text)"), IdxTransfer) \
+	XX(RadioSentence, sentence, NDTSentence, NCTNone, DEFVALUE(RadioSentence, RadioSentence()), DOC_MSG("Content of message (list of words to say)"), IdxTransfer)
 
-	RadioChatMessage() {channel = 0; sender = nullptr;}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTRadioChat;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(RadioChat, RADIO_CHAT_MSG)
 
-// Text (and sound) radio chat message
-struct RadioChatWaveMessage : public NetworkSimpleObject
-{
-	// chat channel
-	int channel;
-	// sender unit
-	AIUnit *sender;
-	// receiving units
-	RefArray<NetworkObject> units;
-	// sender name
-	RString senderName;
-	// name of class from CfgRadio containing sound and title
-	RString wave;
+#define RADIO_CHAT_WAVE_MSG(XX) \
+	XX(int, channel, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Radio channel"), IdxTransfer) \
+	XX(RefArray<NetworkObject>, units, NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("List of receiving units"), IdxTransferRefs) \
+	XX(RString, wave, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Sound identifier"), IdxTransfer) \
+	XX(OLink<AIUnit>, sender, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Sender unit"), IdxTransferRef) \
+	XX(RString, senderName, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Sender name"), IdxTransfer)
 
-	RadioChatWaveMessage() {channel = 0; sender = nullptr;}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTRadioChatWave;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(RadioChatWave, RADIO_CHAT_WAVE_MSG)
 
 // Set Voice Over Net channel message
 struct SetVoiceChannelMessage : public NetworkSimpleObject
