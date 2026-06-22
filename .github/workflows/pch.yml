@@ -1,0 +1,59 @@
+name: PCH Check
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  no-pch-build:
+    name: Linux Debug no-PCH
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf \
+            autoconf-archive \
+            automake \
+            clang \
+            libtool \
+            pkg-config \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libxext-dev \
+            libxrandr-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxtst-dev \
+            libxinerama-dev \
+            libxkbcommon-dev \
+            libwayland-dev \
+            wayland-protocols
+
+      - name: Setup CMake and Ninja
+        uses: lukka/get-cmake@latest
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgJsonGlob: 'vcpkg.json'
+
+      - name: Configure
+        run: >
+          cmake
+          --preset linux-x64-clang
+          -DPOSEIDON_DISABLE_PCH=ON
+          -DCMAKE_C_COMPILER_LAUNCHER=
+          -DCMAKE_CXX_COMPILER_LAUNCHER=
+
+      - name: Build
+        run: cmake --build build/linux-x64-clang --parallel 2
