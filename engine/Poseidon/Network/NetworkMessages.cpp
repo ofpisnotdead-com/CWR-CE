@@ -64,37 +64,7 @@ using namespace Poseidon;
 
 DEFINE_NET_MESSAGE(AskForDammage, ASK_FOR_DAMMAGE_MSG)
 
-IndicesAskForSetDammage::IndicesAskForSetDammage()
-{
-    who = -1;
-    dammage = -1;
-}
-
-void IndicesAskForSetDammage::Scan(NetworkMessageFormatBase* format){SCAN(who) SCAN(dammage)}
-
-// Create network message indices for AskForSetDammageMessage class
-NetworkMessageIndices* GetIndicesAskForSetDammage()
-{
-    return new IndicesAskForSetDammage();
-}
-
-NetworkMessageFormat& AskForSetDammageMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    Vector3 temp = VZero;
-    format.Add("who", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Damaged object"));
-    format.Add("dammage", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("New value of total damage"));
-    return format;
-}
-
-TMError AskForSetDammageMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskForSetDammage*>(ctx.GetIndices()))
-    const IndicesAskForSetDammage* indices = static_cast<const IndicesAskForSetDammage*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->who, who))
-    TMCHECK(ctx.IdxTransfer(indices->dammage, dammage))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(AskForSetDammage, ASK_FOR_SET_DAMMAGE_MSG)
 
 IndicesAskForGetIn::IndicesAskForGetIn()
 {
