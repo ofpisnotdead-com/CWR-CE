@@ -22,13 +22,26 @@ function(dist_copy TARGET)
         VERBATIM
     )
 
-    # Copy PDB on Windows debug builds
-    if(WIN32 AND NOT CMAKE_BUILD_TYPE STREQUAL "Release")
-        get_target_property(_type ${TARGET} TYPE)
+    get_target_property(_type ${TARGET} TYPE)
+
+    if(WIN32)
         if(_type STREQUAL "EXECUTABLE" OR _type STREQUAL "SHARED_LIBRARY")
             add_custom_command(TARGET ${TARGET} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     $<TARGET_PDB_FILE:${TARGET}> ${DIST_DIR}/
+                VERBATIM
+            )
+        endif()
+    endif()
+
+    if(UNIX AND NOT APPLE AND CMAKE_BUILD_TYPE STREQUAL "Release" AND CMAKE_OBJCOPY AND CMAKE_STRIP)
+        if(_type STREQUAL "EXECUTABLE" OR _type STREQUAL "SHARED_LIBRARY" OR _type STREQUAL "MODULE_LIBRARY")
+            set(_debug_dst "${_dst}.debug")
+            add_custom_command(TARGET ${TARGET} POST_BUILD
+                COMMAND ${CMAKE_OBJCOPY} --only-keep-debug $<TARGET_FILE:${TARGET}> ${_debug_dst}
+                COMMAND ${CMAKE_STRIP} --strip-debug --strip-unneeded ${_dst}
+                COMMAND ${CMAKE_OBJCOPY} --add-gnu-debuglink=${_debug_dst} ${_dst}
+                COMMENT "Writing debug symbols and stripping ${TARGET} in ${DIST_DIR}"
                 VERBATIM
             )
         endif()
