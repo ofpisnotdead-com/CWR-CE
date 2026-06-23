@@ -512,28 +512,14 @@ DECLARE_NET_MESSAGE(AskForHideBody, ASK_FOR_HIDE_BODY_MSG)
 
 DECLARE_NET_MESSAGE(ExplosionDammageEffects, EXPLOSION_DAMMAGE_EFFECTS_MSG)
 
-// Message for transfer fire effects (sound, fire, smoke, recoil effect, etc.) to other clients
-struct FireWeaponMessage : public NetworkSimpleObject
-{
-	// firing vehicle
-	EntityAI *vehicle;
-	// aimed target
-	EntityAI *target;
-	// firing weapon index
-	int weapon;
-	// fired magazine id
-	int magazineCreator;
-	// fired magazine id
-	int magazineId;
+#define FIRE_WEAPON_MSG(XX) \
+	XX(OLink<EntityAI>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Firing vehicle"), IdxTransferRef) \
+	XX(OLink<EntityAI>, target, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Aimed target"), IdxTransferRef) \
+	XX(int, weapon, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Firing weapon index"), IdxTransfer) \
+	XX(int, magazineCreator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Fired magazine id"), IdxTransfer) \
+	XX(int, magazineId, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Fired magazine id"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTFireWeapon;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(FireWeapon, FIRE_WEAPON_MSG)
 
 // Message for ask vehicle to add weapon into cargo
 struct AddWeaponCargoMessage : public NetworkSimpleObject
