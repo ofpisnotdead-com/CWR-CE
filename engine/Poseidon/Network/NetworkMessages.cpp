@@ -327,110 +327,11 @@ TMError NetworkCommandMessage::TransferMsg(NetworkMessageContext& ctx)
     return TMOK;
 }
 
-// network message indices for IntegrityQuestionMessage class
-class IndicesIntegrityQuestion : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int id;
-    int type;
-    int name;
-    int offset;
-    int size;
+DEFINE_NET_MESSAGE(IntegrityQuestion, INTEGRITY_QUESTION_MSG)
+DEFINE_GET_INDICES(IntegrityQuestion)
 
-    IndicesIntegrityQuestion();
-    NetworkMessageIndices* Clone() const override { return new IndicesIntegrityQuestion; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesIntegrityQuestion::IndicesIntegrityQuestion()
-{
-    id = -1;
-    type = -1;
-    name = -1;
-    offset = -1;
-    size = -1;
-}
-
-void IndicesIntegrityQuestion::Scan(NetworkMessageFormatBase* format){SCAN(id) SCAN(type) SCAN(name) SCAN(offset)
-                                                                          SCAN(size)}
-
-// Create network message indices for IntegrityQuestionMessage class
-NetworkMessageIndices* GetIndicesIntegrityQuestion()
-{
-    return new IndicesIntegrityQuestion();
-}
-
-NetworkMessageFormat& IntegrityQuestionMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("id", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unique id of question"));
-    format.Add("type", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Type of question"));
-    format.Add("name", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Question name"));
-    format.Add("offset", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Region in question"));
-    format.Add("size", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Region in question"));
-    return format;
-}
-
-TMError IntegrityQuestionMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesIntegrityQuestion*>(ctx.GetIndices()))
-    const IndicesIntegrityQuestion* indices = static_cast<const IndicesIntegrityQuestion*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->id, id))
-    TMCHECK(ctx.IdxTransfer(indices->type, (int&)type))
-    TMCHECK(ctx.IdxTransfer(indices->name, q.name))
-    TMCHECK(ctx.IdxTransfer(indices->offset, q.offset))
-    TMCHECK(ctx.IdxTransfer(indices->size, q.size))
-    return TMOK;
-}
-
-// network message indices for IntegrityAnswerMessage class
-class IndicesIntegrityAnswer : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int answer;
-    int id;
-    int type;
-
-    IndicesIntegrityAnswer();
-    NetworkMessageIndices* Clone() const override { return new IndicesIntegrityAnswer; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesIntegrityAnswer::IndicesIntegrityAnswer()
-{
-    answer = -1;
-    id = -1;
-    type = -1;
-}
-
-void IndicesIntegrityAnswer::Scan(NetworkMessageFormatBase* format){SCAN(answer) SCAN(id) SCAN(type)}
-
-// Create network message indices for IntegrityAnswerMessage class
-NetworkMessageIndices* GetIndicesIntegrityAnswer()
-{
-    return new IndicesIntegrityAnswer();
-}
-
-NetworkMessageFormat& IntegrityAnswerMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("id", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unique id of question"));
-    format.Add("type", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Type of question"));
-    format.Add("answer", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Answer value (CRC of selected data)"));
-    return format;
-}
-
-TMError IntegrityAnswerMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesIntegrityAnswer*>(ctx.GetIndices()))
-    const IndicesIntegrityAnswer* indices = static_cast<const IndicesIntegrityAnswer*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->id, id))
-    TMCHECK(ctx.IdxTransfer(indices->type, (int&)type))
-    TMCHECK(ctx.IdxTransfer(indices->answer, answer))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(IntegrityAnswer, INTEGRITY_ANSWER_MSG)
+DEFINE_GET_INDICES(IntegrityAnswer)
 
 // network message indices for PlayerStateMessage class
 class IndicesPlayerState : public NetworkMessageIndices

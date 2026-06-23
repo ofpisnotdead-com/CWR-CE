@@ -312,34 +312,22 @@ bool ParseMission(bool multiplayer);
 
 // Integrity question message
 // This message is sent by server to clients to check consistency of their data (to avoid cheaters).
-struct IntegrityQuestionMessage : public NetworkSimpleObject
-{
-    // question unique identifier
-    int id;
-    // type of question
-    IntegrityQuestionType type;
-    // question itself
-    IntegrityQuestion q;
+#define INTEGRITY_QUESTION_MSG(XX) \
+	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unique id of question"), IdxTransfer) \
+	XX(int, type, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Type of question"), IdxTransfer) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Question name"), IdxTransfer) \
+	XX(int, offset, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Region in question"), IdxTransfer) \
+	XX(int, size, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Region in question"), IdxTransfer)
 
-    NetworkMessageType GetNMType(NetworkMessageClass cls) const override { return NMTIntegrityQuestion; }
-    static NetworkMessageFormat& CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format);
-    TMError TransferMsg(NetworkMessageContext& ctx) override;
-};
+DECLARE_NET_MESSAGE(IntegrityQuestion, INTEGRITY_QUESTION_MSG)
 
 // Answer to integrity question message
-struct IntegrityAnswerMessage : public NetworkSimpleObject
-{
-    // question unique identifier
-    int id;
-    // type of question
-    IntegrityQuestionType type;
-    // answer value (CRC of selected data)
-    int answer;
+#define INTEGRITY_ANSWER_MSG(XX) \
+	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unique id of question"), IdxTransfer) \
+	XX(int, type, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Type of question"), IdxTransfer) \
+	XX(int, answer, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Answer value (CRC of selected data)"), IdxTransfer)
 
-    NetworkMessageType GetNMType(NetworkMessageClass cls) const override { return NMTIntegrityAnswer; }
-    static NetworkMessageFormat& CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format);
-    TMError TransferMsg(NetworkMessageContext& ctx) override;
-};
+DECLARE_NET_MESSAGE(IntegrityAnswer, INTEGRITY_ANSWER_MSG)
 
 // Message used for distribution of players' states to clients
 struct PlayerStateMessage : public NetworkSimpleObject
