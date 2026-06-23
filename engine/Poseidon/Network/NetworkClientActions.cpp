@@ -2229,7 +2229,8 @@ void NetworkClient::DeleteObject(NetworkId& id)
     }
 
     DeleteObjectMessage msg;
-    msg.object = id;
+    msg._creator = id.creator;
+    msg._id = id.id;
     SendMsg(&msg, NMFGuaranteed);
 
 #if CHECK_MSG
@@ -2570,7 +2571,8 @@ void NetworkClient::SendMessages()
             if (!info.object)
             {
                 DeleteObjectMessage msg;
-                msg.object = info.id;
+                msg._creator = info.id.creator;
+                msg._id = info.id.id;
                 SendMsg(&msg, NMFGuaranteed);
                 if (DiagLevel >= 1)
                 {
