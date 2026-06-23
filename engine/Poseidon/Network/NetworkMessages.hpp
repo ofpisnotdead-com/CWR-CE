@@ -411,22 +411,11 @@ DECLARE_NET_MESSAGE(DeleteCommand, DELETE_COMMAND_MSG)
 
 DECLARE_NET_MESSAGE(AskForDammage, ASK_FOR_DAMMAGE_MSG)
 
-// Message for ask object owner for set of total damage of object
-struct AskForSetDammageMessage : public NetworkSimpleObject
-{
-	// damaged object
-	Object *who;
-	// new value of total damage
-	float dammage;
+#define ASK_FOR_SET_DAMMAGE_MSG(XX) \
+	XX(OLink<Object>, who, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Damaged object"), IdxTransferRef) \
+	XX(float, dammage, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("New value of total damage"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForSetDammage;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskForSetDammage, ASK_FOR_SET_DAMMAGE_MSG)
 
 // Message for ask vehicle owner for get in person
 struct AskForGetInMessage : public NetworkSimpleObject
