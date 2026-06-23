@@ -133,7 +133,6 @@ jobs:
         uses: andriivitiv/setup-steamcmd@v1
 
       - name: Try Steam demo game data
-        continue-on-error: true
         shell: pwsh
         env:
           GAME_DATA_DIR: ${{ github.workspace }}/.game-data/remaster-demo
@@ -141,7 +140,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path $env:GAME_DATA_DIR
           $steamExit = 0
-          steamcmd +@sSteamCmdForcePlatformType windows +force_install_dir "$env:GAME_DATA_DIR" +login anonymous +app_update $env:STEAM_APP_ID validate +quit
+          steamcmd +@sSteamCmdForcePlatformType windows +force_install_dir "$env:GAME_DATA_DIR" +login anonymous +app_license_request $env:STEAM_APP_ID +app_update $env:STEAM_APP_ID validate +quit
           if ($LASTEXITCODE -ne 0) {
             $steamExit = $LASTEXITCODE
             Write-Warning "SteamCMD app_update failed with exit code $steamExit"
@@ -175,34 +174,22 @@ jobs:
           if ($steamExit -ne 0) {
             exit $steamExit
           }
-
-      - name: Prepare fixture game data
-        shell: pwsh
-        env:
-          FIXTURE_DATA_DIR: ${{ github.workspace }}/.game-data/studio
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $fixtureSource = Join-Path $env:GITHUB_WORKSPACE 'tests/fixtures/studio'
-          $fallbackFont = Join-Path $env:GITHUB_WORKSPACE 'tests/fixtures/font/dummy.ttf'
-          $fontCandidates = if ($env:RUNNER_OS -eq 'Windows') {
-            @("$env:WINDIR\Fonts\arial.ttf", "$env:WINDIR\Fonts\segoeui.ttf")
-          } else {
-            @('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', '/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf')
+          foreach ($required in @(
+            'BIN/RESOURCE.BIN',
+            'BIN/STRINGTABLE_MAINMENU.utf8.csv',
+            'BIN/optionsShell.hpp',
+            'DTA/Data.pbo',
+            'DTA/Fonts.pbo',
+            'fonts/cwr_title.ttf',
+            'Missions/Demo.Demo/mission.sqm'
+          )) {
+            $path = Join-Path $env:GAME_DATA_DIR $required
+            if (-not (Test-Path -LiteralPath $path)) {
+              throw "Steam demo content is missing required file: $required"
+            }
           }
-          $fontSource = $fontCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-          if (-not $fontSource) {
-            $fontSource = $fallbackFont
-          }
-          $fontDir = Join-Path $env:FIXTURE_DATA_DIR 'fonts'
-          New-Item -ItemType Directory -Force -Path $env:FIXTURE_DATA_DIR
-          Copy-Item -Path (Join-Path $fixtureSource '*') -Destination $env:FIXTURE_DATA_DIR -Recurse -Force
-          New-Item -ItemType Directory -Force -Path $fontDir
-          foreach ($fontName in @('cwr_title.ttf', 'cwr_body.ttf', 'cwr_mono.ttf', 'cwr_serif.ttf', 'cwr_hand.ttf')) {
-            Copy-Item -LiteralPath $fontSource -Destination (Join-Path $fontDir $fontName) -Force
-          }
-          "TRIDENT_DATA_DIR=$env:FIXTURE_DATA_DIR" | Add-Content -LiteralPath $env:GITHUB_ENV
-          Write-Host "Using Trident data directory: $env:FIXTURE_DATA_DIR"
-          Write-Host "Using Trident font source: $fontSource"
+          "TRIDENT_DATA_DIR=$env:GAME_DATA_DIR" | Add-Content -LiteralPath $env:GITHUB_ENV
+          Write-Host "Using Trident data directory: $env:GAME_DATA_DIR"
 
       - name: Write Trident env
         shell: pwsh
