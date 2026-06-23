@@ -40,7 +40,6 @@ DEFINE_ENUM_END(TMError)
 	XX(FORMAT_CREATE, SetVoiceChannelMessage, SetVoiceChannel, "Set Voice Over Net channel (targets).", Chat) \
 	XX(FORMAT_CREATE, SetSpeakerMessage, SetSpeaker, "Set which unit is speaking using Voice Over Net.", Chat) \
 	XX(FORMAT_CREATE, MissionHeader, MissionHeader, "Description of selected mission.", Control) \
-	XX(FORMAT_CREATE, PlayerRole, PlayerSide, "<notused/> Obsolete.", Control) \
 	XX(FORMAT_CREATE, PlayerRole, PlayerRole, "Define attachment between players and his role in game.", Control) \
 	XX(FORMAT_CREATE, SelectPlayerMessage, SelectPlayer, "Assign player to unit.", Control) \
 	XX(FORMAT_CREATE, AttachPersonMessage, AttachPerson, "Attach body (instance of class Person) and brain (instance of class AIUnit).", Control) \

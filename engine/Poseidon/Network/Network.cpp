@@ -874,46 +874,12 @@ TMError MissionHeader::TransferMsg(NetworkMessageContext& ctx)
     return TMOK;
 }
 
-IndicesPlayerRole::IndicesPlayerRole()
-{
-    index = -1;
-    side = -1;
-    group = -1;
-    unit = -1;
-    vehicle = -1;
-    position = -1;
-    leader = -1;
-    roleLocked = -1;
-    player = -1;
-}
-
-void IndicesPlayerRole::Scan(NetworkMessageFormatBase* format){SCAN(index) SCAN(side) SCAN(group) SCAN(unit)
-                                                                   SCAN(vehicle) SCAN(position) SCAN(leader)
-                                                                       SCAN(roleLocked) SCAN(player)}
-
-// Create network message indices for PlayerRole class
-NetworkMessageIndices* GetIndicesPlayerRole()
-{
-    return new IndicesPlayerRole();
-}
-NetworkMessageIndices* GetIndicesPlayerSide()
-{
-    return new IndicesPlayerRole();
-}
+DEFINE_NET_INDICES(PlayerRole, PLAYER_ROLE_MSG)
+DEFINE_GET_INDICES(PlayerRole)
 
 NetworkMessageFormat& PlayerRole::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("index", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Index of role"));
-    format.Add("side", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Side of role"));
-    format.Add("group", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Group ID of role"));
-    format.Add("unit", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unit ID of role"));
-    format.Add("vehicle", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Vehicle used by this role"));
-    format.Add("position", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0),
-               DOC_MSG("Position in vehicle (driver, commander, ...)"));
-    format.Add("leader", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Is this unit group leader"));
-    format.Add("roleLocked", NDTBool, NCTNone, DEFVALUE(bool, false),
-               DOC_MSG("Role is locked (only admin can assign this role)"));
-    format.Add("player", NDTInteger, NCTNone, DEFVALUE(int, AI_PLAYER), DOC_MSG("Currently attached player"));
+    PLAYER_ROLE_MSG(MSG_FORMAT)
     return format;
 }
 
