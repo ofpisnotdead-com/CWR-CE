@@ -20,6 +20,8 @@ jobs:
   smoke:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    env:
+      STEAM_SHARED_SECRET: ${{ secrets.STEAM_SHARED_SECRET }}
 
     strategy:
       fail-fast: false
@@ -45,10 +47,22 @@ jobs:
       - name: Setup SteamCMD
         uses: andriivitiv/setup-steamcmd@v1
 
+      - name: Generate Steam auth code
+        id: steam_totp
+        if: env.STEAM_SHARED_SECRET != ''
+        uses: andriivitiv/steam-totp@v1
+        env:
+          STEAM_SHARED_SECRET: ${{ secrets.STEAM_SHARED_SECRET }}
+        with:
+          shared_secret: ${{ secrets.STEAM_SHARED_SECRET }}
+
       - name: Try Steam demo game data
         shell: pwsh
         env:
           GAME_DATA_DIR: ${{ github.workspace }}/.game-data/remaster-demo
+          STEAM_USERNAME: ${{ secrets.STEAM_USERNAME }}
+          STEAM_PASSWORD: ${{ secrets.STEAM_PASSWORD }}
+          STEAM_TOTP_CODE: ${{ steps.steam_totp.outputs.code }}
         run: |
           $ErrorActionPreference = 'Stop'
           $requiredFiles = @(
@@ -76,13 +90,26 @@ jobs:
             return $ok
           }
 
+          $hasSteamCredentials = -not [string]::IsNullOrWhiteSpace($env:STEAM_USERNAME) -and -not [string]::IsNullOrWhiteSpace($env:STEAM_PASSWORD)
+          Write-Host "Steam authenticated login configured: $hasSteamCredentials"
+
           foreach ($platform in @('', 'windows', 'linux')) {
             $label = if ($platform) { $platform } else { 'native' }
             $attemptDir = Join-Path $env:GAME_DATA_DIR $label
             Remove-Item -LiteralPath $attemptDir -Recurse -Force -ErrorAction SilentlyContinue
             New-Item -ItemType Directory -Force -Path $attemptDir
 
-            $steamArgs = @('+force_install_dir', $attemptDir, '+login', 'anonymous', '+app_license_request', $env:STEAM_APP_ID, '+app_update', $env:STEAM_APP_ID, 'validate', '+quit')
+            $loginArgs = if ($hasSteamCredentials) {
+              if ([string]::IsNullOrWhiteSpace($env:STEAM_TOTP_CODE)) {
+                @('+login', $env:STEAM_USERNAME, $env:STEAM_PASSWORD)
+              } else {
+                @('+login', $env:STEAM_USERNAME, $env:STEAM_PASSWORD, $env:STEAM_TOTP_CODE)
+              }
+            } else {
+              @('+login', 'anonymous')
+            }
+
+            $steamArgs = @('+force_install_dir', $attemptDir) + $loginArgs + @('+app_license_request', $env:STEAM_APP_ID, '+app_update', $env:STEAM_APP_ID, 'validate', '+quit')
             if ($platform) {
               $steamArgs = @('+@sSteamCmdForcePlatformType', $platform) + $steamArgs
             }
