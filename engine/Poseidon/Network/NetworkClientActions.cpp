@@ -1744,8 +1744,8 @@ void NetworkClient::AskForJoin(AIGroup* join, AIGroup* group)
     }
 
     AskForJoinGroupMessage msg;
-    msg.join = join;
-    msg.group = group;
+    msg._join = join;
+    msg._group = group;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1757,8 +1757,8 @@ void NetworkClient::AskForJoin(AIGroup* join, OLinkArray<AIUnit>& units)
     }
 
     AskForJoinUnitsMessage msg;
-    msg.join = join;
-    msg.units = units;
+    msg._join = join;
+    msg._units = units;
     SendMsg(&msg, NMFGuaranteed);
 }
 
