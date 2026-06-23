@@ -179,30 +179,3 @@ public:
 	NetworkMessageIndices *Clone() const override {return new IndicesMarkerCreate;}
 	void Scan(NetworkMessageFormatBase *format) override;
 };
-
-// network message indices for ShowTargetMessage class
-class IndicesShowTarget : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int target;
-
-	IndicesShowTarget();
-	NetworkMessageIndices *Clone() const override {return new IndicesShowTarget;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for ShowGroupDirMessage class
-class IndicesShowGroupDir : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int dir;
-
-	IndicesShowGroupDir();
-	NetworkMessageIndices *Clone() const override {return new IndicesShowGroupDir;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-

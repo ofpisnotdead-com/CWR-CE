@@ -823,67 +823,9 @@ TMError SquadIdentity::TransferMsg(NetworkMessageContext& ctx)
     return TMOK;
 }
 
-IndicesShowTarget::IndicesShowTarget()
-{
-    vehicle = -1;
-    target = -1;
-}
+DEFINE_NET_MESSAGE(ShowTarget, SHOW_TARGET_MSG)
 
-void IndicesShowTarget::Scan(NetworkMessageFormatBase* format){SCAN(vehicle) SCAN(target)}
-
-// Create network message indices for ShowTargetMessage class
-NetworkMessageIndices* GetIndicesShowTarget()
-{
-    return new IndicesShowTarget();
-}
-
-NetworkMessageFormat& ShowTargetMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Player person"));
-    format.Add("target", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Target to show"));
-    return format;
-}
-
-TMError ShowTargetMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesShowTarget*>(ctx.GetIndices()))
-    const IndicesShowTarget* indices = static_cast<const IndicesShowTarget*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->vehicle, vehicle))
-    TMCHECK(ctx.IdxTransferRef(indices->target, target))
-    return TMOK;
-}
-
-IndicesShowGroupDir::IndicesShowGroupDir()
-{
-    vehicle = -1;
-    dir = -1;
-}
-
-void IndicesShowGroupDir::Scan(NetworkMessageFormatBase* format){SCAN(vehicle) SCAN(dir)}
-
-// Create network message indices for ShowGroupDirMessage class
-NetworkMessageIndices* GetIndicesShowGroupDir()
-{
-    return new IndicesShowGroupDir();
-}
-
-NetworkMessageFormat& ShowGroupDirMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Player person"));
-    format.Add("dir", NDTVector, NCTNone, DEFVALUE(Vector3, VForward), DOC_MSG("Direction to show"));
-    return format;
-}
-
-TMError ShowGroupDirMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesShowGroupDir*>(ctx.GetIndices()))
-    const IndicesShowGroupDir* indices = static_cast<const IndicesShowGroupDir*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->vehicle, vehicle))
-    TMCHECK(ctx.IdxTransfer(indices->dir, dir))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(ShowGroupDir, SHOW_GROUP_DIR_MSG)
 
 // Declare static variable for message format
 #define DECLARE_FORMAT(macro, class, name, description, group) \
