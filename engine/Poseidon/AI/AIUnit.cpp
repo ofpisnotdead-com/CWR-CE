@@ -765,146 +765,42 @@ NetworkMessageType AIUnit::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-IndicesCreateAIUnit::IndicesCreateAIUnit()
-{
-    person = -1;
-    subgroup = -1;
-    id = -1;
-    name = -1;
-    face = -1;
-    glasses = -1;
-    speaker = -1;
-    pitch = -1;
-    rank = -1;
-    experience = -1;
-    initExperience = -1;
-    playable = -1;
-    squadPicture = -1;
-    squadTitle = -1;
-}
-
-void IndicesCreateAIUnit::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(person)
-    SCAN(subgroup)
-    SCAN(id)
-    SCAN(name)
-    SCAN(face)
-    SCAN(glasses)
-    SCAN(speaker)
-    SCAN(pitch)
-    SCAN(rank)
-    SCAN(experience)
-    SCAN(initExperience)
-    SCAN(playable)
-    SCAN(squadPicture)
-    SCAN(squadTitle)
-}
+DEFINE_NET_INDICES_EX(CreateAIUnit, NetworkObject, CREATE_AI_UNIT_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesCreateAIUnit()
-{
-    using namespace Poseidon;
-    return new IndicesCreateAIUnit();
-}
+
+DEFINE_GET_INDICES(CreateAIUnit)
+
 namespace Poseidon
 {
 
-class IndicesUpdateAIUnit : public IndicesNetworkObject
-{
-    typedef IndicesNetworkObject base;
+#define UPDATE_AI_UNIT_MSG(XX) \
+	XX(OLink<Person>, person, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Attached body"), IdxTransferRef, ET_NONE, 0) \
+	XX(float, experience, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Amount of experience"), IdxTransfer, ET_ABS_DIF, 0.01 * ERR_COEF_VALUE_MINOR) \
+	XX(float, ability, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0.2), DOC_MSG("Ability of (AI) unit"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
+	XX(int, semaphore, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, SemaphoreYellow), DOC_MSG("Combat mode"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, combatModeMajor, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, CMAware), DOC_MSG("Behaviour"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(Time, dangerUntil, NDTTime, NCTNone, DEFVALUE(Time, Time(0)), DOC_MSG("In danger mode until..."), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(bool, captive, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Captive unit"), IdxTransfer, ET_NONE, 0) \
+	XX(OLink<Object>, house, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("House, where destination is"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
+	XX(int, housePos, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Destination position in house"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
+	XX(Vector3, wantedPosition, NDTVector, NCTNone, DEFVALUE(Vector3, VUndefined), DOC_MSG("Destination position"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MINOR) \
+	XX(int, planningMode, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, DoNotPlan), DOC_MSG("How to plan path"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MINOR) \
+	XX(float, formationAngle, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Relative orientation in formation"), IdxTransfer, ET_NONE, 0) \
+	XX(Vector3, formationPos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Relative position in formation"), IdxTransfer, ET_NONE, 0) \
+	XX(int, state, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, Wait), DOC_MSG("Unit (FSM) state"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, mode, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, Normal), DOC_MSG("Precision of path planning"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, lifeState, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, LSAlive), DOC_MSG("Life state of unit (Alive, Death, Asleep etc.)"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(bool, getInAllowed, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Can get in vehicles"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(bool, getInOrdered, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Must get in vehicles"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
 
-  public:
-    int person;
-    int experience;
-    int ability;
-    int semaphore;
-    int combatModeMajor;
-    int dangerUntil;
-    int captive;
-    int house;
-    int housePos;
-    int wantedPosition;
-    int planningMode;
-    int formationAngle;
-    int formationPos;
-    int state;
-    int mode;
-    int lifeState;
-    // ?? _delay
-    int getInAllowed;
-    int getInOrdered;
-
-    IndicesUpdateAIUnit();
-    ~IndicesUpdateAIUnit() override;
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateAIUnit; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateAIUnit::IndicesUpdateAIUnit()
-{
-    person = -1;
-    experience = -1;
-    ability = -1;
-    semaphore = -1;
-    combatModeMajor = -1;
-    dangerUntil = -1;
-    captive = -1;
-    house = -1;
-    housePos = -1;
-    wantedPosition = -1;
-    planningMode = -1;
-    formationAngle = -1;
-    formationPos = -1;
-    state = -1;
-    mode = -1;
-    lifeState = -1;
-    // ?? _delay
-    getInAllowed = -1;
-    getInOrdered = -1;
-}
-
-IndicesUpdateAIUnit::~IndicesUpdateAIUnit()
-{
-    /*
-        void DeleteIndicesPath(IndicesPath *path);
-        DeleteIndicesPath(path);
-    */
-}
-
-void IndicesUpdateAIUnit::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(person)
-    SCAN(experience)
-    SCAN(ability)
-    SCAN(semaphore)
-    SCAN(combatModeMajor)
-    SCAN(dangerUntil)
-    SCAN(captive)
-    SCAN(house)
-    SCAN(housePos)
-    SCAN(wantedPosition)
-    SCAN(planningMode)
-    SCAN(formationAngle)
-    SCAN(formationPos)
-    SCAN(state)
-    SCAN(mode)
-    SCAN(lifeState)
-    // ?? _delay
-    SCAN(getInAllowed)
-    SCAN(getInOrdered)
-}
+DECLARE_NET_INDICES_EX_ERR(UpdateAIUnit, NetworkObject, UPDATE_AI_UNIT_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdateAIUnit, NetworkObject, UPDATE_AI_UNIT_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateAIUnit()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateAIUnit();
-}
+
+DEFINE_GET_INDICES(UpdateAIUnit)
+
 namespace Poseidon
 {
 
@@ -914,61 +810,11 @@ NetworkMessageFormat& AIUnit::CreateFormat(NetworkMessageClass cls, NetworkMessa
     {
         case NMCCreate:
             NetworkObject::CreateFormat(cls, format);
-            format.Add("person", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Attached body"));
-            format.Add("subgroup", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Superior subgroup"));
-            format.Add("id", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID in group"));
-            format.Add("name", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Full name"));
-            format.Add("face", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Face"));
-            format.Add("glasses", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Glasses type"));
-            format.Add("speaker", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Speaker"));
-            format.Add("pitch", NDTFloat, NCTNone, DEFVALUE(float, 1.0f), DOC_MSG("Voice pitch"));
-            format.Add("rank", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, RankPrivate), DOC_MSG("Current rank"));
-            format.Add("experience", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Amount of experience"));
-            format.Add("initExperience", NDTFloat, NCTNone, DEFVALUE(float, 0),
-                       DOC_MSG("Initial amount of experience"));
-            format.Add("playable", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Is unit playable"));
-            format.Add("squadPicture", NDTString, NCTNone, DEFVALUE(RString, ""),
-                       DOC_MSG("Squad picture (shown on vehicles)"));
-            format.Add("squadTitle", NDTString, NCTNone, DEFVALUE(RString, ""),
-                       DOC_MSG("Squad title (shown on vehicles)"));
+            CREATE_AI_UNIT_MSG(MSG_FORMAT)
             break;
         case NMCUpdateGeneric:
             NetworkObject::CreateFormat(cls, format);
-            format.Add("person", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Attached body"));
-            format.Add("experience", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Amount of experience"), ET_ABS_DIF,
-                       0.01 * ERR_COEF_VALUE_MINOR);
-            format.Add("ability", NDTFloat, NCTFloat0To1, DEFVALUE(float, 0.2), DOC_MSG("Ability of (AI) unit"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("semaphore", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, SemaphoreYellow),
-                       DOC_MSG("Combat mode"), ET_NOT_EQUAL, ERR_COEF_MODE);
-            format.Add("combatModeMajor", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, CMAware), DOC_MSG("Behaviour"),
-                       ET_NOT_EQUAL, ERR_COEF_MODE);
-            format.Add("dangerUntil", NDTTime, NCTNone, DEFVALUE(Time, Time(0)), DOC_MSG("In danger mode until..."),
-                       ET_NOT_EQUAL, ERR_COEF_MODE);
-            format.Add("captive", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Captive unit"));
-            format.Add("house", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("House, where destination is"), ET_NOT_EQUAL,
-                       ERR_COEF_VALUE_MAJOR);
-            format.Add("housePos", NDTInteger, NCTSmallSigned, DEFVALUE(int, -1),
-                       DOC_MSG("Destination position in house"), ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR);
-            format.Add("wantedPosition", NDTVector, NCTNone, DEFVALUE(Vector3, VUndefined),
-                       DOC_MSG("Destination position"), ET_NOT_EQUAL, ERR_COEF_VALUE_MINOR);
-            format.Add("planningMode", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, DoNotPlan),
-                       DOC_MSG("How to plan path"), ET_NOT_EQUAL, ERR_COEF_VALUE_MINOR);
-            format.Add("formationAngle", NDTFloat, NCTFloatAngle, DEFVALUE(float, 0),
-                       DOC_MSG("Relative orientation in formation"));
-            format.Add("formationPos", NDTVector, NCTNone, DEFVALUE(Vector3, VZero),
-                       DOC_MSG("Relative position in formation"));
-            format.Add("state", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, Wait), DOC_MSG("Unit (FSM) state"),
-                       ET_NOT_EQUAL, ERR_COEF_MODE);
-            format.Add("mode", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, Normal),
-                       DOC_MSG("Precision of path planning"), ET_NOT_EQUAL, ERR_COEF_MODE);
-            format.Add("lifeState", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, LSAlive),
-                       DOC_MSG("Life state of unit (Alive, Death, Asleep etc.)"), ET_NOT_EQUAL, ERR_COEF_MODE);
-            // ?? _delay
-            format.Add("getInAllowed", NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Can get in vehicles"),
-                       ET_NOT_EQUAL, ERR_COEF_MODE);
-            format.Add("getInOrdered", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Must get in vehicles"),
-                       ET_NOT_EQUAL, ERR_COEF_MODE);
+            UPDATE_AI_UNIT_MSG(MSG_FORMAT_ERR)
             break;
         default:
             NetworkObject::CreateFormat(cls, format);
