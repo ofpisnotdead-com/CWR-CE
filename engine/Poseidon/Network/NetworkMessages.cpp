@@ -78,104 +78,11 @@ DEFINE_NET_MESSAGE(AskForAimObserver, ASK_FOR_AIM_OBSERVER_MSG)
 
 DEFINE_NET_MESSAGE(AskForSelectWeapon, ASK_FOR_SELECT_WEAPON_MSG)
 
-IndicesAskForAddImpulse::IndicesAskForAddImpulse()
-{
-    vehicle = -1;
-    force = -1;
-    torque = -1;
-}
+DEFINE_NET_MESSAGE(AskForAddImpulse, ASK_FOR_ADD_IMPULSE_MSG)
 
-void IndicesAskForAddImpulse::Scan(NetworkMessageFormatBase* format){SCAN(vehicle) SCAN(force) SCAN(torque)}
+DEFINE_NET_MESSAGE(AskForMoveVector, ASK_FOR_MOVE_VECTOR_MSG)
 
-// Create network message indices for AskForAddImpulseMessage class
-NetworkMessageIndices* GetIndicesAskForAddImpulse()
-{
-    return new IndicesAskForAddImpulse();
-}
-
-NetworkMessageFormat& AskForAddImpulseMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle impulse is applied to"));
-    format.Add("force", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Applied force"));
-    format.Add("torque", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Applied torque"));
-    return format;
-}
-
-TMError AskForAddImpulseMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskForAddImpulse*>(ctx.GetIndices()))
-    const IndicesAskForAddImpulse* indices = static_cast<const IndicesAskForAddImpulse*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->vehicle, vehicle))
-    TMCHECK(ctx.IdxTransfer(indices->force, force))
-    TMCHECK(ctx.IdxTransfer(indices->torque, torque))
-    return TMOK;
-}
-
-IndicesAskForMoveVector::IndicesAskForMoveVector()
-{
-    vehicle = -1;
-    pos = -1;
-}
-
-void IndicesAskForMoveVector::Scan(NetworkMessageFormatBase* format){SCAN(vehicle) SCAN(pos)}
-
-// Create network message indices for AskForMoveVectorMessage class
-NetworkMessageIndices* GetIndicesAskForMoveVector()
-{
-    return new IndicesAskForMoveVector();
-}
-
-NetworkMessageFormat& AskForMoveVectorMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Moving object"));
-    format.Add("pos", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("New position"));
-    return format;
-}
-
-TMError AskForMoveVectorMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskForMoveVector*>(ctx.GetIndices()))
-    const IndicesAskForMoveVector* indices = static_cast<const IndicesAskForMoveVector*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->vehicle, vehicle))
-    TMCHECK(ctx.IdxTransfer(indices->pos, pos))
-    return TMOK;
-}
-
-IndicesAskForMoveMatrix::IndicesAskForMoveMatrix()
-{
-    vehicle = -1;
-    pos = -1;
-    orient = -1;
-}
-
-void IndicesAskForMoveMatrix::Scan(NetworkMessageFormatBase* format){SCAN(vehicle) SCAN(pos) SCAN(orient)}
-
-// Create network message indices for AskForMoveMatrixMessage class
-NetworkMessageIndices* GetIndicesAskForMoveMatrix()
-{
-    return new IndicesAskForMoveMatrix();
-}
-
-NetworkMessageFormat& AskForMoveMatrixMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Moving object"));
-    format.Add("pos", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("New position"));
-    format.Add("orient", NDTMatrix, NCTNone, DEFVALUE(Matrix3, M3Identity), DOC_MSG("New orientation"));
-    return format;
-}
-
-TMError AskForMoveMatrixMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskForMoveMatrix*>(ctx.GetIndices()))
-    const IndicesAskForMoveMatrix* indices = static_cast<const IndicesAskForMoveMatrix*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->vehicle, vehicle))
-    TMCHECK(ctx.IdxTransfer(indices->pos, pos))
-    TMCHECK(ctx.IdxTransfer(indices->orient, orient))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(AskForMoveMatrix, ASK_FOR_MOVE_MATRIX_MSG)
 
 IndicesAskForJoinGroup::IndicesAskForJoinGroup()
 {

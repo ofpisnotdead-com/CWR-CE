@@ -1703,9 +1703,9 @@ void NetworkClient::AskForAddImpulse(Vehicle* vehicle, Vector3Par force, Vector3
     }
 
     AskForAddImpulseMessage msg;
-    msg.vehicle = vehicle;
-    msg.force = force;
-    msg.torque = torque;
+    msg._vehicle = vehicle;
+    msg._force = force;
+    msg._torque = torque;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1717,8 +1717,8 @@ void NetworkClient::AskForMove(Object* vehicle, Vector3Par pos)
     }
 
     AskForMoveVectorMessage msg;
-    msg.vehicle = vehicle;
-    msg.pos = pos;
+    msg._vehicle = vehicle;
+    msg._pos = pos;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1730,9 +1730,9 @@ void NetworkClient::AskForMove(Object* vehicle, Matrix4Par trans)
     }
 
     AskForMoveMatrixMessage msg;
-    msg.vehicle = vehicle;
-    msg.pos = trans.Position();
-    msg.orient = trans.Orientation();
+    msg._vehicle = vehicle;
+    msg._pos = trans.Position();
+    msg._orient = trans.Orientation();
     SendMsg(&msg, NMFGuaranteed);
 }
 
