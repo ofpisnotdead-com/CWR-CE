@@ -651,19 +651,20 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             SelectPlayerMessage pl;
             pl.TransferMsg(ctx);
-            NET_ERROR(pl.player == _player);
-            NetworkObject* object = GetObject(pl.person);
+            NET_ERROR(pl._player == _player);
+            NetworkId id(pl._creator, pl._id);
+            NetworkObject* object = GetObject(id);
             Person* veh = dynamic_cast<Person*>(object);
             if (!veh)
             {
-                RptF("Client: Player (%d) is not vehicle with brain (%x)", (int)pl.player, pl.person.id);
+                RptF("Client: Player (%d) is not vehicle with brain (%x)", (int)pl._player, pl._id);
                 break;
             }
             GWorld->SwitchCameraTo(veh->Brain()->GetVehicle(), CamInternal);
             GWorld->SetPlayerManual(true);
             GWorld->SwitchPlayerTo(veh);
             GWorld->SetRealPlayer(veh);
-            if (pl.respawn)
+            if (pl._respawn)
             {
                 RString name = "onPlayerResurrect.sqs";
                 if (QIFStreamB::FileExist(RString("scripts\\") + name))

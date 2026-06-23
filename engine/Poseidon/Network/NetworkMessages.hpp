@@ -353,28 +353,14 @@ DECLARE_NET_MESSAGE(SetVoiceChannel, SET_VOICE_CHANNEL_MSG)
 
 DECLARE_NET_MESSAGE(SetSpeaker, SET_SPEAKER_MSG)
 
-// Select person as player message
-struct SelectPlayerMessage : public NetworkSimpleObject
-{
-	// DirectX player id
-	int player;
-	// player's person
-	NetworkId person;
-	// player's position
-	Vector3 position;
-	// play "ressurect" cutscene
-	bool respawn;
+#define SELECT_PLAYER_MSG(XX) \
+	XX(int, player, NDTInteger, NCTNone, DEFVALUE(int, AI_PLAYER), DOC_MSG("Client (player) ID of player"), IdxTransfer) \
+	XX(int, creator, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID of player's unit"), IdxTransfer) \
+	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID of player's unit"), IdxTransfer) \
+	XX(Vector3, position, NDTVector, NCTNone, DEFVALUE(Vector3, Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX)), DOC_MSG("Player's unit position"), IdxTransfer) \
+	XX(bool, respawn, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Selection of player's unit after respawn"), IdxTransfer)
 
-	SelectPlayerMessage() {player = AI_PLAYER; position = Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX); respawn = false;}
-	SelectPlayerMessage(int pl, NetworkId pe, Vector3Par pos, bool resp) {player = pl; person = pe; position = pos, respawn = resp;}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTSelectPlayer;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(SelectPlayer, SELECT_PLAYER_MSG)
 
 // Message is sent when owner of some object changes
 struct ChangeOwnerMessage : public NetworkSimpleObject

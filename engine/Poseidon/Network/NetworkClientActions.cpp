@@ -528,7 +528,13 @@ void NetworkClient::RegisterFormats()
 
 void NetworkClient::SelectPlayer(int player, Person* person, bool respawn)
 {
-    SelectPlayerMessage msg(player, person->GetNetworkId(), person->Position(), respawn);
+    SelectPlayerMessage msg;
+    NetworkId id = person->GetNetworkId();
+    msg._player = player;
+    msg._creator = id.creator;
+    msg._id = id.id;
+    msg._position = person->Position();
+    msg._respawn = respawn;
     SendMsg(&msg, NMFGuaranteed);
 
     if (person->IsLocal())
