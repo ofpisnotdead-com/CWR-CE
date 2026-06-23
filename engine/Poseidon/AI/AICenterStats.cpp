@@ -1151,79 +1151,32 @@ NetworkMessageType AICenter::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesCreateAICenter : public IndicesNetworkObject
-{
-    typedef IndicesNetworkObject base;
+#define CREATE_AI_CENTER_MSG(XX) \
+	XX(int, side, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, TEast), DOC_MSG("Side of center"), IdxTransfer)
 
-  public:
-    //! index of field in message format
-    int side;
-
-    IndicesCreateAICenter();
-    NetworkMessageIndices* Clone() const override { return new IndicesCreateAICenter; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesCreateAICenter::IndicesCreateAICenter()
-{
-    side = -1;
-}
-
-void IndicesCreateAICenter::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(side)
-}
+DECLARE_NET_INDICES_EX(CreateAICenter, NetworkObject, CREATE_AI_CENTER_MSG)
+DEFINE_NET_INDICES_EX(CreateAICenter, NetworkObject, CREATE_AI_CENTER_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesCreateAICenter()
-{
-    using namespace Poseidon;
-    return new IndicesCreateAICenter();
-}
+
+DEFINE_GET_INDICES(CreateAICenter)
+
 namespace Poseidon
 {
 
-class IndicesUpdateAICenter : public IndicesNetworkObject
-{
-    typedef IndicesNetworkObject base;
+#define UPDATE_AI_CENTER_MSG(XX) \
+	XX(float, friends0, NDTFloat, NCTNone, DEFVALUE(float, 1.0), DOC_MSG("Friendship to other side"), IdxTransfer) \
+	XX(float, friends1, NDTFloat, NCTNone, DEFVALUE(float, 1.0), DOC_MSG("Friendship to other side"), IdxTransfer) \
+	XX(float, friends2, NDTFloat, NCTNone, DEFVALUE(float, 1.0), DOC_MSG("Friendship to other side"), IdxTransfer) \
+	XX(float, friends3, NDTFloat, NCTNone, DEFVALUE(float, 1.0), DOC_MSG("Friendship to other side"), IdxTransfer)
 
-  public:
-    //! index of field in message format
-    int friends[TSideUnknown];
-
-    IndicesUpdateAICenter();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateAICenter; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateAICenter::IndicesUpdateAICenter()
-{
-    for (int i = 0; i < TSideUnknown; i++)
-    {
-        friends[i] = -1;
-    }
-}
-
-void IndicesUpdateAICenter::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    for (int i = 0; i < TSideUnknown; i++)
-    {
-        char buffer[256];
-        ::sprintf(buffer, "friends%d", i);
-        friends[i] = format->FindIndex(buffer);
-    }
-}
+DECLARE_NET_INDICES_EX(UpdateAICenter, NetworkObject, UPDATE_AI_CENTER_MSG)
+DEFINE_NET_INDICES_EX(UpdateAICenter, NetworkObject, UPDATE_AI_CENTER_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateAICenter()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateAICenter();
-}
+
+DEFINE_GET_INDICES(UpdateAICenter)
+
 namespace Poseidon
 {
 
@@ -1233,16 +1186,11 @@ NetworkMessageFormat& AICenter::CreateFormat(NetworkMessageClass cls, NetworkMes
     {
         case NMCCreate:
             NetworkObject::CreateFormat(cls, format);
-            format.Add("side", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, TEast), DOC_MSG("Side of center"));
+            CREATE_AI_CENTER_MSG(MSG_FORMAT)
             break;
         case NMCUpdateGeneric:
             NetworkObject::CreateFormat(cls, format);
-            for (int i = 0; i < TSideUnknown; i++)
-            {
-                char buffer[256];
-                ::sprintf(buffer, "friends%d", i);
-                format.Add(buffer, NDTFloat, NCTNone, DEFVALUE(float, 1.0), DOC_MSG("Friendship to other side"));
-            }
+            UPDATE_AI_CENTER_MSG(MSG_FORMAT)
             break;
         default:
             NetworkObject::CreateFormat(cls, format);
@@ -1307,10 +1255,10 @@ TMError AICenter::TransferMsg(NetworkMessageContext& ctx)
                 AI_ERROR(dynamic_cast<const IndicesUpdateAICenter*>(ctx.GetIndices()))
                 const IndicesUpdateAICenter* indices = static_cast<const IndicesUpdateAICenter*>(ctx.GetIndices());
 
-                for (int i = 0; i < TSideUnknown; i++)
-                {
-                    TMCHECK(ctx.IdxTransfer(indices->friends[i], _friends[i]))
-                }
+                TMCHECK(ctx.IdxTransfer(indices->friends0, _friends[0]))
+                TMCHECK(ctx.IdxTransfer(indices->friends1, _friends[1]))
+                TMCHECK(ctx.IdxTransfer(indices->friends2, _friends[2]))
+                TMCHECK(ctx.IdxTransfer(indices->friends3, _friends[3]))
             }
             break;
         default:
