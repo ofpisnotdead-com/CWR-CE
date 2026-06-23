@@ -19,6 +19,7 @@
 use crate::client::GameInstance;
 use crate::scenarios::ScenarioResult;
 use anyhow::{Context, Result};
+use std::cmp::Reverse;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -93,7 +94,7 @@ pub enum TestKind {
     Seq(PathBuf),
 }
 
-fn scheduled_tests<'a>(tests: &'a [IntegrationTest], max_slots: u32) -> Vec<&'a IntegrationTest> {
+fn scheduled_tests(tests: &[IntegrationTest], max_slots: u32) -> Vec<&IntegrationTest> {
     let mut ordered: Vec<_> = tests.iter().enumerate().collect();
     ordered.sort_by_key(|(index, test)| (test.reserves_full_pool(max_slots), *index));
     ordered.into_iter().map(|(_, test)| test).collect()
@@ -2185,7 +2186,7 @@ pub fn print_profile(results: &[(String, ScenarioResult)], n: usize) {
         return;
     }
     let mut sorted: Vec<&(String, ScenarioResult)> = results.iter().collect();
-    sorted.sort_by(|a, b| b.1.duration.cmp(&a.1.duration));
+    sorted.sort_by_key(|result| Reverse(result.1.duration));
     let take = n.min(sorted.len());
     println!("\n  Top {take} slowest tests:");
     let max_name_len = sorted
@@ -2638,7 +2639,7 @@ triAssertDisplay 9099
             "triClickText \"OPTIONS\"\ntriAssertEq [(triDisplay), 9099]\n",
         )
         .unwrap();
-        let source = format!("#include \"helper.sqf\"\ntriClick 1102\n");
+        let source = "#include \"helper.sqf\"\ntriClick 1102\n".to_string();
         let expanded = expand_includes(&source, dir.path()).unwrap();
         let stmts = parse_statements(&expanded);
         assert_eq!(

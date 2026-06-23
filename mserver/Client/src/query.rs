@@ -58,7 +58,7 @@ pub fn query_server<A: ToSocketAddrs>(
                 }
                 match deadline.checked_duration_since(Instant::now()) {
                     Some(remaining) if !remaining.is_zero() => {
-                        socket.set_read_timeout(Some(remaining))?
+                        socket.set_read_timeout(Some(remaining))?;
                     }
                     _ => return Ok(None),
                 }

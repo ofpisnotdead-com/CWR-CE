@@ -334,7 +334,7 @@ fn compress_artifact(mut raw: Box<dyn Read>) -> Result<(NamedTempFile, u64)> {
         // Spread compression across cores — at level 19 a multi-GB mod is otherwise CPU-bound on
         // one thread for tens of minutes. Falls back to single-threaded if unsupported.
         let workers = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
-        let _ = encoder.multithread(workers as u32);
+        let _ = encoder.multithread(u32::try_from(workers).unwrap_or(u32::MAX));
         std::io::copy(&mut raw, &mut encoder).context("compressing artifact")?;
         encoder.finish().context("finishing zstd stream")?;
     }
@@ -519,8 +519,7 @@ fn run_install(args: &InstallArgs, master: &str, insecure: bool) -> Result<()> {
         let folder = entry["folderName"]
             .as_str()
             .filter(|s| !s.trim().is_empty())
-            .map(str::to_string)
-            .unwrap_or_else(|| format!("@{mod_id}"));
+            .map_or_else(|| format!("@{mod_id}"), str::to_string);
         if !mods.iter().any(|(m, _, _)| m == &mod_id) {
             mods.push((mod_id, folder, entry.clone()));
         }
@@ -967,7 +966,7 @@ mod tests {
         pbo.write(&mut raw).unwrap();
 
         let (tmp, compressed_len) = compress_artifact(Box::new(Cursor::new(raw.clone()))).unwrap();
-        assert!(compressed_len > 0 && (compressed_len as usize) < raw.len());
+        assert!(compressed_len > 0 && compressed_len < raw.len() as u64);
         let compressed = std::fs::read(tmp.path()).unwrap();
         assert_eq!(compressed.len() as u64, compressed_len);
 
