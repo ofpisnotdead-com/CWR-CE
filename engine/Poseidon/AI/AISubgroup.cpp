@@ -189,85 +189,21 @@ NetworkMessageType Command::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-IndicesCreateCommand::IndicesCreateCommand()
-{
-    subgroup = -1;
-    index = -1;
-    message = -1;
-    target = -1;
-    targetE = -1;
-    destination = -1;
-    time = -1;
-    join = -1;
-    action = -1;
-    param = -1;
-    param2 = -1;
-    param3 = -1;
-    discretion = -1;
-    context = -1;
-    id = -1;
-}
-
-void IndicesCreateCommand::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(subgroup)
-    SCAN(index)
-    SCAN(message)
-    SCAN(target)
-    SCAN(targetE)
-    SCAN(destination)
-    SCAN(time)
-    SCAN(join)
-    SCAN(action)
-    SCAN(param)
-    SCAN(param2)
-    SCAN(param3)
-    SCAN(discretion)
-    SCAN(context)
-    SCAN(id)
-}
+DEFINE_NET_INDICES_EX(CreateCommand, NetworkObject, CREATE_COMMAND_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesCreateCommand()
-{
-    using namespace Poseidon;
-    return new IndicesCreateCommand();
-}
+
+DEFINE_GET_INDICES(CreateCommand)
+
 namespace Poseidon
 {
 
-class IndicesUpdateCommand : public IndicesNetworkObject
-{
-    typedef IndicesNetworkObject base;
-
-  public:
-    int destination;
-
-    IndicesUpdateCommand();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateCommand; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateCommand::IndicesUpdateCommand()
-{
-    destination = -1;
-}
-
-void IndicesUpdateCommand::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(destination)
-}
+DEFINE_NET_INDICES_EX(UpdateCommand, NetworkObject, UPDATE_COMMAND_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateCommand()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateCommand();
-}
+
+DEFINE_GET_INDICES(UpdateCommand)
+
 namespace Poseidon
 {
 
@@ -277,32 +213,11 @@ NetworkMessageFormat& Command::CreateFormat(NetworkMessageClass cls, NetworkMess
     {
         case NMCCreate:
             NetworkObject::CreateFormat(cls, format);
-            format.Add("subgroup", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Subgroup, executing this command"));
-            format.Add("index", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0),
-                       DOC_MSG("Index of command in subgroup"));
-
-            format.Add("message", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, NoCommand), DOC_MSG("Type of command"));
-            format.Add("target", NDTRef, NCTNone, DEFVALUENULL,
-                       DOC_MSG("Target (exact) of command - used for well known targets"));
-            format.Add("targetE", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Target (inexact) - used for enemies"));
-            format.Add("destination", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Destination position"));
-            format.Add("time", NDTTime, NCTNone, DEFVALUE(Time, Time(0)), DOC_MSG("Time, when command timeouts"));
-            format.Add("join", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Join to main subroup after completition"));
-            format.Add("action", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0),
-                       DOC_MSG("Type of action for Action command"));
-            format.Add("param", NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Action parameter"));
-            format.Add("param2", NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Action parameter"));
-            format.Add("param3", NDTString, NCTNone, DEFVALUE(RString, RString("")), DOC_MSG("Action parameter"));
-            format.Add("discretion", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, Undefined),
-                       DOC_MSG("Subgroup discretion"));
-            format.Add("context", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, CtxUndefined),
-                       DOC_MSG("How command was ordered"));
-            format.Add("id", NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Unique (in group) id of command"));
+            CREATE_COMMAND_MSG(MSG_FORMAT)
             break;
         case NMCUpdateGeneric:
             NetworkObject::CreateFormat(cls, format);
-            format.Add("destination", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Destination position"),
-                       ET_ABS_DIF, 1);
+            UPDATE_COMMAND_MSG(MSG_FORMAT)
             break;
         default:
             NetworkObject::CreateFormat(cls, format);
