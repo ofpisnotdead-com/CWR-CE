@@ -750,7 +750,10 @@ void NetworkServer::OnPlayerDestroy(int dpid)
             oInfo.owner = _botClient;
             if (!oInfo.id.IsNull())
             {
-                ChangeOwnerMessage msg(oInfo.id, _botClient);
+                ChangeOwnerMessage msg;
+                msg._creator = oInfo.id.creator;
+                msg._id = oInfo.id.id;
+                msg._owner = _botClient;
                 SendMsg(_botClient, &msg, NMFGuaranteed);
             }
         }
