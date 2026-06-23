@@ -43,17 +43,10 @@ class TankOrCarType: public TransportType
 	void InitShape() override;
 };
 
-class IndicesUpdateTankOrCar : public IndicesUpdateTransport
-{
-	typedef IndicesUpdateTransport base;
+#define UPDATE_TANK_OR_CAR_MSG(XX) \
+	XX(bool, pilotBrake, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("State of pilot brake (on / off)"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) 
 
-public:
-	int pilotBrake;
-
-	IndicesUpdateTankOrCar();
-	NetworkMessageIndices *Clone() const override {return new IndicesUpdateTankOrCar;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES_EX_ERR(UpdateTankOrCar, UpdateTransport, UPDATE_TANK_OR_CAR_MSG)
 
 class TankOrCar: public Transport
 {
