@@ -2322,60 +2322,24 @@ NetworkMessageType Man::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesUpdateMan : public IndicesUpdateVehicleBrain
-{
-    typedef IndicesUpdateVehicleBrain base;
+#define UPDATE_MAN_MSG(XX) \
+	XX(float, hideBodyWanted, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Wanted state of body (1 .. fully hidden)"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MINOR) \
+	XX(float, tired, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("How man is tired"), IdxTransfer, ET_NONE, 0) \
+	XX(float, walkSpeedWanted, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted speed"), IdxTransfer, ET_NONE, 0) \
+	XX(int, unitPos, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, UPAuto), DOC_MSG("Up / down state"), IdxTransfer, ET_NONE, 0) \
+	XX(OLink<EntityAI>, flagCarrier, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Carried flag"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(bool, nvg, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Night vision is active"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
+	XX(OLink<Building>, ladderBuilding, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Ladder ID"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, ladderIndex, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Ladder ID"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
+	XX(float, ladderPosition, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Position on ladder"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
-  public:
-    int hideBodyWanted;
-    int tired;
-    int walkSpeedWanted;
-    int unitPos;
-    int flagCarrier;
-    int nvg;
-    int ladderBuilding;
-    int ladderIndex;
-    int ladderPosition;
-
-    IndicesUpdateMan();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateMan; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateMan::IndicesUpdateMan()
-{
-    hideBodyWanted = -1;
-    tired = -1;
-    walkSpeedWanted = -1;
-    unitPos = -1;
-    flagCarrier = -1;
-    nvg = -1;
-    ladderBuilding = -1;
-    ladderIndex = -1;
-    ladderPosition = -1;
-}
-
-void IndicesUpdateMan::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(hideBodyWanted)
-    SCAN(tired)
-    SCAN(walkSpeedWanted)
-    SCAN(unitPos)
-    SCAN(flagCarrier)
-    SCAN(nvg)
-    SCAN(ladderBuilding);
-    SCAN(ladderIndex);
-    SCAN(ladderPosition);
-}
+DECLARE_NET_INDICES_EX_ERR(UpdateMan, UpdateVehicleBrain, UPDATE_MAN_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdateMan, UpdateVehicleBrain, UPDATE_MAN_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateMan()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateMan();
-}
+
+DEFINE_GET_INDICES(UpdateMan)
+
 namespace Poseidon
 {
 
@@ -2421,25 +2385,7 @@ NetworkMessageFormat& Man::CreateFormat(NetworkMessageClass cls, NetworkMessageF
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-
-            format.Add("hideBodyWanted", NDTFloat, NCTFloat0To1, DEFVALUE(float, 0),
-                       DOC_MSG("Wanted state of body (1 .. fully hidden)"), ET_ABS_DIF, ERR_COEF_VALUE_MINOR);
-
-            format.Add("tired", NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("How man is tired"));
-            format.Add("walkSpeedWanted", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted speed"));
-            format.Add("unitPos", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, UPAuto), DOC_MSG("Up / down state"));
-            format.Add("flagCarrier", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Carried flag"), ET_NOT_EQUAL,
-                       ERR_COEF_MODE);
-            format.Add("nvg", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Night vision is active"), ET_ABS_DIF,
-                       ERR_COEF_VALUE_MAJOR);
-
-            format.Add("ladderBuilding", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Ladder ID"), ET_NOT_EQUAL,
-                       ERR_COEF_MODE);
-            format.Add("ladderIndex", NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Ladder ID"), ET_NOT_EQUAL,
-                       ERR_COEF_VALUE_MAJOR);
-            format.Add("ladderPosition", NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Position on ladder"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-
+            UPDATE_MAN_MSG(MSG_FORMAT_ERR)
             break;
         case NMCUpdatePosition:
             base::CreateFormat(cls, format);
