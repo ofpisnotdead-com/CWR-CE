@@ -704,18 +704,18 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             TransferFileMessage transfer;
             transfer.TransferMsg(ctx);
             const size_t maxTransferSize =
-                Poseidon::NetworkTransferredAssetMaxSize(transfer.path, static_cast<size_t>(MaxCustomFileSize));
-            if (!Poseidon::ShouldAcceptNetworkTransferredAsset(transfer.path, static_cast<size_t>(transfer.totSize),
+                Poseidon::NetworkTransferredAssetMaxSize(transfer._path, static_cast<size_t>(MaxCustomFileSize));
+            if (!Poseidon::ShouldAcceptNetworkTransferredAsset(transfer._path, static_cast<size_t>(transfer._totSize),
                                                                static_cast<size_t>(MaxCustomFileSize)))
             {
-                if (!Poseidon::IsSafeNetworkTransferredAssetPath(transfer.path))
+                if (!Poseidon::IsSafeNetworkTransferredAssetPath(transfer._path))
                 {
-                    LOG_WARN(Network, "[NMTTransferFile] rejected unsafe path '{}'", (const char*)transfer.path);
+                    LOG_WARN(Network, "[NMTTransferFile] rejected unsafe path '{}'", (const char*)transfer._path);
                 }
                 else
                 {
                     LOG_WARN(Network, "[NMTTransferFile] rejected oversized custom asset '{}' ({} B > {} B)",
-                             (const char*)transfer.path, transfer.totSize, maxTransferSize);
+                             (const char*)transfer._path, transfer._totSize, maxTransferSize);
                 }
                 break;
             }
@@ -729,8 +729,8 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
 
             // Rewrite transfer path to use client's own cache dir
             // (server embeds its absolute CacheDir which differs per-instance)
-            transfer.path = Poseidon::BuildNetworkMissionTransferCachePboPath(_missionHeader.fileName);
-            if (transfer.path.GetLength() == 0)
+            transfer._path = Poseidon::BuildNetworkMissionTransferCachePboPath(_missionHeader.fileName);
+            if (transfer._path.GetLength() == 0)
             {
                 LOG_WARN(Network, "[NMTTransferMissionFile] rejected unsafe mission file name '{}'",
                          (const char*)_missionHeader.fileName);
@@ -742,15 +742,15 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
 
             int ret = ReceiveFileSegment(transfer);
             LOG_DEBUG(Network, "[NMTTransferMissionFile] path='{}' ret={} state={} missionFileValid={}",
-                      (const char*)transfer.path, ret, (int)_state, _missionFileValid);
+                      (const char*)transfer._path, ret, (int)_state, _missionFileValid);
             if (ret > 0)
             {
                 // transfer mission file always into tmp directory (do not rewrite original file)
-                const char* ptr = transfer.path;
+                const char* ptr = transfer._path;
                 const char* ext = strrchr(ptr, '.');
                 NET_ERROR(ext);
                 NET_ERROR(stricmp(ext, ".pbo") == 0);
-                RString path = transfer.path.Substring(0, ext - ptr);
+                RString path = transfer._path.Substring(0, ext - ptr);
                 CreateMPMissionBank(path, _missionHeader.island);
 
                 _missionFileValid = true;
@@ -780,7 +780,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 if (id)
                 {
                     snprintf(message, sizeof(message), format, (const char*)id->name);
-                    sprintf(message + strlen(message), " - %s", (const char*)transfer.path);
+                    sprintf(message + strlen(message), " - %s", (const char*)transfer._path);
                 }
                 Disconnect(message);
             }

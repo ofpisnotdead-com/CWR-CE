@@ -803,7 +803,7 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         break;
         case NMTTransferFileToServer:
         {
-            TransferFileMessage transfer;
+            TransferFileToServerMessage transfer;
             transfer.TransferMsg(ctx);
             // check if path is valid upload path
             // if not, kick sender
@@ -831,25 +831,25 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             if (alreadyKicked)
             {
                 LOG_DEBUG(Network, "Transfer file {} request ignored, sender is being kicked off",
-                          (const char*)transfer.path);
+                          (const char*)transfer._path);
                 break;
             }
             // check if file transferred is within allowed range
             // if not, kick off sender
-            if (transfer.totSize > MaxCustomFileSize)
+            if (transfer._totSize > MaxCustomFileSize)
             {
                 // check name of player (from file name)
                 ServerMessage(Format("Player %s kicked off - too big custom file '%s' (%d B > %d B)", (const char*)name,
-                                     (const char*)GetRelUploadPath(transfer.path, from), transfer.totSize,
+                                     (const char*)GetRelUploadPath(transfer._path, from), transfer._totSize,
                                      MaxCustomFileSize));
                 KickOff(from, KORKick);
                 break;
             }
 
-            if (!CheckValidUpload(transfer.path, from))
+            if (!CheckValidUpload(transfer._path, from))
             {
                 ServerMessage(Format("Player %s kicked off - invalid custom file '%s'", (const char*)name,
-                                     (const char*)transfer.path));
+                                     (const char*)transfer._path));
                 KickOff(from, KORKick);
                 break;
             }
