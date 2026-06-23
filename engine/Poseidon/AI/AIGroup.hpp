@@ -304,39 +304,19 @@ enum OpenFireState
 	OFSOpenFire
 };
 
-class IndicesUpdateAIGroup : public IndicesNetworkObject
-{
-	typedef IndicesNetworkObject base;
+#define UPDATE_AI_GROUP_MSG(XX) \
+	XX(OLink<AISubgroup>, mainSubgroup, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Main subgroup"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_STRUCTURE) \
+	XX(OLink<AIUnit>, leader, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Leader unit"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_STRUCTURE) \
+	XX(int, semaphore, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, SemaphoreYellow), DOC_MSG("Default combat mode"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, combatModeMinor, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, CMSafe), DOC_MSG("Default behaviour"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, enemiesDetected, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Number of detected enemies"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MINOR) \
+	XX(int, unknownsDetected, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Number of detected possible enemies"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MINOR) \
+	XX(float, forceCourage, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, -1), DOC_MSG("Enforced (by designer) courage"), IdxTransfer, ET_ABS_DIF, ERR_COEF_MODE) \
+	XX(float, courage, NDTFloat, NCTFloat0To1, DEFVALUE(float, 1), DOC_MSG("Calculated courage"), IdxTransfer, ET_ABS_DIF, ERR_COEF_MODE) \
+	XX(bool, flee, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Units are fleeing"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, waypointIndex, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Index of currently processing waypoint"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
 
-public:
-	//@{
-	int mainSubgroup;
-	int leader;
-	int semaphore;
-	int combatModeMinor;
-	// ??	_lastEnemyDetected
-	// ?? _nextCmdId
-	// ?? _locksWP
-	int enemiesDetected;
-	int unknownsDetected;
-	// ?? int disclosed;
-	// ?? _vehicles
-	// ?? _overlookTarget
-	// ?? _guardPosition
-	// ?? _maxStrength
-	int forceCourage;
-	int courage;
-	int flee;
-	// ?? _threshold
-	// ?? _thresholdValid
-
-	int waypointIndex;
-	//@}
-
-	IndicesUpdateAIGroup();
-	NetworkMessageIndices *Clone() const override {return new IndicesUpdateAIGroup;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES_EX_ERR(UpdateAIGroup, NetworkObject, UPDATE_AI_GROUP_MSG)
 
 class AIGroup
 	:	public AI, public AbstractAIMachine<Mission, AIGroupContext>
