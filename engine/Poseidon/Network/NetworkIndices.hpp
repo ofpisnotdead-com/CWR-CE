@@ -382,19 +382,6 @@ public:
 	void Scan(NetworkMessageFormatBase *format) override;
 };
 
-// network message indices for DeleteObjectMessage class
-class IndicesDeleteObject : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int creator;
-	int id;
-
-	IndicesDeleteObject();
-	NetworkMessageIndices *Clone() const override {return new IndicesDeleteObject;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
 // network message indices for DeleteCommandMessage class
 class IndicesDeleteCommand : public NetworkMessageIndices
 {

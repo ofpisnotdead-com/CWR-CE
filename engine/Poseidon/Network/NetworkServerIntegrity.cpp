@@ -1027,7 +1027,8 @@ void NetworkServer::OnObjectDestroy(const NetworkId& id)
 {
     int owner = PerformObjectDestroy(id);
     DeleteObjectMessage msg;
-    msg.object = id;
+    msg._creator = id.creator;
+    msg._id = id.id;
 
     for (int i = 0; i < _players.Size(); i++)
     {
