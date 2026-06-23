@@ -1869,8 +1869,8 @@ void NetworkClient::OnVehicleDestroyed(EntityAI* killed, EntityAI* killer)
     }
 
     VehicleDestroyedMessage msg;
-    msg.killed = killed;
-    msg.killer = killer;
+    msg._killed = killed;
+    msg._killer = killer;
     SendMsg(&msg, NMFGuaranteed);
 }
 
