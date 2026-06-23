@@ -1649,9 +1649,9 @@ void NetworkClient::AskForAimWeapon(EntityAI* vehicle, int weapon, Vector3Par di
     }
 
     AskForAimWeaponMessage msg;
-    msg.vehicle = vehicle;
-    msg.weapon = weapon;
-    msg.dir = dir;
+    msg._vehicle = vehicle;
+    msg._weapon = weapon;
+    msg._dir = dir;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1663,8 +1663,8 @@ void NetworkClient::AskForAimObserver(EntityAI* vehicle, Vector3Par dir)
     }
 
     AskForAimObserverMessage msg;
-    msg.vehicle = vehicle;
-    msg.dir = dir;
+    msg._vehicle = vehicle;
+    msg._dir = dir;
     SendMsg(&msg, NMFGuaranteed);
 }
 

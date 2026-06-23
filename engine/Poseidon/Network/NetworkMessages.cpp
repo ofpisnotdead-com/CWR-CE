@@ -77,70 +77,11 @@ DEFINE_GET_INDICES(AskForGetOut)
 DEFINE_NET_MESSAGE(AskForChangePosition, ASK_FOR_CHANGE_POSITION_MSG)
 DEFINE_GET_INDICES(AskForChangePosition)
 
-IndicesAskForAimWeapon::IndicesAskForAimWeapon()
-{
-    vehicle = -1;
-    weapon = -1;
-    dir = -1;
-}
+DEFINE_NET_MESSAGE(AskForAimWeapon, ASK_FOR_AIM_WEAPON_MSG)
+DEFINE_GET_INDICES(AskForAimWeapon)
 
-void IndicesAskForAimWeapon::Scan(NetworkMessageFormatBase* format){SCAN(vehicle) SCAN(weapon) SCAN(dir)}
-
-// Create network message indices for AskForAimWeaponMessage class
-NetworkMessageIndices* GetIndicesAskForAimWeapon()
-{
-    return new IndicesAskForAimWeapon();
-}
-
-NetworkMessageFormat& AskForAimWeaponMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which weapon is aiming"));
-    format.Add("weapon", NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Aiming weapon index"));
-    format.Add("dir", NDTVector, NCTNone, DEFVALUE(Vector3, VForward), DOC_MSG("Direction to aim"));
-    return format;
-}
-
-TMError AskForAimWeaponMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskForAimWeapon*>(ctx.GetIndices()))
-    const IndicesAskForAimWeapon* indices = static_cast<const IndicesAskForAimWeapon*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->vehicle, vehicle))
-    TMCHECK(ctx.IdxTransfer(indices->weapon, weapon))
-    TMCHECK(ctx.IdxTransfer(indices->dir, dir))
-    return TMOK;
-}
-
-IndicesAskForAimObserver::IndicesAskForAimObserver()
-{
-    vehicle = -1;
-    dir = -1;
-}
-
-void IndicesAskForAimObserver::Scan(NetworkMessageFormatBase* format){SCAN(vehicle) SCAN(dir)}
-
-// Create network message indices for AskForAimObserverMessage class
-NetworkMessageIndices* GetIndicesAskForAimObserver()
-{
-    return new IndicesAskForAimObserver();
-}
-
-NetworkMessageFormat& AskForAimObserverMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which turret is aiming"));
-    format.Add("dir", NDTVector, NCTNone, DEFVALUE(Vector3, VForward), DOC_MSG("Direction to aim"));
-    return format;
-}
-
-TMError AskForAimObserverMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskForAimObserver*>(ctx.GetIndices()))
-    const IndicesAskForAimObserver* indices = static_cast<const IndicesAskForAimObserver*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->vehicle, vehicle))
-    TMCHECK(ctx.IdxTransfer(indices->dir, dir))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(AskForAimObserver, ASK_FOR_AIM_OBSERVER_MSG)
+DEFINE_GET_INDICES(AskForAimObserver)
 
 IndicesAskForSelectWeapon::IndicesAskForSelectWeapon()
 {
