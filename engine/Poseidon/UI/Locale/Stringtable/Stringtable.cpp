@@ -598,6 +598,12 @@ RString LocalizeString(const char* str)
     return GStringTable.Localize(str);
 }
 
+const char* LocalizeStringWithFallback(const char* key, const char* fallback)
+{
+    RString s = LocalizeString(key);
+    return s.GetLength() > 0 ? s.Data() : fallback;
+}
+
 RString Localize(RString str)
 {
     // BIS RV2 convention: "@KEY" — strip the @, look up KEY.

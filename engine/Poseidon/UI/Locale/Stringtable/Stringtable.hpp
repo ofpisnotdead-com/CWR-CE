@@ -25,6 +25,9 @@ int RegisterString(RString name);
 RString LocalizeString(int ids);
 RString LocalizeString(const char* str);
 
+// Localized value for `key`, or `fallback` verbatim if the key is missing/empty.
+const char* LocalizeStringWithFallback(const char* key, const char* fallback);
+
 RString Localize(RString str);
 
 // Open `csvPath` and return the value for `key` in the column matching the

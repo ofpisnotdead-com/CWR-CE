@@ -167,6 +167,16 @@ TEST_CASE("Stringtable - Load global stringtable", "[stringtable][load][global]"
     }
 }
 
+TEST_CASE("Stringtable - LocalizeStringWithFallback", "[stringtable][localize]")
+{
+    Poseidon::ClearStringtable();
+    GLanguage = "English";
+    Poseidon::LoadStringtable("global", GetTestFixturePath("stringtable_test.csv"), 0, true);
+
+    REQUIRE(std::string(Poseidon::LocalizeStringWithFallback("STR_HELLO", "fb")) == "Hello");
+    REQUIRE(std::string(Poseidon::LocalizeStringWithFallback("STR_DOES_NOT_EXIST", "fb")) == "fb");
+}
+
 TEST_CASE("Stringtable - Localize by name", "[stringtable][localize]")
 {
     Poseidon::ClearStringtable();
