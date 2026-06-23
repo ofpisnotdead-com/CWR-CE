@@ -594,42 +594,7 @@ TMError ExplosionDammageEffectsMessage::TransferMsg(NetworkMessageContext& ctx)
 
 DEFINE_NET_MESSAGE(DeleteObject, DELETE_OBJECT_MSG)
 
-IndicesDeleteCommand::IndicesDeleteCommand()
-{
-    creator = -1;
-    id = -1;
-    subgrp = -1;
-    index = -1;
-}
-
-void IndicesDeleteCommand::Scan(NetworkMessageFormatBase* format){SCAN(creator) SCAN(id) SCAN(subgrp) SCAN(index)}
-
-// Create network message indices for DeleteCommandMessage class
-NetworkMessageIndices* GetIndicesDeleteCommand()
-{
-    return new IndicesDeleteCommand();
-}
-
-NetworkMessageFormat& DeleteCommandMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("creator", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Id of command to destroy"));
-    format.Add("id", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID of command to destroy"));
-    format.Add("subgrp", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Subgroup that owns command"));
-    format.Add("index", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Index of command in subgroup"));
-    return format;
-}
-
-TMError DeleteCommandMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesDeleteCommand*>(ctx.GetIndices()))
-    const IndicesDeleteCommand* indices = static_cast<const IndicesDeleteCommand*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->creator, object.creator))
-    TMCHECK(ctx.IdxTransfer(indices->id, object.id))
-    TMCHECK(ctx.IdxTransferRef(indices->subgrp, subgrp))
-    TMCHECK(ctx.IdxTransfer(indices->index, index))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(DeleteCommand, DELETE_COMMAND_MSG)
 
 IndicesAskForAmmo::IndicesAskForAmmo()
 {
