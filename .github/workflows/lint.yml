@@ -1,4 +1,4 @@
-name: Lint
+name: C++
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
 
 jobs:
   clang-format:
-    name: C++ formatting
+    name: Lint
     runs-on: ubuntu-24.04
 
     steps:
