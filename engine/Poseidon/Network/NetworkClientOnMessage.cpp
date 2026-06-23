@@ -331,19 +331,19 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             NetworkCommandMessage cmd;
             cmd.TransferMsg(ctx);
-            switch (cmd.type)
+            switch (cmd._type)
             {
                 case NCMTLogged:
                 {
                     _gameMaster = true;
-                    cmd.content.Read(&_admin, sizeof(_admin));
+                    cmd._content.Read(&_admin, sizeof(_admin));
                     /*
                                 _serverMissions.Clear();
-                                RString mission = cmd.content.ReadString();
+                                RString mission = cmd._content.ReadString();
                                 while (mission.GetLength() > 0)
                                 {
                                   _serverMissions.Add(mission);
-                                  mission = cmd.content.ReadString();
+                                  mission = cmd._content.ReadString();
                                 }
                     */
                     GChatList.Add(CCGlobal, nullptr, LocalizeString(IDS_MP_LOGGED), false, true);
@@ -360,11 +360,11 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 case NCMTVoteMission:
                 {
                     _serverMissions.Clear();
-                    RString mission = cmd.content.ReadString();
+                    RString mission = cmd._content.ReadString();
                     while (mission.GetLength() > 0)
                     {
                         _serverMissions.Add(mission);
-                        mission = cmd.content.ReadString();
+                        mission = cmd._content.ReadString();
                     }
                     if (_gameMaster)
                     {
@@ -379,14 +379,14 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     int memory = 0;
                     float in = 0;
                     float out = 0;
-                    cmd.content.Read(&fps, sizeof(fps));
-                    cmd.content.Read(&memory, sizeof(memory));
-                    cmd.content.Read(&in, sizeof(in));
-                    cmd.content.Read(&out, sizeof(out));
+                    cmd._content.Read(&fps, sizeof(fps));
+                    cmd._content.Read(&memory, sizeof(memory));
+                    cmd._content.Read(&in, sizeof(in));
+                    cmd._content.Read(&out, sizeof(out));
 
                     int sizeNG = 0, sizeG = 0;
-                    cmd.content.Read(&sizeG, sizeof(sizeG));
-                    cmd.content.Read(&sizeNG, sizeof(sizeNG));
+                    cmd._content.Read(&sizeG, sizeof(sizeG));
+                    cmd._content.Read(&sizeNG, sizeof(sizeNG));
 
                     char buffer[256];
                     snprintf(buffer, sizeof(buffer), LocalizeString(IDS_SERVER_MONITOR), fps, 1e-6 * memory, 8e-3 * out,
@@ -395,12 +395,12 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
                 break;
                 case NCMTDebugAnswer:
-                    LOG_DEBUG(Network, "{}", (const char*)cmd.content.ReadString());
+                    LOG_DEBUG(Network, "{}", (const char*)cmd._content.ReadString());
                     break;
                 case NCMTMissionTimeElapsed:
                 {
                     int timeElapsed = 0;
-                    cmd.content.Read(&timeElapsed, sizeof(timeElapsed));
+                    cmd._content.Read(&timeElapsed, sizeof(timeElapsed));
                     _missionHeader.start = GlobalTickCount() - timeElapsed;
                     _jip = true;
                     LOG_INFO(Network, "JIP: Joined in progress (mission elapsed: {}ms)", timeElapsed);

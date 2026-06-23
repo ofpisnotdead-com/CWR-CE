@@ -1127,32 +1127,32 @@ RString GetIdentityText(const PlayerIdentity& identity)
 void NetworkClient::SendKick(int player)
 {
     NetworkCommandMessage msg;
-    msg.type = NCMTKick;
-    msg.content.Write(&player, sizeof(int));
+    msg._type = NCMTKick;
+    msg._content.Write(&player, sizeof(int));
     SendMsg(&msg, NMFGuaranteed);
 }
 
 void NetworkClient::SendLockSession(bool lock)
 {
     NetworkCommandMessage msg;
-    msg.type = NCMTLockSession;
-    msg.content.Write(&lock, sizeof(bool));
+    msg._type = NCMTLockSession;
+    msg._content.Write(&lock, sizeof(bool));
     SendMsg(&msg, NMFGuaranteed);
 }
 
 void NetworkClient::SendBan(int player)
 {
     NetworkCommandMessage msg;
-    msg.type = NCMTBan;
-    msg.content.Write(&player, sizeof(int));
+    msg._type = NCMTBan;
+    msg._content.Write(&player, sizeof(int));
     SendMsg(&msg, NMFGuaranteed);
 }
 
 void NetworkClient::SendUnban(const char* idOrIp)
 {
     NetworkCommandMessage msg;
-    msg.type = NCMTUnban;
-    msg.content.WriteString(idOrIp);
+    msg._type = NCMTUnban;
+    msg._content.WriteString(idOrIp);
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1204,8 +1204,8 @@ bool NetworkClient::ProcessCommand(RString command)
         case CMDLogin:
         {
             NetworkCommandMessage msg;
-            msg.type = NCMTLogin;
-            msg.content.WriteString(beg);
+            msg._type = NCMTLogin;
+            msg._content.WriteString(beg);
             SendMsg(&msg, NMFGuaranteed);
         }
         break;
@@ -1213,7 +1213,7 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster)
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTLogout;
+                msg._type = NCMTLogout;
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1259,7 +1259,7 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster)
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTRestart;
+                msg._type = NCMTRestart;
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1267,10 +1267,10 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster)
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTMission;
-                msg.content.WriteString(beg);
+                msg._type = NCMTMission;
+                msg._content.WriteString(beg);
                 bool cadetMode = false;
-                msg.content.Write(&cadetMode, sizeof(bool));
+                msg._content.Write(&cadetMode, sizeof(bool));
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1278,7 +1278,7 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster)
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTMissions;
+                msg._type = NCMTMissions;
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1286,7 +1286,7 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster)
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTShutdown;
+                msg._type = NCMTShutdown;
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1294,7 +1294,7 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster)
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTReassign;
+                msg._type = NCMTReassign;
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1302,13 +1302,13 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster)
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTMonitorAsk;
+                msg._type = NCMTMonitorAsk;
                 float value = 10.0f;
                 if (*beg)
                 {
                     value = atof(beg);
                 }
-                msg.content.Write(&value, sizeof(value));
+                msg._content.Write(&value, sizeof(value));
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1326,7 +1326,7 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster)
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTInit;
+                msg._type = NCMTInit;
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1334,8 +1334,8 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster || GetNetworkManager().IsServer())
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTDebugAsk;
-                msg.content.WriteString(beg);
+                msg._type = NCMTDebugAsk;
+                msg._content.WriteString(beg);
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1358,10 +1358,10 @@ bool NetworkClient::ProcessCommand(RString command)
                     if (id != AI_PLAYER)
                     {
                         NetworkCommandMessage msg;
-                        msg.type = NCMTVote;
+                        msg._type = NCMTVote;
                         int subtype = NCMTKick;
-                        msg.content.Write(&subtype, sizeof(int));
-                        msg.content.Write(&id, sizeof(int));
+                        msg._content.Write(&subtype, sizeof(int));
+                        msg._content.Write(&id, sizeof(int));
                         SendMsg(&msg, NMFGuaranteed);
                     }
                 }
@@ -1369,41 +1369,41 @@ bool NetworkClient::ProcessCommand(RString command)
                 case CMDRestart:
                 {
                     NetworkCommandMessage msg;
-                    msg.type = NCMTVote;
+                    msg._type = NCMTVote;
                     int subtype = NCMTRestart;
-                    msg.content.Write(&subtype, sizeof(int));
+                    msg._content.Write(&subtype, sizeof(int));
                     SendMsg(&msg, NMFGuaranteed);
                 }
                 break;
                 case CMDReassign:
                 {
                     NetworkCommandMessage msg;
-                    msg.type = NCMTVote;
+                    msg._type = NCMTVote;
                     int subtype = NCMTReassign;
-                    msg.content.Write(&subtype, sizeof(int));
+                    msg._content.Write(&subtype, sizeof(int));
                     SendMsg(&msg, NMFGuaranteed);
                 }
                 break;
                 case CMDMission:
                 {
                     NetworkCommandMessage msg;
-                    msg.type = NCMTVote;
+                    msg._type = NCMTVote;
                     int subtype = NCMTMission;
-                    msg.content.Write(&subtype, sizeof(int));
+                    msg._content.Write(&subtype, sizeof(int));
                     RString name = beg;
                     name.Lower();
-                    msg.content.WriteString(name);
+                    msg._content.WriteString(name);
                     bool cadetMode = false;
-                    msg.content.Write(&cadetMode, sizeof(bool));
+                    msg._content.Write(&cadetMode, sizeof(bool));
                     SendMsg(&msg, NMFGuaranteed);
                 }
                 break;
                 case CMDMissions:
                 {
                     NetworkCommandMessage msg;
-                    msg.type = NCMTVote;
+                    msg._type = NCMTVote;
                     int subtype = NCMTMissions;
-                    msg.content.Write(&subtype, sizeof(int));
+                    msg._content.Write(&subtype, sizeof(int));
                     SendMsg(&msg, NMFGuaranteed);
                 }
                 break;
@@ -1413,10 +1413,10 @@ bool NetworkClient::ProcessCommand(RString command)
                     if (id != AI_PLAYER)
                     {
                         NetworkCommandMessage msg;
-                        msg.type = NCMTVote;
+                        msg._type = NCMTVote;
                         int subtype = NCMTAdmin;
-                        msg.content.Write(&subtype, sizeof(int));
-                        msg.content.Write(&id, sizeof(int));
+                        msg._content.Write(&subtype, sizeof(int));
+                        msg._content.Write(&id, sizeof(int));
                         SendMsg(&msg, NMFGuaranteed);
                     }
                 }
@@ -1433,9 +1433,9 @@ void NetworkClient::SelectMission(RString mission, bool cadetMode)
     if (_gameMaster)
     {
         NetworkCommandMessage msg;
-        msg.type = NCMTMission;
-        msg.content.WriteString(mission);
-        msg.content.Write(&cadetMode, sizeof(bool));
+        msg._type = NCMTMission;
+        msg._content.WriteString(mission);
+        msg._content.Write(&cadetMode, sizeof(bool));
         SendMsg(&msg, NMFGuaranteed);
     }
     _selectMission = false;
@@ -1445,11 +1445,11 @@ void NetworkClient::SelectMission(RString mission, bool cadetMode)
 void NetworkClient::VoteMission(RString mission, bool cadetMode)
 {
     NetworkCommandMessage msg;
-    msg.type = NCMTVote;
+    msg._type = NCMTVote;
     int subtype = NCMTMission;
-    msg.content.Write(&subtype, sizeof(int));
-    msg.content.WriteString(mission);
-    msg.content.Write(&cadetMode, sizeof(bool));
+    msg._content.Write(&subtype, sizeof(int));
+    msg._content.WriteString(mission);
+    msg._content.Write(&cadetMode, sizeof(bool));
     SendMsg(&msg, NMFGuaranteed);
 
     _voteMission = false;

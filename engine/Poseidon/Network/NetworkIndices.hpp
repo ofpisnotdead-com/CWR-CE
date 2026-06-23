@@ -80,22 +80,11 @@ enum NetworkCommandMessageType
 	NCMTUnban,
 };
 
-// Message for transfer of Network Command
-struct NetworkCommandMessage : public NetworkSimpleObject
-{
-	// type of command
-	NetworkCommandMessageType type;
-	// parameters of command
-	SimpleStream content;
+#define NETWORK_COMMAND_MSG(XX) \
+        XX(int, type, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Type of command"), IdxTransfer) \
+        XX(SimpleStream, content, NDTRawData, NCTNone, DEFVALUERAWDATA, DOC_MSG("Parameters of command"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTNetworkCommand;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(NetworkCommand, NETWORK_COMMAND_MSG)
 
 // network message indices for PlayerRole class
 class IndicesPlayerRole : public NetworkMessageIndices
