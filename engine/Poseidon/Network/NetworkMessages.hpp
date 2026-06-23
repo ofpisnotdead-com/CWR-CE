@@ -567,20 +567,10 @@ struct UpdateWeaponsMessage : public NetworkSimpleObject
 
 DECLARE_NET_MESSAGE(VehicleDestroyed, VEHICLE_DESTROYED_MSG)
 
-// Message for transfer info about (user made) marker was deleted to other clients
-struct MarkerDeleteMessage : public NetworkSimpleObject
-{
-	// name of marker
-	RString name;
+#define MARKER_DELETE_MSG(XX) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Name of marker"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTMarkerDelete;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(MarkerDelete, MARKER_DELETE_MSG)
 
 // Message for transfer info about (user made) marker creation to other clients
 struct MarkerCreateMessage : public NetworkSimpleObject

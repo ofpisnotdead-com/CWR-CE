@@ -1925,7 +1925,7 @@ void NetworkClient::MarkerDelete(RString name)
     }
 
     MarkerDeleteMessage msg;
-    msg.name = name;
+    msg._name = name;
     SendMsg(&msg, NMFGuaranteed);
 }
 
