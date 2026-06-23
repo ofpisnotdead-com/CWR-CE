@@ -463,33 +463,12 @@ NetworkMessageType Mine::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesUpdateMine : public IndicesUpdateShot
-{
-    typedef IndicesUpdateShot base;
+#define UPDATE_MINE_MSG(XX) \
+	XX(bool, active, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Mine is active (can explode)"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
 
-  public:
-    int active;
-
-    IndicesUpdateMine();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateMine; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateMine::IndicesUpdateMine()
-{
-    active = -1;
-}
-
-void IndicesUpdateMine::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-    SCAN(active)
-}
-
-NetworkMessageIndices* GetIndicesUpdateMine()
-{
-    return new IndicesUpdateMine();
-}
+DECLARE_NET_INDICES_EX_ERR(UpdateMine, UpdateShot, UPDATE_MINE_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdateMine, UpdateShot, UPDATE_MINE_MSG)
+DEFINE_GET_INDICES(UpdateMine)
 
 NetworkMessageFormat& Mine::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
@@ -497,8 +476,7 @@ NetworkMessageFormat& Mine::CreateFormat(NetworkMessageClass cls, NetworkMessage
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-            format.Add("active", NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Mine is active (can explode)"),
-                       ET_ABS_DIF, ERR_COEF_MODE);
+            UPDATE_MINE_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);
