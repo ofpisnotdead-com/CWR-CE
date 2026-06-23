@@ -464,60 +464,25 @@ DECLARE_NET_MESSAGE(AskForSelectWeapon, ASK_FOR_SELECT_WEAPON_MSG)
 
 DECLARE_NET_MESSAGE(AskForAmmo, ASK_FOR_AMMO_MSG)
 
-// Message for ask vehicle owner for add impulse
-struct AskForAddImpulseMessage : public NetworkSimpleObject
-{
-	// vehicle impulse is applied to
-	Vehicle *vehicle;
-	// applied force
-	Vector3 force;
-	// applied torque
-	Vector3 torque;
+#define ASK_FOR_ADD_IMPULSE_MSG(XX) \
+	XX(OLink<Vehicle>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle impulse is applied to"), IdxTransferRef) \
+	XX(Vector3, force, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Applied force"), IdxTransfer) \
+	XX(Vector3, torque, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Applied torque"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForAddImpulse;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskForAddImpulse, ASK_FOR_ADD_IMPULSE_MSG)
 
-// Message for ask object owner for move object
-struct AskForMoveVectorMessage : public NetworkSimpleObject
-{
-	// moving object
-	Object *vehicle;
-	// new position
-	Vector3 pos;
+#define ASK_FOR_MOVE_VECTOR_MSG(XX) \
+	XX(OLink<Object>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Moving object"), IdxTransferRef) \
+	XX(Vector3, pos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("New position"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForMoveVector;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskForMoveVector, ASK_FOR_MOVE_VECTOR_MSG)
 
-// Message for ask object owner for move object
-struct AskForMoveMatrixMessage : public NetworkSimpleObject
-{
-	// moving object
-	Object *vehicle;
-	// new position
-	Vector3 pos;
-	// new orientation
-	Matrix3 orient;
+#define ASK_FOR_MOVE_MATRIX_MSG(XX) \
+	XX(OLink<Object>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Moving object"), IdxTransferRef) \
+	XX(Vector3, pos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("New position"), IdxTransfer) \
+	XX(Matrix3, orient, NDTMatrix, NCTNone, DEFVALUE(Matrix3, M3Identity), DOC_MSG("New orientation"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForMoveMatrix;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskForMoveMatrix, ASK_FOR_MOVE_MATRIX_MSG)
 
 // Message for ask group owner for join other group
 struct AskForJoinGroupMessage : public NetworkSimpleObject
