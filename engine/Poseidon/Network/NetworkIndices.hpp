@@ -146,18 +146,6 @@ public:
 	void Scan(NetworkMessageFormatBase *format) override;
 };
 
-// network message indices for AskForHideBodyMessage class
-class IndicesAskForHideBody : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-
-	IndicesAskForHideBody();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForHideBody;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
 namespace Poseidon { class IndicesUpdateEntityAIWeapons; }
 using Poseidon::IndicesUpdateEntityAIWeapons;
 

@@ -818,9 +818,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForHideBodyMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle)
+            if (ask._vehicle)
             {
-                ask.vehicle->HideBody();
+                ask._vehicle->HideBody();
             }
         }
         break;

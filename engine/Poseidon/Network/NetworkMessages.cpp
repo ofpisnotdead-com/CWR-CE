@@ -88,33 +88,7 @@ DEFINE_NET_MESSAGE(AskForJoinGroup, ASK_FOR_JOIN_GROUP_MSG)
 
 DEFINE_NET_MESSAGE(AskForJoinUnits, ASK_FOR_JOIN_UNITS_MSG)
 
-IndicesAskForHideBody::IndicesAskForHideBody()
-{
-    vehicle = -1;
-}
-
-void IndicesAskForHideBody::Scan(NetworkMessageFormatBase* format){SCAN(vehicle)}
-
-// Create network message indices for AskForHideBodyMessage class
-NetworkMessageIndices* GetIndicesAskForHideBody()
-{
-    return new IndicesAskForHideBody();
-}
-
-NetworkMessageFormat& AskForHideBodyMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Body to hide"));
-    return format;
-}
-
-TMError AskForHideBodyMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskForHideBody*>(ctx.GetIndices()))
-    const IndicesAskForHideBody* indices = static_cast<const IndicesAskForHideBody*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->vehicle, vehicle))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(AskForHideBody, ASK_FOR_HIDE_BODY_MSG)
 
 // network message indices for ExplosionDammageEffectsMessage class
 class IndicesExplosionDammageEffects : public NetworkMessageIndices
