@@ -1869,153 +1869,59 @@ NetworkMessageType HelicopterAuto::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesCreateHelicopter : public IndicesCreateVehicle
-{
-    typedef IndicesCreateVehicle base;
+#define CREATE_HELICOPTER_MSG(XX) \
+	XX(float, rotorSpeed, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Initial rotor speed"), IdxTransfer)
 
-  public:
-    int rotorSpeed;
-
-    IndicesCreateHelicopter();
-    NetworkMessageIndices* Clone() const override { return new IndicesCreateHelicopter; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesCreateHelicopter::IndicesCreateHelicopter()
-{
-    rotorSpeed = -1;
-}
-
-void IndicesCreateHelicopter::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(rotorSpeed)
-}
+DECLARE_NET_INDICES_EX(CreateHelicopter, CreateVehicle, CREATE_HELICOPTER_MSG)
+DEFINE_NET_INDICES_EX(CreateHelicopter, CreateVehicle, CREATE_HELICOPTER_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesCreateHelicopter()
-{
-    using namespace Poseidon;
-    return new IndicesCreateHelicopter();
-}
+
+DEFINE_GET_INDICES(CreateHelicopter)
+
 namespace Poseidon
 {
 
-class IndicesUpdateHelicopter : public IndicesUpdateTransport
-{
-    typedef IndicesUpdateTransport base;
+#define UPDATE_HELICOPTER_MSG(XX) \
+	XX(float, rotorSpeedWanted, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Wanted rotor speed"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
+	XX(int, state, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Autopilot state"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(float, pilotHeight, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Height, wanted by pilot"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
+	XX(Vector3, pilotSpeed, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Speed, wanted by pilot"), IdxTransfer, ET_ABS_DIF, 1) \
+	XX(int, stopMode, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Landing type"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(Vector3, stopPosition, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Landing position"), IdxTransfer, ET_ABS_DIF, 0.1) \
+	XX(bool, pilotSpeedHelper, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("pilotSpeed is valid"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
+	XX(bool, pilotHeightHelper, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("pilotHeight is valid"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
+	XX(bool, pilotDirHelper, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("pilotHeading is valid"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR)
 
-  public:
-    int rotorSpeedWanted;
-    int state;
-    int pilotHeight;
-    int pilotSpeed;
-    int stopMode;
-    int stopPosition;
-    int pilotSpeedHelper;
-    int pilotHeightHelper;
-    int pilotDirHelper;
-
-    IndicesUpdateHelicopter();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateHelicopter; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateHelicopter::IndicesUpdateHelicopter()
-{
-    rotorSpeedWanted = -1;
-    state = -1;
-    pilotHeight = -1;
-    pilotSpeed = -1;
-    stopMode = -1;
-    stopPosition = -1;
-    pilotSpeedHelper = -1;
-    pilotHeightHelper = -1;
-    pilotDirHelper = -1;
-}
-
-void IndicesUpdateHelicopter::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(rotorSpeedWanted)
-    SCAN(state)
-    SCAN(pilotHeight)
-    SCAN(pilotSpeed)
-    SCAN(stopMode)
-    SCAN(stopPosition)
-
-    SCAN(pilotSpeedHelper)
-    SCAN(pilotHeightHelper)
-    SCAN(pilotDirHelper)
-}
+DECLARE_NET_INDICES_EX_ERR(UpdateHelicopter, UpdateTransport, UPDATE_HELICOPTER_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdateHelicopter, UpdateTransport, UPDATE_HELICOPTER_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateHelicopter()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateHelicopter();
-}
+
+DEFINE_GET_INDICES(UpdateHelicopter)
+
 namespace Poseidon
 {
 
-class IndicesUpdatePositionHelicopter : public IndicesUpdatePositionVehicle
-{
-    typedef IndicesUpdatePositionVehicle base;
+#define UPDATE_POSITION_HELICOPTER_MSG(XX) \
+	XX(Turret, turret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Turret object"), IdxTransferObject, ET_ABS_DIF, 1) \
+	XX(float, backRotorWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted back rotor control"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
+	XX(float, mainRotorWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted main rotor control"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
+	XX(float, cyclicForwardWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted forward cyclic position"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
+	XX(float, cyclicAsideWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted aside cyclic position"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
+	XX(float, rotorDiveWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted rotor dive"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
+	XX(float, bankWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted bank position"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
+	XX(float, diveWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted dive"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
+	XX(float, pilotHeading, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Heading, wanted by pilot"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
+	XX(float, pilotDive, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Dive, wanted by pilot"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
-  public:
-    int turret;
-    int backRotorWanted;
-    int mainRotorWanted;
-    int cyclicForwardWanted;
-    int cyclicAsideWanted;
-    int rotorDiveWanted;
-    int bankWanted;
-    int diveWanted;
-    int pilotHeading;
-    int pilotDive;
-
-    IndicesUpdatePositionHelicopter();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdatePositionHelicopter; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdatePositionHelicopter::IndicesUpdatePositionHelicopter()
-{
-    turret = -1;
-    backRotorWanted = -1;
-    mainRotorWanted = -1;
-    cyclicForwardWanted = -1;
-    cyclicAsideWanted = -1;
-    rotorDiveWanted = -1;
-    bankWanted = -1;
-    diveWanted = -1;
-    pilotHeading = -1;
-    pilotDive = -1;
-}
-
-void IndicesUpdatePositionHelicopter::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-    SCAN(turret)
-    SCAN(backRotorWanted)
-    SCAN(mainRotorWanted)
-    SCAN(cyclicForwardWanted)
-    SCAN(cyclicAsideWanted)
-    SCAN(rotorDiveWanted)
-    SCAN(bankWanted)
-    SCAN(diveWanted)
-    SCAN(pilotHeading)
-    SCAN(pilotDive)
-}
+DECLARE_NET_INDICES_EX_ERR(UpdatePositionHelicopter, UpdatePositionVehicle, UPDATE_POSITION_HELICOPTER_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdatePositionHelicopter, UpdatePositionVehicle, UPDATE_POSITION_HELICOPTER_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdatePositionHelicopter()
-{
-    using namespace Poseidon;
-    return new IndicesUpdatePositionHelicopter();
-}
+
+DEFINE_GET_INDICES(UpdatePositionHelicopter)
+
 namespace Poseidon
 {
 
@@ -2025,57 +1931,15 @@ NetworkMessageFormat& HelicopterAuto::CreateFormat(NetworkMessageClass cls, Netw
     {
         case NMCCreate:
             base::CreateFormat(cls, format);
-
-            format.Add("rotorSpeed", NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Initial rotor speed"));
+            CREATE_HELICOPTER_MSG(MSG_FORMAT)
             break;
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-
-            format.Add("rotorSpeedWanted", NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Wanted rotor speed"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("state", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Autopilot state"),
-                       ET_NOT_EQUAL, ERR_COEF_MODE);
-            format.Add("pilotHeight", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Height, wanted by pilot"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("pilotSpeed", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Speed, wanted by pilot"),
-                       ET_ABS_DIF, 1);
-            format.Add("stopMode", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Landing type"),
-                       ET_NOT_EQUAL, ERR_COEF_MODE);
-            format.Add("stopPosition", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Landing position"),
-                       ET_ABS_DIF, 0.1);
-
-            format.Add("pilotSpeedHelper", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("pilotSpeed is valid"),
-                       ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR);
-            format.Add("pilotHeightHelper", NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("pilotHeight is valid"),
-                       ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR);
-            format.Add("pilotDirHelper", NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("pilotHeading is valid"),
-                       ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR);
-
+            UPDATE_HELICOPTER_MSG(MSG_FORMAT_ERR)
             break;
         case NMCUpdatePosition:
             base::CreateFormat(cls, format);
-            format.Add("turret", NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Turret object"),
-                       ET_ABS_DIF, 1);
-            format.Add("backRotorWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0),
-                       DOC_MSG("Wanted back rotor control"), ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("mainRotorWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0),
-                       DOC_MSG("Wanted main rotor control"), ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("cyclicForwardWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0),
-                       DOC_MSG("Wanted forward cyclic position"), ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("cyclicAsideWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0),
-                       DOC_MSG("Wanted aside cyclic position"), ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("rotorDiveWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted rotor dive"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("bankWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted bank position"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("diveWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted dive"), ET_ABS_DIF,
-                       ERR_COEF_VALUE_MAJOR);
-
-            format.Add("pilotHeading", NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Heading, wanted by pilot"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("pilotDive", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Dive, wanted by pilot"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-
+            UPDATE_POSITION_HELICOPTER_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);
