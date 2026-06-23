@@ -1807,11 +1807,11 @@ void NetworkClient::FireWeapon(EntityAI* vehicle, int weapon, const Magazine* ma
     }
 
     FireWeaponMessage msg;
-    msg.vehicle = vehicle;
-    msg.target = target;
-    msg.weapon = weapon;
-    msg.magazineCreator = magazine->_creator;
-    msg.magazineId = magazine->_id;
+    msg._vehicle = vehicle;
+    msg._target = target;
+    msg._weapon = weapon;
+    msg._magazineCreator = magazine->_creator;
+    msg._magazineId = magazine->_id;
     SendMsg(&msg, NMFGuaranteed);
 }
 

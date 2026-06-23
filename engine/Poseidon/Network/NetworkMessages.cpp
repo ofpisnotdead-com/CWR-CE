@@ -116,62 +116,8 @@ DEFINE_GET_INDICES(DeleteCommand)
 DEFINE_NET_MESSAGE(AskForAmmo, ASK_FOR_AMMO_MSG)
 DEFINE_GET_INDICES(AskForAmmo)
 
-// network message indices for FireWeaponMessage class
-class IndicesFireWeapon : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int vehicle;
-    int target;
-    int weapon;
-    int magazineCreator;
-    int magazineId;
-
-    IndicesFireWeapon();
-    NetworkMessageIndices* Clone() const override { return new IndicesFireWeapon; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesFireWeapon::IndicesFireWeapon()
-{
-    vehicle = -1;
-    target = -1;
-    weapon = -1;
-    magazineCreator = -1;
-    magazineId = -1;
-}
-
-void IndicesFireWeapon::Scan(NetworkMessageFormatBase* format){SCAN(vehicle) SCAN(target) SCAN(weapon)
-                                                                   SCAN(magazineCreator) SCAN(magazineId)}
-
-// Create network message indices for FireWeaponMessage class
-NetworkMessageIndices* GetIndicesFireWeapon()
-{
-    return new IndicesFireWeapon();
-}
-
-NetworkMessageFormat& FireWeaponMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Firing vehicle"));
-    format.Add("target", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Aimed target"));
-    format.Add("weapon", NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Firing weapon index"));
-    format.Add("magazineCreator", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Fired magazine id"));
-    format.Add("magazineId", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Fired magazine id"));
-    return format;
-}
-
-TMError FireWeaponMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesFireWeapon*>(ctx.GetIndices()))
-    const IndicesFireWeapon* indices = static_cast<const IndicesFireWeapon*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->vehicle, vehicle))
-    TMCHECK(ctx.IdxTransferRef(indices->target, target))
-    TMCHECK(ctx.IdxTransfer(indices->weapon, weapon))
-    TMCHECK(ctx.IdxTransfer(indices->magazineCreator, magazineCreator))
-    TMCHECK(ctx.IdxTransfer(indices->magazineId, magazineId))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(FireWeapon, FIRE_WEAPON_MSG)
+DEFINE_GET_INDICES(FireWeapon)
 
 IndicesUpdateWeapons::IndicesUpdateWeapons()
 {

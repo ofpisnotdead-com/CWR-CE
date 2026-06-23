@@ -1031,11 +1031,11 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             FireWeaponMessage fire;
             fire.TransferMsg(ctx);
-            EntityAI* veh = fire.vehicle;
+            EntityAI* veh = fire._vehicle;
             if (veh)
             {
-                const Magazine* magazine = veh->FindMagazine(fire.magazineCreator, fire.magazineId);
-                veh->FireWeaponEffects(fire.weapon, magazine, fire.target);
+                const Magazine* magazine = veh->FindMagazine(fire._magazineCreator, fire._magazineId);
+                veh->FireWeaponEffects(fire._weapon, magazine, fire._target);
             }
         }
         break;
