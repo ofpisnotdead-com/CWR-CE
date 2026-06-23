@@ -567,24 +567,11 @@ RString ClientInfoObject::GetDebugName() const
 DEFINE_NET_MESSAGE(Player, PLAYER_MSG)
 DEFINE_GET_INDICES(Player)
 
-// network message indices for NetworkMessageQueue class
-class IndicesMessages : public NetworkMessageIndices
-{
-  public:
-    IndicesMessages();
-    NetworkMessageIndices* Clone() const override { return new IndicesMessages; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
+#define MESSAGES_MSG(XX)
 
-IndicesMessages::IndicesMessages() = default;
-
-void IndicesMessages::Scan(NetworkMessageFormatBase* format) {}
-
-// Create network message indices for NetworkMessageQueue class
-NetworkMessageIndices* GetIndicesMessages()
-{
-    return new IndicesMessages();
-}
+DECLARE_NET_INDICES(Messages, MESSAGES_MSG)
+DEFINE_NET_INDICES(Messages, MESSAGES_MSG)
+DEFINE_GET_INDICES(Messages)
 
 NetworkMessageFormat& NetworkMessageQueue::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
