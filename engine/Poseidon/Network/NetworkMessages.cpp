@@ -415,53 +415,12 @@ RString PlayerIdentity::GetName() const
     }
 }
 
-// network message indices for SquadIdentity class
-class IndicesSquad : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int id;
-    int nick;
-    int name;
-    int email;
-    int web;
-    int picture;
-    int title;
-
-    IndicesSquad();
-    NetworkMessageIndices* Clone() const override { return new IndicesSquad; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesSquad::IndicesSquad()
-{
-    id = -1;
-    nick = -1;
-    name = -1;
-    email = -1;
-    web = -1;
-    picture = -1;
-    title = -1;
-}
-
-void IndicesSquad::Scan(NetworkMessageFormatBase* format){SCAN(id) SCAN(nick) SCAN(name) SCAN(email) SCAN(web)
-                                                              SCAN(picture) SCAN(title)}
-
-// Create network message indices for SquadIdentity class
-NetworkMessageIndices* GetIndicesSquad()
-{
-    return new IndicesSquad();
-}
+DEFINE_NET_MESSAGE(Squad, SQUAD_MSG)
+DEFINE_GET_INDICES(Squad)
 
 NetworkMessageFormat& SquadIdentity::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("id", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Unique id of squad (URL of XML page)"));
-    format.Add("nick", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Nick (short) name of squad"));
-    format.Add("name", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Full name of squad"));
-    format.Add("email", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("E-mail of squad administrator"));
-    format.Add("web", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Web page of squad"));
-    format.Add("picture", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Picture of squad (shown on vehicles)"));
-    format.Add("title", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Title of squad (shown on vehicles)"));
+    SQUAD_MSG(MSG_FORMAT)
     return format;
 }
 
