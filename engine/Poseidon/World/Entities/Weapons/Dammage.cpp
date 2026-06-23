@@ -725,65 +725,30 @@ NetworkMessageType Object::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-IndicesCreateObject::IndicesCreateObject() = default;
-
-void IndicesCreateObject::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-}
+DEFINE_NET_INDICES_EX(CreateObject, NetworkObject, CREATE_OBJECT_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesCreateObject()
-{
-    using namespace Poseidon;
-    return new IndicesCreateObject();
-}
+
+DEFINE_GET_INDICES(CreateObject)
+
 namespace Poseidon
 {
 
-IndicesUpdateObject::IndicesUpdateObject()
-{
-    canSmoke = -1;
-    destroyed = -1;
-}
-
-void IndicesUpdateObject::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(canSmoke);
-    SCAN(destroyed);
-}
+DEFINE_NET_INDICES_EX_ERR(UpdateObject, NetworkObject, UPDATE_OBJECT_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateObject()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateObject();
-}
+
+DEFINE_GET_INDICES(UpdateObject)
+
 namespace Poseidon
 {
 
-IndicesUpdateDammageObject::IndicesUpdateDammageObject()
-{
-    isDestroyed = -1;
-    dammage = -1;
-}
-
-void IndicesUpdateDammageObject::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(isDestroyed);
-    SCAN(dammage);
-}
+DEFINE_NET_INDICES_EX_ERR(UpdateDammageObject, NetworkObject, UPDATE_DAMMAGE_OBJECT_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateDammageObject()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateDammageObject();
-}
+
+DEFINE_GET_INDICES(UpdateDammageObject)
+
 namespace Poseidon
 {
 
@@ -793,18 +758,15 @@ NetworkMessageFormat& Object::CreateFormat(NetworkMessageClass cls, NetworkMessa
     {
         case NMCCreate:
             NetworkObject::CreateFormat(cls, format);
+            CREATE_OBJECT_MSG(MSG_FORMAT)
             break;
         case NMCUpdateDammage:
             NetworkObject::CreateFormat(cls, format);
-            format.Add("isDestroyed", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Object is already destructed"),
-                       ET_NOT_EQUAL, ERR_COEF_STRUCTURE);
-            format.Add("dammage", NDTFloat, NCTFloatMostly0To1, DEFVALUE(float, 0.0f),
-                       DOC_MSG("Total damage of object"), ET_ABS_DIF, ERR_COEF_MODE);
+            UPDATE_DAMMAGE_OBJECT_MSG(MSG_FORMAT_ERR)
             break;
         case NMCUpdateGeneric:
             NetworkObject::CreateFormat(cls, format);
-            format.Add("canSmoke", NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Object may smoke when destructed"));
-            format.Add("destroyed", NDTFloat, NCTFloat0To1, DEFVALUE(float, 0.0f), DOC_MSG("Shape destruction state"));
+            UPDATE_OBJECT_MSG(MSG_FORMAT_ERR)
             break;
         default:
             NetworkObject::CreateFormat(cls, format);
