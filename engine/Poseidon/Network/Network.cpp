@@ -1024,53 +1024,8 @@ DEFINE_GET_INDICES(SetSpeaker)
 DEFINE_NET_MESSAGE(SelectPlayer, SELECT_PLAYER_MSG)
 DEFINE_GET_INDICES(SelectPlayer)
 
-// network message indices for ChangeOwnerMessage class
-class IndicesChangeOwner : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int creator;
-    int id;
-    int owner;
-
-    IndicesChangeOwner();
-    NetworkMessageIndices* Clone() const override { return new IndicesChangeOwner; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesChangeOwner::IndicesChangeOwner()
-{
-    creator = -1;
-    id = -1;
-    owner = -1;
-}
-
-void IndicesChangeOwner::Scan(NetworkMessageFormatBase* format){SCAN(creator) SCAN(id) SCAN(owner)}
-
-// Create network message indices for ChangeOwnerMessage class
-NetworkMessageIndices* GetIndicesChangeOwner()
-{
-    return new IndicesChangeOwner();
-}
-
-NetworkMessageFormat& ChangeOwnerMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("creator", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of object, which owner is changing"));
-    format.Add("id", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID of object, whic player is changing"));
-    format.Add("owner", NDTInteger, NCTNone, DEFVALUE(int, AI_PLAYER), DOC_MSG("Client ID of new owner"));
-    return format;
-}
-
-TMError ChangeOwnerMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesChangeOwner*>(ctx.GetIndices()))
-    const IndicesChangeOwner* indices = static_cast<const IndicesChangeOwner*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->creator, object.creator))
-    TMCHECK(ctx.IdxTransfer(indices->id, object.id))
-    TMCHECK(ctx.IdxTransfer(indices->owner, owner))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(ChangeOwner, CHANGE_OWNER_MSG)
+DEFINE_GET_INDICES(ChangeOwner)
 
 // network message indices for PlaySoundMessage class
 class IndicesPlaySound : public NetworkMessageIndices

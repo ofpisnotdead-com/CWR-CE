@@ -362,24 +362,12 @@ DECLARE_NET_MESSAGE(SetSpeaker, SET_SPEAKER_MSG)
 
 DECLARE_NET_MESSAGE(SelectPlayer, SELECT_PLAYER_MSG)
 
-// Message is sent when owner of some object changes
-struct ChangeOwnerMessage : public NetworkSimpleObject
-{
-	// object which owner changes
-	NetworkId object;
-	// DirectX ID of new owner
-	int owner;
+#define CHANGE_OWNER_MSG(XX) \
+	XX(int, creator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of object, which owner is changing"), IdxTransfer) \
+	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID of object, which owner is changing"), IdxTransfer) \
+	XX(int, owner, NDTInteger, NCTNone, DEFVALUE(int, AI_PLAYER), DOC_MSG("Client ID of new owner"), IdxTransfer)
 
-	ChangeOwnerMessage() {owner = AI_PLAYER;}
-	ChangeOwnerMessage(NetworkId obj, int ow) {object = obj; owner = ow;}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTChangeOwner;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(ChangeOwner, CHANGE_OWNER_MSG)
 
 // Message sent to clients to play sound
 struct PlaySoundMessage : public NetworkSimpleObject
