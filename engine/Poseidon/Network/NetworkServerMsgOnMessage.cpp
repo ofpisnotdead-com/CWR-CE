@@ -257,8 +257,8 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             SelectPlayerMessage pl;
             pl.TransferMsg(ctx);
-            NET_ERROR(pl.player != AI_PLAYER);
-            NetworkPlayerInfo* info = GetPlayerInfo(pl.player);
+            NET_ERROR(pl._player != AI_PLAYER);
+            NetworkPlayerInfo* info = GetPlayerInfo(pl._player);
             NET_ERROR(info);
             if (!info)
             {
@@ -267,29 +267,30 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             // A client may only select its own slot; only an admin/bot may assign
             // another player and change object ownership on its behalf, so the
             // ChangeOwner below is gated to the acting slot.
-            if (!Poseidon::SelectPlayerAuthorized(from, pl.player, _gameMaster, _botClient))
+            if (!Poseidon::SelectPlayerAuthorized(from, pl._player, _gameMaster, _botClient))
             {
-                LOG_WARN(Network, "SelectPlayer: rejected from={} acting for player={}", from, pl.player);
+                LOG_WARN(Network, "SelectPlayer: rejected from={} acting for player={}", from, pl._player);
                 break;
             }
-            info->person = pl.person;
-            info->cameraPosition = pl.position;
+            NetworkId person(pl._creator, pl._id);
+            info->person = person;
+            info->cameraPosition = pl._position;
             info->cameraPositionTime = msg->time;
             // fulfill info->unit, info->group
-            NetworkId brain = PersonToUnit(pl.person);
+            NetworkId brain = PersonToUnit(person);
             info->unit = brain;
 
-            if (from != pl.player)
+            if (from != pl._player)
             {
-                NetworkComponent::SendMsg(pl.player, msg, type, NMFGuaranteed);
+                NetworkComponent::SendMsg(pl._player, msg, type, NMFGuaranteed);
             }
-            NetworkObjectInfo* oInfo = GetObjectInfo(pl.person);
+            NetworkObjectInfo* oInfo = GetObjectInfo(person);
             NET_ERROR(oInfo);
             if (!oInfo)
             {
                 break;
             }
-            ChangeOwner(pl.person, oInfo->owner, pl.player);
+            ChangeOwner(person, oInfo->owner, pl._player);
             if (!brain.IsNull())
             {
                 NetworkObjectInfo* oInfo = GetObjectInfo(brain);
@@ -298,7 +299,7 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 {
                     break;
                 }
-                ChangeOwner(brain, oInfo->owner, pl.player);
+                ChangeOwner(brain, oInfo->owner, pl._player);
             }
         }
         break;
@@ -1673,9 +1674,14 @@ void NetworkServer::OnGameStateMessage(int from, NetworkMessage* msg, NetworkMes
                     {
                         continue;
                     }
-                    SelectPlayerMessage pl(info.dpid, id, info.cameraPosition, false);
-                    NetworkComponent::SendMsg(pl.player, &pl, NMFGuaranteed);
-                    ChangeOwner(id, oInfo->owner, pl.player);
+                    SelectPlayerMessage pl;
+                    pl._player = info.dpid;
+                    pl._creator = id.creator;
+                    pl._id = id.id;
+                    pl._position = info.cameraPosition;
+                    pl._respawn = false;
+                    NetworkComponent::SendMsg(pl._player, &pl, NMFGuaranteed);
+                    ChangeOwner(id, oInfo->owner, pl._player);
                 }
                 // change state
                 SetGameState(NGSBriefing);
@@ -1774,9 +1780,14 @@ void NetworkServer::OnGameStateMessage(int from, NetworkMessage* msg, NetworkMes
                         NetworkObjectInfo* oInfo = GetObjectInfo(info->person);
                         if (oInfo)
                         {
-                            SelectPlayerMessage pl(info->dpid, info->person, info->cameraPosition, false);
-                            NetworkComponent::SendMsg(pl.player, &pl, NMFGuaranteed);
-                            ChangeOwner(info->person, oInfo->owner, pl.player);
+                            SelectPlayerMessage pl;
+                            pl._player = info->dpid;
+                            pl._creator = info->person.creator;
+                            pl._id = info->person.id;
+                            pl._position = info->cameraPosition;
+                            pl._respawn = false;
+                            NetworkComponent::SendMsg(pl._player, &pl, NMFGuaranteed);
+                            ChangeOwner(info->person, oInfo->owner, pl._player);
                         }
                         // Also transfer ownership of the brain/unit
                         NetworkId brain = PersonToUnit(info->person);
