@@ -354,20 +354,11 @@ struct PlayerStateMessage : public NetworkSimpleObject
     TMError TransferMsg(NetworkMessageContext& ctx) override;
 };
 
-// Message for attach person to unit
-struct AttachPersonMessage : public NetworkSimpleObject
-{
-    // person to attach
-    OLink<Person> person;
-    // unit to attach
-    OLink<AIUnit> unit;
+#define ATTACH_PERSON_MSG(XX) \
+	XX(OLink<Person>, person, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Person to attach"), IdxTransferRef) \
+	XX(OLink<AIUnit>, unit, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Unit to attach"), IdxTransferRef)
 
-    AttachPersonMessage() {}
-    AttachPersonMessage(Person* p);
-    NetworkMessageType GetNMType(NetworkMessageClass cls) const override { return NMTAttachPerson; }
-    static NetworkMessageFormat& CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format);
-    TMError TransferMsg(NetworkMessageContext& ctx) override;
-};
+DECLARE_NET_MESSAGE(AttachPerson, ATTACH_PERSON_MSG)
 
 // Network indices live in networkIndices.hpp
 #include <Poseidon/Network/NetworkIndices.hpp>
