@@ -146,34 +146,6 @@ public:
 	void Scan(NetworkMessageFormatBase *format) override;
 };
 
-// network message indices for AskForGetInMessage class
-class IndicesAskForGetIn : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int soldier;
-	int vehicle;
-	int position;
-
-	IndicesAskForGetIn();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForGetIn;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForGetOutMessage class
-class IndicesAskForGetOut : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int soldier;
-	int vehicle;
-	int parachute;
-
-	IndicesAskForGetOut();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForGetOut;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
 // network message indices for AskForChangePositionMessage class
 class IndicesAskForChangePosition : public NetworkMessageIndices
 {
