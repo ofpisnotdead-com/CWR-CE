@@ -496,20 +496,10 @@ DECLARE_NET_MESSAGE(AskForJoinGroup, ASK_FOR_JOIN_GROUP_MSG)
 
 DECLARE_NET_MESSAGE(AskForJoinUnits, ASK_FOR_JOIN_UNITS_MSG)
 
-// Message for ask person owner for hide body
-struct AskForHideBodyMessage : public NetworkSimpleObject
-{
-	// body to hide
-	Person *vehicle;
+#define ASK_FOR_HIDE_BODY_MSG(XX) \
+	XX(OLink<Person>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Body to hide"), IdxTransferRef)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForHideBody;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskForHideBody, ASK_FOR_HIDE_BODY_MSG)
 
 // Message for transfer explosion effects (explosion, smoke, etc.) to other clients
 struct ExplosionDammageEffectsMessage : public NetworkSimpleObject
