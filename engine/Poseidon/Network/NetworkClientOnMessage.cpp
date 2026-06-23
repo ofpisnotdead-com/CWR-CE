@@ -842,41 +842,41 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForGetInMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle)
+            if (ask._vehicle)
             {
                 bool ok = false;
-                switch (ask.position)
+                switch (ask._position)
                 {
                     case GIPCommander:
-                        if (ask.vehicle->Commander() && !ask.vehicle->Commander()->IsDammageDestroyed())
+                        if (ask._vehicle->Commander() && !ask._vehicle->Commander()->IsDammageDestroyed())
                         {
                             break;
                         }
-                        ask.vehicle->GetInCommander(ask.soldier);
+                        ask._vehicle->GetInCommander(ask._soldier);
                         ok = true;
                         break;
                     case GIPDriver:
-                        if (ask.vehicle->Driver() && !ask.vehicle->Driver()->IsDammageDestroyed())
+                        if (ask._vehicle->Driver() && !ask._vehicle->Driver()->IsDammageDestroyed())
                         {
                             break;
                         }
-                        ask.vehicle->GetInDriver(ask.soldier);
+                        ask._vehicle->GetInDriver(ask._soldier);
                         ok = true;
                         break;
                     case GIPGunner:
-                        if (ask.vehicle->Gunner() && !ask.vehicle->Gunner()->IsDammageDestroyed())
+                        if (ask._vehicle->Gunner() && !ask._vehicle->Gunner()->IsDammageDestroyed())
                         {
                             break;
                         }
-                        ask.vehicle->GetInGunner(ask.soldier);
+                        ask._vehicle->GetInGunner(ask._soldier);
                         ok = true;
                         break;
                     case GIPCargo:
                     {
-                        for (int i = 0; i < ask.vehicle->GetManCargo().Size(); i++)
+                        for (int i = 0; i < ask._vehicle->GetManCargo().Size(); i++)
                         {
-                            if (ask.vehicle->GetManCargo()[i] == nullptr ||
-                                ask.vehicle->GetManCargo()[i]->IsDammageDestroyed())
+                            if (ask._vehicle->GetManCargo()[i] == nullptr ||
+                                ask._vehicle->GetManCargo()[i]->IsDammageDestroyed())
                             {
                                 ok = true;
                                 break;
@@ -885,19 +885,19 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     }
                         if (ok)
                         {
-                            ask.vehicle->GetInCargo(ask.soldier);
+                            ask._vehicle->GetInCargo(ask._soldier);
                         }
                         break;
                     default:
-                        RptF("Client: Unknown get in position %d", ask.position);
+                        RptF("Client: Unknown get in position %d", ask._position);
                         break;
                 }
                 if (ok)
                 {
-                    ask.vehicle->GetInFinished(ask.soldier->Brain());
-                    if (GLOB_WORLD->FocusOn() == ask.soldier->Brain())
+                    ask._vehicle->GetInFinished(ask._soldier->Brain());
+                    if (GLOB_WORLD->FocusOn() == ask._soldier->Brain())
                     {
-                        GLOB_WORLD->SwitchCameraTo(ask.vehicle, GLOB_WORLD->GetCameraType());
+                        GLOB_WORLD->SwitchCameraTo(ask._vehicle, GLOB_WORLD->GetCameraType());
                     }
                 }
             }
@@ -907,17 +907,17 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForGetOutMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle && ask.soldier && ask.soldier->Brain())
+            if (ask._vehicle && ask._soldier && ask._soldier->Brain())
             {
                 /*
                 LOG_DEBUG(Network,
                   "%s: get out from %s to %s",
-                  (const char *)ask.soldier->GetDebugName(),
-                  (const char *)ask.vehicle->GetDebugName(),
-                  ask.parachute ? "Parachute" : "nothing"
+                  (const char *)ask._soldier->GetDebugName(),
+                  (const char *)ask._vehicle->GetDebugName(),
+                  ask._parachute ? "Parachute" : "nothing"
                 );
                 */
-                ask.soldier->Brain()->DoGetOut(ask.vehicle, ask.parachute);
+                ask._soldier->Brain()->DoGetOut(ask._vehicle, ask._parachute);
             }
         }
         break;
