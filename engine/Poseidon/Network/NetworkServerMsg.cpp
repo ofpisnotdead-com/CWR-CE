@@ -714,9 +714,9 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
         if (_state == NGSPlay)
         {
             NetworkCommandMessage msg;
-            msg.type = NCMTMissionTimeElapsed;
+            msg._type = NCMTMissionTimeElapsed;
             int timeElapsed = GlobalTickCount() - _missionHeader.start;
-            msg.content.Write(&timeElapsed, sizeof(timeElapsed));
+            msg._content.Write(&timeElapsed, sizeof(timeElapsed));
             SendMsg(info->dpid, &msg, NMFGuaranteed);
         }
     }
@@ -784,7 +784,7 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
     if (_state == NGSCreate && _mission.GetLength() == 1 && _mission[0] == '?')
     {
         NetworkCommandMessage answer;
-        answer.type = NCMTVoteMission;
+        answer._type = NCMTVoteMission;
         AddMissionList(answer);
         SendMsg(identity.dpnid, &answer, NMFGuaranteed);
     }
