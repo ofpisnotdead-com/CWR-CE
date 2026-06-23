@@ -1175,11 +1175,11 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             }
             MarkerCreateMessage marker;
             marker.TransferMsg(ctx);
-            if (marker.channel != CCGlobal && !FindUnit(GWorld->GetRealPlayer(), marker.units))
+            if (marker._channel != CCGlobal && !FindUnit(GWorld->GetRealPlayer(), marker._units))
             {
                 break;
             }
-            RString name = marker.marker.name;
+            RString name = marker._marker.name;
             int index = -1;
             for (int i = 0; i < markersMap.Size(); i++)
             {
@@ -1193,7 +1193,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 index = markersMap.Add();
             }
-            markersMap[index] = marker.marker;
+            markersMap[index] = marker._marker;
         }
         break;
         case NMTMarkerDelete:

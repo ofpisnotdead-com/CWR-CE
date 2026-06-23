@@ -662,84 +662,41 @@ LSError ArcadeMarkerInfo::Serialize(ParamArchive& ar)
     return LSOK;
 }
 
-class IndicesMarker
-{
-  public:
-    int position;
-    int name;
-    int text;
-    int markerType;
-    int type;
-    int colorName;
-    int fillName;
-    int a;
-    int b;
-    int angle;
+DEFINE_NETWORK_OBJECT_SIMPLE(ArcadeMarkerInfo, Marker)
 
-    IndicesMarker();
-    void Scan(NetworkMessageFormatBase* format);
-};
+#define MARKER_MSG(XX) \
+	XX(Vector3, position, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Marker position"), IdxTransfer) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Marker (unique) name"), IdxTransfer) \
+	XX(RString, text, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Marker title"), IdxTransfer) \
+	XX(int, markerType, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, MTIcon), DOC_MSG("Marker type (icon, rectangle, ellipse)"), IdxTransfer) \
+	XX(RString, type, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Marker icon"), IdxTransfer) \
+	XX(RString, colorName, NDTString, NCTNone, DEFVALUE(RString, "Default"), DOC_MSG("Marker color name"), IdxTransfer) \
+	XX(RString, fillName, NDTString, NCTNone, DEFVALUE(RString, "Solid"), DOC_MSG("Marker fill name"), IdxTransfer) \
+	XX(float, a, NDTFloat, NCTNone, DEFVALUE(float, 1.0f), DOC_MSG("Width"), IdxTransfer) \
+	XX(float, b, NDTFloat, NCTNone, DEFVALUE(float, 1.0f), DOC_MSG("Height"), IdxTransfer) \
+	XX(float, angle, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Rotation"), IdxTransfer)
 
-IndicesMarker::IndicesMarker()
-{
-    position = -1;
-    name = -1;
-    text = -1;
-    markerType = -1;
-    type = -1;
-    colorName = -1;
-    fillName = -1;
-    a = -1;
-    b = -1;
-    angle = -1;
-}
-
-void IndicesMarker::Scan(NetworkMessageFormatBase* format)
-{
-    SCAN(position)
-    SCAN(name) SCAN(text) SCAN(markerType) SCAN(type) SCAN(colorName) SCAN(fillName) SCAN(a) SCAN(b) SCAN(angle)
-}
+DECLARE_NET_INDICES(Marker, MARKER_MSG)
+DEFINE_NET_INDICES(Marker, MARKER_MSG)
 
 } // namespace Poseidon
-IndicesMarker* GetIndicesMarker()
-{
-    using namespace Poseidon;
-    return new IndicesMarker();
-}
-void DeleteIndicesMarker(IndicesMarker* marker)
-{
-    using namespace Poseidon;
-    delete marker;
-}
+
+DEFINE_GET_INDICES(Marker)
+
 namespace Poseidon
 {
 
-} // namespace Poseidon
-void ScanIndicesMarker(IndicesMarker* marker, NetworkMessageFormatBase* format)
+NetworkMessageFormat& ArcadeMarkerInfo::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    using namespace Poseidon;
-    marker->Scan(format);
-}
-namespace Poseidon
-{
-
-void ArcadeMarkerInfo::CreateFormat(NetworkMessageFormat& format)
-{
-    format.Add("position", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Marker position"));
-    format.Add("name", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Marker (unique) name"));
-    format.Add("text", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Marker title"));
-    format.Add("markerType", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, MTIcon),
-               DOC_MSG("Marker type (icon, rectangle, ellipse)"));
-    format.Add("type", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Marker icon"));
-    format.Add("colorName", NDTString, NCTNone, DEFVALUE(RString, "Default"), DOC_MSG("Marker color name"));
-    format.Add("fillName", NDTString, NCTNone, DEFVALUE(RString, "Solid"), DOC_MSG("Marker fill name"));
-    format.Add("a", NDTFloat, NCTNone, DEFVALUE(float, 1.0f), DOC_MSG("Width"));
-    format.Add("b", NDTFloat, NCTNone, DEFVALUE(float, 1.0f), DOC_MSG("Height"));
-    format.Add("angle", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Rotation"));
+    MARKER_MSG(MSG_FORMAT)
+    return format;
 }
 
-TMError ArcadeMarkerInfo::TransferMsg(NetworkMessageContext& ctx, IndicesMarker* indices)
+TMError ArcadeMarkerInfo::TransferMsg(NetworkMessageContext& ctx)
 {
+    PoseidonAssert(dynamic_cast<const IndicesMarker*>(ctx.GetIndices()))
+        const IndicesMarker* indices = static_cast<const IndicesMarker*>(ctx.GetIndices());
+
     TMCHECK(ctx.IdxTransfer(indices->position, position))
     TMCHECK(ctx.IdxTransfer(indices->name, name))
     TMCHECK(ctx.IdxTransfer(indices->text, text))

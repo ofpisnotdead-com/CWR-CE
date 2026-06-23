@@ -263,8 +263,6 @@ enum MarkerType
 	MTEllipse
 };
 
-class IndicesMarker;
-
 struct ArcadeMarkerInfo
 {
 	Point3 position;
@@ -291,11 +289,13 @@ struct ArcadeMarkerInfo
 
 	LSError Serialize(ParamArchive &ar);
 
-	static void CreateFormat
+	NetworkMessageType GetNMType(NetworkMessageClass cls) const;
+	static NetworkMessageFormat &CreateFormat
 	(
+		NetworkMessageClass cls,
 		NetworkMessageFormat &format
 	);
-	TMError TransferMsg(NetworkMessageContext &ctx, IndicesMarker *indices);
+	TMError TransferMsg(NetworkMessageContext &ctx);
 
 	void AddOffset(Vector3Par offset);
 	void Rotate(Vector3Par center, float angle, bool sel);
