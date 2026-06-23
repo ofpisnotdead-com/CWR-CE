@@ -146,23 +146,6 @@ public:
 	void Scan(NetworkMessageFormatBase *format) override;
 };
 
-// network message indices for AskForDammageMessage class
-class IndicesAskForDammage : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int who;
-	int owner;
-	int modelPos;
-	int val;
-	int valRange;
-	int ammo;
-
-	IndicesAskForDammage();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForDammage;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
 // network message indices for AskForSetDammageMessage class
 class IndicesAskForSetDammage : public NetworkMessageIndices
 {

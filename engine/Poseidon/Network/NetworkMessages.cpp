@@ -61,50 +61,8 @@ using Poseidon::Foundation::Time;
 #define USE_PRIVATE_HEAP 1
 
 using namespace Poseidon;
-IndicesAskForDammage::IndicesAskForDammage()
-{
-    who = -1;
-    owner = -1;
-    modelPos = -1;
-    val = -1;
-    valRange = -1;
-    ammo = -1;
-}
 
-void IndicesAskForDammage::Scan(NetworkMessageFormatBase* format){SCAN(who) SCAN(owner) SCAN(modelPos) SCAN(val)
-                                                                      SCAN(valRange) SCAN(ammo)}
-
-// Create network message indices for AskForDammageMessage class
-NetworkMessageIndices* GetIndicesAskForDammage()
-{
-    return new IndicesAskForDammage();
-}
-
-NetworkMessageFormat& AskForDammageMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    Vector3 temp = VZero;
-    format.Add("who", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Damaged object"));
-    format.Add("owner", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is responsible for damage"));
-    format.Add("modelPos", NDTVector, NCTNone, DEFVALUE(Vector3, temp), DOC_MSG("Position of damage"));
-    format.Add("val", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Amount of damage"));
-    format.Add("valRange", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Range of damage"));
-    format.Add("ammo", NDTString, NCTNone, DEFVALUE(RString, RString()), DOC_MSG("Ammunition type"));
-    return format;
-}
-
-TMError AskForDammageMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskForDammage*>(ctx.GetIndices()))
-    const IndicesAskForDammage* indices = static_cast<const IndicesAskForDammage*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->who, who))
-    TMCHECK(ctx.IdxTransferRef(indices->owner, owner))
-    TMCHECK(ctx.IdxTransfer(indices->modelPos, modelPos))
-    TMCHECK(ctx.IdxTransfer(indices->val, val))
-    TMCHECK(ctx.IdxTransfer(indices->valRange, valRange))
-    TMCHECK(ctx.IdxTransfer(indices->ammo, ammo))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(AskForDammage, ASK_FOR_DAMMAGE_MSG)
 
 IndicesAskForSetDammage::IndicesAskForSetDammage()
 {
