@@ -250,49 +250,7 @@ TMError MarkerCreateMessage::TransferMsg(NetworkMessageContext& ctx)
     return marker.TransferMsg(ctx, indices->marker);
 }
 
-// network message indices for NetworkCommandMessage class
-class IndicesNetworkCommand : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int type;
-    int content;
-
-    IndicesNetworkCommand();
-    NetworkMessageIndices* Clone() const override { return new IndicesNetworkCommand; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesNetworkCommand::IndicesNetworkCommand()
-{
-    type = -1;
-    content = -1;
-}
-
-void IndicesNetworkCommand::Scan(NetworkMessageFormatBase* format){SCAN(type) SCAN(content)}
-
-// Create network message indices for NetworkCommandMessage class
-NetworkMessageIndices* GetIndicesNetworkCommand()
-{
-    return new IndicesNetworkCommand();
-}
-
-NetworkMessageFormat& NetworkCommandMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("type", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Type of command"));
-    format.Add("content", NDTRawData, NCTNone, DEFVALUERAWDATA, DOC_MSG("Parameters of command"));
-    return format;
-}
-
-TMError NetworkCommandMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesNetworkCommand*>(ctx.GetIndices()))
-    const IndicesNetworkCommand* indices = static_cast<const IndicesNetworkCommand*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->type, (int&)type))
-    TMCHECK(ctx.IdxTransfer(indices->content, content))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(NetworkCommand, NETWORK_COMMAND_MSG)
 
 DEFINE_NET_MESSAGE(IntegrityQuestion, INTEGRITY_QUESTION_MSG)
 

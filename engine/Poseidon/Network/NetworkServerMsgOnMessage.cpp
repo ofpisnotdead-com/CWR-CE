@@ -1226,7 +1226,7 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
 
 void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
 {
-    switch (cmd.type)
+    switch (cmd._type)
     {
         case NCMTLogin:
         {
@@ -1244,7 +1244,7 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
                 }
                 if (ident < _identities.Size())
                 {
-                    RString password = cmd.content.ReadString();
+                    RString password = cmd._content.ReadString();
                     if (!Poseidon::AdminLoginPasswordAccepted(_serverCfg, password))
                     {
                         if (++_identities[ident].failedLogin >= 10)
@@ -1338,21 +1338,21 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
             if (Poseidon::CommandFromGameMaster(_dedicated, from, _gameMaster))
             {
                 float interval;
-                cmd.content.Read(&interval, sizeof(interval));
+                cmd._content.Read(&interval, sizeof(interval));
                 Monitor(interval);
             }
             break;
         case NCMTDebugAsk:
             if (_dedicated && from == _gameMaster || !_dedicated && from == _botClient)
             {
-                DebugAsk(cmd.content.ReadString(), from, !_admin);
+                DebugAsk(cmd._content.ReadString(), from, !_admin);
             }
             break;
         case NCMTMission:
             if (Poseidon::CommandFromGameMaster(_dedicated, from, _gameMaster))
             {
-                _mission = cmd.content.ReadString();
-                cmd.content.Read(&_cadetMode, sizeof(bool));
+                _mission = cmd._content.ReadString();
+                cmd._content.Read(&_cadetMode, sizeof(bool));
                 if (_mission.GetLength() > 0)
                 {
                     _restart = true;
@@ -1432,7 +1432,7 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
             if (Poseidon::CommandFromPasswordAdmin(_dedicated, from, _gameMaster, _admin))
             {
                 bool lock;
-                if (cmd.content.Read(&lock, sizeof(bool)))
+                if (cmd._content.Read(&lock, sizeof(bool)))
                 {
                     _sessionLocked = lock;
                     const PlayerIdentity* adminId = FindIdentity(from);
@@ -1445,7 +1445,7 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
             if (Poseidon::CommandFromAdminOrBot(from, _gameMaster, _botClient))
             {
                 int player;
-                if (cmd.content.Read(&player, sizeof(int)) && player != _botClient)
+                if (cmd._content.Read(&player, sizeof(int)) && player != _botClient)
                 {
                     KickOff(player, KORKick);
                 }
@@ -1455,7 +1455,7 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
             if (Poseidon::CommandFromAdminOrBot(from, _gameMaster, _botClient))
             {
                 int player;
-                if (cmd.content.Read(&player, sizeof(int)) && player != _botClient)
+                if (cmd._content.Read(&player, sizeof(int)) && player != _botClient)
                 {
                     Ban(player);
                 }
@@ -1464,7 +1464,7 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
         case NCMTUnban:
             if (Poseidon::CommandFromAdminOrBot(from, _gameMaster, _botClient))
             {
-                RString arg = cmd.content.ReadString();
+                RString arg = cmd._content.ReadString();
                 if (arg.GetLength() > 0)
                 {
                     Unban(static_cast<const char*>(arg));
@@ -1483,13 +1483,13 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
                 char echo[512];
                 snprintf(echo, sizeof(echo), "%s votes: ", (const char*)info->name);
                 int subtype;
-                cmd.content.Read(&subtype, sizeof(int));
+                cmd._content.Read(&subtype, sizeof(int));
                 switch (subtype)
                 {
                     case NCMTMission:
                     {
-                        char* ptr = cmd.content.Data() + cmd.content.GetPos();
-                        int size = cmd.content.Size() - cmd.content.GetPos();
+                        char* ptr = cmd._content.Data() + cmd._content.GetPos();
+                        int size = cmd._content.Size() - cmd._content.GetPos();
                         _votings.Add(this, (char*)&subtype, sizeof(int), 0.9999, from, ptr, size, true);
                         // ptr is raw wire bytes, not guaranteed NUL-terminated; bound both the
                         // read (%.*s precision) and the write (snprintf) so a long/unterminated
@@ -1521,7 +1521,7 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
                     {
                         int id[2];
                         id[0] = subtype;
-                        cmd.content.Read(&id[1], sizeof(int));
+                        cmd._content.Read(&id[1], sizeof(int));
                         _votings.Add(this, (char*)id, 2 * sizeof(int), _voteThreshold, from);
                         const NetworkPlayerInfo* info = GetPlayerInfo(id[1]);
                         if (info)
@@ -1534,8 +1534,8 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
                     break;
                     case NCMTAdmin:
                     {
-                        char* ptr = cmd.content.Data() + cmd.content.GetPos();
-                        int size = cmd.content.Size() - cmd.content.GetPos();
+                        char* ptr = cmd._content.Data() + cmd._content.GetPos();
+                        int size = cmd._content.Size() - cmd._content.GetPos();
                         _votings.Add(this, (char*)&subtype, sizeof(int), _voteThreshold, from, ptr, size);
                         // ptr is wire data; the target player id is the first int — require it
                         // to actually be present before dereferencing (N-SEC-06 OOB read).

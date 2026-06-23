@@ -319,8 +319,8 @@ void NetworkServer::DebugAnswer(RString str)
     if (_gameMaster != AI_PLAYER)
     {
         NetworkCommandMessage msg;
-        msg.type = NCMTDebugAnswer;
-        msg.content.WriteString(str);
+        msg._type = NCMTDebugAnswer;
+        msg._content.WriteString(str);
         SendMsg(_gameMaster, &msg, NMFGuaranteed);
     }
 }
@@ -514,7 +514,7 @@ void NetworkServer::SimulateDS()
                         {
                             _mission = "?";
                             NetworkCommandMessage answer;
-                            answer.type = NCMTVoteMission;
+                            answer._type = NCMTVoteMission;
                             AddMissionList(answer);
                             for (int i = 0; i < _identities.Size(); i++)
                             {
@@ -949,16 +949,16 @@ void NetworkServer::SimulateDS()
         else // if (_state == NGSPlay)
         {
             NetworkCommandMessage msg;
-            msg.type = NCMTMonitorAnswer;
+            msg._type = NCMTMonitorAnswer;
             float invInterval = 1.0 / (_monitorInterval + 0.001f * (tickCount - _monitorNext));
             float fps = _monitorFrames * invInterval;
             int memory = MemoryUsed();
             float in = _monitorIn * invInterval;
             float out = _monitorOut * invInterval;
-            msg.content.Write(&fps, sizeof(fps));
-            msg.content.Write(&memory, sizeof(memory));
-            msg.content.Write(&in, sizeof(in));
-            msg.content.Write(&out, sizeof(out));
+            msg._content.Write(&fps, sizeof(fps));
+            msg._content.Write(&memory, sizeof(memory));
+            msg._content.Write(&in, sizeof(in));
+            msg._content.Write(&out, sizeof(out));
 
             int sizeG = 0, sizeNG = 0;
             for (int i = 0; i < _players.Size(); i++)
@@ -973,8 +973,8 @@ void NetworkServer::SimulateDS()
                     sizeNG += player._messageQueueNonGuaranteed[j].msg->size;
                 }
             }
-            msg.content.Write(&sizeG, sizeof(sizeG));
-            msg.content.Write(&sizeNG, sizeof(sizeNG));
+            msg._content.Write(&sizeG, sizeof(sizeG));
+            msg._content.Write(&sizeNG, sizeof(sizeNG));
 
             SendMsg(_gameMaster, &msg, NMFGuaranteed);
         }
