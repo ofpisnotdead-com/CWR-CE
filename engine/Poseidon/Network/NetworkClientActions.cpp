@@ -611,13 +611,13 @@ void NetworkClient::PlaySound(RString name, Vector3Par position, Vector3Par spee
     }
 
     PlaySoundMessage msg;
-    msg.name = name;
-    msg.position = position;
-    msg.speed = speed;
-    msg.volume = volume;
-    msg.freq = freq;
-    msg.soundId = _soundId++;
-    msg.creator = _player;
+    msg._name = name;
+    msg._position = position;
+    msg._speed = speed;
+    msg._volume = volume;
+    msg._freq = freq;
+    msg._soundId = _soundId++;
+    msg._creator = _player;
     //  int id = _soundId++;
     SendMsg(&msg, NMFNone);
 
@@ -637,7 +637,7 @@ void NetworkClient::PlaySound(RString name, Vector3Par position, Vector3Par spee
 
     int index = _sentSounds.Add();
     _sentSounds[index].creator = _player;
-    _sentSounds[index].id = msg.soundId;
+    _sentSounds[index].id = msg._soundId;
     _sentSounds[index].wave = wave;
 }
 
@@ -671,9 +671,9 @@ void NetworkClient::SoundState(IWave* wave, SoundStateType state)
     }
 
     SoundStateMessage msg;
-    msg.state = state;
-    msg.creator = creator;
-    msg.soundId = id;
+    msg._state = state;
+    msg._creator = creator;
+    msg._soundId = id;
     SendMsg(&msg, NMFNone);
 }
 
