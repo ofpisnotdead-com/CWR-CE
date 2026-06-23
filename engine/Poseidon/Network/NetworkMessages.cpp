@@ -348,39 +348,8 @@ DEFINE_GET_INDICES(DeleteObject)
 DEFINE_NET_MESSAGE(DeleteCommand, DELETE_COMMAND_MSG)
 DEFINE_GET_INDICES(DeleteCommand)
 
-IndicesAskForAmmo::IndicesAskForAmmo()
-{
-    vehicle = -1;
-    weapon = -1;
-    burst = -1;
-}
-
-void IndicesAskForAmmo::Scan(NetworkMessageFormatBase* format){SCAN(vehicle) SCAN(weapon) SCAN(burst)}
-
-// Create network message indices for AskForAmmoMessage class
-NetworkMessageIndices* GetIndicesAskForAmmo()
-{
-    return new IndicesAskForAmmo();
-}
-
-NetworkMessageFormat& AskForAmmoMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which ammo is changing"));
-    format.Add("weapon", NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Weapon index"));
-    format.Add("burst", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 1), DOC_MSG("Amount of ammo to decrease"));
-    return format;
-}
-
-TMError AskForAmmoMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskForAmmo*>(ctx.GetIndices()))
-    const IndicesAskForAmmo* indices = static_cast<const IndicesAskForAmmo*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->vehicle, vehicle))
-    TMCHECK(ctx.IdxTransfer(indices->weapon, weapon))
-    TMCHECK(ctx.IdxTransfer(indices->burst, burst))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(AskForAmmo, ASK_FOR_AMMO_MSG)
+DEFINE_GET_INDICES(AskForAmmo)
 
 // network message indices for FireWeaponMessage class
 class IndicesFireWeapon : public NetworkMessageIndices
