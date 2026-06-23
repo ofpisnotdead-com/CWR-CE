@@ -769,9 +769,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForAddImpulseMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle)
+            if (ask._vehicle)
             {
-                ask.vehicle->AddImpulse(ask.force, ask.torque);
+                ask._vehicle->AddImpulse(ask._force, ask._torque);
             }
         }
         break;
@@ -779,9 +779,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForMoveVectorMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle)
+            if (ask._vehicle)
             {
-                ask.vehicle->Move(ask.pos);
+                ask._vehicle->Move(ask._pos);
             }
         }
         break;
@@ -789,12 +789,12 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForMoveMatrixMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle)
+            if (ask._vehicle)
             {
                 Matrix4 trans;
-                trans.SetPosition(ask.pos);
-                trans.SetOrientation(ask.orient);
-                ask.vehicle->Move(trans);
+                trans.SetPosition(ask._pos);
+                trans.SetOrientation(ask._orient);
+                ask._vehicle->Move(trans);
             }
         }
         break;
