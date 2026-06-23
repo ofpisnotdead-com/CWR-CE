@@ -42,6 +42,82 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup SteamCMD
+        uses: andriivitiv/setup-steamcmd@v1
+
+      - name: Try Steam demo game data
+        shell: pwsh
+        env:
+          GAME_DATA_DIR: ${{ github.workspace }}/.game-data/remaster-demo
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $requiredFiles = @(
+            'BIN/RESOURCE.BIN',
+            'BIN/STRINGTABLE_MAINMENU.utf8.csv',
+            'BIN/optionsShell.hpp',
+            'DTA/Data.pbo',
+            'DTA/Fonts.pbo',
+            'fonts/cwr_title.ttf',
+            'Missions/Demo.Demo/mission.sqm'
+          )
+
+          function Test-DemoContent {
+            param([string] $Path)
+
+            $ok = $true
+            foreach ($required in $requiredFiles) {
+              $requiredPath = Join-Path $Path $required
+              $exists = Test-Path -LiteralPath $requiredPath
+              Write-Host "Steam required content $required = $exists"
+              if (-not $exists) {
+                $ok = $false
+              }
+            }
+            return $ok
+          }
+
+          foreach ($platform in @('', 'windows', 'linux')) {
+            $label = if ($platform) { $platform } else { 'native' }
+            $attemptDir = Join-Path $env:GAME_DATA_DIR $label
+            Remove-Item -LiteralPath $attemptDir -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Force -Path $attemptDir
+
+            $steamArgs = @('+force_install_dir', $attemptDir, '+login', 'anonymous', '+app_license_request', $env:STEAM_APP_ID, '+app_update', $env:STEAM_APP_ID, 'validate', '+quit')
+            if ($platform) {
+              $steamArgs = @('+@sSteamCmdForcePlatformType', $platform) + $steamArgs
+            }
+
+            Write-Host "Trying Steam demo content platform: $label"
+            & steamcmd @steamArgs
+            $steamExit = $LASTEXITCODE
+            if ($steamExit -ne 0) {
+              Write-Warning "SteamCMD app_update failed for platform $label with exit code $steamExit"
+            }
+
+            $files = @(Get-ChildItem -LiteralPath $attemptDir -Recurse -File -ErrorAction SilentlyContinue)
+            $totalBytes = ($files | Measure-Object -Property Length -Sum).Sum
+            Write-Host "Steam content directory: $attemptDir"
+            Write-Host "Steam content file count: $($files.Count)"
+            Write-Host "Steam content total bytes: $totalBytes"
+            $root = (Resolve-Path -LiteralPath $attemptDir).Path
+            $files |
+              Sort-Object FullName |
+              Select-Object -First 120 |
+              ForEach-Object {
+                $relative = $_.FullName.Substring($root.Length).TrimStart([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+                Write-Host ("Steam file {0} ({1} bytes)" -f $relative, $_.Length)
+              }
+
+            if ((Test-DemoContent -Path $attemptDir) -and $steamExit -eq 0) {
+              Get-ChildItem -LiteralPath $attemptDir -Recurse -Include *.exe,*.dll,*.pdb -File | Remove-Item -Force
+              "TRIDENT_DATA_DIR=$attemptDir" | Add-Content -LiteralPath $env:GITHUB_ENV
+              Write-Host "Using Trident data directory: $attemptDir"
+              exit 0
+            }
+          }
+
+          throw "Steam demo content was not available from native, windows, or linux SteamCMD installs."
+
       - name: Install Linux system packages
         if: runner.os == 'Linux'
         run: |
@@ -128,68 +204,6 @@ jobs:
       - name: Build Trident
         working-directory: engine/Trident
         run: cargo build --locked --profile rwdi
-
-      - name: Setup SteamCMD
-        uses: andriivitiv/setup-steamcmd@v1
-
-      - name: Try Steam demo game data
-        shell: pwsh
-        env:
-          GAME_DATA_DIR: ${{ github.workspace }}/.game-data/remaster-demo
-        run: |
-          $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force -Path $env:GAME_DATA_DIR
-          $steamExit = 0
-          steamcmd +@sSteamCmdForcePlatformType windows +force_install_dir "$env:GAME_DATA_DIR" +login anonymous +app_license_request $env:STEAM_APP_ID +app_update $env:STEAM_APP_ID validate +quit
-          if ($LASTEXITCODE -ne 0) {
-            $steamExit = $LASTEXITCODE
-            Write-Warning "SteamCMD app_update failed with exit code $steamExit"
-          }
-          $files = @(Get-ChildItem -LiteralPath $env:GAME_DATA_DIR -Recurse -File -ErrorAction SilentlyContinue)
-          $totalBytes = ($files | Measure-Object -Property Length -Sum).Sum
-          Write-Host "Steam content directory: $env:GAME_DATA_DIR"
-          Write-Host "Steam content file count: $($files.Count)"
-          Write-Host "Steam content total bytes: $totalBytes"
-          foreach ($required in @(
-            'BIN/RESOURCE.BIN',
-            'BIN/STRINGTABLE_MAINMENU.utf8.csv',
-            'BIN/optionsShell.hpp',
-            'DTA/Data.pbo',
-            'DTA/Fonts.pbo',
-            'fonts/cwr_title.ttf',
-            'Missions/Demo.Demo/mission.sqm'
-          )) {
-            $path = Join-Path $env:GAME_DATA_DIR $required
-            Write-Host "Steam required content $required = $(Test-Path -LiteralPath $path)"
-          }
-          $root = (Resolve-Path -LiteralPath $env:GAME_DATA_DIR).Path
-          $files |
-            Sort-Object FullName |
-            Select-Object -First 120 |
-            ForEach-Object {
-              $relative = $_.FullName.Substring($root.Length).TrimStart([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
-              Write-Host ("Steam file {0} ({1} bytes)" -f $relative, $_.Length)
-            }
-          Get-ChildItem -LiteralPath $env:GAME_DATA_DIR -Recurse -Include *.exe,*.dll,*.pdb -File | Remove-Item -Force
-          if ($steamExit -ne 0) {
-            exit $steamExit
-          }
-          foreach ($required in @(
-            'BIN/RESOURCE.BIN',
-            'BIN/STRINGTABLE_MAINMENU.utf8.csv',
-            'BIN/optionsShell.hpp',
-            'DTA/Data.pbo',
-            'DTA/Fonts.pbo',
-            'fonts/cwr_title.ttf',
-            'Missions/Demo.Demo/mission.sqm'
-          )) {
-            $path = Join-Path $env:GAME_DATA_DIR $required
-            if (-not (Test-Path -LiteralPath $path)) {
-              throw "Steam demo content is missing required file: $required"
-            }
-          }
-          "TRIDENT_DATA_DIR=$env:GAME_DATA_DIR" | Add-Content -LiteralPath $env:GITHUB_ENV
-          Write-Host "Using Trident data directory: $env:GAME_DATA_DIR"
 
       - name: Write Trident env
         shell: pwsh
