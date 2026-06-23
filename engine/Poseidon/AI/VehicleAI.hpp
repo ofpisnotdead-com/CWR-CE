@@ -240,17 +240,10 @@ struct AIUnitInfo : public SerializeClass
 	LSError Serialize(ParamArchive &ar) override;
 };
 
-class IndicesUpdateVehicleBrain : public IndicesUpdateVehicleSupply
-{
-	typedef IndicesUpdateVehicleSupply base;
+#define UPDATE_VEHICLE_BRAIN_MSG(XX) \
+	XX(int, remotePlayer, NDTInteger, NCTNone, DEFVALUE(int, 1), DOC_MSG("Person is controled by player on some client"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
 
-public:
-	int remotePlayer;
-
-	IndicesUpdateVehicleBrain();
-	NetworkMessageIndices *Clone() const override {return new IndicesUpdateVehicleBrain;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES_EX_ERR(UpdateVehicleBrain, UpdateVehicleSupply, UPDATE_VEHICLE_BRAIN_MSG)
 
 //Target status (position, spotability etc.)
 struct Target: public RemoveLLinks
