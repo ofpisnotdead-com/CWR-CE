@@ -2573,39 +2573,17 @@ NetworkMessageType Car::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesUpdateCar : public IndicesUpdateTankOrCar
-{
-    typedef IndicesUpdateTankOrCar base;
+#define UPDATE_CAR_MSG(XX) \
+	XX(RString, plateNumber, NDTString, NCTNone, DEFVALUE(RString, "Debug markerDebug markerXX"), DOC_MSG("Plate number"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
+	XX(float, scudState, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Scud launcher state"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
-  public:
-    int plateNumber;
-    int scudState;
-
-    IndicesUpdateCar();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateCar; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateCar::IndicesUpdateCar()
-{
-    plateNumber = -1;
-    scudState = -1;
-}
-
-void IndicesUpdateCar::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(plateNumber)
-    SCAN(scudState)
-}
+DECLARE_NET_INDICES_EX_ERR(UpdateCar, UpdateTankOrCar, UPDATE_CAR_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdateCar, UpdateTankOrCar, UPDATE_CAR_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateCar()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateCar();
-}
+
+DEFINE_GET_INDICES(UpdateCar)
+
 namespace Poseidon
 {
 
@@ -2656,10 +2634,7 @@ NetworkMessageFormat& Car::CreateFormat(NetworkMessageClass cls, NetworkMessageF
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-            format.Add("plateNumber", NDTString, NCTNone, DEFVALUE(RString, "Debug markerDebug markerXX"),
-                       DOC_MSG("Plate number"), ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR);
-            format.Add("scudState", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Scud launcher state"), ET_ABS_DIF,
-                       ERR_COEF_VALUE_MAJOR);
+            UPDATE_CAR_MSG(MSG_FORMAT_ERR)
             break;
         case NMCUpdatePosition:
             base::CreateFormat(cls, format);
