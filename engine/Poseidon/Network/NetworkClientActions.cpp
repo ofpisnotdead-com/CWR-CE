@@ -879,7 +879,11 @@ void NetworkClient::DeleteCommand(AISubgroup* subgrp, int index, Command* cmd)
         return;
     }
 
-    DeleteCommandMessage msg(subgrp, index, id);
+    DeleteCommandMessage msg;
+    msg._creator = id.creator;
+    msg._id = id.id;
+    msg._subgrp = subgrp;
+    msg._index = index;
     SendMsg(&msg, NMFGuaranteed);
 
 #if CHECK_MSG
