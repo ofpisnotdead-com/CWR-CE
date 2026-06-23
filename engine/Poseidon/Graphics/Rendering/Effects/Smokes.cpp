@@ -477,47 +477,20 @@ NetworkMessageType ObjectDestructed::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesCreateObjectDestructed : public IndicesCreateVehicle
-{
-    typedef IndicesCreateVehicle base;
+#define CREATE_OBJECT_DESTRUCTED_MSG(XX) \
+	XX(OLink<Object>, destroy, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Destroying object"), IdxTransferRef) \
+	XX(float, timeToLive, NDTFloat, NCTNone, DEFVALUE(float, 2), DOC_MSG("Time to live"), IdxTransfer) \
+	XX(RString, soundName, NDTString, NCTNone, DEFVALUE(RString, RString(nullptr)), DOC_MSG("ID of played sound"), IdxTransfer) \
+	XX(float, soundVolume, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Volume of played sound"), IdxTransfer) \
+	XX(float, soundFrequency, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Pitch of played sound"), IdxTransfer)
 
-  public:
-    int destroy;
-    int timeToLive;
-    int soundName;
-    int soundVolume;
-    int soundFrequency;
-
-    IndicesCreateObjectDestructed();
-    NetworkMessageIndices* Clone() const override { return new IndicesCreateObjectDestructed; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesCreateObjectDestructed::IndicesCreateObjectDestructed()
-{
-    destroy = -1;
-    timeToLive = -1;
-    soundName = -1;
-    soundVolume = -1;
-    soundFrequency = -1;
-}
-
-void IndicesCreateObjectDestructed::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(destroy)
-    SCAN(timeToLive)
-    SCAN(soundName)
-    SCAN(soundVolume)
-    SCAN(soundFrequency)
-}
+DECLARE_NET_INDICES_EX(CreateObjectDestructed, CreateVehicle, CREATE_OBJECT_DESTRUCTED_MSG)
+DEFINE_NET_INDICES_EX(CreateObjectDestructed, CreateVehicle, CREATE_OBJECT_DESTRUCTED_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesCreateObjectDestructed()
-{
-    return new Poseidon::IndicesCreateObjectDestructed();
-}
+
+DEFINE_GET_INDICES(CreateObjectDestructed)
+
 namespace Poseidon
 {
 
@@ -527,12 +500,7 @@ NetworkMessageFormat& ObjectDestructed::CreateFormat(NetworkMessageClass cls, Ne
     {
         case NMCCreate:
             base::CreateFormat(cls, format);
-            format.Add("destroy", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Destroying object"));
-            format.Add("timeToLive", NDTFloat, NCTNone, DEFVALUE(float, 2), DOC_MSG("Time to live"));
-            format.Add("soundName", NDTString, NCTNone, DEFVALUE(RString, RString(nullptr)),
-                       DOC_MSG("ID of played sound"));
-            format.Add("soundVolume", NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Volume of played sound"));
-            format.Add("soundFrequency", NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Pitch of played sound"));
+            CREATE_OBJECT_DESTRUCTED_MSG(MSG_FORMAT)
             break;
         default:
             base::CreateFormat(cls, format);
@@ -1432,50 +1400,21 @@ NetworkMessageType Crater::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesCreateCrater : public IndicesCreateVehicle
-{
-    typedef IndicesCreateVehicle base;
+#define CREATE_CRATER_MSG(XX) \
+	XX(float, timeToLive, NDTFloat, NCTNone, DEFVALUE(float, 20), DOC_MSG("Time to live"), IdxTransfer) \
+	XX(float, size, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Size"), IdxTransfer) \
+	XX(bool, isSmoke, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Source of smoke"), IdxTransfer) \
+	XX(bool, isBlood, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Source of blood"), IdxTransfer) \
+	XX(bool, isWater, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Source of water"), IdxTransfer) \
+	XX(float, alpha, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Transparency"), IdxTransfer)
 
-  public:
-    int timeToLive;
-    int size;
-    int isSmoke;
-    int isBlood;
-    int isWater;
-    int alpha;
-
-    IndicesCreateCrater();
-    NetworkMessageIndices* Clone() const override { return new IndicesCreateCrater; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesCreateCrater::IndicesCreateCrater()
-{
-    timeToLive = -1;
-    size = -1;
-    isSmoke = -1;
-    isBlood = -1;
-    isWater = -1;
-    alpha = -1;
-}
-
-void IndicesCreateCrater::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(timeToLive)
-    SCAN(size)
-    SCAN(isSmoke)
-    SCAN(isBlood)
-    SCAN(isWater)
-    SCAN(alpha)
-}
+DECLARE_NET_INDICES_EX(CreateCrater, CreateVehicle, CREATE_CRATER_MSG)
+DEFINE_NET_INDICES_EX(CreateCrater, CreateVehicle, CREATE_CRATER_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesCreateCrater()
-{
-    return new Poseidon::IndicesCreateCrater();
-}
+
+DEFINE_GET_INDICES(CreateCrater)
+
 namespace Poseidon
 {
 
@@ -1485,12 +1424,7 @@ NetworkMessageFormat& Crater::CreateFormat(NetworkMessageClass cls, NetworkMessa
     {
         case NMCCreate:
             base::CreateFormat(cls, format);
-            format.Add("timeToLive", NDTFloat, NCTNone, DEFVALUE(float, 20), DOC_MSG("Time to live"));
-            format.Add("size", NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Size"));
-            format.Add("isSmoke", NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Source of smoke"));
-            format.Add("isBlood", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Source of blood"));
-            format.Add("isWater", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Source of water"));
-            format.Add("alpha", NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Transparency"));
+            CREATE_CRATER_MSG(MSG_FORMAT)
             break;
         default:
             base::CreateFormat(cls, format);
@@ -1634,41 +1568,18 @@ NetworkMessageType CraterOnVehicle::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesCreateCraterOnVehicle : public IndicesCreateCrater
-{
-    typedef IndicesCreateCrater base;
+#define CREATE_CRATER_ON_VEHICLE_MSG(XX) \
+	XX(OLink<Object>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Attached vehicle (where this crater is)"), IdxTransferRef) \
+	XX(Vector3, pos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Position on vehicle"), IdxTransfer) \
+	XX(Vector3, dir, NDTVector, NCTNone, DEFVALUE(Vector3, VUp), DOC_MSG("Orientation on vehicle"), IdxTransfer)
 
-  public:
-    int vehicle;
-    int pos;
-    int dir;
-
-    IndicesCreateCraterOnVehicle();
-    NetworkMessageIndices* Clone() const override { return new IndicesCreateCraterOnVehicle; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesCreateCraterOnVehicle::IndicesCreateCraterOnVehicle()
-{
-    vehicle = -1;
-    pos = -1;
-    dir = -1;
-}
-
-void IndicesCreateCraterOnVehicle::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(vehicle)
-    SCAN(pos)
-    SCAN(dir)
-}
+DECLARE_NET_INDICES_EX(CreateCraterOnVehicle, CreateCrater, CREATE_CRATER_ON_VEHICLE_MSG)
+DEFINE_NET_INDICES_EX(CreateCraterOnVehicle, CreateCrater, CREATE_CRATER_ON_VEHICLE_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesCreateCraterOnVehicle()
-{
-    return new Poseidon::IndicesCreateCraterOnVehicle();
-}
+
+DEFINE_GET_INDICES(CreateCraterOnVehicle)
+
 namespace Poseidon
 {
 
@@ -1678,9 +1589,7 @@ NetworkMessageFormat& CraterOnVehicle::CreateFormat(NetworkMessageClass cls, Net
     {
         case NMCCreate:
             base::CreateFormat(cls, format);
-            format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Attached vehicle (where this crater is)"));
-            format.Add("pos", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Position on vehicle"));
-            format.Add("dir", NDTVector, NCTNone, DEFVALUE(Vector3, VUp), DOC_MSG("Orientation on vehicle"));
+            CREATE_CRATER_ON_VEHICLE_MSG(MSG_FORMAT)
             break;
         default:
             base::CreateFormat(cls, format);
