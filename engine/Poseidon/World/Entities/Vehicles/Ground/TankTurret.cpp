@@ -600,47 +600,24 @@ void Turret::TurretBroken(const TurretType& type)
     _gunStabilized = false;
 }
 
-class IndicesUpdateTurret : public NetworkMessageIndices
-{
-  public:
-    int gunStabilized;
-    int yRotWanted;
-    int xRotWanted;
+#define UPDATE_TURRET_MSG(XX) \
+	XX(bool, gunStabilized, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Gun is stabilized"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(float, yRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted rotation in y axis"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
+	XX(float, xRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted rotation in x axis"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
-    IndicesUpdateTurret();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateTurret; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateTurret::IndicesUpdateTurret()
-{
-    gunStabilized = -1;
-    yRotWanted = -1;
-    xRotWanted = -1;
-}
-
-void IndicesUpdateTurret::Scan(NetworkMessageFormatBase* format)
-{
-    SCAN(gunStabilized) SCAN(yRotWanted) SCAN(xRotWanted)
-}
+DECLARE_NET_INDICES_ERR(UpdateTurret, UPDATE_TURRET_MSG)
+DEFINE_NET_INDICES_ERR(UpdateTurret, UPDATE_TURRET_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateTurret()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateTurret();
-}
+
+DEFINE_GET_INDICES(UpdateTurret)
+
 namespace Poseidon
 {
 
 NetworkMessageFormat& Turret::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("gunStabilized", NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Gun is stabilized"), ET_NOT_EQUAL,
-               ERR_COEF_MODE);
-    format.Add("yRotWanted", NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted rotation in y axis"),
-               ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-    format.Add("xRotWanted", NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted rotation in x axis"),
-               ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
+    UPDATE_TURRET_MSG(MSG_FORMAT_ERR)
     return format;
 }
 

@@ -2587,44 +2587,19 @@ DEFINE_GET_INDICES(UpdateCar)
 namespace Poseidon
 {
 
-class IndicesUpdatePositionCar : public IndicesUpdatePositionVehicle
-{
-    typedef IndicesUpdatePositionVehicle base;
+#define UPDATE_POSITION_CAR_MSG(XX) \
+	XX(Turret, turret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Turret object (for example for cars with MG)"), IdxTransferObject, ET_ABS_DIF, 1) \
+	XX(float, rpmWanted, NDTFloat, NCTFloat0To2, DEFVALUE(float, 0), DOC_MSG("Wanted value of RPM"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
+	XX(float, thrustWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
+	XX(float, turnWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted turning angle"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
-  public:
-    int turret;
-    int rpmWanted;
-    int thrustWanted;
-    int turnWanted;
-
-    IndicesUpdatePositionCar();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdatePositionCar; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdatePositionCar::IndicesUpdatePositionCar()
-{
-    turret = -1;
-    rpmWanted = -1;
-    thrustWanted = -1;
-    turnWanted = -1;
-}
-
-void IndicesUpdatePositionCar::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-    SCAN(turret)
-    SCAN(rpmWanted)
-    SCAN(thrustWanted)
-    SCAN(turnWanted)
-}
+DECLARE_NET_INDICES_EX_ERR(UpdatePositionCar, UpdatePositionVehicle, UPDATE_POSITION_CAR_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdatePositionCar, UpdatePositionVehicle, UPDATE_POSITION_CAR_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdatePositionCar()
-{
-    using namespace Poseidon;
-    return new IndicesUpdatePositionCar();
-}
+
+DEFINE_GET_INDICES(UpdatePositionCar)
+
 namespace Poseidon
 {
 
@@ -2638,14 +2613,7 @@ NetworkMessageFormat& Car::CreateFormat(NetworkMessageClass cls, NetworkMessageF
             break;
         case NMCUpdatePosition:
             base::CreateFormat(cls, format);
-            format.Add("turret", NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret),
-                       DOC_MSG("Turret object (for example for cars with MG)"), ET_ABS_DIF, 1);
-            format.Add("rpmWanted", NDTFloat, NCTFloat0To2, DEFVALUE(float, 0), DOC_MSG("Wanted value of RPM"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("thrustWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("turnWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted turning angle"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
+            UPDATE_POSITION_CAR_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);
