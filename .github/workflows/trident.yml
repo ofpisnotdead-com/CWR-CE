@@ -132,36 +132,28 @@ jobs:
       - name: Setup SteamCMD
         uses: andriivitiv/setup-steamcmd@v1
 
-      - name: Prepare game data
+      - name: Try Steam demo game data
+        continue-on-error: true
         shell: pwsh
         env:
           GAME_DATA_DIR: ${{ github.workspace }}/.game-data/remaster-demo
-          FIXTURE_DATA_DIR: ${{ github.workspace }}/.game-data/studio
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path $env:GAME_DATA_DIR
-          $downloaded = $false
-          $nativeErrorPreference = $PSNativeCommandUseErrorActionPreference
-          $PSNativeCommandUseErrorActionPreference = $false
           steamcmd +@sSteamCmdForcePlatformType windows +force_install_dir "$env:GAME_DATA_DIR" +login anonymous +app_update $env:STEAM_APP_ID validate +quit
-          $steamExit = $LASTEXITCODE
-          $PSNativeCommandUseErrorActionPreference = $nativeErrorPreference
-          if ($steamExit -eq 0) {
-            $downloaded = $true
-          } else {
-            Write-Warning "SteamCMD download failed with exit code $steamExit; falling back to packages/Demo."
-          }
-          if ($downloaded -and (Get-ChildItem -LiteralPath $env:GAME_DATA_DIR -Force)) {
-            Get-ChildItem -LiteralPath $env:GAME_DATA_DIR -Recurse -Include *.exe,*.dll,*.pdb -File | Remove-Item -Force
-            $dataDir = $env:GAME_DATA_DIR
-          } else {
-            $fixtureSource = Join-Path $env:GITHUB_WORKSPACE 'tests/fixtures/studio'
-            New-Item -ItemType Directory -Force -Path $env:FIXTURE_DATA_DIR
-            Copy-Item -Path (Join-Path $fixtureSource '*') -Destination $env:FIXTURE_DATA_DIR -Recurse -Force
-            $dataDir = $env:FIXTURE_DATA_DIR
-          }
-          "TRIDENT_DATA_DIR=$dataDir" | Add-Content -LiteralPath $env:GITHUB_ENV
-          Write-Host "Using Trident data directory: $dataDir"
+          Get-ChildItem -LiteralPath $env:GAME_DATA_DIR -Recurse -Include *.exe,*.dll,*.pdb -File | Remove-Item -Force
+
+      - name: Prepare fixture game data
+        shell: pwsh
+        env:
+          FIXTURE_DATA_DIR: ${{ github.workspace }}/.game-data/studio
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fixtureSource = Join-Path $env:GITHUB_WORKSPACE 'tests/fixtures/studio'
+          New-Item -ItemType Directory -Force -Path $env:FIXTURE_DATA_DIR
+          Copy-Item -Path (Join-Path $fixtureSource '*') -Destination $env:FIXTURE_DATA_DIR -Recurse -Force
+          "TRIDENT_DATA_DIR=$env:FIXTURE_DATA_DIR" | Add-Content -LiteralPath $env:GITHUB_ENV
+          Write-Host "Using Trident data directory: $env:FIXTURE_DATA_DIR"
 
       - name: Write Trident env
         shell: pwsh
