@@ -146,14 +146,10 @@ enum RadioMessageVehicleType
 
 RadioMessage *CreateVehicleMessage(int type);
 
-class IndicesVMessage : public NetworkMessageIndices
-{
-public:
-	int vehicle;
+#define V_MESSAGE_MSG(XX) \
+	XX(OLink<Transport>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("In vehicle"), IdxTransferRef)
 
-	IndicesVMessage();
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES(VMessage, V_MESSAGE_MSG)
 
 class RadioMessageWithTarget: public RadioMessage, public NetworkSimpleObject
 {
