@@ -14,7 +14,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   STEAM_APP_ID: '4819000'
-  TRIDENT_TEST_PATH: tests/integration/scripting/format_long_no_overflow.test.sqf
+  TRIDENT_TEST_PATH: tests/integration
 
 jobs:
   smoke:
