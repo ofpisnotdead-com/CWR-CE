@@ -86,9 +86,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .vcpkg-bincache/${{ matrix.vcpkg_triplet }}
-          key: vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/vcpkg-triplets/**', 'cmake/vcpkg-overlay-ports/**') }}
+          key: vcpkg-${{ matrix.preset }}-${{ matrix.vcpkg_triplet }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/vcpkg-triplets/**', 'cmake/vcpkg-overlay-ports/**') }}
           restore-keys: |
-            vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-
+            vcpkg-${{ matrix.preset }}-${{ matrix.vcpkg_triplet }}-
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11

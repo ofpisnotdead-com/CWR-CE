@@ -1,0 +1,141 @@
+name: Repro SDL ibus
+
+on:
+  push:
+    branches:
+      - sdl-ibus
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repro-sdl-ibus-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reproduce:
+    name: SDL ibus link (Debian 13)
+    runs-on: ubuntu-24.04
+    container:
+      image: debian:13
+    env:
+      DEBIAN_FRONTEND: noninteractive
+
+    steps:
+      - name: Install toolchain and SDL system dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential \
+            ca-certificates \
+            cmake \
+            curl \
+            git \
+            jq \
+            ninja-build \
+            pkg-config \
+            tar \
+            unzip \
+            zip \
+            zstd \
+            libx11-dev \
+            libxext-dev \
+            libxft-dev \
+            libgl1-mesa-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libegl1-mesa-dev \
+            wayland-protocols \
+            libibus-1.0-dev
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: .vcpkg-bincache
+          key: vcpkg-repro-sdl-ibus-debian13-${{ hashFiles('vcpkg.json', '.github/workflows/repro-sdl-ibus.yml') }}
+          restore-keys: |
+            vcpkg-repro-sdl-ibus-debian13-
+
+      - name: Build sdl3 at the repo baseline and check for the ibus/dbus link bug
+        run: |
+          set -euo pipefail
+
+          BASELINE="$(jq -r '.["builtin-baseline"]' vcpkg.json)"
+          echo "Using vcpkg builtin-baseline: $BASELINE"
+
+          export VCPKG_DEFAULT_BINARY_CACHE="$PWD/.vcpkg-bincache"
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+
+          # Fetch vcpkg pinned to the exact baseline the project uses, so we
+          # build the same (buggy) sdl3 port the CI/Ubuntu build resolves to.
+          git init -q vcpkg
+          git -C vcpkg remote add origin https://github.com/microsoft/vcpkg.git
+          git -C vcpkg fetch -q --depth 1 origin "$BASELINE"
+          git -C vcpkg checkout -q FETCH_HEAD
+          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+          # Release-only static triplet keeps the SDL build fast.
+          mkdir -p overlay-triplets
+          cat > overlay-triplets/x64-linux-rel.cmake <<'EOF'
+          set(VCPKG_TARGET_ARCHITECTURE x64)
+          set(VCPKG_CRT_LINKAGE dynamic)
+          set(VCPKG_LIBRARY_LINKAGE static)
+          set(VCPKG_CMAKE_SYSTEM_NAME Linux)
+          set(VCPKG_BUILD_TYPE release)
+          EOF
+
+          ./vcpkg/vcpkg install "sdl3[core,ibus,x11,wayland]" \
+            --triplet x64-linux-rel \
+            --overlay-triplets="$PWD/overlay-triplets"
+
+          PREFIX="$PWD/vcpkg/installed/x64-linux-rel"
+          ARCHIVE="$(find "$PREFIX" -name 'libSDL3.a' | head -1)"
+          echo "Built archive: $ARCHIVE"
+
+          # Deterministic signal: SDL_ime.c references SDL_IBus_* but, with dbus
+          # disabled in the port, SDL_ibus.c is never compiled, so the symbol is
+          # left unresolved in the static archive.
+          REPRO=0
+          if nm "$ARCHIVE" 2>/dev/null | grep -qE '[[:space:]]U[[:space:]]SDL_IBus_Init$' \
+             && ! nm "$ARCHIVE" 2>/dev/null | grep -qE '[[:space:]][^Uuvw][[:space:]]SDL_IBus_Init$'; then
+            echo "::error::SDL_IBus_Init is referenced (U) but never defined in libSDL3.a"
+            REPRO=1
+          else
+            echo "SDL_IBus_Init appears resolved; the ibus/dbus bug did not reproduce"
+          fi
+
+          # Human-readable confirmation: a real link reproduces the exact error
+          # seen in the project and upstream.
+          cat > repro.c <<'EOF'
+          #include <SDL3/SDL.h>
+          int main(int argc, char **argv) {
+            (void)argc; (void)argv;
+            SDL_Init(SDL_INIT_VIDEO);
+            SDL_Window *w = SDL_CreateWindow("t", 1, 1, 0);
+            SDL_StartTextInput(w);
+            SDL_Quit();
+            return 0;
+          }
+          EOF
+          export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
+          echo "---- attempting to link a minimal SDL program ----"
+          if cc repro.c $(pkg-config --static --cflags --libs sdl3) -o repro 2> link.log; then
+            echo "link succeeded"
+          else
+            echo "link failed:"
+            cat link.log
+            if grep -q 'SDL_IBus_' link.log; then
+              REPRO=1
+            fi
+          fi
+
+          if [ "$REPRO" = 1 ]; then
+            echo "Reproduced the SDL ibus/dbus link failure."
+            exit 1
+          fi
+          echo "Did not reproduce."
