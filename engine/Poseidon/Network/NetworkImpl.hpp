@@ -330,17 +330,11 @@ DECLARE_NET_MESSAGE(IntegrityQuestion, INTEGRITY_QUESTION_MSG)
 DECLARE_NET_MESSAGE(IntegrityAnswer, INTEGRITY_ANSWER_MSG)
 
 // Message used for distribution of players' states to clients
-struct PlayerStateMessage : public NetworkSimpleObject
-{
-    // DirectPlay ID of player
-    int player;
-    // new state of player
-    NetworkGameState state;
+#define PLAYER_STATE_MSG(XX) \
+	XX(int, player, NDTInteger, NCTNone, DEFVALUE(int, AI_PLAYER), DOC_MSG("Client (player) ID"), IdxTransfer) \
+	XX(int, state, NDTInteger, NCTNone, DEFVALUE(int, NGSNone), DOC_MSG("New state of player"), IdxTransfer)
 
-    NetworkMessageType GetNMType(NetworkMessageClass cls) const override { return NMTPlayerState; }
-    static NetworkMessageFormat& CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format);
-    TMError TransferMsg(NetworkMessageContext& ctx) override;
-};
+DECLARE_NET_MESSAGE(PlayerState, PLAYER_STATE_MSG)
 
 #define ATTACH_PERSON_MSG(XX) \
 	XX(OLink<Person>, person, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Person to attach"), IdxTransferRef) \

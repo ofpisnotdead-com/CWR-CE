@@ -315,9 +315,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             for (int i = 0; i < _identities.Size(); i++)
             {
                 PlayerIdentity& identity = _identities[i];
-                if (identity.dpnid == state.player)
+                if (identity.dpnid == state._player)
                 {
-                    identity.state = state.state;
+                    identity.state = state._state;
                     break;
                 }
             }
