@@ -679,39 +679,17 @@ struct SetFlagCarrierMessage : public SetFlagOwnerMessage
 	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTSetFlagCarrier;}
 };
 
-// Message for ask person owner for show target
-struct ShowTargetMessage : public NetworkSimpleObject
-{
-	// player person
-	Person *vehicle;
-	// target to show
-	TargetType *target;
+#define SHOW_TARGET_MSG(XX) \
+	XX(OLink<Person>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Player person"), IdxTransferRef) \
+	XX(OLink<TargetType>, target, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Target to show"), IdxTransferRef)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTShowTarget;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(ShowTarget, SHOW_TARGET_MSG)
 
-// Message for ask person owner for show group direction
-struct ShowGroupDirMessage : public NetworkSimpleObject
-{
-	// player person
-	Person *vehicle;
-	// direction to show
-	Vector3 dir;
+#define SHOW_GROUP_DIR_MSG(XX) \
+	XX(OLink<Person>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Player person"), IdxTransferRef) \
+	XX(Vector3, dir, NDTVector, NCTNone, DEFVALUE(Vector3, VForward), DOC_MSG("Direction to show"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTShowGroupDir;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(ShowGroupDir, SHOW_GROUP_DIR_MSG)
 
 // Single message in agregated message
 struct NetworkMessageQueueItem

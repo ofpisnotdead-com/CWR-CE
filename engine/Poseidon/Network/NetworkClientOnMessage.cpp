@@ -2139,12 +2139,12 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             ShowTargetMessage show;
             show.TransferMsg(ctx);
-            Person* person = show.vehicle;
+            Person* person = show._vehicle;
             AIUnit* unit = person ? person->Brain() : nullptr;
             AIGroup* grp = unit ? unit->GetGroup() : nullptr;
-            if (grp && show.target)
+            if (grp && show._target)
             {
-                Target* target = grp->FindTarget(show.target);
+                Target* target = grp->FindTarget(show._target);
                 unit->AssignTarget(target);
                 if (GWorld->UI())
                     GWorld->UI()->ShowTarget();
@@ -2155,13 +2155,13 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             ShowGroupDirMessage show;
             show.TransferMsg(ctx);
-            Person* person = show.vehicle;
+            Person* person = show._vehicle;
             AIUnit* unit = person ? person->Brain() : nullptr;
             AIGroup* grp = unit ? unit->GetGroup() : nullptr;
             AISubgroup* subgrp = grp ? grp->MainSubgroup() : nullptr;
             if (subgrp)
             {
-                subgrp->SetDirection(show.dir);
+                subgrp->SetDirection(show._dir);
                 if (GWorld->UI())
                     GWorld->UI()->ShowGroupDir();
             }

@@ -2271,8 +2271,8 @@ void NetworkClient::ShowTarget(Person* vehicle, TargetType* target)
     }
 
     ShowTargetMessage msg;
-    msg.vehicle = vehicle;
-    msg.target = target;
+    msg._vehicle = vehicle;
+    msg._target = target;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -2284,8 +2284,8 @@ void NetworkClient::ShowGroupDir(Person* vehicle, Vector3Par dir)
     }
 
     ShowGroupDirMessage msg;
-    msg.vehicle = vehicle;
-    msg.dir = dir;
+    msg._vehicle = vehicle;
+    msg._dir = dir;
     SendMsg(&msg, NMFGuaranteed);
 }
 
