@@ -788,8 +788,8 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
 void NetworkServer::SetPlayerState(int dpid, NetworkGameState state)
 {
     PlayerStateMessage ps;
-    ps.player = dpid;
-    ps.state = state;
+    ps._player = dpid;
+    ps._state = state;
     for (int i = 0; i < _players.Size(); i++)
     {
         SendMsg(_players[i].dpid, &ps, NMFGuaranteed);
