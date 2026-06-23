@@ -146,33 +146,6 @@ public:
 	void Scan(NetworkMessageFormatBase *format) override;
 };
 
-// network message indices for AskForAimWeaponMessage class
-class IndicesAskForAimWeapon : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int weapon;
-	int dir;
-
-	IndicesAskForAimWeapon();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForAimWeapon;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForAimObserverMessage class
-class IndicesAskForAimObserver : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int dir;
-
-	IndicesAskForAimObserver();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForAimObserver;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
 // network message indices for AskForSelectWeaponMessage class
 class IndicesAskForSelectWeapon : public NetworkMessageIndices
 {
