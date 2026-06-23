@@ -227,45 +227,8 @@ TMError VehicleInitCmd::TransferMsg(NetworkMessageContext& ctx)
 DEFINE_NET_MESSAGE(VehicleDestroyed, VEHICLE_DESTROYED_MSG)
 DEFINE_GET_INDICES(VehicleDestroyed)
 
-// network message indices for MarkerDeleteMessage class
-class IndicesMarkerDelete : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int name;
-
-    IndicesMarkerDelete();
-    NetworkMessageIndices* Clone() const override { return new IndicesMarkerDelete; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesMarkerDelete::IndicesMarkerDelete()
-{
-    name = -1;
-}
-
-void IndicesMarkerDelete::Scan(NetworkMessageFormatBase* format){SCAN(name)}
-
-// Create network message indices for MarkerDeleteMessage class
-NetworkMessageIndices* GetIndicesMarkerDelete()
-{
-    return new IndicesMarkerDelete();
-}
-
-NetworkMessageFormat& MarkerDeleteMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("name", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Name of marker"));
-    return format;
-}
-
-TMError MarkerDeleteMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesMarkerDelete*>(ctx.GetIndices()))
-    const IndicesMarkerDelete* indices = static_cast<const IndicesMarkerDelete*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->name, name))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(MarkerDelete, MARKER_DELETE_MSG)
+DEFINE_GET_INDICES(MarkerDelete)
 
 IndicesMarkerCreate::IndicesMarkerCreate()
 {
