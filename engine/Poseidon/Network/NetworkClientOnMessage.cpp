@@ -301,9 +301,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             question.TransferMsg(ctx);
 
             IntegrityAnswerMessage answer;
-            answer.id = question.id;
-            answer.type = question.type;
-            answer.answer = IntegrityCheckAnswer(question.type, question.q);
+            answer._id = question._id;
+            answer._type = question._type;
+            answer._answer = IntegrityCheckAnswer((IntegrityQuestionType)question._type, question._q);
             SendMsg(&answer, NMFGuaranteed | NMFHighPriority);
         }
         break;

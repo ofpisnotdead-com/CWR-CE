@@ -95,9 +95,9 @@ bool NetworkServer::IntegrityCheck(int dpnid, IntegrityQuestionType type, const 
     }
 
     IntegrityQuestionMessage msg;
-    msg.id = id;
-    msg.type = type;
-    msg.q = q;
+    msg._id = id;
+    msg._type = type;
+    msg._q = q;
     SendMsg(dpnid, &msg, NMFGuaranteed | NMFHighPriority);
     return true;
 }
