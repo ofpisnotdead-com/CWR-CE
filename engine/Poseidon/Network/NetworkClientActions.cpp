@@ -1910,10 +1910,10 @@ void NetworkClient::MarkerCreate(int channel, AIUnit* sender, RefArray<NetworkOb
     }
 
     MarkerCreateMessage msg;
-    msg.marker = info;
-    msg.channel = channel;
-    msg.sender = sender;
-    msg.units = units;
+    msg._marker = info;
+    msg._channel = channel;
+    msg._sender = sender;
+    msg._units = units;
     SendMsg(&msg, NMFGuaranteed);
 }
 

@@ -572,26 +572,13 @@ DECLARE_NET_MESSAGE(VehicleDestroyed, VEHICLE_DESTROYED_MSG)
 
 DECLARE_NET_MESSAGE(MarkerDelete, MARKER_DELETE_MSG)
 
-// Message for transfer info about (user made) marker creation to other clients
-struct MarkerCreateMessage : public NetworkSimpleObject
-{
-	// chat channel (who will see the marker)
-	int channel;
-	// sender unit
-	AIUnit *sender;
-	// receiving units
-	RefArray<NetworkObject> units;
-	// marker itself
-	ArcadeMarkerInfo marker;
+#define MARKER_CREATE_MSG(XX) \
+	XX(int, channel, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Chat channel (who will see the marker)"), IdxTransfer) \
+	XX(OLink<AIUnit>, sender, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Sender unit"), IdxTransferRef) \
+	XX(RefArray<NetworkObject>, units, NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("List of receiving units"), IdxTransferRefs) \
+	XX(ArcadeMarkerInfo, marker, NDTObject, NCTNone, DEFVALUE_MSG(NMTMarker), DOC_MSG("Marker object to create"), IdxTransferObject)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTMarkerCreate;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(MarkerCreate, MARKER_CREATE_MSG)
 
 #define TRANSFER_FILE_MSG(XX) \
 	XX(RString, path, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Path of transferred file"), IdxTransfer) \

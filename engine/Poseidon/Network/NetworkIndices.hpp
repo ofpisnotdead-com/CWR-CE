@@ -1,9 +1,6 @@
 #pragma once
 
 #include <Poseidon/Network/Network.hpp>
-namespace Poseidon { class IndicesMarker; }
-using Poseidon::IndicesMarker;
-
 class SimpleStream : public AutoArray<char>
 {
 protected:
@@ -137,21 +134,5 @@ public:
 	IndicesUpdateWeapons();
 	~IndicesUpdateWeapons() override;
 	NetworkMessageIndices *Clone() const override {return new IndicesUpdateWeapons;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for MarkerCreateMessage class
-class IndicesMarkerCreate : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int channel;
-	int sender;
-	int units;
-	IndicesMarker *marker;
-
-	IndicesMarkerCreate();
-	~IndicesMarkerCreate() override;
-	NetworkMessageIndices *Clone() const override {return new IndicesMarkerCreate;}
 	void Scan(NetworkMessageFormatBase *format) override;
 };
