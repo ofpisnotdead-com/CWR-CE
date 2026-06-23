@@ -355,42 +355,11 @@ TMError RespawnQueueItem::TransferMsg(NetworkMessageContext &ctx)
 }
 */
 
-IndicesSetFlagOwner::IndicesSetFlagOwner()
-{
-    owner = -1;
-    carrier = -1;
-}
+DEFINE_NET_MESSAGE(SetFlagOwner, SET_FLAG_OWNER_MSG)
+DEFINE_GET_INDICES(SetFlagOwner)
 
-void IndicesSetFlagOwner::Scan(NetworkMessageFormatBase* format){SCAN(owner) SCAN(carrier)}
-
-// Create network message indices for SetFlagOwnerMessage class
-NetworkMessageIndices* GetIndicesSetFlagOwner()
-{
-    return new IndicesSetFlagOwner();
-}
-
-// Create network message indices for SetFlagCarrierMessage class
-NetworkMessageIndices* GetIndicesSetFlagCarrier()
-{
-    return new IndicesSetFlagOwner();
-}
-
-NetworkMessageFormat& SetFlagOwnerMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("owner", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Flag owner"));
-    format.Add("carrier", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Flag carrier"));
-    return format;
-}
-
-TMError SetFlagOwnerMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesSetFlagOwner*>(ctx.GetIndices()))
-    const IndicesSetFlagOwner* indices = static_cast<const IndicesSetFlagOwner*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->owner, owner))
-    TMCHECK(ctx.IdxTransferRef(indices->carrier, carrier))
-    return TMOK;
-}
+DEFINE_NET_INDICES_EX(SetFlagCarrier, SetFlagOwner, SET_FLAG_CARRIER_MSG)
+DEFINE_GET_INDICES(SetFlagCarrier)
 
 // network message indices for PlayerIdentity class
 class IndicesLogin : public NetworkMessageIndices
