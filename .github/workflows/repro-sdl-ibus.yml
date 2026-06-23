@@ -61,7 +61,7 @@ jobs:
           restore-keys: |
             vcpkg-repro-sdl-ibus-debian13-
 
-      - name: Build sdl3 at the repo baseline and check for the ibus/dbus link bug
+      - name: Build sdl3 at the repo's vcpkg baseline
         run: |
           set -euo pipefail
 
@@ -79,7 +79,6 @@ jobs:
           git -C "$REPO/vcpkg" fetch -q --depth 1 origin "$BASELINE"
           git -C "$REPO/vcpkg" checkout -q FETCH_HEAD
           "$REPO/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
-          VCPKG="$REPO/vcpkg/vcpkg"
 
           # Release-only static triplet keeps the SDL build fast.
           mkdir -p "$REPO/overlay-triplets"
@@ -93,17 +92,26 @@ jobs:
 
           # Run from a manifest-free directory so vcpkg uses classic mode and
           # accepts the individual sdl3 package argument.
-          WORK=/tmp/sdlbuild
-          mkdir -p "$WORK"
-          cd "$WORK"
-          "$VCPKG" install "sdl3[core,ibus,x11,wayland]" \
+          mkdir -p /tmp/sdlbuild
+          cd /tmp/sdlbuild
+          "$REPO/vcpkg/vcpkg" install "sdl3[core,ibus,x11,wayland]" \
             --triplet x64-linux-rel \
             --overlay-triplets="$REPO/overlay-triplets" \
-            --x-install-root="$WORK/installed"
+            --x-install-root=/tmp/sdlbuild/installed
 
-          PREFIX="$WORK/installed/x64-linux-rel"
-          ARCHIVE="$(find "$PREFIX" -name 'libSDL3.a' | head -1)"
+          ARCHIVE="$(find /tmp/sdlbuild/installed -name 'libSDL3.a' | head -1)"
+          if [ -z "$ARCHIVE" ]; then
+            echo "::error::libSDL3.a was not produced; the SDL build failed for an unrelated reason"
+            exit 2
+          fi
           echo "Built archive: $ARCHIVE"
+
+      - name: Reproduce the SDL ibus/dbus link failure
+        run: |
+          set -euo pipefail
+
+          PREFIX=/tmp/sdlbuild/installed/x64-linux-rel
+          ARCHIVE="$(find /tmp/sdlbuild/installed -name 'libSDL3.a' | head -1)"
 
           # Deterministic signal: SDL_ime.c references SDL_IBus_* but, with dbus
           # disabled in the port, SDL_ibus.c is never compiled, so the symbol is
@@ -119,7 +127,7 @@ jobs:
 
           # Human-readable confirmation: a real link reproduces the exact error
           # seen in the project and upstream.
-          cat > repro.c <<'EOF'
+          cat > /tmp/sdlbuild/repro.c <<'EOF'
           #include <SDL3/SDL.h>
           int main(int argc, char **argv) {
             (void)argc; (void)argv;
@@ -132,12 +140,12 @@ jobs:
           EOF
           export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
           echo "---- attempting to link a minimal SDL program ----"
-          if cc repro.c $(pkg-config --static --cflags --libs sdl3) -o repro 2> link.log; then
+          if cc /tmp/sdlbuild/repro.c $(pkg-config --static --cflags --libs sdl3) -o /tmp/sdlbuild/repro 2> /tmp/sdlbuild/link.log; then
             echo "link succeeded"
           else
             echo "link failed:"
-            cat link.log
-            if grep -q 'SDL_IBus_' link.log; then
+            cat /tmp/sdlbuild/link.log
+            if grep -q 'SDL_IBus_' /tmp/sdlbuild/link.log; then
               REPRO=1
             fi
           fi
