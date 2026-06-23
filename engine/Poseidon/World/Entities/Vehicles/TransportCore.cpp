@@ -3,6 +3,7 @@
 #include <Poseidon/AI/AI.hpp>
 #include <Poseidon/World/Entities/Weapons/ProxyWeapon.hpp>
 #include <Poseidon/World/Entities/Infantry/Person.hpp>
+#include <Poseidon/UI/Settings/AspectRatio.hpp>
 #include <Poseidon/Core/Global.hpp>
 #include <Poseidon/World/World.hpp>
 #include <Poseidon/World/Terrain/Landscape.hpp>
@@ -1887,12 +1888,9 @@ void Transport::Draw(int level, ClipFlags clipFlags, const FrameBase& pos)
             LODShapeWithShadow* oShape = GetOpticsModel(person);
             if (oShape)
             {
-                // Vehicle gunner optics (tank turret periscope,
-                // helicopter HUD, etc.) are 4:3-designed with dark
-                // surround art — same as binoculars.  Draw at the
-                // authored 4:3 proportion (no stretch) and pillarbox
-                // the lateral strips on widescreen.
-                Draw2D(oShape, 0, GetOpticsColor(person), /*preserveAspect4x3*/ true);
+                // vehicle gunner optics are a 4:3 vignette — stretch when bars off.
+                const bool preserve4x3 = AspectRatio::ArePillarboxBarsEnabled();
+                Draw2D(oShape, 0, GetOpticsColor(person), /*preserveAspect4x3*/ preserve4x3);
                 Object::DrawWidescreenPillarbox();
             }
         }

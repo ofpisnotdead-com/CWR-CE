@@ -1,0 +1,62 @@
+version=11;
+class Mission
+{
+	randomSeed=12345;
+	class Intel
+	{
+		viewDistance=900;
+		month=7;
+		day=5;
+		hour=10;
+		minute=0;
+	};
+	class Groups
+	{
+		items=1;
+		class Item0
+		{
+			side="WEST";
+			class Vehicles
+			{
+				items=3;
+				class Item0
+				{
+					position[]={6710.527832,82.907585,5408.891602};
+					azimut=355.000000;
+					id=0;
+					side="WEST";
+					vehicle="OfficerWNight";
+					player="PLAYER COMMANDER";
+					leader=1;
+					rank="COLONEL";
+					skill=0.600000;
+				};
+				class Item1
+				{
+					position[]={6719.004883,82.311951,5419.918457};
+					id=1;
+					side="WEST";
+					vehicle="SoldierWG";
+					skill=0.600000;
+				};
+				class Item2
+				{
+					position[]={6720.373535,81.936882,5412.308105};
+					id=2;
+					side="WEST";
+					vehicle="SoldierWMedic";
+					skill=0.600000;
+				};
+			};
+		};
+	};
+};
+class Intro
+{
+};
+class OutroWin
+{
+};
+class OutroLoose
+{
+};

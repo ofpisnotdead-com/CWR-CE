@@ -6,6 +6,7 @@
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
 #include <Poseidon/World/Terrain/Landscape.hpp>
 #include <Poseidon/UI/Controls/UIControls.hpp>
+#include <Poseidon/UI/Settings/AspectRatio.hpp>
 #include <Poseidon/UI/Locale/Stringtable/CodepageTranscode.hpp>
 #include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
 #include <Poseidon/Graphics/Textures/TexturePreload.hpp>
@@ -361,8 +362,10 @@ void TitleEffectBasic::DrawRsc()
 {
     if (_rscOverlayShapes.Size() > 0)
     {
+        // 4:3 model overlay — preserve 4:3 + pillarbox while bars are on, else stretch.
+        const bool preserve4x3 = AspectRatio::ArePillarboxBarsEnabled();
         for (int i = 0; i < _rscOverlayShapes.Size(); ++i)
-            Object::Draw2D(_rscOverlayShapes[i], 0, PackedWhite, /*preserveAspect4x3*/ true);
+            Object::Draw2D(_rscOverlayShapes[i], 0, PackedWhite, /*preserveAspect4x3*/ preserve4x3);
         if (_rscOverlayPillarbox)
             Object::DrawWidescreenPillarbox(/*requireGameplayActive*/ false);
         return;
