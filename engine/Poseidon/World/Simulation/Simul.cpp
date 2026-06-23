@@ -1517,59 +1517,21 @@ NetworkMessageType Entity::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-IndicesCreateVehicle::IndicesCreateVehicle()
-{
-    list = -1;
-    type = -1;
-    shape = -1;
-    position = -1;
-    name = -1;
-    idVehicle = -1;
-    hierParent = -1;
-}
-
-void IndicesCreateVehicle::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(list)
-    SCAN(type)
-    SCAN(shape)
-    SCAN(position)
-    SCAN(name)
-    SCAN(idVehicle)
-    SCAN(hierParent)
-}
+DEFINE_NET_INDICES_EX(CreateVehicle, NetworkObject, CREATE_VEHICLE_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesCreateVehicle()
-{
-    using namespace Poseidon;
-    return new IndicesCreateVehicle();
-}
+
+DEFINE_GET_INDICES(CreateVehicle)
+
 namespace Poseidon
 {
 
-IndicesUpdateVehicle::IndicesUpdateVehicle()
-{
-    targetSide = -1;
-    animations = -1;
-}
-
-void IndicesUpdateVehicle::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(targetSide)
-    SCAN(animations)
-}
+DEFINE_NET_INDICES_EX_ERR(UpdateVehicle, UpdateObject, UPDATE_VEHICLE_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateVehicle()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateVehicle();
-}
+
+DEFINE_GET_INDICES(UpdateVehicle)
+
 namespace Poseidon
 {
 
@@ -1603,22 +1565,11 @@ NetworkMessageFormat& Entity::CreateFormat(NetworkMessageClass cls, NetworkMessa
     {
         case NMCCreate:
             NetworkObject::CreateFormat(cls, format);
-            format.Add("list", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0),
-                       DOC_MSG("Container, which manage this entity"));
-            format.Add("type", NDTString, NCTDefault, DEFVALUE(RString, ""), DOC_MSG("Entity type"));
-            format.Add("shape", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Entity shape (model)"));
-            format.Add("position", NDTVector, NCTNone, DEFVALUE(Vector3, temp), DOC_MSG("Current position"));
-            format.Add("name", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Name of variable"));
-            format.Add("idVehicle", NDTInteger, NCTSmallSigned, DEFVALUE(int, -1),
-                       DOC_MSG("ID in map of vehicles (used in waypoints and triggers)"));
-            format.Add("hierParent", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Parent in hierarchy"), ET_NOT_EQUAL,
-                       ERR_COEF_STRUCTURE);
+            CREATE_VEHICLE_MSG(MSG_FORMAT)
             break;
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-            format.Add("targetSide", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, TWest), DOC_MSG("Side"));
-            format.Add("animations", NDTFloatArray, NCTNone, DEFVALUEFLOATARRAY,
-                       DOC_MSG("Current state of users defined animations"), ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
+            UPDATE_VEHICLE_MSG(MSG_FORMAT_ERR)
             break;
         case NMCUpdatePosition:
             base::CreateFormat(cls, format);
