@@ -1578,23 +1578,8 @@ void IndicesUpdateVehicleAI::Scan(NetworkMessageFormatBase* format)
     weapons->Scan(format);
 }
 
-IndicesUpdateDammageVehicleAI::IndicesUpdateDammageVehicleAI()
-{
-    isDead = -1;
-    hit = -1;
-}
-
-IndicesUpdateDammageVehicleAI::~IndicesUpdateDammageVehicleAI() = default;
-
-void IndicesUpdateDammageVehicleAI::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(isDead)
-    SCAN(hit)
-}
-
 } // namespace Poseidon
+
 NetworkMessageIndices* GetIndicesUpdateVehicleAI()
 {
     using namespace Poseidon;
@@ -1603,12 +1588,12 @@ NetworkMessageIndices* GetIndicesUpdateVehicleAI()
 namespace Poseidon
 {
 
+DEFINE_NET_INDICES_EX_ERR(UpdateDammageVehicleAI, UpdateDammageObject, UPDATE_DAMMAGE_VEHICLE_AI_MSG)
+
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateDammageVehicleAI()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateDammageVehicleAI();
-}
+
+DEFINE_GET_INDICES(UpdateDammageVehicleAI)
+
 namespace Poseidon
 {
 
@@ -1618,10 +1603,7 @@ NetworkMessageFormat& EntityAI::CreateFormat(NetworkMessageClass cls, NetworkMes
     {
         case NMCUpdateDammage:
             base::CreateFormat(cls, format);
-            format.Add("isDead", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Unit is destroyed (unusable)"),
-                       ET_NOT_EQUAL, ERR_COEF_STRUCTURE);
-            format.Add("hit", NDTFloatArray, NCTFloat0To1, DEFVALUEFLOATARRAY, DOC_MSG("Damage of parts of entity"),
-                       ET_ABS_DIF, ERR_COEF_STRUCTURE);
+            UPDATE_DAMMAGE_VEHICLE_AI_MSG(MSG_FORMAT_ERR)
             break;
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);

@@ -193,19 +193,11 @@ public:
 
 //! dammage EntityAI state indices
 
-class IndicesUpdateDammageVehicleAI : public IndicesUpdateDammageObject
-{
-	typedef IndicesUpdateDammageObject base;
+#define UPDATE_DAMMAGE_VEHICLE_AI_MSG(XX) \
+	XX(bool, isDead, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Unit is destroyed (unusable)"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_STRUCTURE) \
+	XX(AutoArray<float>, hit, NDTFloatArray, NCTFloat0To1, DEFVALUEFLOATARRAY, DOC_MSG("Damage of parts of entity"), IdxTransfer, ET_ABS_DIF, ERR_COEF_STRUCTURE)
 
-public:
-	int isDead;
-	int hit;
-
-	IndicesUpdateDammageVehicleAI();
-	~IndicesUpdateDammageVehicleAI() override;
-	NetworkMessageIndices *Clone() const override {return new IndicesUpdateDammageVehicleAI;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES_EX_ERR(UpdateDammageVehicleAI, UpdateDammageObject, UPDATE_DAMMAGE_VEHICLE_AI_MSG)
 
 class EntityAI: public Entity
 {
