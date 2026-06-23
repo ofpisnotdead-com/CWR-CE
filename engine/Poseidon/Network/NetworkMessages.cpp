@@ -84,67 +84,9 @@ DEFINE_NET_MESSAGE(AskForMoveVector, ASK_FOR_MOVE_VECTOR_MSG)
 
 DEFINE_NET_MESSAGE(AskForMoveMatrix, ASK_FOR_MOVE_MATRIX_MSG)
 
-IndicesAskForJoinGroup::IndicesAskForJoinGroup()
-{
-    join = -1;
-    group = -1;
-}
+DEFINE_NET_MESSAGE(AskForJoinGroup, ASK_FOR_JOIN_GROUP_MSG)
 
-void IndicesAskForJoinGroup::Scan(NetworkMessageFormatBase* format){SCAN(join) SCAN(group)}
-
-// Create network message indices for AskForJoinGroupMessage class
-NetworkMessageIndices* GetIndicesAskForJoinGroup()
-{
-    return new IndicesAskForJoinGroup();
-}
-
-NetworkMessageFormat& AskForJoinGroupMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("join", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Joined group"));
-    format.Add("group", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Joining group"));
-    return format;
-}
-
-TMError AskForJoinGroupMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskForJoinGroup*>(ctx.GetIndices()))
-    const IndicesAskForJoinGroup* indices = static_cast<const IndicesAskForJoinGroup*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->join, join))
-    TMCHECK(ctx.IdxTransferRef(indices->group, group))
-    return TMOK;
-}
-
-IndicesAskForJoinUnits::IndicesAskForJoinUnits()
-{
-    join = -1;
-    units = -1;
-}
-
-void IndicesAskForJoinUnits::Scan(NetworkMessageFormatBase* format){SCAN(join) SCAN(units)}
-
-// Create network message indices for AskForMoveMatrixMessage class
-NetworkMessageIndices* GetIndicesAskForJoinUnits()
-{
-    return new IndicesAskForJoinUnits();
-}
-
-NetworkMessageFormat& AskForJoinUnitsMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("join", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Joined group"));
-    format.Add("units", NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("Joining units"));
-    return format;
-}
-
-TMError AskForJoinUnitsMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskForJoinUnits*>(ctx.GetIndices()))
-    const IndicesAskForJoinUnits* indices = static_cast<const IndicesAskForJoinUnits*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->join, join))
-    TMCHECK(ctx.IdxTransferRefs(indices->units, units))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(AskForJoinUnits, ASK_FOR_JOIN_UNITS_MSG)
 
 IndicesAskForHideBody::IndicesAskForHideBody()
 {

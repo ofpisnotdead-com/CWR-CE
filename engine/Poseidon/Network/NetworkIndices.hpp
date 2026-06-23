@@ -146,32 +146,6 @@ public:
 	void Scan(NetworkMessageFormatBase *format) override;
 };
 
-// network message indices for AskForJoinGroupMessage class
-class IndicesAskForJoinGroup : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int join;
-	int group;
-
-	IndicesAskForJoinGroup();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForJoinGroup;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForJoinUnitsMessage class
-class IndicesAskForJoinUnits : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int join;
-	int units;
-
-	IndicesAskForJoinUnits();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForJoinUnits;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
 // network message indices for AskForHideBodyMessage class
 class IndicesAskForHideBody : public NetworkMessageIndices
 {

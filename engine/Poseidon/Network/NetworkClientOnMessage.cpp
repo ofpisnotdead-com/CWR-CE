@@ -803,7 +803,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             AskForJoinGroupMessage ask;
             ask.TransferMsg(ctx);
             void ProcessJoinGroups(AIGroup * from, AIGroup * to);
-            ProcessJoinGroups(ask.group, ask.join);
+            ProcessJoinGroups(ask._group, ask._join);
         }
         break;
         case NMTAskForJoinUnits:
@@ -811,7 +811,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             AskForJoinUnitsMessage ask;
             ask.TransferMsg(ctx);
             void ProcessJoinGroups(OLinkArray<AIUnit> & units, AIGroup * grp);
-            ProcessJoinGroups(ask.units, ask.join);
+            ProcessJoinGroups(ask._units, ask._join);
         }
         break;
         case NMTAskForHideBody:
