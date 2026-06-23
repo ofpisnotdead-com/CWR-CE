@@ -709,7 +709,10 @@ void NetworkServer::ChangeOwner(NetworkId& id, int from, int to)
 
     // PlayerObjectInfo for object creates automatically
 
-    ChangeOwnerMessage msg(id, to);
+    ChangeOwnerMessage msg;
+    msg._creator = id.creator;
+    msg._id = id.id;
+    msg._owner = to;
     SendMsg(from, &msg, NMFGuaranteed);
     SendMsg(to, &msg, NMFGuaranteed);
 }

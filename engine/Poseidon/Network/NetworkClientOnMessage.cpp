@@ -1347,14 +1347,15 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             ChangeOwnerMessage co;
             co.TransferMsg(ctx);
-            if (co.owner == _player)
+            NetworkId id(co._creator, co._id);
+            if (co._owner == _player)
             {
                 // object becomes local
                 NetworkObject* object = nullptr;
                 for (int i = 0; i < _remoteObjects.Size(); i++)
                 {
                     NetworkRemoteObjectInfo& info = _remoteObjects[i];
-                    if (info.id == co.object)
+                    if (info.id == id)
                     {
                         object = info.object;
                         _remoteObjects.Delete(i);
@@ -1370,7 +1371,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     // add to local objects
                     int index = _localObjects.Add();
                     NetworkLocalObjectInfo& localObject = _localObjects[index];
-                    localObject.id = co.object;
+                    localObject.id = id;
                     localObject.object = object;
                     for (int j = NMCUpdateFirst; j < NMCUpdateN; j++)
                     {
@@ -1389,7 +1390,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
                 else
                 {
-                    RptF("Client: Remote object %d:%d not found", co.object.creator, co.object.id);
+                    RptF("Client: Remote object %d:%d not found", id.creator, id.id);
                 }
             }
             else
@@ -1402,7 +1403,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 for (int i = 0; i < _localObjects.Size(); i++)
                 {
                     NetworkLocalObjectInfo& info = _localObjects[i];
-                    if (info.id == co.object)
+                    if (info.id == id)
                     {
                         object = info.object;
                         _localObjects.Delete(i);
@@ -1418,7 +1419,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     // add to remote objects
                     int index = _remoteObjects.Add();
                     NetworkRemoteObjectInfo& info = _remoteObjects[index];
-                    info.id = co.object;
+                    info.id = id;
                     info.object = object;
                     if (DiagLevel >= 1)
                     {
@@ -1427,7 +1428,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
                 else
                 {
-                    RptF("Client: Local object %d:%d not found", co.object.creator, co.object.id);
+                    RptF("Client: Local object %d:%d not found", id.creator, id.id);
                 }
             }
         }
