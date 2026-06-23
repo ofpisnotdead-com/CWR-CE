@@ -598,7 +598,9 @@ void NetworkClient::SelectPlayer(int player, Person* person, bool respawn)
 
 void NetworkClient::AttachPerson(Person* person)
 {
-    AttachPersonMessage msg(person);
+    AttachPersonMessage msg;
+    msg._person = person;
+    msg._unit = person->Brain();
     SendMsg(&msg, NMFGuaranteed);
 }
 

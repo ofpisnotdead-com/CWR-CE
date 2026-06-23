@@ -133,19 +133,6 @@ public:
 	void Scan(NetworkMessageFormatBase *format) override;
 };
 
-// network message indices for AttachPersonMessage class
-class IndicesAttachPerson : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int person;
-	int unit;
-
-	IndicesAttachPerson();
-	NetworkMessageIndices *Clone() const override {return new IndicesAttachPerson;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
 namespace Poseidon { class IndicesUpdateEntityAIWeapons; }
 using Poseidon::IndicesUpdateEntityAIWeapons;
 

@@ -854,43 +854,9 @@ TMError PlayerStateMessage::TransferMsg(NetworkMessageContext& ctx)
     return TMOK;
 }
 
-AttachPersonMessage::AttachPersonMessage(Person* p)
-{
-    NET_ERROR(p);
-    person = p;
-    unit = person->Brain();
-}
+DEFINE_NET_MESSAGE(AttachPerson, ATTACH_PERSON_MSG)
+DEFINE_GET_INDICES(AttachPerson)
 
-IndicesAttachPerson::IndicesAttachPerson()
-{
-    person = -1;
-    unit = -1;
-}
-
-void IndicesAttachPerson::Scan(NetworkMessageFormatBase* format){SCAN(person) SCAN(unit)}
-
-// Create network message indices for AttachPersonMessage class
-NetworkMessageIndices* GetIndicesAttachPerson()
-{
-    return new IndicesAttachPerson();
-}
-
-NetworkMessageFormat& AttachPersonMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("person", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Person to attach"));
-    format.Add("unit", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Unit to attach"));
-    return format;
-}
-
-TMError AttachPersonMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAttachPerson*>(ctx.GetIndices()))
-    const IndicesAttachPerson* indices = static_cast<const IndicesAttachPerson*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->person, person))
-    TMCHECK(ctx.IdxTransferRef(indices->unit, unit))
-    return TMOK;
-}
 /*
 NetworkMessageFormat &RespawnQueueItem::CreateFormat
 (
