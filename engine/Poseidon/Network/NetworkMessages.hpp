@@ -431,24 +431,12 @@ DECLARE_NET_MESSAGE(AskForGetIn, ASK_FOR_GET_IN_MSG)
 
 DECLARE_NET_MESSAGE(AskForGetOut, ASK_FOR_GET_OUT_MSG)
 
-// Message for ask vehicle owner for change person position
-struct AskForChangePositionMessage : public NetworkSimpleObject
-{
-	// who is changing position
-	Person *soldier;
-	// vehicle where position is changed
-	Transport *vehicle;
-	// performed action
-	UIActionType type;
+#define ASK_FOR_CHANGE_POSITION_MSG(XX) \
+	XX(OLink<Person>, soldier, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is changing position"), IdxTransferRef) \
+	XX(OLink<Transport>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle where position is changed"), IdxTransferRef) \
+	XX(int, type, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ATMoveToDriver), DOC_MSG("Performed action"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForChangePosition;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskForChangePosition, ASK_FOR_CHANGE_POSITION_MSG)
 
 // Message for ask vehicle owner for aim weapon
 struct AskForAimWeaponMessage : public NetworkSimpleObject

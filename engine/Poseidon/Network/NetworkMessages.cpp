@@ -70,39 +70,7 @@ DEFINE_NET_MESSAGE(AskForGetIn, ASK_FOR_GET_IN_MSG)
 
 DEFINE_NET_MESSAGE(AskForGetOut, ASK_FOR_GET_OUT_MSG)
 
-IndicesAskForChangePosition::IndicesAskForChangePosition()
-{
-    soldier = -1;
-    vehicle = -1;
-    type = -1;
-}
-
-void IndicesAskForChangePosition::Scan(NetworkMessageFormatBase* format){SCAN(soldier) SCAN(vehicle) SCAN(type)}
-
-// Create network message indices for AskForChangePositionMessage class
-NetworkMessageIndices* GetIndicesAskForChangePosition()
-{
-    return new IndicesAskForChangePosition();
-}
-
-NetworkMessageFormat& AskForChangePositionMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("soldier", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is changing position"));
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle where position is changed"));
-    format.Add("type", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ATMoveToDriver), DOC_MSG("Performed action"));
-    return format;
-}
-
-TMError AskForChangePositionMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskForChangePosition*>(ctx.GetIndices()))
-    const IndicesAskForChangePosition* indices = static_cast<const IndicesAskForChangePosition*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->soldier, soldier))
-    TMCHECK(ctx.IdxTransferRef(indices->vehicle, vehicle))
-    TMCHECK(ctx.IdxTransfer(indices->type, (int&)type))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(AskForChangePosition, ASK_FOR_CHANGE_POSITION_MSG)
 
 IndicesAskForAimWeapon::IndicesAskForAimWeapon()
 {

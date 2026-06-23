@@ -146,20 +146,6 @@ public:
 	void Scan(NetworkMessageFormatBase *format) override;
 };
 
-// network message indices for AskForChangePositionMessage class
-class IndicesAskForChangePosition : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int soldier;
-	int vehicle;
-	int type;
-
-	IndicesAskForChangePosition();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForChangePosition;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
 // network message indices for AskForAimWeaponMessage class
 class IndicesAskForAimWeapon : public NetworkMessageIndices
 {
