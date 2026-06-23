@@ -1675,8 +1675,8 @@ void NetworkClient::AskForSelectWeapon(EntityAI* vehicle, int weapon)
     }
 
     AskForSelectWeaponMessage msg;
-    msg.vehicle = vehicle;
-    msg.weapon = weapon;
+    msg._vehicle = vehicle;
+    msg._weapon = weapon;
     SendMsg(&msg, NMFGuaranteed);
 }
 

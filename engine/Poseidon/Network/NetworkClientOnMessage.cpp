@@ -1000,9 +1000,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForSelectWeaponMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle)
+            if (ask._vehicle)
             {
-                ask.vehicle->SelectWeapon(ask.weapon);
+                ask._vehicle->SelectWeapon(ask._weapon);
             }
         }
         break;

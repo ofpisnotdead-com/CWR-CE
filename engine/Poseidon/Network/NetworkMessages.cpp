@@ -83,36 +83,8 @@ DEFINE_GET_INDICES(AskForAimWeapon)
 DEFINE_NET_MESSAGE(AskForAimObserver, ASK_FOR_AIM_OBSERVER_MSG)
 DEFINE_GET_INDICES(AskForAimObserver)
 
-IndicesAskForSelectWeapon::IndicesAskForSelectWeapon()
-{
-    vehicle = -1;
-    weapon = -1;
-}
-
-void IndicesAskForSelectWeapon::Scan(NetworkMessageFormatBase* format){SCAN(vehicle) SCAN(weapon)}
-
-// Create network message indices for AskForSelectWeaponMessage class
-NetworkMessageIndices* GetIndicesAskForSelectWeapon()
-{
-    return new IndicesAskForSelectWeapon();
-}
-
-NetworkMessageFormat& AskForSelectWeaponMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which weapon is selecting"));
-    format.Add("weapon", NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Selected weapon index"));
-    return format;
-}
-
-TMError AskForSelectWeaponMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskForSelectWeapon*>(ctx.GetIndices()))
-    const IndicesAskForSelectWeapon* indices = static_cast<const IndicesAskForSelectWeapon*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->vehicle, vehicle))
-    TMCHECK(ctx.IdxTransfer(indices->weapon, weapon))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(AskForSelectWeapon, ASK_FOR_SELECT_WEAPON_MSG)
+DEFINE_GET_INDICES(AskForSelectWeapon)
 
 IndicesAskForAddImpulse::IndicesAskForAddImpulse()
 {
