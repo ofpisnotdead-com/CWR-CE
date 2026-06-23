@@ -438,41 +438,18 @@ DECLARE_NET_MESSAGE(AskForGetOut, ASK_FOR_GET_OUT_MSG)
 
 DECLARE_NET_MESSAGE(AskForChangePosition, ASK_FOR_CHANGE_POSITION_MSG)
 
-// Message for ask vehicle owner for aim weapon
-struct AskForAimWeaponMessage : public NetworkSimpleObject
-{
-	// vehicle which weapon is aiming
-	EntityAI *vehicle;
-	// aiming weapon index
-	int weapon;
-	// direction to aim
-	Vector3 dir;
+#define ASK_FOR_AIM_WEAPON_MSG(XX) \
+	XX(OLink<EntityAI>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which weapon is aiming"), IdxTransferRef) \
+	XX(int, weapon, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Aiming weapon index"), IdxTransfer) \
+	XX(Vector3, dir, NDTVector, NCTNone, DEFVALUE(Vector3, VForward), DOC_MSG("Direction to aim"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForAimWeapon;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskForAimWeapon, ASK_FOR_AIM_WEAPON_MSG)
 
-// Message for ask vehicle owner for aim observer turret
-struct AskForAimObserverMessage : public NetworkSimpleObject
-{
-	// vehicle which turret is aiming
-	EntityAI *vehicle;
-	// direction to aim
-	Vector3 dir;
+#define ASK_FOR_AIM_OBSERVER_MSG(XX) \
+	XX(OLink<EntityAI>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which turret is aiming"), IdxTransferRef) \
+	XX(Vector3, dir, NDTVector, NCTNone, DEFVALUE(Vector3, VForward), DOC_MSG("Direction to aim"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForAimObserver;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskForAimObserver, ASK_FOR_AIM_OBSERVER_MSG)
 
 // Message for ask vehicle owner for select weapon
 struct AskForSelectWeaponMessage : public NetworkSimpleObject
