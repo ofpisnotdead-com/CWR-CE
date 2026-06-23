@@ -1010,17 +1010,17 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForAmmoMessage ask;
             ask.TransferMsg(ctx);
-            if (!ask.vehicle)
+            if (!ask._vehicle)
             {
                 break;
             }
-            Magazine* state = ask.vehicle->GetMagazineSlot(ask.weapon)._magazine;
+            Magazine* state = ask._vehicle->GetMagazineSlot(ask._weapon)._magazine;
             if (!state)
             {
                 break;
             }
-            saturateMin(ask.burst, state->_ammo);
-            state->_ammo -= ask.burst;
+            saturateMin(ask._burst, state->_ammo);
+            state->_ammo -= ask._burst;
             if (state->_ammo < 0)
             {
                 state->_ammo = 0;

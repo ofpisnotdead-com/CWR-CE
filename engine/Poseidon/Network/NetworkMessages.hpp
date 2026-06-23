@@ -457,24 +457,12 @@ DECLARE_NET_MESSAGE(AskForAimObserver, ASK_FOR_AIM_OBSERVER_MSG)
 
 DECLARE_NET_MESSAGE(AskForSelectWeapon, ASK_FOR_SELECT_WEAPON_MSG)
 
-// Message for ask vehicle owner for change ammo state
-struct AskForAmmoMessage : public NetworkSimpleObject
-{
-	// vehicle which ammo is changing
-	EntityAI *vehicle;
-	// weapon index
-	int weapon;
-	// amount of ammo to decrease
-	int burst;
+#define ASK_FOR_AMMO_MSG(XX) \
+	XX(OLink<EntityAI>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which ammo is changing"), IdxTransferRef) \
+	XX(int, weapon, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Weapon index"), IdxTransfer) \
+	XX(int, burst, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 1), DOC_MSG("Amount of ammo to decrease"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForAmmo;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskForAmmo, ASK_FOR_AMMO_MSG)
 
 // Message for ask vehicle owner for add impulse
 struct AskForAddImpulseMessage : public NetworkSimpleObject
