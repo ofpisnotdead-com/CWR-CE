@@ -41,23 +41,23 @@ int SendNetworkFileTransferSegments(const RString& destinationPath, const void* 
                                     SendFn&& sendSegment, int maxSegmentSize = NetworkFileTransferSegmentSize)
 {
     MessageType msg;
-    msg.path = destinationPath;
-    msg.totSize = totalSize;
-    msg.totSegments = GetNetworkFileTransferSegmentCount(totalSize, maxSegmentSize);
-    msg.offset = 0;
+    msg._path = destinationPath;
+    msg._totSize = totalSize;
+    msg._totSegments = GetNetworkFileTransferSegmentCount(totalSize, maxSegmentSize);
+    msg._offset = 0;
 
     const char* bytes = static_cast<const char*>(data);
-    for (int i = 0; i < msg.totSegments; i++)
+    for (int i = 0; i < msg._totSegments; i++)
     {
-        msg.curSegment = i;
-        const int size = std::min(maxSegmentSize, totalSize - msg.offset);
-        msg.data.Resize(size);
-        memcpy(msg.data.Data(), bytes + msg.offset, size);
+        msg._curSegment = i;
+        const int size = std::min(maxSegmentSize, totalSize - msg._offset);
+        msg._data.Resize(size);
+        memcpy(msg._data.Data(), bytes + msg._offset, size);
         sendSegment(msg);
-        msg.offset += size;
+        msg._offset += size;
     }
 
-    return msg.totSegments;
+    return msg._totSegments;
 }
 
 } // namespace Poseidon

@@ -1033,76 +1033,14 @@ DEFINE_GET_INDICES(PlaySound)
 DEFINE_NET_MESSAGE(SoundState, SOUND_STATE_MSG)
 DEFINE_GET_INDICES(SoundState)
 
-// network message indices for TransferFileMessage, TransferMissionFileMessage and TransferFileToServerMessage classes
-class IndicesTransferFile : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int path;
-    int data;
-    int totSize;
-    int offset;
-    int totSegments;
-    int curSegment;
+DEFINE_NET_MESSAGE(TransferFile, TRANSFER_FILE_MSG)
+DEFINE_GET_INDICES(TransferFile)
 
-    IndicesTransferFile();
-    NetworkMessageIndices* Clone() const override { return new IndicesTransferFile; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
+DEFINE_NET_INDICES_EX(TransferMissionFile, TransferFile, TRANSFER_MISSION_FILE_MSG)
+DEFINE_GET_INDICES(TransferMissionFile)
 
-IndicesTransferFile::IndicesTransferFile()
-{
-    path = -1;
-    data = -1;
-    totSize = -1;
-    offset = -1;
-    totSegments = -1;
-    curSegment = -1;
-}
-
-void IndicesTransferFile::Scan(NetworkMessageFormatBase* format){SCAN(path) SCAN(data) SCAN(totSize) SCAN(offset)
-                                                                     SCAN(totSegments) SCAN(curSegment)}
-
-// Create network message indices for TransferFileMessage class
-NetworkMessageIndices* GetIndicesTransferFile()
-{
-    return new IndicesTransferFile();
-}
-// Create network message indices for TransferMissionFileMessage class
-NetworkMessageIndices* GetIndicesTransferMissionFile()
-{
-    return new IndicesTransferFile();
-}
-// Create network message indices for TransferFileToServerMessage class
-NetworkMessageIndices* GetIndicesTransferFileToServer()
-{
-    return new IndicesTransferFile();
-}
-
-NetworkMessageFormat& TransferFileMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("path", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Path of transferred file"));
-    format.Add("data", NDTRawData, NCTNone, DEFVALUERAWDATA, DOC_MSG("Content of file (single segment)"));
-    format.Add("totSize", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Total size of file"));
-    format.Add("offset", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Offset of this segment"));
-    format.Add("totSegments", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 1), DOC_MSG("Total number of segments"));
-    format.Add("curSegment", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Index of this segment"));
-    return format;
-}
-
-TMError TransferFileMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesTransferFile*>(ctx.GetIndices()))
-    const IndicesTransferFile* indices = static_cast<const IndicesTransferFile*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->path, path))
-    TMCHECK(ctx.IdxTransfer(indices->data, data))
-    TMCHECK(ctx.IdxTransfer(indices->totSize, totSize))
-    TMCHECK(ctx.IdxTransfer(indices->offset, offset))
-    TMCHECK(ctx.IdxTransfer(indices->totSegments, totSegments))
-    TMCHECK(ctx.IdxTransfer(indices->curSegment, curSegment))
-    return TMOK;
-}
+DEFINE_NET_INDICES_EX(TransferFileToServer, TransferFile, TRANSFER_MISSION_FILE_MSG)
+DEFINE_GET_INDICES(TransferFileToServer)
 
 // network message indices for AskMissionFileMessage class
 class IndicesAskMissionFile : public NetworkMessageIndices

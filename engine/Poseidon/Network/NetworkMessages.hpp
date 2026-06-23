@@ -593,50 +593,35 @@ struct MarkerCreateMessage : public NetworkSimpleObject
 	TMError TransferMsg(NetworkMessageContext &ctx) override;
 };
 
-// Message for transfer file to other clients
-struct TransferFileMessage : public NetworkSimpleObject
-{
-	// destination file path
-	RString path;
-	// segment of file content
-	AutoArray<char> data;
+#define TRANSFER_FILE_MSG(XX) \
+	XX(RString, path, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Path of transferred file"), IdxTransfer) \
+	XX(AutoArray<char>, data, NDTRawData, NCTNone, DEFVALUERAWDATA, DOC_MSG("Content of file (single segment)"), IdxTransfer) \
+	XX(int, totSize, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Total size of file"), IdxTransfer) \
+	XX(int, offset, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Offset of this segment"), IdxTransfer) \
+	XX(int, totSegments, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 1), DOC_MSG("Total number of segments"), IdxTransfer) \
+	XX(int, curSegment, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Index of this segment"), IdxTransfer)
 
-	// total size of file
-	int totSize;
-	// offset of segment in file
-	int offset;
+DECLARE_NET_MESSAGE(TransferFile, TRANSFER_FILE_MSG)
 
-	// total count of segments
-	int totSegments;
-	// index of segment
-	int curSegment;
-
-/*
-	// date and time of last file modification
-	int timeL;
-	int timeH;
-*/
-
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTTransferFile;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define TRANSFER_MISSION_FILE_MSG(XX)
 
 // Message for transfer mission pbo file to other clients
 struct TransferMissionFileMessage : public TransferFileMessage
 {
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTTransferMissionFile;}
+	DECLARE_DEFINE_NETWORK_OBJECT_SIMPLE(TransferMissionFile)
 };
+
+DECLARE_NET_INDICES_EX(TransferMissionFile, TransferFile, TRANSFER_MISSION_FILE_MSG)
+
+#define TRANSFER_FILE_TO_SERVER_MSG(XX)
 
 // Message for transfer file to server
 struct TransferFileToServerMessage : public TransferFileMessage
 {
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTTransferFileToServer;}
+	DECLARE_DEFINE_NETWORK_OBJECT_SIMPLE(TransferFileToServer)
 };
+
+DECLARE_NET_INDICES_EX(TransferFileToServer, TransferFile, TRANSFER_MISSION_FILE_MSG)
 
 // Message sent to server to answer if mission pbo file on client is actual (valid)
 struct AskMissionFileMessage : public NetworkSimpleObject
