@@ -1942,7 +1942,8 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 DeleteObjectMessage dom;
                 dom.TransferMsg(ctx);
-                DestroyRemoteObject(dom.object);
+                NetworkId id(dom._creator, dom._id);
+                DestroyRemoteObject(id);
             }
             break;
         case NMTDeleteCommand:

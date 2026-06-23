@@ -387,21 +387,11 @@ DECLARE_NET_MESSAGE(PlaySound, PLAY_SOUND_MSG)
 
 DECLARE_NET_MESSAGE(SoundState, SOUND_STATE_MSG)
 
-// Message announcing destroying of network object
-struct DeleteObjectMessage : public NetworkSimpleObject
-{
-	// object to destroy
-	NetworkId object;
+#define DELETE_OBJECT_MSG(XX) \
+	XX(int, creator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Id of object to destroy"), IdxTransfer) \
+	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Id of object to destroy"), IdxTransfer)
 
-	DeleteObjectMessage() {}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTDeleteObject;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(DeleteObject, DELETE_OBJECT_MSG)
 
 // Message announcing destroying of command
 struct DeleteCommandMessage : public NetworkSimpleObject

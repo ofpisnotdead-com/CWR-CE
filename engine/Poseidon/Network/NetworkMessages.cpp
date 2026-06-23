@@ -592,36 +592,8 @@ TMError ExplosionDammageEffectsMessage::TransferMsg(NetworkMessageContext& ctx)
     return TMOK;
 }
 
-IndicesDeleteObject::IndicesDeleteObject()
-{
-    creator = -1;
-    id = -1;
-}
-
-void IndicesDeleteObject::Scan(NetworkMessageFormatBase* format){SCAN(creator) SCAN(id)}
-
-// Create network message indices for DeleteObjectMessage class
-NetworkMessageIndices* GetIndicesDeleteObject()
-{
-    return new IndicesDeleteObject();
-}
-
-NetworkMessageFormat& DeleteObjectMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("creator", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Id of object to destroy"));
-    format.Add("id", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Id of object to destroy"));
-    return format;
-}
-
-TMError DeleteObjectMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesDeleteObject*>(ctx.GetIndices()))
-    const IndicesDeleteObject* indices = static_cast<const IndicesDeleteObject*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->creator, object.creator))
-    TMCHECK(ctx.IdxTransfer(indices->id, object.id))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(DeleteObject, DELETE_OBJECT_MSG)
+DEFINE_GET_INDICES(DeleteObject)
 
 IndicesDeleteCommand::IndicesDeleteCommand()
 {
