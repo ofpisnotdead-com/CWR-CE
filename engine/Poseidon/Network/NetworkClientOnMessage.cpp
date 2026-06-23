@@ -1441,7 +1441,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             ++GTriNetSoundsReceived; // tri test observable (replicated-sound count)
 
             IWave* wave =
-                GSoundScene->OpenAndPlayOnce(sound.name, sound.position, sound.speed, sound.volume, sound.freq);
+                GSoundScene->OpenAndPlayOnce(sound._name, sound._position, sound._speed, sound._volume, sound._freq);
             if (wave)
             {
                 GSoundScene->AddSound(wave);
@@ -1460,8 +1460,8 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
 
                 int index = _receivedSounds.Add();
-                _receivedSounds[index].creator = sound.creator;
-                _receivedSounds[index].id = sound.soundId;
+                _receivedSounds[index].creator = sound._creator;
+                _receivedSounds[index].id = sound._soundId;
                 _receivedSounds[index].wave = wave;
             }
         }
@@ -1479,10 +1479,10 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     _receivedSounds.Delete(i);
                     continue;
                 }
-                if (info.creator == sound.creator && info.id == sound.soundId)
+                if (info.creator == sound._creator && info.id == sound._soundId)
                 {
                     const bool applied =
-                        Poseidon::ApplyReplicatedNetworkSoundState(info.wave, static_cast<SoundStateType>(sound.state),
+                        Poseidon::ApplyReplicatedNetworkSoundState(info.wave, static_cast<SoundStateType>(sound._state),
                                                                    [](IWave* wave) { GSoundScene->DeleteSound(wave); });
                     if (!applied)
                     {

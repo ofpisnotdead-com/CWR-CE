@@ -369,53 +369,23 @@ DECLARE_NET_MESSAGE(SelectPlayer, SELECT_PLAYER_MSG)
 
 DECLARE_NET_MESSAGE(ChangeOwner, CHANGE_OWNER_MSG)
 
-// Message sent to clients to play sound
-struct PlaySoundMessage : public NetworkSimpleObject
-{
-	// name of sound file
-	RString name;
-	// position source position
-	Vector3 position;
-	// speed source speed
-	Vector3 speed;
-	// volume sound volume
-	float volume;
-	// freq sound frequency
-	float freq;
-	// unique id of client where sound originate
-	int creator;
-	// unique id of sound on client where sound originate
-	int soundId;
-	
-	PlaySoundMessage() {}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTPlaySound;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define PLAY_SOUND_MSG(XX) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Sound identifier"), IdxTransfer) \
+	XX(Vector3, position, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Sound source position"), IdxTransfer) \
+	XX(Vector3, speed, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Sound source speed"), IdxTransfer) \
+	XX(float, volume, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Sound volume"), IdxTransfer) \
+	XX(float, freq, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Sound pitch"), IdxTransfer) \
+	XX(int, creator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Unique network ID of sound"), IdxTransfer) \
+	XX(int, soundId, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unique network ID of sound"), IdxTransfer)
 
-// Message sent to clients to change state of played sound
-struct SoundStateMessage : public NetworkSimpleObject
-{
-	// new state of sound
-	SoundStateType state;
-	// unique id of client where sound originate
-	int creator;
-	// unique id of sound on client where sound originate
-	int soundId;
+DECLARE_NET_MESSAGE(PlaySound, PLAY_SOUND_MSG)
 
-	SoundStateMessage() {}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTSoundState;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define SOUND_STATE_MSG(XX) \
+	XX(int, state, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("New state of sound"), IdxTransfer) \
+	XX(int, creator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Network ID of sound"), IdxTransfer) \
+	XX(int, soundId, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Network ID of sound"), IdxTransfer)
+
+DECLARE_NET_MESSAGE(SoundState, SOUND_STATE_MSG)
 
 // Message announcing destroying of network object
 struct DeleteObjectMessage : public NetworkSimpleObject
