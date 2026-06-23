@@ -146,47 +146,6 @@ public:
 	void Scan(NetworkMessageFormatBase *format) override;
 };
 
-// network message indices for AskForAddImpulseMessage class
-class IndicesAskForAddImpulse : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int force;
-	int torque;
-
-	IndicesAskForAddImpulse();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForAddImpulse;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForMoveVectorMessage class
-class IndicesAskForMoveVector : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int pos;
-
-	IndicesAskForMoveVector();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForMoveVector;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForMoveMatrixMessage class
-class IndicesAskForMoveMatrix : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int pos;
-	int orient;
-
-	IndicesAskForMoveMatrix();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForMoveMatrix;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
 // network message indices for AskForJoinGroupMessage class
 class IndicesAskForJoinGroup : public NetworkMessageIndices
 {
