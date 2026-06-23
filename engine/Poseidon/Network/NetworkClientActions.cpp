@@ -1635,9 +1635,9 @@ void NetworkClient::AskForChangePosition(Person* soldier, Transport* vehicle, UI
     }
 
     AskForChangePositionMessage msg;
-    msg.soldier = soldier;
-    msg.vehicle = vehicle;
-    msg.type = type;
+    msg._soldier = soldier;
+    msg._vehicle = vehicle;
+    msg._type = type;
     SendMsg(&msg, NMFGuaranteed);
 }
 
