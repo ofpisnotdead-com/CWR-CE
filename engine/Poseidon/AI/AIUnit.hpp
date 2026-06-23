@@ -13,31 +13,23 @@ namespace Poseidon
 {
 extern const Vector3 VUndefined;
 
+#define CREATE_AI_UNIT_MSG(XX) \
+	XX(OLink<Person>, person, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Attached body"), IdxTransferRef) \
+	XX(OLink<AISubgroup>, subgroup, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Superior subgroup"), IdxTransferRef) \
+	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID in group"), IdxTransfer) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Full name"), IdxTransfer) \
+	XX(RString, face, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Face"), IdxTransfer) \
+	XX(RString, glasses, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Glasses type"), IdxTransfer) \
+	XX(RString, speaker, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Speaker"), IdxTransfer) \
+	XX(float, pitch, NDTFloat, NCTNone, DEFVALUE(float, 1.0f), DOC_MSG("Voice pitch"), IdxTransfer) \
+	XX(int, rank, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, RankPrivate), DOC_MSG("Current rank"), IdxTransfer) \
+	XX(float, experience, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Amount of experience"), IdxTransfer) \
+	XX(float, initExperience, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Initial amount of experience"), IdxTransfer) \
+	XX(bool, playable, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Is unit playable"), IdxTransfer) \
+	XX(RString, squadPicture, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Squad picture (shown on vehicles)"), IdxTransfer) \
+	XX(RString, squadTitle, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Squad title (shown on vehicles)"), IdxTransfer)
 
-class IndicesCreateAIUnit : public IndicesNetworkObject
-{
-	typedef IndicesNetworkObject base;
-
-public:
-	int person;
-	int subgroup;
-	int id;
-	int name;
-	int face;
-	int glasses;
-	int speaker;
-	int pitch;
-	int rank;
-	int experience;
-	int initExperience;
-	int playable;
-	int squadPicture;
-	int squadTitle;
-
-	IndicesCreateAIUnit();
-	NetworkMessageIndices *Clone() const override {return new IndicesCreateAIUnit;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES_EX(CreateAIUnit, NetworkObject, CREATE_AI_UNIT_MSG)
 
 // callback function type - see also FindNearestEmptyCallback
 typedef bool FindFreePositionCallback(Vector3Par pos, void *context);
