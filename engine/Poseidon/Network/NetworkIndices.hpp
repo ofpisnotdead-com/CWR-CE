@@ -83,25 +83,18 @@ enum NetworkCommandMessageType
 
 DECLARE_NET_MESSAGE(NetworkCommand, NETWORK_COMMAND_MSG)
 
-// network message indices for PlayerRole class
-class IndicesPlayerRole : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int index;
-	int side;
-	int group;
-	int unit;
-	int vehicle;
-	int position;
-	int leader;
-	int roleLocked;
-	int player;
+#define PLAYER_ROLE_MSG(XX) \
+	XX(int, index, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Index of role"), IdxTransfer) \
+	XX(int, side, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Side of role"), IdxTransfer) \
+	XX(int, group, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Group ID of role"), IdxTransfer) \
+	XX(int, unit, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unit ID of role"), IdxTransfer) \
+	XX(RString, vehicle, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Vehicle used by this role"), IdxTransfer) \
+	XX(int, position, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Position in vehicle (driver, commander, ...)"), IdxTransfer) \
+	XX(bool, leader, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Is this unit group leader"), IdxTransfer) \
+	XX(bool, roleLocked, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Role is locked (only admin can assign this role)"), IdxTransfer) \
+	XX(int, player, NDTInteger, NCTNone, DEFVALUE(int, AI_PLAYER), DOC_MSG("Currently attached player"), IdxTransfer)
 
-	IndicesPlayerRole();
-	NetworkMessageIndices *Clone() const override {return new IndicesPlayerRole;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_MESSAGE(PlayerRole, PLAYER_ROLE_MSG)
 
 // network message indices for PlayerIdentity class
 class IndicesPlayerUpdate : public NetworkMessageIndices
