@@ -484,39 +484,17 @@ DECLARE_NET_MESSAGE(AskForMoveVector, ASK_FOR_MOVE_VECTOR_MSG)
 
 DECLARE_NET_MESSAGE(AskForMoveMatrix, ASK_FOR_MOVE_MATRIX_MSG)
 
-// Message for ask group owner for join other group
-struct AskForJoinGroupMessage : public NetworkSimpleObject
-{
-	// joined group
-	AIGroup *join;
-	// joining group
-	AIGroup *group;
+#define ASK_FOR_JOIN_GROUP_MSG(XX) \
+	XX(OLink<AIGroup>, join, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Joined group"), IdxTransferRef) \
+	XX(OLink<AIGroup>, group, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Joining group"), IdxTransferRef)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForJoinGroup;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskForJoinGroup, ASK_FOR_JOIN_GROUP_MSG)
 
-// Message for ask group owner for join other units
-struct AskForJoinUnitsMessage : public NetworkSimpleObject
-{
-	// joined group
-	AIGroup *join;
-	// joining units
-	OLinkArray<AIUnit> units;
+#define ASK_FOR_JOIN_UNITS_MSG(XX) \
+	XX(OLink<AIGroup>, join, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Joined group"), IdxTransferRef) \
+	XX(OLinkArray<AIUnit>, units, NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("Joining units"), IdxTransferRefs)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForJoinUnits;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskForJoinUnits, ASK_FOR_JOIN_UNITS_MSG)
 
 // Message for ask person owner for hide body
 struct AskForHideBodyMessage : public NetworkSimpleObject
