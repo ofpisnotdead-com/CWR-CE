@@ -1147,7 +1147,11 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 {
                     AUTO_STATIC_ARRAY(int, oldPlayers, 32);
                     _server->GetTransmitTargets(from, oldPlayers);
-                    SetSpeakerMessage message(from, false, info->person);
+                    SetSpeakerMessage message;
+                    message._player = from;
+                    message._on = false;
+                    message._creator = info->person.creator;
+                    message._id = info->person.id;
                     for (int i = 0; i < oldPlayers.Size(); i++)
                     {
                         SendMsg(oldPlayers[i], &message, NMFGuaranteed);
@@ -1155,7 +1159,11 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
                 if (channel == CCDirect)
                 {
-                    SetSpeakerMessage message(from, true, info->person);
+                    SetSpeakerMessage message;
+                    message._player = from;
+                    message._on = true;
+                    message._creator = info->person.creator;
+                    message._id = info->person.id;
                     for (int i = 0; i < players.Size(); i++)
                     {
                         SendMsg(players[i], &message, NMFGuaranteed);
@@ -1179,7 +1187,11 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 if (Poseidon::ShouldNotifyJoinedPlayerAboutActiveDirectSpeaker(pi.dpid, from, pi.state, pi.channel,
                                                                                NGSCreate, CCDirect))
                 {
-                    SetSpeakerMessage message(pi.dpid, true, pi.person);
+                    SetSpeakerMessage message;
+                    message._player = pi.dpid;
+                    message._on = true;
+                    message._creator = pi.person.creator;
+                    message._id = pi.person.id;
                     SendMsg(from, &message, NMFGuaranteed);
                 }
             }

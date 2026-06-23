@@ -1759,12 +1759,12 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             SetSpeakerMessage message;
             message.TransferMsg(ctx);
-            if (message.on)
+            if (message._on)
             {
                 int index = -1;
                 for (int i = 0; i < _soundBuffers.Size(); i++)
                 {
-                    if (_soundBuffers[i].player == message.player)
+                    if (_soundBuffers[i].player == message._player)
                     {
                         _soundBuffers[i].buffer = nullptr;
                         index = i;
@@ -1774,10 +1774,11 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 if (index < 0)
                 {
                     index = _soundBuffers.Add();
-                    _soundBuffers[index].player = message.player;
+                    _soundBuffers[index].player = message._player;
                 }
-                _soundBuffers[index].buffer = _client->Create3DSoundBuffer(message.player);
-                NetworkObject* networkObject = GetObject(message.object);
+                _soundBuffers[index].buffer = _client->Create3DSoundBuffer(message._player);
+                NetworkId id(message._creator, message._id);
+                NetworkObject* networkObject = GetObject(id);
                 if (networkObject)
                 {
                     Vector3 pos = networkObject->GetSpeakerPosition();
@@ -1792,7 +1793,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 for (int i = 0; i < _soundBuffers.Size(); i++)
                 {
-                    if (_soundBuffers[i].player == message.player)
+                    if (_soundBuffers[i].player == message._player)
                     {
                         _soundBuffers[i].buffer = nullptr;
                         _soundBuffers[i].object->SetRandomLip(false);
