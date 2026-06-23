@@ -1064,9 +1064,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             VehicleDestroyedMessage info;
             info.TransferMsg(ctx);
-            if (info.killed)
+            if (info._killed)
             {
-                Person* person = dyn_cast<Person>(info.killed);
+                Person* person = dyn_cast<Person>(info._killed.GetLink());
                 if (person && person->GetInfo()._name.GetLength() == 0 && person->IsNetworkPlayer())
                 {
                     const PlayerIdentity* identity = FindIdentity(person->GetRemotePlayer());
@@ -1076,12 +1076,12 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     }
                 }
             }
-            if (info.killer)
+            if (info._killer)
             {
-                Person* person = dyn_cast<Person>(info.killer);
+                Person* person = dyn_cast<Person>(info._killer.GetLink());
                 if (!person)
                 {
-                    Transport* vehicle = dyn_cast<Transport>(info.killer);
+                    Transport* vehicle = dyn_cast<Transport>(info._killer.GetLink());
                     if (vehicle)
                     {
                         person = vehicle->Commander();
@@ -1105,17 +1105,17 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
             }
 
-            GStats.OnVehicleDestroyed(info.killed, info.killer);
+            GStats.OnVehicleDestroyed(info._killed, info._killer);
             // add experience
-            if (info.killer && info.killed)
+            if (info._killer && info._killed)
             {
                 // use Entity member to get original target side
                 // all dead bodies are considered civilian
-                TargetSide origSide = info.killed->Entity::GetTargetSide();
-                const VehicleType& type = *info.killed->GetType();
+                TargetSide origSide = info._killed->Entity::GetTargetSide();
+                const VehicleType& type = *info._killed->GetType();
 
                 // increase killer's experience
-                AIUnit* kBrain = info.killer->CommanderUnit();
+                AIUnit* kBrain = info._killer->CommanderUnit();
                 if (kBrain && kBrain->IsLocal())
                 {
                     kBrain->IncreaseExperience(type, origSide);
@@ -1124,24 +1124,24 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     if (killerGroup && killerGroup->GetCenter()->IsEnemy(origSide))
                     {
                         // find corresponding target
-                        Target* tar = killerGroup->FindTargetAll(info.killed);
+                        Target* tar = killerGroup->FindTargetAll(info._killed);
                         if (tar)
                         {
                             // mark killer
                             // when destroyed will be set, it will be marked for reporting
-                            tar->idKiller = info.killer;
+                            tar->idKiller = info._killer;
                         }
                     }
                 }
-                if (info.killer->GunnerUnit() && info.killer->GunnerUnit()->IsLocal() &&
-                    info.killer->GunnerUnit() != kBrain)
+                if (info._killer->GunnerUnit() && info._killer->GunnerUnit()->IsLocal() &&
+                    info._killer->GunnerUnit() != kBrain)
                 {
-                    info.killer->GunnerUnit()->IncreaseExperience(type, origSide);
+                    info._killer->GunnerUnit()->IncreaseExperience(type, origSide);
                 }
-                if (info.killer->PilotUnit() && info.killer->PilotUnit()->IsLocal() &&
-                    info.killer->PilotUnit() != kBrain)
+                if (info._killer->PilotUnit() && info._killer->PilotUnit()->IsLocal() &&
+                    info._killer->PilotUnit() != kBrain)
                 {
-                    info.killer->PilotUnit()->IncreaseExperience(type, origSide);
+                    info._killer->PilotUnit()->IncreaseExperience(type, origSide);
                 }
             }
         }
