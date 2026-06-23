@@ -1769,7 +1769,7 @@ void NetworkClient::AskForHideBody(Person* vehicle)
     }
 
     AskForHideBodyMessage msg;
-    msg.vehicle = vehicle;
+    msg._vehicle = vehicle;
     SendMsg(&msg, NMFGuaranteed);
 }
 
