@@ -1483,6 +1483,119 @@ void DrawRenderTab()
     ImGui::Text("target  scale %.2fx, %dx MSAA", GEngine->GetRenderScale(), GEngine->GetMsaaSamples());
     ImGui::TextDisabled("settings are session-only; persist via graphics.cfg");
 }
+void DrawMouseTab()
+{
+    // Plain field writes into live GInput.mouse — no Defer needed (cf. DrawCheatsTab).
+    auto& sub = InputSubsystem::Instance();
+    MouseTuning& t = sub.GetMouseTuning();
+
+    ImGui::TextUnformatted("Player settings (final)");
+    ImGui::Separator();
+
+    int dpiIdx = 0; // Off
+    if (t.dpiNormalize)
+    {
+        int bestDiff = 1 << 30;
+        for (int i = 1; i < kMouseDpiPresetCount; ++i)
+        {
+            int d = t.mouseDpi - kMouseDpiPresets[i];
+            if (d < 0)
+                d = -d;
+            if (d < bestDiff)
+            {
+                bestDiff = d;
+                dpiIdx = i;
+            }
+        }
+    }
+    if (ImGui::Combo("Mouse DPI", &dpiIdx, kMouseDpiLabels, kMouseDpiPresetCount))
+    {
+        t.dpiNormalize = dpiIdx > 0;
+        if (dpiIdx > 0)
+            t.mouseDpi = kMouseDpiPresets[dpiIdx];
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Set this to your mouse's DPI. The game then feels like %d DPI at any hardware.\n"
+                          "Off = classic (no compensation).",
+                          t.referenceDpi);
+
+    float sx = sub.GetMouseSensitivityX();
+    if (ImGui::SliderFloat("Sensitivity X", &sx, t.SensMin(), t.SensMax(), "%.3f"))
+        sub.SetMouseSensitivityX(sx);
+    float sy = sub.GetMouseSensitivityY();
+    if (ImGui::SliderFloat("Sensitivity Y", &sy, t.SensMin(), t.SensMax(), "%.3f"))
+        sub.SetMouseSensitivityY(sy);
+
+    bool rev = sub.IsReverseMouse();
+    if (ImGui::Checkbox("Invert Y axis", &rev))
+        sub.SetReverseMouse(rev);
+    bool swap = sub.IsMouseButtonsReversed();
+    if (ImGui::Checkbox("Swap mouse buttons", &swap))
+        sub.SetMouseButtonsReversed(swap);
+
+    ImGui::Spacing();
+    ImGui::TextUnformatted("Final values (live)");
+    ImGui::Separator();
+
+    // Cursor math mirrors MouseState::Update (kCursorScaleX = 1/200; screen = 2 NDC).
+    const float dpiF = t.DpiFactor();
+    const float perCountX = sx * t.baseScale * dpiF / 200.0f;
+    ImGui::Text("Reference DPI: %d   |   DPI factor: %.3f", t.referenceDpi, dpiF);
+    ImGui::Text("Effective sensitivity X (x baseScale): %.3f", sx * t.baseScale * dpiF);
+    if (perCountX > 0.0f)
+    {
+        const float countsCrossX = 2.0f / perCountX;
+        ImGui::Text("Counts to cross screen (X): %.0f", countsCrossX);
+        if (t.dpiNormalize && t.mouseDpi > 0)
+        {
+            // Normalized: physical hand travel is DPI-independent (mouseDpi cancels).
+            const float inch = countsCrossX / static_cast<float>(t.mouseDpi);
+            ImGui::Text("Hand travel to cross screen (X): %.2f in / %.1f cm", inch, inch * 2.54f);
+            ImGui::TextDisabled("  same physical feel at every DPI — normalization working");
+        }
+        else
+        {
+            ImGui::TextDisabled("  Off: raw counts — physical feel depends on your hardware DPI");
+        }
+    }
+    if (s_window)
+        ImGui::Text("SDL display scale: %.2f   pixel density: %.2f", SDL_GetWindowDisplayScale(s_window),
+                    SDL_GetWindowPixelDensity(s_window));
+    ImGui::TextDisabled("Mouse moves over this panel are captured by ImGui — close it to feel changes in game.");
+
+    ImGui::Spacing();
+    if (ImGui::CollapsingHeader("Advanced (dev only)"))
+    {
+        ImGui::SliderFloat("Base scale", &t.baseScale, 0.1f, 3.0f, "%.3f");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Master look scale (was the hard-coded 1.5).");
+        ImGui::SliderInt("Reference DPI", &t.referenceDpi, 100, 3200);
+        ImGui::SliderFloat("Smoothing", &t.smoothing, 0.0f, 0.95f, "%.2f");
+        ImGui::Checkbox("Acceleration", &t.acceleration);
+        ImGui::BeginDisabled(!t.acceleration);
+        ImGui::SliderFloat("Accel exponent", &t.accelExponent, 1.0f, 2.0f, "%.2f");
+        ImGui::EndDisabled();
+        ImGui::SliderFloat("Menu cursor scale", &t.menuCursorScale, 0.1f, 4.0f, "%.2f");
+        if (ImGui::Checkbox("Extended sensitivity range", &t.extendedRange))
+        {
+            sub.SetMouseSensitivityX(std::clamp(sub.GetMouseSensitivityX(), t.SensMin(), t.SensMax()));
+            sub.SetMouseSensitivityY(std::clamp(sub.GetMouseSensitivityY(), t.SensMin(), t.SensMax()));
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Off = legacy 0.5..2.0 sensitivity range. On = 0.05..3.0.");
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    if (ImGui::Button("Reset tuning to classic"))
+        t = MouseTuning{};
+    ImGui::SameLine();
+    if (ImGui::Button("Save to mouse.cfg"))
+        Defer([] { InputSubsystem::Instance().SaveKeys(); });
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Persist sensitivity + tuning to mouse.cfg (also written for old builds).");
+}
+
 void DrawMainWindow()
 {
     ImGui::SetNextWindowSize(ImVec2(560, 480), ImGuiCond_FirstUseEver);
@@ -1503,6 +1616,11 @@ void DrawMainWindow()
         if (ImGui::BeginTabItem("Game"))
         {
             DrawGameTab();
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Mouse"))
+        {
+            DrawMouseTab();
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("Console"))

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Poseidon/Input/InputDeviceConstants.hpp>
+#include <Poseidon/Input/MouseTuning.hpp>
 #include <Poseidon/Foundation/Time/Time.hpp>
 
 namespace Poseidon
@@ -35,6 +36,10 @@ struct MouseState
     // Config
     bool reverseY = false;
     bool buttonsReversed = false;
+
+    // Live feel tuning (DPI normalize, smoothing, accel, menu cursor scale,
+    // master baseScale).  Defaults reproduce classic behavior exactly.
+    MouseTuning tuning;
 
     // Activity timestamps
     Foundation::UITime cursorLastActive = UITIME_MIN;
@@ -96,7 +101,6 @@ struct MouseState
   private:
     static constexpr int kButtonBufferSize = 16;
     static constexpr int kDoubleClickWindowMs = 400;
-    static constexpr float kSensitivityScale = 1.5f;
     static constexpr float kCursorScaleX = 1.0f / 200.0f;
     static constexpr float kCursorScaleY = 1.0f / 150.0f;
     static constexpr float kCursorLimitX = 0.6f;
@@ -116,6 +120,8 @@ struct MouseState
     int buttonLastPressedMs_[N_MOUSE_BUTTONS] = {};
     float bufDeltaX_ = 0, bufDeltaY_ = 0;
     float bufWheel_ = 0;
+    // Smoothing low-pass state (only used when tuning.smoothing > 0).
+    float smoothX_ = 0, smoothY_ = 0;
 };
 } // namespace Poseidon
 

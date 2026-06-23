@@ -1,8 +1,8 @@
 #pragma once
 
-// Mouse settings page — Y-axis inversion, button swap, sensitivity X / Y.
+// Mouse settings page — Y-axis inversion, button swap, sensitivity X / Y, Mouse DPI.
 //
-// 4 rows + auto-appended Close.  All four rows apply live (matching the
+// 5 rows + auto-appended Close.  All apply live (matching the
 // way the RscDisplayConfigure handled them).  Cancel via Close
 // snapshots the values on Mount and restores them — same pattern as
 // DisplayConfigure's `_old*` members, lifted into the page.
@@ -27,6 +27,12 @@ class MousePage : public ScrollListPage
     static int SensitivityToPercent(float value);
     static float PercentToSensitivity(int percent);
 
+    // Mouse DPI stepper mapping (pure, unit-tested).  Index 0 = "Off"; 1..N map to
+    // kMouseDpiPresets.  DpiToIndex returns the nearest preset for display without
+    // changing the stored value, so a hand-edited non-preset DPI survives.
+    static int DpiToIndex(bool normalize, int mouseDpi);
+    static int IndexToDpi(int index);
+
     void Mount(OptionsShell& shell) override;
     void OnReshown(OptionsShell& shell) override;
     void Unmount(OptionsShell& shell) override;
@@ -47,7 +53,8 @@ class MousePage : public ScrollListPage
             kRowButtonsReversed = 1,
             kRowSensitivityX    = 2,
             kRowSensitivityY    = 3,
-            kRowCount           = 4,
+            kRowMouseDpi        = 4,
+            kRowCount           = 5,
         };
 
         int RowCount() const override { return kRowCount; }
@@ -75,6 +82,8 @@ class MousePage : public ScrollListPage
     bool  m_savedButtonsReversed = false;
     float m_savedSensitivityX    = 1.0f;
     float m_savedSensitivityY    = 1.0f;
+    bool  m_savedDpiNormalize    = false;
+    int   m_savedMouseDpi        = 1600;
 };
 
 } // namespace Poseidon

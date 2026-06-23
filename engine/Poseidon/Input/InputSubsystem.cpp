@@ -1060,6 +1060,15 @@ void InputSubsystem::LoadKeys()
     GInput.mouse.buttonsReversed = mouse.buttonsReversed;
     GInput.mouse.sensitivityX = mouse.sensitivityX;
     GInput.mouse.sensitivityY = mouse.sensitivityY;
+    GInput.mouse.tuning.baseScale = mouse.baseScale;
+    GInput.mouse.tuning.dpiNormalize = mouse.dpiNormalize;
+    GInput.mouse.tuning.mouseDpi = mouse.mouseDpi;
+    GInput.mouse.tuning.referenceDpi = mouse.referenceDpi;
+    GInput.mouse.tuning.smoothing = mouse.smoothing;
+    GInput.mouse.tuning.acceleration = mouse.acceleration;
+    GInput.mouse.tuning.accelExponent = mouse.accelExponent;
+    GInput.mouse.tuning.menuCursorScale = mouse.menuCursorScale;
+    GInput.mouse.tuning.extendedRange = mouse.extendedRange;
 
     GInput.gamepad.enabled = gamepad.enabled;
     GInput.gamepad.deadzoneStick = gamepad.deadzoneStick;
@@ -1084,6 +1093,15 @@ void InputSubsystem::SaveKeys()
     mouse.buttonsReversed = GInput.mouse.buttonsReversed;
     mouse.sensitivityX = GInput.mouse.sensitivityX;
     mouse.sensitivityY = GInput.mouse.sensitivityY;
+    mouse.baseScale = GInput.mouse.tuning.baseScale;
+    mouse.dpiNormalize = GInput.mouse.tuning.dpiNormalize;
+    mouse.mouseDpi = GInput.mouse.tuning.mouseDpi;
+    mouse.referenceDpi = GInput.mouse.tuning.referenceDpi;
+    mouse.smoothing = GInput.mouse.tuning.smoothing;
+    mouse.acceleration = GInput.mouse.tuning.acceleration;
+    mouse.accelExponent = GInput.mouse.tuning.accelExponent;
+    mouse.menuCursorScale = GInput.mouse.tuning.menuCursorScale;
+    mouse.extendedRange = GInput.mouse.tuning.extendedRange;
     mouse.Save(MouseCfgPath());
 }
 
@@ -1273,6 +1291,14 @@ void InputSubsystem::SetMouseSensitivityX(float v)
 void InputSubsystem::SetMouseSensitivityY(float v)
 {
     GInput.mouse.sensitivityY = v;
+}
+MouseTuning& InputSubsystem::GetMouseTuning()
+{
+    return GInput.mouse.tuning;
+}
+const MouseTuning& InputSubsystem::GetMouseTuning() const
+{
+    return GInput.mouse.tuning;
 }
 
 const AutoArray<int>& InputSubsystem::GetUserKeys(UserAction action) const

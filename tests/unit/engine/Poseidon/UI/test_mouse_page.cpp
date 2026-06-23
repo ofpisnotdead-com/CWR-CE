@@ -26,6 +26,8 @@ class MouseStateSnapshot
         btn = sub.IsMouseButtonsReversed();
         sx = sub.GetMouseSensitivityX();
         sy = sub.GetMouseSensitivityY();
+        norm = sub.GetMouseTuning().dpiNormalize;
+        dpi = sub.GetMouseTuning().mouseDpi;
     }
     ~MouseStateSnapshot()
     {
@@ -34,6 +36,8 @@ class MouseStateSnapshot
         sub.SetMouseButtonsReversed(btn);
         sub.SetMouseSensitivityX(sx);
         sub.SetMouseSensitivityY(sy);
+        sub.GetMouseTuning().dpiNormalize = norm;
+        sub.GetMouseTuning().mouseDpi = dpi;
     }
 
   private:
@@ -41,6 +45,8 @@ class MouseStateSnapshot
     bool btn = false;
     float sx = 1.0f;
     float sy = 1.0f;
+    bool norm = false;
+    int dpi = 1600;
 };
 
 // MousePage's provider is a private member type — re-create the same
@@ -72,12 +78,12 @@ void LoadMainMenuStringtable()
 }
 } // namespace
 
-TEST_CASE("MousePage: provider exposes 4 rows + close", "[UI][MousePage]")
+TEST_CASE("MousePage: provider exposes 5 rows + close", "[UI][MousePage]")
 {
     TestableMousePage page;
     auto& p = page.Provider();
-    // 4 mouse rows + the auto-appended Close row.
-    CHECK(p.RowCount() == 5);
+    // 5 mouse rows (incl. Mouse DPI) + the auto-appended Close row.
+    CHECK(p.RowCount() == 6);
 }
 
 TEST_CASE("MousePage: row labels match the resource bundle expectations", "[UI][MousePage]")
@@ -91,7 +97,8 @@ TEST_CASE("MousePage: row labels match the resource bundle expectations", "[UI][
     CHECK(std::string(p.RowLabel(1)) == "Mouse buttons swap");
     CHECK(std::string(p.RowLabel(2)) == "Mouse sensitivity X");
     CHECK(std::string(p.RowLabel(3)) == "Mouse sensitivity Y");
-    // Row 4 is the Close action — label comes from the localized
+    CHECK(std::string(p.RowLabel(4)) == "Mouse DPI");
+    // Row 5 is the Close action — label comes from the localized
     // STR_DISP_CLOSE which the unit-test environment doesn't populate;
     // structural check (it exists as an action row) covered separately.
 }
@@ -117,7 +124,8 @@ TEST_CASE("MousePage: kind is Stepper for toggles, Slider for sensitivities, Act
     CHECK(p.RowKind(1) == OptionsScrollList::KindStepper); // Buttons swap toggle
     CHECK(p.RowKind(2) == OptionsScrollList::KindSlider);  // Sensitivity X
     CHECK(p.RowKind(3) == OptionsScrollList::KindSlider);  // Sensitivity Y
-    CHECK(p.RowKind(4) == OptionsScrollList::KindAction);  // Close
+    CHECK(p.RowKind(4) == OptionsScrollList::KindStepper); // Mouse DPI (preset select)
+    CHECK(p.RowKind(5) == OptionsScrollList::KindAction);  // Close
 }
 
 TEST_CASE("MousePage: toggle rows round-trip through the InputSubsystem", "[UI][MousePage]")
@@ -185,6 +193,67 @@ TEST_CASE("MousePage: sensitivity readback inverts cleanly", "[UI][MousePage]")
     // (matches the legacy slider math) we want this test to lock in.
     sub.SetMouseSensitivityY(1.0f);
     CHECK(p.RowValue(3) == 33);
+}
+
+TEST_CASE("MousePage: Mouse DPI helpers map index <-> preset", "[UI][MousePage]")
+{
+    // Off when normalization is disabled, regardless of stored DPI.
+    CHECK(MousePage::DpiToIndex(false, 1600) == 0);
+    CHECK(MousePage::DpiToIndex(false, 400) == 0);
+    // Exact presets map to their index (kMouseDpiPresets: 0,400,800,1200,1600,...).
+    CHECK(MousePage::DpiToIndex(true, 400) == 1);
+    CHECK(MousePage::DpiToIndex(true, 1600) == 4);
+    CHECK(MousePage::DpiToIndex(true, 16000) == 9);
+    // A non-preset value snaps to the NEAREST preset for display (5000 → 6400 = idx 7).
+    CHECK(MousePage::DpiToIndex(true, 5000) == 7);
+
+    CHECK(MousePage::IndexToDpi(0) == 0); // Off sentinel
+    CHECK(MousePage::IndexToDpi(1) == 400);
+    CHECK(MousePage::IndexToDpi(4) == 1600);
+    CHECK(MousePage::IndexToDpi(9) == 16000);
+    CHECK(MousePage::IndexToDpi(99) == 0); // out of range → Off
+}
+
+TEST_CASE("MousePage: Mouse DPI row round-trips through the tuning", "[UI][MousePage]")
+{
+    MouseStateSnapshot snap;
+    TestableMousePage page;
+    auto& p = page.Provider();
+    auto& sub = InputSubsystem::Instance();
+
+    // Row 4 is Mouse DPI.  Index 0 = Off → normalization disabled.
+    p.SetRowValue(4, 0);
+    CHECK(sub.GetMouseTuning().dpiNormalize == false);
+    CHECK(p.RowValue(4) == 0);
+
+    // Index 4 = 1600 → normalization on, mouseDpi 1600.
+    p.SetRowValue(4, 4);
+    CHECK(sub.GetMouseTuning().dpiNormalize == true);
+    CHECK(sub.GetMouseTuning().mouseDpi == 1600);
+    CHECK(p.RowValue(4) == 4);
+
+    // Index 9 = 16000.
+    p.SetRowValue(4, 9);
+    CHECK(sub.GetMouseTuning().mouseDpi == 16000);
+    CHECK(p.RowValue(4) == 9);
+}
+
+TEST_CASE("MousePage: a hand-edited non-preset DPI is preserved on read", "[UI][MousePage]")
+{
+    MouseStateSnapshot snap;
+    TestableMousePage page;
+    auto& p = page.Provider();
+    auto& sub = InputSubsystem::Instance();
+
+    // Simulate a value hand-edited into mouse.cfg that isn't a menu preset.
+    sub.GetMouseTuning().dpiNormalize = true;
+    sub.GetMouseTuning().mouseDpi = 5000;
+
+    // Reading the row for display returns the nearest preset index...
+    CHECK(p.RowValue(4) == 7); // nearest to 5000 is 6400
+    // ...but must NOT mutate the stored custom value.
+    CHECK(sub.GetMouseTuning().mouseDpi == 5000);
+    CHECK(sub.GetMouseTuning().dpiNormalize == true);
 }
 
 TEST_CASE("MousePage: sensitivity helpers clamp the supported 0.5x..2.0x range", "[UI][MousePage]")

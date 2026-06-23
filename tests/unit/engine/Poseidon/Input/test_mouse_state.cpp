@@ -732,3 +732,193 @@ TEST_CASE("MouseState: FlushAndReset also clears raw deltas", "[input][mouse]")
     REQUIRE(ms.rawDeltaX == 0.0f);
     REQUIRE(ms.rawDeltaY == 0.0f);
 }
+
+// --- MouseTuning: pure helpers ---
+
+TEST_CASE("MouseTuning: defaults reproduce classic feel", "[input][mouse][tuning]")
+{
+    MouseTuning t;
+    REQUIRE(t.baseScale == 1.5f); // == the old hard-coded kSensitivityScale
+    REQUIRE_FALSE(t.dpiNormalize);
+    REQUIRE(t.DpiFactor() == 1.0f);
+    REQUIRE(t.smoothing == 0.0f);
+    REQUIRE_FALSE(t.acceleration);
+    REQUIRE(t.menuCursorScale == 1.0f);
+    REQUIRE_FALSE(t.extendedRange);
+    REQUIRE(t.SensMin() == 0.5f);
+    REQUIRE(t.SensMax() == 2.0f);
+}
+
+TEST_CASE("MouseTuning: DpiFactor normalizes against reference DPI", "[input][mouse][tuning]")
+{
+    MouseTuning t;
+    t.dpiNormalize = true;
+    t.referenceDpi = 800;
+
+    t.mouseDpi = 800;
+    REQUIRE(t.DpiFactor() == Catch::Approx(1.0f));
+    t.mouseDpi = 1600;
+    REQUIRE(t.DpiFactor() == Catch::Approx(0.5f)); // 2x DPI → half speed
+    t.mouseDpi = 12000;
+    REQUIRE(t.DpiFactor() == Catch::Approx(800.0f / 12000.0f));
+
+    // Disabled → always 1.0 regardless of DPI.
+    t.dpiNormalize = false;
+    REQUIRE(t.DpiFactor() == 1.0f);
+}
+
+TEST_CASE("MouseTuning: extendedRange widens the sensitivity band", "[input][mouse][tuning]")
+{
+    MouseTuning t;
+    t.extendedRange = true;
+    REQUIRE(t.SensMin() == 0.05f);
+    REQUIRE(t.SensMax() == 3.0f);
+}
+
+TEST_CASE("MouseTuning: Normalize clamps every field", "[input][mouse][tuning]")
+{
+    MouseTuning t;
+    t.baseScale = 99.0f;
+    t.mouseDpi = 0;
+    t.referenceDpi = 999999;
+    t.smoothing = 5.0f;
+    t.accelExponent = 9.0f;
+    t.menuCursorScale = 99.0f;
+    REQUIRE(t.Normalize());
+    REQUIRE(t.baseScale == 3.0f);
+    REQUIRE(t.mouseDpi == 100);
+    REQUIRE(t.referenceDpi == 32000);
+    REQUIRE(t.smoothing == 0.95f);
+    REQUIRE(t.accelExponent == 2.0f);
+    REQUIRE(t.menuCursorScale == 4.0f);
+
+    // Already-in-range is a no-op.
+    MouseTuning ok;
+    REQUIRE_FALSE(ok.Normalize());
+}
+
+TEST_CASE("MouseTuning: referenceDpi defaults to the validated-comfortable 1600", "[input][mouse][tuning]")
+{
+    MouseTuning t;
+    REQUIRE(t.referenceDpi == 1600);
+    REQUIRE(t.mouseDpi == 1600);
+    // At mouseDpi == referenceDpi the factor is 1.0, so turning normalization on
+    // without changing DPI is identical to Off (Off ≡ 1600).
+    t.dpiNormalize = true;
+    REQUIRE(t.DpiFactor() == Catch::Approx(1.0f));
+}
+
+TEST_CASE("MouseTuning: DPI presets stay within the sensitivity coverage span", "[input][mouse][tuning]")
+{
+    // Sensitivity spans 0.5..2.0 → a 4x range.  For there to be no unreachable
+    // "dead zone" between two adjacent DPI presets, their ratio must be ≤ 4 so
+    // the sensitivity slider can always bridge the gap.
+    REQUIRE(kMouseDpiPresets[0] == 0); // index 0 is "Off"
+    REQUIRE(kMouseDpiPresetCount >= 2);
+    // Labels must line up 1:1 with the preset values (the stepper indexes both).
+    REQUIRE(static_cast<int>(sizeof(kMouseDpiLabels) / sizeof(kMouseDpiLabels[0])) == kMouseDpiPresetCount);
+    for (int i = 2; i < kMouseDpiPresetCount; ++i) // ratios between real DPI presets only
+    {
+        REQUIRE(kMouseDpiPresets[i] > kMouseDpiPresets[i - 1]); // strictly increasing
+        const float ratio = static_cast<float>(kMouseDpiPresets[i]) / static_cast<float>(kMouseDpiPresets[i - 1]);
+        REQUIRE(ratio <= 4.0f);
+    }
+}
+
+// --- MouseState: tuning applied in Update ---
+
+TEST_CASE("MouseState: baseScale replaces the legacy 1.5 constant", "[input][mouse][tuning]")
+{
+    MouseState ms;
+    MouseState::CursorAccum cursor;
+    ms.tuning.baseScale = 3.0f;
+
+    ms.BufferMotion(10.0f, 0.0f);
+    ms.Update(cursor, 0, false, UITime(), nullptr);
+
+    REQUIRE(ms.deltaX == Catch::Approx(10.0f * 1.0f * 3.0f));
+}
+
+TEST_CASE("MouseState: DPI normalization scales the delta", "[input][mouse][tuning]")
+{
+    MouseState ms;
+    MouseState::CursorAccum cursor;
+    ms.tuning.dpiNormalize = true;
+    ms.tuning.mouseDpi = 1600;
+    ms.tuning.referenceDpi = 800;
+
+    ms.BufferMotion(10.0f, 0.0f);
+    ms.Update(cursor, 0, false, UITime(), nullptr);
+
+    // 10 * sens(1) * baseScale(1.5) * dpiFactor(0.5)
+    REQUIRE(ms.deltaX == Catch::Approx(10.0f * 1.5f * 0.5f));
+}
+
+TEST_CASE("MouseState: smoothing low-passes motion across frames", "[input][mouse][tuning]")
+{
+    MouseState ms;
+    MouseState::CursorAccum cursor;
+    ms.tuning.smoothing = 0.5f; // alpha = 0.5
+
+    ms.BufferMotion(10.0f, 0.0f);
+    ms.Update(cursor, 0, false, UITime(), nullptr);
+    const float frame1 = ms.deltaX; // smoothX = 5 → 5 * 1.5 = 7.5
+
+    REQUIRE(frame1 == Catch::Approx(5.0f * 1.5f));
+    REQUIRE(frame1 < 10.0f * 1.5f); // less than the un-smoothed value
+
+    ms.BufferMotion(10.0f, 0.0f);
+    ms.Update(cursor, 0, false, UITime(), nullptr);
+    const float frame2 = ms.deltaX; // smoothX = 7.5 → 11.25
+
+    REQUIRE(frame2 == Catch::Approx(7.5f * 1.5f));
+    REQUIRE(frame2 > frame1); // converging toward the steady input
+}
+
+TEST_CASE("MouseState: acceleration amplifies motion, exponent 1 is a no-op", "[input][mouse][tuning]")
+{
+    MouseState::CursorAccum cursor;
+
+    // Exponent 1 (or disabled) → identical to linear.
+    MouseState linear;
+    linear.tuning.acceleration = true;
+    linear.tuning.accelExponent = 1.0f;
+    linear.BufferMotion(10.0f, 0.0f);
+    linear.Update(cursor, 0, false, UITime(), nullptr);
+    REQUIRE(linear.deltaX == Catch::Approx(10.0f * 1.5f));
+
+    // Exponent > 1 → faster-than-linear for the same input.
+    MouseState accel;
+    accel.tuning.acceleration = true;
+    accel.tuning.accelExponent = 2.0f;
+    MouseState::CursorAccum cursor2;
+    accel.BufferMotion(10.0f, 0.0f);
+    accel.Update(cursor2, 0, false, UITime(), nullptr);
+    REQUIRE(accel.deltaX > 10.0f * 1.5f);
+}
+
+TEST_CASE("MouseState: menuCursorScale decouples cursor from aim", "[input][mouse][tuning]")
+{
+    MouseState ms;
+    MouseState::CursorAccum cursor;
+    ms.tuning.menuCursorScale = 2.0f;
+
+    ms.BufferMotion(10.0f, 0.0f); // small move, below the per-frame clamp
+    ms.Update(cursor, 0, false, UITime(), nullptr);
+
+    // Aim uses the unscaled move; the cursor gets menuCursorScale applied.
+    REQUIRE(cursor.aimDeltaX > 0.0f);
+    REQUIRE(cursor.cursorX == Catch::Approx(2.0f * cursor.aimDeltaX));
+}
+
+TEST_CASE("MouseState: default tuning keeps cursor and aim identical", "[input][mouse][tuning]")
+{
+    MouseState ms;
+    MouseState::CursorAccum cursor;
+
+    ms.BufferMotion(10.0f, 0.0f);
+    ms.Update(cursor, 0, false, UITime(), nullptr);
+
+    // menuCursorScale defaults to 1.0 → classic shared movement.
+    REQUIRE(cursor.cursorX == Catch::Approx(cursor.aimDeltaX));
+}

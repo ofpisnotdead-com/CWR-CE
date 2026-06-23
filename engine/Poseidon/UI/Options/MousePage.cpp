@@ -36,6 +36,35 @@ float MousePage::PercentToSensitivity(int percent)
     return 0.5f + (std::clamp(percent, 0, 100) / 100.0f) * 1.5f;
 }
 
+int MousePage::DpiToIndex(bool normalize, int mouseDpi)
+{
+    if (!normalize)
+        return 0; // Off
+    // Nearest preset, for display only — a hand-edited non-preset mouseDpi maps to
+    // the closest entry but isn't written back unless the user changes the stepper.
+    int best = 1;
+    int bestDiff = 1 << 30;
+    for (int i = 1; i < kMouseDpiPresetCount; ++i)
+    {
+        int d = mouseDpi - kMouseDpiPresets[i];
+        if (d < 0)
+            d = -d;
+        if (d < bestDiff)
+        {
+            bestDiff = d;
+            best = i;
+        }
+    }
+    return best;
+}
+
+int MousePage::IndexToDpi(int index)
+{
+    if (index <= 0 || index >= kMouseDpiPresetCount)
+        return 0; // Off sentinel
+    return kMouseDpiPresets[index];
+}
+
 void MousePage::Mount(OptionsShell& shell)
 {
     auto& sub = InputSubsystem::Instance();
@@ -43,6 +72,8 @@ void MousePage::Mount(OptionsShell& shell)
     m_savedButtonsReversed = sub.IsMouseButtonsReversed();
     m_savedSensitivityX = sub.GetMouseSensitivityX();
     m_savedSensitivityY = sub.GetMouseSensitivityY();
+    m_savedDpiNormalize = sub.GetMouseTuning().dpiNormalize;
+    m_savedMouseDpi = sub.GetMouseTuning().mouseDpi;
     ScrollListPage::Mount(shell);
 }
 
@@ -75,6 +106,8 @@ const char* MousePage::MouseProvider::RowLabel(int row) const
             return LocalizeString("STR_DISP_OPT_MOUSE_SENSITIVITY_X");
         case kRowSensitivityY:
             return LocalizeString("STR_DISP_OPT_MOUSE_SENSITIVITY_Y");
+        case kRowMouseDpi:
+            return LocalizeStringWithFallback("STR_DISP_OPT_MOUSE_DPI", "Mouse DPI");
         default:
             return "";
     }
@@ -92,6 +125,10 @@ const char* MousePage::MouseProvider::RowDescription(int row) const
             return LocalizeString("STR_DISP_OPT_MOUSE_SENSITIVITY_X_DESC");
         case kRowSensitivityY:
             return LocalizeString("STR_DISP_OPT_MOUSE_SENSITIVITY_Y_DESC");
+        case kRowMouseDpi:
+            return LocalizeStringWithFallback(
+                "STR_DISP_OPT_MOUSE_DPI_DESC",
+                "Set this to your mouse's DPI (or close). Fine-tune with sensitivity for a smoother feel.");
         default:
             return "";
     }
@@ -110,6 +147,8 @@ OptionsScrollList::RowDef MousePage::MouseProvider::RowFor(int row) const
             return {522, nullptr, -1};
         case kRowSensitivityY:
             return {532, nullptr, -1};
+        case kRowMouseDpi:
+            return {542, kMouseDpiLabels, kMouseDpiPresetCount};
         default:
             return {-1, nullptr, 0};
     }
@@ -136,6 +175,11 @@ int MousePage::MouseProvider::RowValue(int row) const
             return MousePage::SensitivityToPercent(sub.GetMouseSensitivityX());
         case kRowSensitivityY:
             return MousePage::SensitivityToPercent(sub.GetMouseSensitivityY());
+        case kRowMouseDpi:
+        {
+            const auto& t = sub.GetMouseTuning();
+            return MousePage::DpiToIndex(t.dpiNormalize, t.mouseDpi);
+        }
         default:
             return 0;
     }
@@ -162,6 +206,20 @@ void MousePage::MouseProvider::SetRowValue(int row, int value)
         case kRowSensitivityY:
             sub.SetMouseSensitivityY(MousePage::PercentToSensitivity(value));
             return;
+        case kRowMouseDpi:
+        {
+            auto& t = sub.GetMouseTuning();
+            if (value <= 0 || value >= kMouseDpiPresetCount)
+            {
+                t.dpiNormalize = false; // "Off"
+            }
+            else
+            {
+                t.dpiNormalize = true;
+                t.mouseDpi = kMouseDpiPresets[value];
+            }
+            return;
+        }
     }
 }
 

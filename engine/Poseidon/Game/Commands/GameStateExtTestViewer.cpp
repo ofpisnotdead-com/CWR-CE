@@ -163,7 +163,7 @@ GameValue TriMouseDelta(const GameState* /*state*/, GameValuePar arg)
     // pump's reset (deltaX = bufDeltaX_ * sensitivity).  Sensitivity
     // is divided out so dx=200 yields ~200 px of effective drag,
     // matching what production code sees from a real SDL motion event.
-    constexpr float kSens = 1.5f; // matches kSensitivityScale in MouseState.cpp
+    constexpr float kSens = 1.5f; // matches the default MouseTuning::baseScale
     GInput.mouse.TestInjectMotion(dx / kSens, dy / kSens);
     LOG_INFO(Core, "[tri] triMouseDelta dx={} dy={}", dx, dy);
     return GameValue("OK");

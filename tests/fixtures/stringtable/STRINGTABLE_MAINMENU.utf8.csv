@@ -43,3 +43,5 @@ STR_DISP_OPT_MOUSE_REVERSE_Y_DESC,Invert vertical mouse motion - pushing the mou
 STR_DISP_OPT_MOUSE_SWAP_BUTTONS_DESC,Swap left and right mouse buttons.
 STR_DISP_OPT_MOUSE_SENSITIVITY_X_DESC,Horizontal mouse sensitivity. Range 0.5x to 2.0x.
 STR_DISP_OPT_MOUSE_SENSITIVITY_Y_DESC,Vertical mouse sensitivity. Range 0.5x to 2.0x.
+STR_DISP_OPT_MOUSE_DPI,Mouse DPI
+STR_DISP_OPT_MOUSE_DPI_DESC,Set this to your mouse's DPI (or close). Fine-tune with sensitivity for a smoother feel.
