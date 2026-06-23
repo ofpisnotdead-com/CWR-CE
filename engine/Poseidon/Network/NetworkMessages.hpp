@@ -339,46 +339,19 @@ DECLARE_NET_MESSAGE(RadioChat, RADIO_CHAT_MSG)
 
 DECLARE_NET_MESSAGE(RadioChatWave, RADIO_CHAT_WAVE_MSG)
 
-// Set Voice Over Net channel message
-struct SetVoiceChannelMessage : public NetworkSimpleObject
-{
-	// chat channel
-	int channel;
-	// receiving units
-	RefArray<NetworkObject> units;
+#define SET_VOICE_CHANNEL_MSG(XX) \
+	XX(int, channel, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Radio channel"), IdxTransfer) \
+	XX(RefArray<NetworkObject>, units, NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("List of receiving units"), IdxTransferRefs)
 
-	SetVoiceChannelMessage(int ch) {channel = ch;}
-	SetVoiceChannelMessage(int ch, RefArray<NetworkObject> &u)
-	{channel = ch; units = u;}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTSetVoiceChannel;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(SetVoiceChannel, SET_VOICE_CHANNEL_MSG)
 
-// Assign player speaking on Direct channel to sound source object
-struct SetSpeakerMessage : public NetworkSimpleObject
-{
-	// DirectPlay ID of speaking player
-	int player;
-	// is player currently speaking
-	bool on;
-	// sound source object
-	NetworkId object;
+#define SET_SPEAKER_MSG(XX) \
+	XX(int, player, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Client (player) ID of speaking player"), IdxTransfer) \
+	XX(bool, on, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Turn on / off direct speaking"), IdxTransfer) \
+	XX(int, creator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of speaking unit"), IdxTransfer) \
+	XX(int, id, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of speaking unit"), IdxTransfer)
 
-	SetSpeakerMessage() {player = 0; on = false;}
-	SetSpeakerMessage(int pl, bool o, NetworkId &obj) {player = pl; on = o; object = obj;}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTSetSpeaker;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(SetSpeaker, SET_SPEAKER_MSG)
 
 // Select person as player message
 struct SelectPlayerMessage : public NetworkSimpleObject

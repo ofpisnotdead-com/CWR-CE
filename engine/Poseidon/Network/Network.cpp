@@ -993,88 +993,9 @@ DEFINE_NET_MESSAGE(RadioChat, RADIO_CHAT_MSG)
 
 DEFINE_NET_MESSAGE(RadioChatWave, RADIO_CHAT_WAVE_MSG)
 
-IndicesSetVoiceChannel::IndicesSetVoiceChannel()
-{
-    channel = -1;
-    units = -1;
-}
+DEFINE_NET_MESSAGE(SetVoiceChannel, SET_VOICE_CHANNEL_MSG)
 
-void IndicesSetVoiceChannel::Scan(NetworkMessageFormatBase* format){SCAN(channel) SCAN(units)}
-
-// Create network message indices for SetVoiceChannelMessage class
-NetworkMessageIndices* GetIndicesSetVoiceChannel()
-{
-    return new IndicesSetVoiceChannel();
-}
-
-NetworkMessageFormat& SetVoiceChannelMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("channel", NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Radio channel"));
-    format.Add("units", NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("List of receiving units"));
-    return format;
-}
-
-TMError SetVoiceChannelMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesSetVoiceChannel*>(ctx.GetIndices()))
-    const IndicesSetVoiceChannel* indices = static_cast<const IndicesSetVoiceChannel*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->channel, channel))
-    TMCHECK(ctx.IdxTransferRefs(indices->units, units))
-    return TMOK;
-}
-
-// network message indices for SetSpeakerMessage class
-class IndicesSetSpeaker : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int player;
-    int on;
-    int creator;
-    int id;
-
-    IndicesSetSpeaker();
-    NetworkMessageIndices* Clone() const override { return new IndicesSetSpeaker; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesSetSpeaker::IndicesSetSpeaker()
-{
-    player = -1;
-    on = -1;
-    creator = -1;
-    id = -1;
-}
-
-void IndicesSetSpeaker::Scan(NetworkMessageFormatBase* format){SCAN(player) SCAN(on) SCAN(creator) SCAN(id)}
-
-// Create network message indices for SetSpeakerMessage class
-NetworkMessageIndices* GetIndicesSetSpeaker()
-{
-    return new IndicesSetSpeaker();
-}
-
-NetworkMessageFormat& SetSpeakerMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("player", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Client (player) ID of speaking player"));
-    format.Add("on", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Turn on / off direct speaking"));
-    format.Add("creator", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of speaking unit"));
-    format.Add("id", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID of speaking unit"));
-    return format;
-}
-
-TMError SetSpeakerMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesSetSpeaker*>(ctx.GetIndices()))
-    const IndicesSetSpeaker* indices = static_cast<const IndicesSetSpeaker*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->player, player))
-    TMCHECK(ctx.IdxTransfer(indices->on, on))
-    TMCHECK(ctx.IdxTransfer(indices->creator, object.creator))
-    TMCHECK(ctx.IdxTransfer(indices->id, object.id))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(SetSpeaker, SET_SPEAKER_MSG)
 
 // network message indices for SelectPlayerMessage class
 class IndicesSelectPlayer : public NetworkMessageIndices

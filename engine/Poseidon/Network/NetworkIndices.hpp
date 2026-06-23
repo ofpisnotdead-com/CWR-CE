@@ -410,19 +410,6 @@ public:
 	void Scan(NetworkMessageFormatBase *format) override;
 };
 
-// network message indices for SetVoiceChannelMessage class
-class IndicesSetVoiceChannel : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int channel;
-	int units;
-
-	IndicesSetVoiceChannel();
-	NetworkMessageIndices *Clone() const override {return new IndicesSetVoiceChannel;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
 // network message indices for MarkerCreateMessage class
 class IndicesMarkerCreate : public NetworkMessageIndices
 {
