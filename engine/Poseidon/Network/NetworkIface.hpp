@@ -6,7 +6,6 @@
 #include <Poseidon/Foundation/Strings/RString.hpp>
 #include <Poseidon/Foundation/Types/Pointers.hpp>
 #include <Poseidon/Foundation/Containers/StaticArray.hpp>
-#include <Poseidon/Foundation/Time/Time.hpp>
 #include <Poseidon/AI/VehicleAI.hpp>
 
 namespace Poseidon { class Command; }
@@ -27,8 +26,6 @@ namespace Poseidon { class Command; }
 #else
 #define DOC_MSG(text) ""
 #endif
-
-DECL_ENUM(NetworkMessageErrorType)
 
 struct MissionHeader;
 struct PlayerRole;

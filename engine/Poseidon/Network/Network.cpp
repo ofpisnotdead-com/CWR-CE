@@ -349,27 +349,10 @@ RString CreateMPMissionBank(RString filename, RString island)
     return str;
 }
 
-NetworkMessageType NetworkSimpleObject::GetNMType(NetworkMessageClass cls) const
-{
-    return NMTNone;
-}
+DEFINE_NETWORK_OBJECT_SIMPLE(NetworkSimpleObject, None)
 
-IndicesNetworkObject::IndicesNetworkObject()
-{
-    objectCreator = -1;
-    objectId = -1;
-    objectPosition = -1;
-    guaranteed = -1;
-}
-
-void IndicesNetworkObject::Scan(NetworkMessageFormatBase* format){SCAN(objectCreator) SCAN(objectId)
-                                                                      SCAN(objectPosition) SCAN(guaranteed)}
-
-// Create network message indices for NetworkObject class
-NetworkMessageIndices* GetIndicesNetworkObject()
-{
-    return new IndicesNetworkObject();
-}
+DEFINE_NET_INDICES(NetworkObject, NETWORK_OBJECT_MSG)
+DEFINE_GET_INDICES(NetworkObject)
 
 NetworkObject::NetworkObject()
 {
@@ -395,12 +378,7 @@ bool NetworkObject::CheckPredictionFrozen() const
 
 NetworkMessageFormat& NetworkObject::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("objectCreator", NDTInteger, NCTNone, DEFVALUE(int, 0),
-               DOC_MSG("ID of client, which created this object"));
-    format.Add("objectId", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unique (for client) ID of object"));
-    format.Add("objectPosition", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Current position of object"));
-    format.Add("guaranteed", NDTBool, NCTNone, DEFVALUE(bool, false),
-               DOC_MSG("Message is guaranteed (must be delivered)"));
+    NETWORK_OBJECT_MSG(MSG_FORMAT)
     return format;
 }
 

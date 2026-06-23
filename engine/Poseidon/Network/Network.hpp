@@ -3,42 +3,6 @@
 #include <Poseidon/Network/NetworkIface.hpp>
 #include <Poseidon/Network/NetworkMsgFormat.hpp>
 
-struct NetworkUpdateInfo;
-struct NetworkObjectInfo;
-struct NetworkPlayerObjectInfo;
-
-// Network message (internal representation)
-struct NetworkMessage : public RefCount
-{
-	// network message header
-	// time when message was sent
-	Poseidon::Foundation::Time time;
-	// size of raw (serialized, compressed) message - not transferred, used for statistics
-	int size;
-
-	// network message body
-	// transferred values (message body)
-	AutoArray<RefNetworkData> values;
-
-	// Temporary pointer to update info - used for update object info whenever message is sent
-	NetworkUpdateInfo *objectUpdateInfo;
-
-	// Temporary pointer (OnSendComplete) - used on server only
-	NetworkObjectInfo *objectServerInfo;
-
-	// Temporary pointer (OnSendComplete) - used on server only
-	NetworkPlayerObjectInfo *objectPlayerInfo;
-
-	NetworkMessage()
-	{
-		size = 0;
-		objectUpdateInfo = nullptr;
-		objectServerInfo= nullptr;
-		objectPlayerInfo= nullptr;
-	}
-	~NetworkMessage() override {}
-};
-
 #define TRANSFER_FORMAT \
 	if (index < 0) return TMNotFound; \
 	NetworkMessageFormatItem &item = _format->GetItem(index); \

@@ -230,8 +230,7 @@ REGISTER_NDT(AutoArray<RStringIB>,NDTStringArray)
 REGISTER_NDT(StaticArrayAuto<float>,NDTFloatArray)
 
 // Types of items compression
-enum NetworkCompressionType
-{
+DEFINE_ENUM_BEG(NetworkCompressionType)
 	NCTNone,
 	NCTSmallUnsigned, // special compression for unsigned int
 	NCTSmallSigned, // special compression for signed int
@@ -252,15 +251,7 @@ enum NetworkCompressionType
 	NCTVectorPosition,
 	// matrix orienttaion - matrix is assumed orthogonal
 	NCTMatrixOrientation,
-};
-
-struct NetworkMessageFormatItem;
-
-// Interface for class encapsulates value of basic message items types
-struct NetworkData : public RefCount
-{
-	// all fucntionality moved to RefNetworkData
-};
+DEFINE_ENUM_END(NetworkCompressionType)
 
 // Class encapsulates value of basic message items types
 template <class Type>
@@ -300,26 +291,6 @@ DEFINE_ENUM_BEG(NetworkMessageErrorType)
 	// difference of derivations (role of time is incorporated)
 	ET_DER_DIF,
 DEFINE_ENUM_END(NetworkMessageErrorType)
-
-// Class intended to optimization Ref<NetworkData> pointer overhead
-// note: No optimizaton implemented yet
-// Rules: classes derived from RefNetworkData
-// must have same size as RefNetworkData. No data members and no virtual functions
-// can be added, because RefNetworkData is used for direct assignement
-// using operator =.
-
-class RefNetworkData
-{
-	protected:
-	Ref<NetworkData> _data;
-
-	public:
-
-	// Calculate difference from other item with the same type
-	float CalculateError(NetworkMessageErrorType type, const RefNetworkData &value2, NetworkMessageFormatItem &item, float dt) const;
-	// Calculate size of serialized and compressed value
-	int CalculateSize(NetworkCompressionType compression, const NetworkMessageFormatItem &item) const;
-};
 
 class RefNetworkDataNull: public RefNetworkData
 {
