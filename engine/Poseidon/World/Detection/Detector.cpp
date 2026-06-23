@@ -1879,41 +1879,18 @@ NetworkMessageType FlagCarrier::GetNMType(NetworkMessageClass cls) const
 namespace Poseidon
 {
 
-class IndicesUpdateFlag : public IndicesUpdateVehicleSupply
-{
-    typedef IndicesUpdateVehicleSupply base;
+#define UPDATE_FLAG_MSG(XX) \
+	XX(OLink<Person>, flagOwner, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Flag owner"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(RString, flagTexture, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Flag texture"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, flagSide, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, TSideUnknown), DOC_MSG("Flag side"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
 
-  public:
-    int flagOwner;
-    int flagTexture;
-    int flagSide;
-
-    IndicesUpdateFlag();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateFlag; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateFlag::IndicesUpdateFlag()
-{
-    flagOwner = -1;
-    flagTexture = -1;
-    flagSide = -1;
-}
-
-void IndicesUpdateFlag::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(flagOwner)
-    SCAN(flagTexture)
-    SCAN(flagSide)
-}
+DECLARE_NET_INDICES_EX_ERR(UpdateFlag, UpdateVehicleSupply, UPDATE_FLAG_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdateFlag, UpdateVehicleSupply, UPDATE_FLAG_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateFlag()
-{
-    return new ::Poseidon::IndicesUpdateFlag();
-}
+
+DEFINE_GET_INDICES(UpdateFlag)
+
 namespace Poseidon
 {
 
@@ -1923,11 +1900,8 @@ NetworkMessageFormat& FlagCarrier::CreateFormat(NetworkMessageClass cls, Network
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-            format.Add("flagOwner", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Flag owner"), ET_NOT_EQUAL, ERR_COEF_MODE);
-            format.Add("flagTexture", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Flag texture"), ET_NOT_EQUAL,
-                       ERR_COEF_MODE);
-            format.Add("flagSide", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, TSideUnknown), DOC_MSG("Flag side"),
-                       ET_NOT_EQUAL, ERR_COEF_MODE);
+            UPDATE_FLAG_MSG(MSG_FORMAT_ERR)
+
             break;
         default:
             base::CreateFormat(cls, format);
