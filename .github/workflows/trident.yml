@@ -140,8 +140,41 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path $env:GAME_DATA_DIR
+          $steamExit = 0
           steamcmd +@sSteamCmdForcePlatformType windows +force_install_dir "$env:GAME_DATA_DIR" +login anonymous +app_update $env:STEAM_APP_ID validate +quit
+          if ($LASTEXITCODE -ne 0) {
+            $steamExit = $LASTEXITCODE
+            Write-Warning "SteamCMD app_update failed with exit code $steamExit"
+          }
+          $files = @(Get-ChildItem -LiteralPath $env:GAME_DATA_DIR -Recurse -File -ErrorAction SilentlyContinue)
+          $totalBytes = ($files | Measure-Object -Property Length -Sum).Sum
+          Write-Host "Steam content directory: $env:GAME_DATA_DIR"
+          Write-Host "Steam content file count: $($files.Count)"
+          Write-Host "Steam content total bytes: $totalBytes"
+          foreach ($required in @(
+            'BIN/RESOURCE.BIN',
+            'BIN/STRINGTABLE_MAINMENU.utf8.csv',
+            'BIN/optionsShell.hpp',
+            'DTA/Data.pbo',
+            'DTA/Fonts.pbo',
+            'fonts/cwr_title.ttf',
+            'Missions/Demo.Demo/mission.sqm'
+          )) {
+            $path = Join-Path $env:GAME_DATA_DIR $required
+            Write-Host "Steam required content $required = $(Test-Path -LiteralPath $path)"
+          }
+          $root = (Resolve-Path -LiteralPath $env:GAME_DATA_DIR).Path
+          $files |
+            Sort-Object FullName |
+            Select-Object -First 120 |
+            ForEach-Object {
+              $relative = $_.FullName.Substring($root.Length).TrimStart([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+              Write-Host ("Steam file {0} ({1} bytes)" -f $relative, $_.Length)
+            }
           Get-ChildItem -LiteralPath $env:GAME_DATA_DIR -Recurse -Include *.exe,*.dll,*.pdb -File | Remove-Item -Force
+          if ($steamExit -ne 0) {
+            exit $steamExit
+          }
 
       - name: Prepare fixture game data
         shell: pwsh
