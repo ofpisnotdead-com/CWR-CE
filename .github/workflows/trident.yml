@@ -169,11 +169,28 @@ jobs:
           ) | Set-Content -LiteralPath .trident.env -Encoding utf8
           Get-Content -LiteralPath .trident.env
 
+      - name: Check game startup
+        shell: pwsh
+        env:
+          OFPR_GAME_DIR: ${{ github.workspace }}/${{ matrix.dist_dir }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exeName = if ($env:RUNNER_OS -eq 'Windows') { 'PoseidonGame.exe' } else { 'PoseidonGame' }
+          $gameExe = Join-Path $env:OFPR_GAME_DIR $exeName
+          Get-ChildItem -LiteralPath $env:OFPR_GAME_DIR -Force | Format-Table -AutoSize Name,Length,LastWriteTime
+          $output = & $gameExe -C $env:TRIDENT_DATA_DIR --window --check --log-format jsonl --render dummy --nosound 2>&1
+          $exitCode = $LASTEXITCODE
+          $output | ForEach-Object { Write-Host $_ }
+          if ($exitCode -ne 0) {
+            throw "Game startup check failed with exit code $exitCode"
+          }
+
       - name: Run Trident smoke test
         shell: pwsh
         env:
           OFPR_GAME_DIR: ${{ github.workspace }}/${{ matrix.dist_dir }}
           TRI_OUTPUT_DIR: ${{ github.workspace }}/trident-output
+          RUST_LOG: debug
         run: |
           $ErrorActionPreference = 'Stop'
           $commonArgs = @(
