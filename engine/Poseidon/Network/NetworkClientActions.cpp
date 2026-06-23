@@ -2155,18 +2155,18 @@ void NetworkClient::TransferFileToServer(RString dest, RString source)
     f.AutoOpen(source);
 
     TransferFileToServerMessage msg;
-    msg.path = dest;
-    msg.totSize = f.GetBuffer()->GetSize();
-    msg.totSegments = (msg.totSize + maxSegmentSize - 1) / maxSegmentSize;
-    msg.offset = 0;
-    for (int i = 0; i < msg.totSegments; i++)
+    msg._path = dest;
+    msg._totSize = f.GetBuffer()->GetSize();
+    msg._totSegments = (msg._totSize + maxSegmentSize - 1) / maxSegmentSize;
+    msg._offset = 0;
+    for (int i = 0; i < msg._totSegments; i++)
     {
-        msg.curSegment = i;
-        int size = std::min(maxSegmentSize, msg.totSize - msg.offset);
-        msg.data.Resize(size);
-        memcpy(msg.data.Data(), f.GetBuffer()->GetData() + msg.offset, size);
+        msg._curSegment = i;
+        int size = std::min(maxSegmentSize, msg._totSize - msg._offset);
+        msg._data.Resize(size);
+        memcpy(msg._data.Data(), f.GetBuffer()->GetData() + msg._offset, size);
         SendMsg(&msg, NMFGuaranteed);
-        msg.offset += size;
+        msg._offset += size;
     }
 }
 
