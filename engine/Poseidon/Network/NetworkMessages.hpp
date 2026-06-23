@@ -393,26 +393,13 @@ DECLARE_NET_MESSAGE(SoundState, SOUND_STATE_MSG)
 
 DECLARE_NET_MESSAGE(DeleteObject, DELETE_OBJECT_MSG)
 
-// Message announcing destroying of command
-struct DeleteCommandMessage : public NetworkSimpleObject
-{
-	// command to destroy
-	NetworkId object;
-	// subgroup that owns command
-	AISubgroup *subgrp;
-	// index of command in subgroup
-	int index;
+#define DELETE_COMMAND_MSG(XX) \
+	XX(int, creator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Id of command to destroy"), IdxTransfer) \
+	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Id of command to destroy"), IdxTransfer) \
+	XX(OLink<AISubgroup>, subgrp, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Subgroup that owns command"), IdxTransferRef) \
+	XX(int, index, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Index of command in subgroup"), IdxTransfer)
 
-	DeleteCommandMessage() {subgrp = nullptr; index = -1;}
-	DeleteCommandMessage(AISubgroup *s, int i, NetworkId obj) {subgrp = s; index = i; object = obj;}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTDeleteCommand;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(DeleteCommand, DELETE_COMMAND_MSG)
 
 // Message for ask object owner for damage of object
 struct AskForDammageMessage : public NetworkSimpleObject
