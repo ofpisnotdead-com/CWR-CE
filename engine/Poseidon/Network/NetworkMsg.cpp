@@ -281,44 +281,19 @@ int NetworkMessageFormatBase::FindIndex(const char* name) const
     }
 }
 
-// network message indices for NetworkMessageFormatItem class
-class IndicesMsgFormatItem : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int name;
-    int type;
-    int compression;
-    int defValue;
+#define MSG_FORMAT_ITEM_MSG(XX) \
+	XX(RString, name, NDTString, NCTDefault, ND_NULL, DOC_MSG("Item name"), IdxTransfer) \
+	XX(int, type, NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Item type"), IdxTransfer) \
+	XX(int, compression, NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Item compression"), IdxTransfer) \
+	XX(RefNetworkData, defValue, NDTData, NCTNone, ND_NULL, DOC_MSG("Default value of item"), IdxTransfer)
 
-    IndicesMsgFormatItem();
-    NetworkMessageIndices* Clone() const override { return new IndicesMsgFormatItem; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesMsgFormatItem::IndicesMsgFormatItem()
-{
-    name = -1;
-    type = -1;
-    compression = -1;
-    defValue = -1;
-}
-
-void IndicesMsgFormatItem::Scan(NetworkMessageFormatBase* format){SCAN(name) SCAN(type) SCAN(compression)
-                                                                      SCAN(defValue)}
-
-// Create network message indices for NetworkMessageFormatItem class
-NetworkMessageIndices* GetIndicesMsgFormatItem()
-{
-    return new IndicesMsgFormatItem();
-}
+DECLARE_NET_INDICES(MsgFormatItem, MSG_FORMAT_ITEM_MSG)
+DEFINE_NET_INDICES(MsgFormatItem, MSG_FORMAT_ITEM_MSG)
+DEFINE_GET_INDICES(MsgFormatItem)
 
 NetworkMessageFormat& NetworkMessageFormatItem::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("name", NDTString, NCTDefault, ND_NULL, DOC_MSG("Item name"));
-    format.Add("type", NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Item type"));
-    format.Add("compression", NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Item compression"));
-    format.Add("defValue", NDTData, NCTNone, ND_NULL, DOC_MSG("Default value of item"));
+    MSG_FORMAT_ITEM_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -334,32 +309,13 @@ TMError NetworkMessageFormatItem::TransferMsg(NetworkMessageContext& ctx)
     return TMOK;
 }
 
-// network message indices for NetworkMessageFormatBase class
-class IndicesMsgFormat : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int index;
-    int items;
+#define MSG_FORMAT_MSG(XX) \
+	XX(int, index, NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Index of message type"), IdxTransfer) \
+	XX(AutoArray<NetworkMessageFormatItem>, items, NDTObjectArray, NCTNone, DEFVALUE_MSG(NMTMsgFormatItem), DOC_MSG("List of items"), IdxTransferArray)
 
-    IndicesMsgFormat();
-    NetworkMessageIndices* Clone() const override { return new IndicesMsgFormat; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesMsgFormat::IndicesMsgFormat()
-{
-    index = -1;
-    items = -1;
-}
-
-void IndicesMsgFormat::Scan(NetworkMessageFormatBase* format){SCAN(index) SCAN(items)}
-
-// Create network message indices for NetworkMessageFormatBase class
-NetworkMessageIndices* GetIndicesMsgFormat()
-{
-    return new IndicesMsgFormat();
-}
+DECLARE_NET_INDICES(MsgFormat, MSG_FORMAT_MSG)
+DEFINE_NET_INDICES(MsgFormat, MSG_FORMAT_MSG)
+DEFINE_GET_INDICES(MsgFormat)
 
 // Return index of field "index" in IndicesMsgFormat
 int IndicesMsgFormatGetIndex(const NetworkMessageIndices* ind)
@@ -372,8 +328,7 @@ int IndicesMsgFormatGetIndex(const NetworkMessageIndices* ind)
 
 NetworkMessageFormat& NetworkMessageFormatBase::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("index", NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Index of message type"));
-    format.Add("items", NDTObjectArray, NCTNone, DEFVALUE_MSG(NMTMsgFormatItem), DOC_MSG("List of items"));
+    MSG_FORMAT_MSG(MSG_FORMAT)
     return format;
 }
 
