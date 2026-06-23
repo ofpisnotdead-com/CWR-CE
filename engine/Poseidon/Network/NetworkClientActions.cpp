@@ -2104,7 +2104,8 @@ void NetworkClient::RadioChatWave(int channel, RefArray<NetworkObject>& units, R
 
 void NetworkClient::SetVoiceChannel(int channel)
 {
-    SetVoiceChannelMessage msg(channel);
+    SetVoiceChannelMessage msg;
+    msg._channel = channel;
     SendMsg(&msg, NMFGuaranteed);
     if (_client)
         _client->SetVoiceTransmit(channel != CCNone);
@@ -2112,7 +2113,9 @@ void NetworkClient::SetVoiceChannel(int channel)
 
 void NetworkClient::SetVoiceChannel(int channel, RefArray<NetworkObject>& units)
 {
-    SetVoiceChannelMessage msg(channel, units);
+    SetVoiceChannelMessage msg;
+    msg._channel = channel;
+    msg._units = units;
     SendMsg(&msg, NMFGuaranteed);
     if (_client)
         _client->SetVoiceTransmit(channel != CCNone);
@@ -2120,7 +2123,8 @@ void NetworkClient::SetVoiceChannel(int channel, RefArray<NetworkObject>& units)
 
 int NetworkClient::SendVoiceTestTone(int frames, int amplitude)
 {
-    SetVoiceChannelMessage msg(CCDirect);
+    SetVoiceChannelMessage msg;
+    msg._channel = CCDirect;
     SendMsg(&msg, NMFGuaranteed);
     return _client ? _client->SendVoiceTestTone(frames, amplitude) : 0;
 }
