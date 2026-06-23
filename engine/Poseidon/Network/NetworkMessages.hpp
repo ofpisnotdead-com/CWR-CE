@@ -451,22 +451,11 @@ DECLARE_NET_MESSAGE(AskForAimWeapon, ASK_FOR_AIM_WEAPON_MSG)
 
 DECLARE_NET_MESSAGE(AskForAimObserver, ASK_FOR_AIM_OBSERVER_MSG)
 
-// Message for ask vehicle owner for select weapon
-struct AskForSelectWeaponMessage : public NetworkSimpleObject
-{
-	// vehicle which weapon is selecting
-	EntityAI *vehicle;
-	// selected weapon index
-	int weapon;
+#define ASK_FOR_SELECT_WEAPON_MSG(XX) \
+	XX(OLink<EntityAI>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which weapon is selecting"), IdxTransferRef) \
+	XX(int, weapon, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Selected weapon index"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForSelectWeapon;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskForSelectWeapon, ASK_FOR_SELECT_WEAPON_MSG)
 
 // Message for ask vehicle owner for change ammo state
 struct AskForAmmoMessage : public NetworkSimpleObject
