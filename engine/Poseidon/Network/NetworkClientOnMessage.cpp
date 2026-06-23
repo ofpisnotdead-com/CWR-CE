@@ -1201,7 +1201,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             for (int i = 0; i < markersMap.Size(); i++)
             {
                 ArcadeMarkerInfo& marker = markersMap[i];
-                if (marker.name == info.name)
+                if (marker.name == info._name)
                 {
                     markersMap.Delete(i);
                     break;
