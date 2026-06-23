@@ -694,26 +694,18 @@ void CheckCommandFailed(AISubgroupContext *context);
 
 void CreateUnitsList(PackedBoolArray list, char *buffer);
 
+#define UPDATE_AI_SUBGROUP_MSG(XX) \
+	XX(OLink<AIGroup>, group, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Superior group"), IdxTransferRef, ET_NONE, 0) \
+	XX(RefArray<AIUnit>, units, NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("Member units"), IdxTransferRefs, ET_NOT_CONTAIN_COUNT, ERR_COEF_STRUCTURE) \
+	XX(OLink<AIUnit>, leader, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Leader unit"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_STRUCTURE) \
+	XX(int, mode, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, PlanAndGo), DOC_MSG("Planning mode"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(Vector3, wantedPosition, NDTVector, NCTNone, DEFVALUE(Vector3, VUndefined), DOC_MSG("Destination"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, formation, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, FormVee), DOC_MSG("Formation type"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, speedMode, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, SpeedNormal), DOC_MSG("Speed mode"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, lastPrec, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, LevelOperative), DOC_MSG("Planning precision"), IdxTransfer, ET_NONE, 0) \
+	XX(float, formationCoef, NDTFloat, NCTNone, DEFVALUE(float, 1.0), DOC_MSG("Formation spacing"), IdxTransfer, ET_NONE, 0) \
+	XX(Vector3, direction, NDTVector, NCTNone, DEFVALUE(Vector3, VForward), DOC_MSG("Formation direction"), IdxTransfer, ET_NONE, 0)
 
-class IndicesUpdateAISubgroup : public IndicesNetworkObject
-{
-	typedef IndicesNetworkObject base;
-
-public:
-	int group;
-	int units;
-	int leader;
-	int mode;
-	int wantedPosition;
-	int formation;
-	int speedMode;
-	int lastPrec;
-	int formationCoef;
-	int direction;
-
-	IndicesUpdateAISubgroup();
-	NetworkMessageIndices *Clone() const override {return new IndicesUpdateAISubgroup;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES_EX_ERR(UpdateAISubgroup, NetworkObject, UPDATE_AI_SUBGROUP_MSG)
 
 }  // namespace Poseidon
