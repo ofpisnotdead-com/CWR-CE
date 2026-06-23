@@ -502,31 +502,29 @@ struct FormInfo
 
 extern const FormInfo formations[AI::NForms][MAX_UNITS_PER_GROUP];
 
-class IndicesCreateCommand : public IndicesNetworkObject
-{
-	typedef IndicesNetworkObject base;
+#define CREATE_COMMAND_MSG(XX) \
+	XX(OLink<AISubgroup>, subgroup, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Subgroup, executing this command"), IdxTransferRef) \
+	XX(int, index, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Index of command in subgroup"), IdxTransfer) \
+	XX(int, message, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, NoCommand), DOC_MSG("Type of command"), IdxTransfer) \
+	XX(TargetId, target, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Target (exact) of command - used for well known targets"), IdxTransferRef) \
+	XX(LinkTarget, targetE, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Target (inexact) - used for enemies"), IdxTransferRef) \
+	XX(Vector3, destination, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Destination position"), IdxTransfer) \
+	XX(Time, time, NDTTime, NCTNone, DEFVALUE(Time, Time(0)), DOC_MSG("Time, when command timeouts"), IdxTransfer) \
+	XX(OLink<AISubgroup>, join, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Join to main subroup after completition"), IdxTransferRef) \
+	XX(int, action, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Type of action for Action command"), IdxTransfer) \
+	XX(int, param, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Action parameter"), IdxTransfer) \
+	XX(int, param2, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Action parameter"), IdxTransfer) \
+	XX(RString, param3, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Action parameter"), IdxTransfer) \
+	XX(int, discretion, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, Undefined), DOC_MSG("Subgroup discretion"), IdxTransfer) \
+	XX(int, context, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, CtxUndefined), DOC_MSG("How command was ordered"), IdxTransfer) \
+	XX(int, id, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Unique (in group) id of command"), IdxTransfer)
 
-public:
-	int subgroup;
-	int index;
-	int message;
-	int target;
-	int targetE;
-	int destination;
-	int time;
-	int join;
-	int action;
-	int param;
-	int param2;
-	int param3;
-	int discretion;
-	int context;
-	int id;
+DECLARE_NET_INDICES_EX(CreateCommand, NetworkObject, CREATE_COMMAND_MSG)
 
-	IndicesCreateCommand();
-	NetworkMessageIndices *Clone() const override {return new IndicesCreateCommand;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+#define UPDATE_COMMAND_MSG(XX) \
+	XX(Vector3, destination, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Destination position"), IdxTransfer)
+
+DECLARE_NET_INDICES_EX(UpdateCommand, NetworkObject, UPDATE_COMMAND_MSG)
 
 // fix for a bug makes MP incompatible with 1.52
 #define ENABLE_HOLDFIRE_FIX 1
