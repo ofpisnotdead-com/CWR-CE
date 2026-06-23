@@ -880,8 +880,8 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         break;
         case NMTSetFlagCarrier:
         {
-            NET_ERROR(dynamic_cast<const IndicesSetFlagOwner*>(ctx.GetIndices()))
-            const IndicesSetFlagOwner* indices = static_cast<const IndicesSetFlagOwner*>(ctx.GetIndices());
+            NET_ERROR(dynamic_cast<const IndicesSetFlagCarrier*>(ctx.GetIndices()))
+            const IndicesSetFlagCarrier* indices = static_cast<const IndicesSetFlagCarrier*>(ctx.GetIndices());
 
             NetworkId id;
             if (ctx.IdxGetId(indices->owner, id) == TMOK)

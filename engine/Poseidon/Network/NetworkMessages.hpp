@@ -628,28 +628,21 @@ DECLARE_NET_INDICES_EX(TransferFileToServer, TransferFile, TRANSFER_MISSION_FILE
 
 DECLARE_NET_MESSAGE(AskMissionFile, ASK_MISSION_FILE_MSG)
 
-// Message for ask flag (carrier) owner for assign new owner
-struct SetFlagOwnerMessage : public NetworkSimpleObject
-{
-	// new owner
-	Person *owner;
-	// flag carrier
-	EntityAI *carrier;
+#define SET_FLAG_OWNER_MSG(XX) \
+	XX(OLink<Person>, owner, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Flag owner"), IdxTransferRef) \
+	XX(OLink<EntityAI>, carrier, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Flag carrier"), IdxTransferRef)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTSetFlagOwner;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(SetFlagOwner, SET_FLAG_OWNER_MSG)
+
+#define SET_FLAG_CARRIER_MSG(XX)
 
 // Message for ask client owns flag owner for change of flag ownership
 struct SetFlagCarrierMessage : public SetFlagOwnerMessage
 {
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTSetFlagCarrier;}
+	DECLARE_DEFINE_NETWORK_OBJECT_SIMPLE(SetFlagCarrier)
 };
+
+DECLARE_NET_INDICES_EX(SetFlagCarrier, SetFlagOwner, SET_FLAG_CARRIER_MSG)
 
 #define SHOW_TARGET_MSG(XX) \
 	XX(OLink<Person>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Player person"), IdxTransferRef) \

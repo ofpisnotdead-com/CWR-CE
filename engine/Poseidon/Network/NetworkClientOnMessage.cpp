@@ -1264,22 +1264,22 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             SetFlagOwnerMessage ask;
             ask.TransferMsg(ctx);
-            if (!ask.carrier)
+            if (!ask._carrier)
             {
                 break;
             }
-            ask.carrier->SetFlagOwner(ask.owner);
+            ask._carrier->SetFlagOwner(ask._owner);
         }
         break;
         case NMTSetFlagCarrier:
         {
             SetFlagCarrierMessage ask;
             ask.TransferMsg(ctx);
-            if (!ask.owner)
+            if (!ask._owner)
             {
                 break;
             }
-            ask.owner->SetFlagCarrier(ask.carrier);
+            ask._owner->SetFlagCarrier(ask._carrier);
         }
         break;
         case NMTMsgVTarget:

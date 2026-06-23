@@ -1932,16 +1932,16 @@ void NetworkClient::MarkerDelete(RString name)
 void NetworkClient::SetFlagOwner(Person* owner, EntityAI* carrier)
 {
     SetFlagOwnerMessage msg;
-    msg.owner = owner;
-    msg.carrier = carrier;
+    msg._owner = owner;
+    msg._carrier = carrier;
     SendMsg(&msg, NMFGuaranteed);
 }
 
 void NetworkClient::SetFlagCarrier(Person* owner, EntityAI* carrier)
 {
     SetFlagCarrierMessage msg;
-    msg.owner = owner;
-    msg.carrier = carrier;
+    msg._owner = owner;
+    msg._carrier = carrier;
     SendMsg(&msg, NMFGuaranteed);
 }
 

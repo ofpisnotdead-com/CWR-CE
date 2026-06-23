@@ -140,19 +140,6 @@ public:
 	void Scan(NetworkMessageFormatBase *format) override;
 };
 
-// network message indices for SetFlagOwnerMessage and SetFlagCarrierMessage classes
-class IndicesSetFlagOwner : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int owner;
-	int carrier;
-
-	IndicesSetFlagOwner();
-	NetworkMessageIndices *Clone() const override {return new IndicesSetFlagOwner;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
 // network message indices for MarkerCreateMessage class
 class IndicesMarkerCreate : public NetworkMessageIndices
 {
