@@ -11,6 +11,7 @@
     "mimalloc",
     "zstd",
     "sdl3",
+    { "name": "dbus", "default-features": false, "platform": "linux" },
     "openal-soft",
     "opus",
     "libogg",
@@ -30,7 +31,7 @@
       "platform": "!windows"
     }
   ],
-  "builtin-baseline": "15cd15b0da3c48a0c7720e4c87e0b6030334feed",
+  "builtin-baseline": "fa9a5b330aed997a68310ed56418617b87a3b83d",
   "overrides": [
     {
       "name": "catch2",
