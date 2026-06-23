@@ -1825,33 +1825,33 @@ void NetworkClient::UpdateWeapons(EntityAI* vehicle)
 void NetworkClient::AddWeaponCargo(VehicleSupply* vehicle, RString weapon)
 {
     AddWeaponCargoMessage msg;
-    msg.vehicle = vehicle;
-    msg.weapon = weapon;
+    msg._vehicle = vehicle;
+    msg._weapon = weapon;
     SendMsg(&msg, NMFGuaranteed);
 }
 
 void NetworkClient::RemoveWeaponCargo(VehicleSupply* vehicle, RString weapon)
 {
     RemoveWeaponCargoMessage msg;
-    msg.vehicle = vehicle;
-    msg.weapon = weapon;
+    msg._vehicle = vehicle;
+    msg._weapon = weapon;
     SendMsg(&msg, NMFGuaranteed);
 }
 
 void NetworkClient::AddMagazineCargo(VehicleSupply* vehicle, const Magazine* magazine)
 {
     AddMagazineCargoMessage msg;
-    msg.vehicle = vehicle;
-    msg.magazine = const_cast<Magazine*>(magazine);
+    msg._vehicle = vehicle;
+    msg._magazine = const_cast<Magazine*>(magazine);
     SendMsg(&msg, NMFGuaranteed);
 }
 
 void NetworkClient::RemoveMagazineCargo(VehicleSupply* vehicle, int creator, int id)
 {
     RemoveMagazineCargoMessage msg;
-    msg.vehicle = vehicle;
-    msg.creator = creator;
-    msg.id = id;
+    msg._vehicle = vehicle;
+    msg._creator = creator;
+    msg._id = id;
     SendMsg(&msg, NMFGuaranteed);
 }
 

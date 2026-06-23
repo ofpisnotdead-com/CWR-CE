@@ -521,75 +521,30 @@ DECLARE_NET_MESSAGE(ExplosionDammageEffects, EXPLOSION_DAMMAGE_EFFECTS_MSG)
 
 DECLARE_NET_MESSAGE(FireWeapon, FIRE_WEAPON_MSG)
 
-// Message for ask vehicle to add weapon into cargo
-struct AddWeaponCargoMessage : public NetworkSimpleObject
-{
-	// asked vehicle
-	VehicleSupply *vehicle;
-	// name of weapon type to add
-	RString weapon;
+#define ADD_WEAPON_CARGO_MSG(XX) \
+	XX(OLink<VehicleSupply>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Asked vehicle"), IdxTransferRef) \
+	XX(RString, weapon, NDTString, NCTDefault, DEFVALUE(RString, ""), DOC_MSG("Name of weapon type to add"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAddWeaponCargo;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AddWeaponCargo, ADD_WEAPON_CARGO_MSG)
 
-// Message for ask vehicle to remove weapon from cargo
-struct RemoveWeaponCargoMessage : public NetworkSimpleObject
-{
-	// asked vehicle
-	VehicleSupply *vehicle;
-	// name of weapon type to remove
-	RString weapon;
+#define REMOVE_WEAPON_CARGO_MSG(XX) \
+	XX(OLink<VehicleSupply>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Asked vehicle"), IdxTransferRef) \
+	XX(RString, weapon, NDTString, NCTDefault, DEFVALUE(RString, ""), DOC_MSG("Name of weapon type to remove"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTRemoveWeaponCargo;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(RemoveWeaponCargo, REMOVE_WEAPON_CARGO_MSG)
 
-// Message for ask vehicle to add magazine into cargo
-struct AddMagazineCargoMessage : public NetworkSimpleObject
-{
-	// asked vehicle
-	VehicleSupply *vehicle;
-	// magazine to add
-	Ref<Magazine> magazine;
+#define ADD_MAGAZINE_CARGO_MSG(XX) \
+	XX(OLink<VehicleSupply>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Asked vehicle"), IdxTransferRef) \
+	XX(Ref<Magazine>, magazine, NDTObject, NCTNone, DEFVALUE_MSG(NMTMagazine), DOC_MSG("Magazine to add"), IdxTransferContent)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAddMagazineCargo;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AddMagazineCargo, ADD_MAGAZINE_CARGO_MSG)
 
-// Message for ask vehicle to remove magazine from cargo
-struct RemoveMagazineCargoMessage : public NetworkSimpleObject
-{
-	// asked vehicle
-	VehicleSupply *vehicle;
-	// id of magazine to remove
-	int creator;
-	// id of magazine to remove
-	int id;
+#define REMOVE_MAGAZINE_CARGO_MSG(XX) \
+	XX(OLink<VehicleSupply>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Asked vehicle"), IdxTransferRef) \
+	XX(int, creator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of magazine to remove"), IdxTransfer) \
+	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID of magazine to remove"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTRemoveMagazineCargo;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(RemoveMagazineCargo, REMOVE_MAGAZINE_CARGO_MSG)
 
 // Message is sent to update of weapons to vehicle owner
 struct UpdateWeaponsMessage : public NetworkSimpleObject

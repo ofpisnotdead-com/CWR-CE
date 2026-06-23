@@ -1049,10 +1049,10 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AddWeaponCargoMessage update;
             update.TransferMsg(ctx);
-            if (update.vehicle)
+            if (update._vehicle)
             {
-                Ref<WeaponType> weapon = WeaponTypes.New(update.weapon);
-                update.vehicle->AddWeaponCargo(weapon);
+                Ref<WeaponType> weapon = WeaponTypes.New(update._weapon);
+                update._vehicle->AddWeaponCargo(weapon);
             }
         }
         break;
@@ -1060,10 +1060,10 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             RemoveWeaponCargoMessage update;
             update.TransferMsg(ctx);
-            if (update.vehicle)
+            if (update._vehicle)
             {
-                Ref<WeaponType> weapon = WeaponTypes.New(update.weapon);
-                update.vehicle->RemoveWeaponCargo(weapon);
+                Ref<WeaponType> weapon = WeaponTypes.New(update._weapon);
+                update._vehicle->RemoveWeaponCargo(weapon);
             }
         }
         break;
@@ -1071,9 +1071,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AddMagazineCargoMessage update;
             update.TransferMsg(ctx);
-            if (update.vehicle && update.magazine)
+            if (update._vehicle && update._magazine)
             {
-                update.vehicle->AddMagazineCargo(update.magazine);
+                update._vehicle->AddMagazineCargo(update._magazine);
             }
         }
         break;
@@ -1081,12 +1081,12 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             RemoveMagazineCargoMessage update;
             update.TransferMsg(ctx);
-            if (update.vehicle)
+            if (update._vehicle)
             {
-                const Magazine* magazine = update.vehicle->FindMagazine(update.creator, update.id);
+                const Magazine* magazine = update._vehicle->FindMagazine(update._creator, update._id);
                 if (magazine)
                 {
-                    update.vehicle->RemoveMagazineCargo(const_cast<Magazine*>(magazine));
+                    update._vehicle->RemoveMagazineCargo(const_cast<Magazine*>(magazine));
                 }
             }
         }
