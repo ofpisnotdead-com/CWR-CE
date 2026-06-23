@@ -1021,63 +1021,8 @@ DEFINE_GET_INDICES(SetVoiceChannel)
 DEFINE_NET_MESSAGE(SetSpeaker, SET_SPEAKER_MSG)
 DEFINE_GET_INDICES(SetSpeaker)
 
-// network message indices for SelectPlayerMessage class
-class IndicesSelectPlayer : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int player;
-    int creator;
-    int id;
-    int position;
-    int respawn;
-
-    IndicesSelectPlayer();
-    NetworkMessageIndices* Clone() const override { return new IndicesSelectPlayer; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesSelectPlayer::IndicesSelectPlayer()
-{
-    player = -1;
-    creator = -1;
-    id = -1;
-    position = -1;
-    respawn = -1;
-}
-
-void IndicesSelectPlayer::Scan(NetworkMessageFormatBase* format){SCAN(player) SCAN(creator) SCAN(id) SCAN(position)
-                                                                     SCAN(respawn)}
-
-// Create network message indices for SelectPlayerMessage class
-NetworkMessageIndices* GetIndicesSelectPlayer()
-{
-    return new IndicesSelectPlayer();
-}
-
-NetworkMessageFormat& SelectPlayerMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("player", NDTInteger, NCTNone, DEFVALUE(int, AI_PLAYER), DOC_MSG("Client (player) ID of player"));
-    format.Add("creator", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of player's unit"));
-    format.Add("id", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID of player's unit"));
-    format.Add("position", NDTVector, NCTNone, DEFVALUE(Vector3, Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX)),
-               DOC_MSG("Player's unit position"));
-    format.Add("respawn", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Selection of player's unit after respawn"));
-    return format;
-}
-
-TMError SelectPlayerMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesSelectPlayer*>(ctx.GetIndices()))
-    const IndicesSelectPlayer* indices = static_cast<const IndicesSelectPlayer*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->player, player))
-    TMCHECK(ctx.IdxTransfer(indices->creator, person.creator))
-    TMCHECK(ctx.IdxTransfer(indices->id, person.id))
-    TMCHECK(ctx.IdxTransfer(indices->position, position))
-    TMCHECK(ctx.IdxTransfer(indices->respawn, respawn))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(SelectPlayer, SELECT_PLAYER_MSG)
+DEFINE_GET_INDICES(SelectPlayer)
 
 // network message indices for ChangeOwnerMessage class
 class IndicesChangeOwner : public NetworkMessageIndices
