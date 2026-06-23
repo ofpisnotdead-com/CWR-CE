@@ -450,37 +450,12 @@ NetworkMessageType ClientInfoObject::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-// network message indices for ClientInfoObject class
-class IndicesUpdateClientInfo : public IndicesNetworkObject
-{
-    typedef IndicesNetworkObject base;
+#define UPDATE_CLIENT_INFO_MSG(XX) \
+	XX(Vector3, cameraPosition, NDTVector, NCTNone, DEFVALUE(Vector3, InvalidCamPos), DOC_MSG("Position of camera on client"), IdxTransfer)
 
-  public:
-    // index of field in message format
-    int cameraPosition;
-
-    IndicesUpdateClientInfo();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateClientInfo; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateClientInfo::IndicesUpdateClientInfo()
-{
-    cameraPosition = -1;
-}
-
-void IndicesUpdateClientInfo::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(cameraPosition)
-}
-
-// Create network message indices for ClientInfoObject class
-NetworkMessageIndices* GetIndicesUpdateClientInfo()
-{
-    return new IndicesUpdateClientInfo();
-}
+DECLARE_NET_INDICES_EX(UpdateClientInfo, NetworkObject, UPDATE_CLIENT_INFO_MSG)
+DEFINE_NET_INDICES_EX(UpdateClientInfo, NetworkObject, UPDATE_CLIENT_INFO_MSG)
+DEFINE_GET_INDICES(UpdateClientInfo)
 
 NetworkMessageFormat& ClientInfoObject::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
@@ -488,8 +463,7 @@ NetworkMessageFormat& ClientInfoObject::CreateFormat(NetworkMessageClass cls, Ne
     {
         case NMCUpdateGeneric:
             NetworkObject::CreateFormat(cls, format);
-            format.Add("cameraPosition", NDTVector, NCTNone, DEFVALUE(Vector3, InvalidCamPos),
-                       DOC_MSG("Position of camera on client"));
+            UPDATE_CLIENT_INFO_MSG(MSG_FORMAT)
             break;
         default:
             NetworkObject::CreateFormat(cls, format);
