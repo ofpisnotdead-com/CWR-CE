@@ -337,7 +337,7 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskMissionFileMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.valid)
+            if (ask._valid)
             {
                 NetworkPlayerInfo* info = GetPlayerInfo(from);
                 if (info)

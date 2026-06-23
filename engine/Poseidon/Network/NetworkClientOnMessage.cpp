@@ -650,7 +650,8 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 LOG_DEBUG(Network, "[MissionHeader] cache='{}' valid={}", (const char*)fullname, _missionFileValid);
             }
 
-            AskMissionFileMessage ask(_missionFileValid);
+            AskMissionFileMessage ask;
+            ask._valid = _missionFileValid;
             LOG_DEBUG(Network, "[MissionHeader] sending AskMissionFile valid={}", _missionFileValid);
             SendMsg(&ask, NMFGuaranteed);
         }
