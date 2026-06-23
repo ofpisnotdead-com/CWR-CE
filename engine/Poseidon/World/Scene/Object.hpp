@@ -141,40 +141,21 @@ struct ShadowIndex
 	USE_FAST_ALLOCATOR
 };
 
-class IndicesCreateObject : public IndicesNetworkObject
-{
-	typedef IndicesNetworkObject base;
+#define CREATE_OBJECT_MSG(XX)
 
-public:
-	IndicesCreateObject();
-	NetworkMessageIndices *Clone() const override {return new IndicesCreateObject;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-class IndicesUpdateObject : public IndicesNetworkObject
-{
-	typedef IndicesNetworkObject base;
+DECLARE_NET_INDICES_EX(CreateObject, NetworkObject, CREATE_OBJECT_MSG)
 
-public:
-	int canSmoke;
-	int destroyed;
+#define UPDATE_OBJECT_MSG(XX) \
+	XX(bool, canSmoke, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Object may smoke when destructed"), IdxTransfer, ET_NONE, 0) \
+	XX(float, destroyed, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0.0f), DOC_MSG("Shape destruction state"), IdxTransfer, ET_NONE, 0)
 
-	IndicesUpdateObject();
-	NetworkMessageIndices *Clone() const override {return new IndicesUpdateObject;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES_EX_ERR(UpdateObject, NetworkObject, UPDATE_OBJECT_MSG)
 
-class IndicesUpdateDammageObject : public IndicesNetworkObject
-{
-	typedef IndicesNetworkObject base;
+#define UPDATE_DAMMAGE_OBJECT_MSG(XX) \
+	XX(bool, isDestroyed, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Object is already destructed"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_STRUCTURE) \
+	XX(float, dammage, NDTFloat, NCTFloatMostly0To1, DEFVALUE(float, 0.0f), DOC_MSG("Total damage of object"), IdxTransfer, ET_ABS_DIF, ERR_COEF_MODE)
 
-public:
-	int isDestroyed;
-	int dammage;
-
-	IndicesUpdateDammageObject();
-	NetworkMessageIndices *Clone() const override {return new IndicesUpdateDammageObject;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES_EX_ERR(UpdateDammageObject, NetworkObject, UPDATE_DAMMAGE_OBJECT_MSG)
 
 #define SUPPORT_RANDOM_SHAPES 0
 
