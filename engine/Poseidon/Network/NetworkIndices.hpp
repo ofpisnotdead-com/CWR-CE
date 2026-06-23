@@ -128,6 +128,17 @@ DECLARE_NET_INDICES(Login, LOGIN_MSG)
 
 DECLARE_NET_INDICES(PlayerUpdate, PLAYER_UPDATE_MSG)
 
+#define SQUAD_MSG(XX) \
+	XX(RString, id, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Unique id of squad (URL of XML page)"), IdxTransfer) \
+	XX(RString, nick, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Nick (short) name of squad"), IdxTransfer) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Full name of squad"), IdxTransfer) \
+	XX(RString, email, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("E-mail of squad administrator"), IdxTransfer) \
+	XX(RString, web, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Web page of squad"), IdxTransfer) \
+	XX(RString, picture, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Picture of squad (shown on vehicles)"), IdxTransfer) \
+	XX(RString, title, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Title of squad (shown on vehicles)"), IdxTransfer)
+
+DECLARE_NET_MESSAGE(Squad, SQUAD_MSG)
+
 namespace Poseidon { class IndicesUpdateEntityAIWeapons; }
 using Poseidon::IndicesUpdateEntityAIWeapons;
 
