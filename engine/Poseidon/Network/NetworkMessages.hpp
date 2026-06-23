@@ -623,23 +623,10 @@ struct TransferFileToServerMessage : public TransferFileMessage
 
 DECLARE_NET_INDICES_EX(TransferFileToServer, TransferFile, TRANSFER_MISSION_FILE_MSG)
 
-// Message sent to server to answer if mission pbo file on client is actual (valid)
-struct AskMissionFileMessage : public NetworkSimpleObject
-{
-	// if mission file is actual (valid)
-	bool valid;
+#define ASK_MISSION_FILE_MSG(XX) \
+	XX(bool, valid, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Mission file is valid (present on client computer)"), IdxTransfer)
 
-	AskMissionFileMessage() {valid = false;}
-	AskMissionFileMessage(bool v) {valid = v;}
-
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskMissionFile;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskMissionFile, ASK_MISSION_FILE_MSG)
 
 // Message for ask flag (carrier) owner for assign new owner
 struct SetFlagOwnerMessage : public NetworkSimpleObject
