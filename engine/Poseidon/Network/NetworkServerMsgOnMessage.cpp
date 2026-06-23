@@ -196,8 +196,8 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             NetworkPlayerInfo* info = GetPlayerInfo(from);
             if (info)
             {
-                int qId = answer.id;
-                IntegrityQuestionType qType = answer.type;
+                int qId = answer._id;
+                IntegrityQuestionType qType = (IntegrityQuestionType)answer._type;
                 //  it should be an answer to the first question of given type
 
                 int qIndex = -1;
@@ -216,18 +216,18 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     // LogF
                     //(
                     //	"%s - %s: Received answer %d",
-                    //	(const char *)info->name,(const char *)q.name,answer.answer
+                    //	(const char *)info->name,(const char *)q.name,answer._answer
                     //);
                     bool dedicated = IsDedicatedServer();
                     unsigned int myAnswer = IntegrityCheckAnswer(qType, q, dedicated);
                     // integrity question may be a part of active investigation
-                    if (qType != IQTExe && myAnswer != answer.answer)
+                    if (qType != IQTExe && myAnswer != answer._answer)
                     {
                         LOG_DEBUG(Network, "{} - {}: Received answer {:x}, expected {:x}", (const char*)info->name,
-                                  (const char*)q.name, answer.answer, myAnswer);
+                                  (const char*)q.name, answer._answer, myAnswer);
                     }
-                    bool wasIA = IntegrityAnswerReceived(info, qType, q, myAnswer == answer.answer);
-                    if (!wasIA && myAnswer != answer.answer)
+                    bool wasIA = IntegrityAnswerReceived(info, qType, q, myAnswer == answer._answer);
+                    if (!wasIA && myAnswer != answer._answer)
                     {
                         // calculate correct answer
                         // try to provide more info if possible
@@ -253,7 +253,7 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
                 else
                 {
-                    LOG_DEBUG(Network, "Received unknown answer {:08x}", answer.id);
+                    LOG_DEBUG(Network, "Received unknown answer {:08x}", answer._id);
                 }
             }
         }
