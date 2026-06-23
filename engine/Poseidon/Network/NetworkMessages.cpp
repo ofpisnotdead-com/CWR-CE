@@ -68,73 +68,11 @@ DEFINE_GET_INDICES(AskForDammage)
 DEFINE_NET_MESSAGE(AskForSetDammage, ASK_FOR_SET_DAMMAGE_MSG)
 DEFINE_GET_INDICES(AskForSetDammage)
 
-IndicesAskForGetIn::IndicesAskForGetIn()
-{
-    soldier = -1;
-    vehicle = -1;
-    position = -1;
-}
+DEFINE_NET_MESSAGE(AskForGetIn, ASK_FOR_GET_IN_MSG)
+DEFINE_GET_INDICES(AskForGetIn)
 
-void IndicesAskForGetIn::Scan(NetworkMessageFormatBase* format){SCAN(soldier) SCAN(vehicle) SCAN(position)}
-
-// Create network message indices for AskForGetInMessage class
-NetworkMessageIndices* GetIndicesAskForGetIn()
-{
-    return new IndicesAskForGetIn();
-}
-
-NetworkMessageFormat& AskForGetInMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("soldier", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is getting in"));
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle to get in"));
-    format.Add("position", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Position in vehicle to get in"));
-    return format;
-}
-
-TMError AskForGetInMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskForGetIn*>(ctx.GetIndices()))
-    const IndicesAskForGetIn* indices = static_cast<const IndicesAskForGetIn*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->soldier, soldier))
-    TMCHECK(ctx.IdxTransferRef(indices->vehicle, vehicle))
-    TMCHECK(ctx.IdxTransfer(indices->position, (int&)position))
-    return TMOK;
-}
-
-IndicesAskForGetOut::IndicesAskForGetOut()
-{
-    soldier = -1;
-    vehicle = -1;
-    parachute = -1;
-}
-
-void IndicesAskForGetOut::Scan(NetworkMessageFormatBase* format){SCAN(soldier) SCAN(vehicle) SCAN(parachute)}
-
-// Create network message indices for AskForGetOutMessage class
-NetworkMessageIndices* GetIndicesAskForGetOut()
-{
-    return new IndicesAskForGetOut();
-}
-
-NetworkMessageFormat& AskForGetOutMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("soldier", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is getting out"));
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle to get out"));
-    format.Add("parachute", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Parachute or plain ejection"));
-    return format;
-}
-
-TMError AskForGetOutMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskForGetOut*>(ctx.GetIndices()))
-    const IndicesAskForGetOut* indices = static_cast<const IndicesAskForGetOut*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->soldier, soldier))
-    TMCHECK(ctx.IdxTransferRef(indices->vehicle, vehicle))
-    TMCHECK(ctx.IdxTransfer(indices->parachute, parachute))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(AskForGetOut, ASK_FOR_GET_OUT_MSG)
+DEFINE_GET_INDICES(AskForGetOut)
 
 IndicesAskForChangePosition::IndicesAskForChangePosition()
 {

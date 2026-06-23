@@ -417,43 +417,19 @@ DECLARE_NET_MESSAGE(AskForDammage, ASK_FOR_DAMMAGE_MSG)
 
 DECLARE_NET_MESSAGE(AskForSetDammage, ASK_FOR_SET_DAMMAGE_MSG)
 
-// Message for ask vehicle owner for get in person
-struct AskForGetInMessage : public NetworkSimpleObject
-{
-	// who is getting in
-	Person *soldier;
-	// vehicle to get in
-	Transport *vehicle;
-	// position in vehicle to get in
-	GetInPosition position;
+#define ASK_FOR_GET_IN_MSG(XX) \
+	XX(OLink<Person>, soldier, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is getting in"), IdxTransferRef) \
+	XX(OLink<Transport>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle to get in"), IdxTransferRef) \
+	XX(int, position, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Position in vehicle to get in"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForGetIn;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskForGetIn, ASK_FOR_GET_IN_MSG)
 
-// Message for ask vehicle owner for get out person
-struct AskForGetOutMessage : public NetworkSimpleObject
-{
-	// who is getting out
-	Person *soldier;
-	// vehicle to get out
-	Transport *vehicle;
-	// parachute or plain ejection
-	bool parachute;
+#define ASK_FOR_GET_OUT_MSG(XX) \
+	XX(OLink<Person>, soldier, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is getting out"), IdxTransferRef) \
+	XX(OLink<Transport>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle to get out"), IdxTransferRef) \
+	XX(bool, parachute, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Parachute or plain ejection"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForGetOut;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskForGetOut, ASK_FOR_GET_OUT_MSG)
 
 // Message for ask vehicle owner for change person position
 struct AskForChangePositionMessage : public NetworkSimpleObject
