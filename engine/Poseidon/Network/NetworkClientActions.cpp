@@ -1557,12 +1557,12 @@ void NetworkClient::AskForDammage(Object* who, EntityAI* owner, Vector3Par model
     }
 
     AskForDammageMessage msg;
-    msg.who = who;
-    msg.owner = owner;
-    msg.modelPos = modelPos;
-    msg.val = val;
-    msg.valRange = valRange;
-    msg.ammo = ammo;
+    msg._who = who;
+    msg._owner = owner;
+    msg._modelPos = modelPos;
+    msg._val = val;
+    msg._valRange = valRange;
+    msg._ammo = ammo;
     SendMsg(&msg, NMFGuaranteed);
 }
 

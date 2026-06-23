@@ -789,9 +789,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForDammageMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.who)
+            if (ask._who)
             {
-                ask.who->DoDammage(ask.owner, ask.modelPos, ask.val, ask.valRange, ask.ammo);
+                ask._who->DoDammage(ask._owner, ask._modelPos, ask._val, ask._valRange, ask._ammo);
             }
         }
         break;
