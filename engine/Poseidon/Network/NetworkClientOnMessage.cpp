@@ -1954,18 +1954,19 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 DeleteCommandMessage dc;
                 dc.TransferMsg(ctx);
+                NetworkId id(dc._creator, dc._id);
                 for (int i = 0; i < _remoteObjects.Size(); i++)
                 {
                     NetworkRemoteObjectInfo& info = _remoteObjects[i];
-                    if (info.id == dc.object)
+                    if (info.id == id)
                     {
-                        if (dc.subgrp && info.object)
+                        if (dc._subgrp && info.object)
                         {
-                            dc.subgrp->DeleteCommand(dc.index, dynamic_cast<Command*>(info.object.GetLink()));
+                            dc._subgrp->DeleteCommand(dc._index, dynamic_cast<Command*>(info.object.GetLink()));
                         }
                         if (DiagLevel >= 1)
                         {
-                            DiagLogF("Client: remote command destroyed %d:%d", dc.object.creator, dc.object.id);
+                            DiagLogF("Client: remote command destroyed %d:%d", id.creator, id.id);
                         }
                         _remoteObjects.Delete(i);
                         break;
