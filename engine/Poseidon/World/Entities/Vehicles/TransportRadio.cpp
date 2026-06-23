@@ -1636,42 +1636,12 @@ NetworkMessageType Transport::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-IndicesUpdateTransport::IndicesUpdateTransport()
-{
-    commander = -1;
-    driver = -1;
-    gunner = -1;
-    effCommander = -1;
-    manCargo = -1;
-    comFireTarget = -1;
-    lock = -1;
-    driverHiddenWanted = -1;
-    fuel = -1;
-    engineOff = -1;
-}
-
-void IndicesUpdateTransport::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(commander)
-    SCAN(driver)
-    SCAN(gunner)
-    SCAN(effCommander)
-    SCAN(manCargo)
-    SCAN(comFireTarget)
-    SCAN(lock)
-    SCAN(driverHiddenWanted)
-    SCAN(fuel);
-    SCAN(engineOff);
-}
+DEFINE_NET_INDICES_EX_ERR(UpdateTransport, UpdateVehicleSupply, UPDATE_TRANSPORT_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateTransport()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateTransport();
-}
+
+DEFINE_GET_INDICES(UpdateTransport)
+
 namespace Poseidon
 {
 
@@ -1681,27 +1651,7 @@ NetworkMessageFormat& Transport::CreateFormat(NetworkMessageClass cls, NetworkMe
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-            format.Add("commander", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Commander (observer) person"), ET_NOT_EQUAL,
-                       ERR_COEF_STRUCTURE);
-            format.Add("driver", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Driver person"), ET_NOT_EQUAL,
-                       ERR_COEF_STRUCTURE);
-            format.Add("gunner", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Gunner person"), ET_NOT_EQUAL,
-                       ERR_COEF_STRUCTURE);
-            format.Add("effCommander", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Currently commanding person"),
-                       ET_NOT_EQUAL, ERR_COEF_STRUCTURE);
-            format.Add("manCargo", NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("Men in cargo space"),
-                       ET_NOT_EQUAL_COUNT, 0.5 * ERR_COEF_STRUCTURE);
-            format.Add("comFireTarget", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Fire target, selected by commander"),
-                       ET_NOT_EQUAL, ERR_COEF_MODE);
-            format.Add("lock", NDTInteger, NCTSmallSigned, DEFVALUE(int, LSDefault), DOC_MSG("Lock state"),
-                       ET_NOT_EQUAL, ERR_COEF_MODE);
-            format.Add("driverHiddenWanted", NDTFloat, NCTFloat0To1, DEFVALUE(float, 0),
-                       DOC_MSG("Wanted position of (tank) driver - inside / outside"), ET_NOT_EQUAL,
-                       ERR_COEF_VALUE_MAJOR);
-            format.Add("fuel", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Current amount of fuel"), ET_ABS_DIF,
-                       ERR_COEF_VALUE_MINOR);
-            format.Add("engineOff", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Engine is off / on"), ET_ABS_DIF,
-                       ERR_COEF_MODE);
+            UPDATE_TRANSPORT_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);
