@@ -229,24 +229,12 @@ NetworkMessageType TankOrCar::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-IndicesUpdateTankOrCar::IndicesUpdateTankOrCar()
-{
-    pilotBrake = -1;
-}
-
-void IndicesUpdateTankOrCar::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(pilotBrake)
-}
+DEFINE_NET_INDICES_EX_ERR(UpdateTankOrCar, UpdateTransport, UPDATE_TANK_OR_CAR_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateTankOrCar()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateTankOrCar();
-}
+
+DEFINE_GET_INDICES(UpdateTankOrCar)
+
 namespace Poseidon
 {
 
@@ -256,8 +244,7 @@ NetworkMessageFormat& TankOrCar::CreateFormat(NetworkMessageClass cls, NetworkMe
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-            format.Add("pilotBrake", NDTBool, NCTNone, DEFVALUE(bool, false),
-                       DOC_MSG("State of pilot brake (on / off)"), ET_NOT_EQUAL, ERR_COEF_MODE);
+            UPDATE_TANK_OR_CAR_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);
