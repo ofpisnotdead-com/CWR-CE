@@ -1574,8 +1574,8 @@ void NetworkClient::AskForSetDammage(Object* who, float dammage)
     }
 
     AskForSetDammageMessage msg;
-    msg.who = who;
-    msg.dammage = dammage;
+    msg._who = who;
+    msg._dammage = dammage;
     SendMsg(&msg, NMFGuaranteed);
 }
 

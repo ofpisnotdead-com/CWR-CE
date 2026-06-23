@@ -799,9 +799,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForSetDammageMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.who)
+            if (ask._who)
             {
-                ask.who->SetDammage(ask.dammage);
+                ask._who->SetDammage(ask._dammage);
             }
         }
         break;
