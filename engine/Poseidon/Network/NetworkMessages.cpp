@@ -90,72 +90,7 @@ DEFINE_NET_MESSAGE(AskForJoinUnits, ASK_FOR_JOIN_UNITS_MSG)
 
 DEFINE_NET_MESSAGE(AskForHideBody, ASK_FOR_HIDE_BODY_MSG)
 
-// network message indices for ExplosionDammageEffectsMessage class
-class IndicesExplosionDammageEffects : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int owner;
-    int shot;
-    int directHit;
-    int pos;
-    int dir;
-    int type;
-    int enemyDammage;
-
-    IndicesExplosionDammageEffects();
-    NetworkMessageIndices* Clone() const override { return new IndicesExplosionDammageEffects; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesExplosionDammageEffects::IndicesExplosionDammageEffects()
-{
-    owner = -1;
-    shot = -1;
-    directHit = -1;
-    pos = -1;
-    dir = -1;
-    type = -1;
-    enemyDammage = -1;
-}
-
-void IndicesExplosionDammageEffects::Scan(NetworkMessageFormatBase* format){
-    SCAN(owner) SCAN(shot) SCAN(directHit) SCAN(pos) SCAN(dir) SCAN(type) SCAN(enemyDammage)}
-
-// Create network message indices for ExplosionDammageEffectsMessage class
-NetworkMessageIndices* GetIndicesExplosionDammageEffects()
-{
-    return new IndicesExplosionDammageEffects();
-}
-
-NetworkMessageFormat& ExplosionDammageEffectsMessage::CreateFormat(NetworkMessageClass cls,
-                                                                   NetworkMessageFormat& format)
-{
-    format.Add("owner", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Shot owner (who is responsible for explosion)"));
-    format.Add("shot", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Shot"));
-    format.Add("directHit", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Hitted object"));
-    format.Add("pos", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Explosion position"));
-    format.Add("dir", NDTVector, NCTNone, DEFVALUE(Vector3, VForward), DOC_MSG("Explosion direction"));
-    format.Add("type", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Ammunition type"));
-    format.Add("enemyDammage", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Some enemy was damaged"));
-    return format;
-}
-
-TMError ExplosionDammageEffectsMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesExplosionDammageEffects*>(ctx.GetIndices()))
-    const IndicesExplosionDammageEffects* indices =
-        static_cast<const IndicesExplosionDammageEffects*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->owner, owner))
-    TMCHECK(ctx.IdxTransferRef(indices->shot, shot))
-    TMCHECK(ctx.IdxTransferRef(indices->directHit, directHit))
-    TMCHECK(ctx.IdxTransfer(indices->pos, pos))
-    TMCHECK(ctx.IdxTransfer(indices->dir, dir))
-    TMCHECK(ctx.IdxTransfer(indices->type, type))
-    TMCHECK(ctx.IdxTransfer(indices->enemyDammage, enemyDammage))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(ExplosionDammageEffects, EXPLOSION_DAMMAGE_EFFECTS_MSG)
 
 DEFINE_NET_MESSAGE(DeleteObject, DELETE_OBJECT_MSG)
 

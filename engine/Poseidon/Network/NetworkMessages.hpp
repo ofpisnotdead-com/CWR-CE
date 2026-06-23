@@ -501,32 +501,16 @@ DECLARE_NET_MESSAGE(AskForJoinUnits, ASK_FOR_JOIN_UNITS_MSG)
 
 DECLARE_NET_MESSAGE(AskForHideBody, ASK_FOR_HIDE_BODY_MSG)
 
-// Message for transfer explosion effects (explosion, smoke, etc.) to other clients
-struct ExplosionDammageEffectsMessage : public NetworkSimpleObject
-{
-	// shot owner (who is responsible for explosion)
-	EntityAI *owner;
-	// shot
-	Shot *shot;
-	// hitted object
-	Object *directHit;
-	// explosion position
-	Vector3 pos;
-	// explosion direction
-	Vector3 dir;
-	// ammunition
-	RString type;
-	// some enemy was damaged
-	bool enemyDammage;
+#define EXPLOSION_DAMMAGE_EFFECTS_MSG(XX) \
+	XX(OLink<EntityAI>, owner, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Shot owner (who is responsible for explosion"), IdxTransferRef) \
+	XX(OLink<Shot>, shot, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Shot"), IdxTransferRef) \
+	XX(OLink<Object>, directHit, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Hitted object"), IdxTransferRef) \
+	XX(Vector3, pos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Explosion position"), IdxTransfer) \
+	XX(Vector3, dir, NDTVector, NCTNone, DEFVALUE(Vector3, VForward), DOC_MSG("Explosion direction"), IdxTransfer) \
+	XX(RString, type, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Ammunition type"), IdxTransfer) \
+	XX(bool, enemyDammage, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Some enemy was damaged"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTExplosionDammageEffects;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(ExplosionDammageEffects, EXPLOSION_DAMMAGE_EFFECTS_MSG)
 
 // Message for transfer fire effects (sound, fire, smoke, recoil effect, etc.) to other clients
 struct FireWeaponMessage : public NetworkSimpleObject
