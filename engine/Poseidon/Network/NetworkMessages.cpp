@@ -333,49 +333,8 @@ DEFINE_GET_INDICES(IntegrityQuestion)
 DEFINE_NET_MESSAGE(IntegrityAnswer, INTEGRITY_ANSWER_MSG)
 DEFINE_GET_INDICES(IntegrityAnswer)
 
-// network message indices for PlayerStateMessage class
-class IndicesPlayerState : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int player;
-    int state;
-
-    IndicesPlayerState();
-    NetworkMessageIndices* Clone() const override { return new IndicesPlayerState; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesPlayerState::IndicesPlayerState()
-{
-    player = -1;
-    state = -1;
-}
-
-void IndicesPlayerState::Scan(NetworkMessageFormatBase* format){SCAN(player) SCAN(state)}
-
-// Create network message indices for PlayerStateMessage class
-NetworkMessageIndices* GetIndicesPlayerState()
-{
-    return new IndicesPlayerState();
-}
-
-NetworkMessageFormat& PlayerStateMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("player", NDTInteger, NCTNone, DEFVALUE(int, AI_PLAYER), DOC_MSG("Client (player) ID"));
-    format.Add("state", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, NGSNone), DOC_MSG("New state of player"));
-    return format;
-}
-
-TMError PlayerStateMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesPlayerState*>(ctx.GetIndices()))
-    const IndicesPlayerState* indices = static_cast<const IndicesPlayerState*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->player, (int&)player))
-    TMCHECK(ctx.IdxTransfer(indices->state, (int&)state))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(PlayerState, PLAYER_STATE_MSG)
+DEFINE_GET_INDICES(PlayerState)
 
 DEFINE_NET_MESSAGE(AttachPerson, ATTACH_PERSON_MSG)
 DEFINE_GET_INDICES(AttachPerson)
