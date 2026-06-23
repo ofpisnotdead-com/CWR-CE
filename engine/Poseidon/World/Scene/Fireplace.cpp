@@ -107,36 +107,16 @@ NetworkMessageType Fireplace::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesUpdateFireplace : public IndicesUpdateVehicleAI
-{
-    typedef IndicesUpdateVehicleAI base;
+#define UPDATE_FIREPLACE_MSG(XX) \
+	XX(bool, burning, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Fire is burning"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
 
-  public:
-    int burning;
-
-    IndicesUpdateFireplace();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateFireplace; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateFireplace::IndicesUpdateFireplace()
-{
-    burning = -1;
-}
-
-void IndicesUpdateFireplace::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(burning)
-}
+DECLARE_NET_INDICES_EX_ERR(UpdateFireplace, UpdateVehicleAI, UPDATE_FIREPLACE_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdateFireplace, UpdateVehicleAI, UPDATE_FIREPLACE_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateFireplace()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateFireplace();
-}
+
+DEFINE_GET_INDICES(UpdateFireplace)
+
 namespace Poseidon
 {
 
@@ -146,10 +126,7 @@ NetworkMessageFormat& Fireplace::CreateFormat(NetworkMessageClass cls, NetworkMe
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-
-            format.Add("burning", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Fire is burning"), ET_NOT_EQUAL,
-                       ERR_COEF_MODE);
-
+            UPDATE_FIREPLACE_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);
