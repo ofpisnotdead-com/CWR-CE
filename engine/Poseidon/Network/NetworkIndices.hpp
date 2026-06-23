@@ -96,21 +96,37 @@ DECLARE_NET_MESSAGE(NetworkCommand, NETWORK_COMMAND_MSG)
 
 DECLARE_NET_MESSAGE(PlayerRole, PLAYER_ROLE_MSG)
 
-// network message indices for PlayerIdentity class
-class IndicesPlayerUpdate : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int dpnid;
-	int minPing,avgPing,maxPing;
-	int minBandwidth,avgBandwidth,maxBandwidth;
-	int desync;
-	int rights;
+#define LOGIN_MSG(XX) \
+	XX(int, dpnid, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Client (player) ID"), IdxTransfer) \
+	XX(int, playerid, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID unique in session (shorter than dpnid)"), IdxTransfer) \
+	XX(RString, id, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Unique id of player (derivated from CD key)"), IdxTransfer) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Nick (short) name of player"), IdxTransfer) \
+	XX(RString, face, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Selected face"), IdxTransfer) \
+	XX(RString, glasses, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Selected glasses"), IdxTransfer) \
+	XX(RString, speaker, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Selected speaker"), IdxTransfer) \
+	XX(float, pitch, NDTFloat, NCTNone, DEFVALUE(float, 1.0f), DOC_MSG("Selected voice pitch"), IdxTransfer) \
+	XX(RString, squad, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("unique id (URL) of squad"), IdxTransfer) \
+	XX(RString, fullname, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Full name of player"), IdxTransfer) \
+	XX(RString, email, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("E-mail of player"), IdxTransfer) \
+	XX(RString, icq, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("ICQ of player"), IdxTransfer) \
+	XX(RString, remark, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Remark about player"), IdxTransfer) \
+	XX(int, state, NDTInteger, NCTNone, DEFVALUE(int, NGSNone), DOC_MSG("State of player's network client"), IdxTransfer) \
+	XX(int, version, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Version player is using"), IdxTransfer)
 
-	IndicesPlayerUpdate();
-	NetworkMessageIndices *Clone() const override {return new IndicesPlayerUpdate;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES(Login, LOGIN_MSG)
+
+#define PLAYER_UPDATE_MSG(XX) \
+	XX(int, dpnid, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Client (player) ID"), IdxTransfer) \
+	XX(int, minPing, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 10), DOC_MSG("Ping range estimation"), IdxTransfer) \
+	XX(int, avgPing, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 100), DOC_MSG("Ping range estimation"), IdxTransfer) \
+	XX(int, maxPing, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 1000), DOC_MSG("Ping range estimation"), IdxTransfer) \
+	XX(int, minBandwidth, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 2), DOC_MSG("Bandwidth estimation (in kbps)"), IdxTransfer) \
+	XX(int, avgBandwidth, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 14), DOC_MSG("Bandwidth estimation (in kbps)"), IdxTransfer) \
+	XX(int, maxBandwidth, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 28), DOC_MSG("Bandwidth estimation (in kbps)"), IdxTransfer) \
+	XX(int, desync, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Current desync level (max. error of unsent messages)"), IdxTransfer) \
+	XX(int, rights, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Special rights of given player"), IdxTransfer)
+
+DECLARE_NET_INDICES(PlayerUpdate, PLAYER_UPDATE_MSG)
 
 namespace Poseidon { class IndicesUpdateEntityAIWeapons; }
 using Poseidon::IndicesUpdateEntityAIWeapons;

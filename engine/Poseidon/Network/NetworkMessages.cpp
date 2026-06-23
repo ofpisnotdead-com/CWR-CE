@@ -311,92 +311,11 @@ DEFINE_GET_INDICES(SetFlagOwner)
 DEFINE_NET_INDICES_EX(SetFlagCarrier, SetFlagOwner, SET_FLAG_CARRIER_MSG)
 DEFINE_GET_INDICES(SetFlagCarrier)
 
-// network message indices for PlayerIdentity class
-class IndicesLogin : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int dpnid;
-    int playerid;
-    int id;
-    int name;
-    int face;
-    int glasses;
-    int speaker;
-    int pitch;
-    int squad;
-    int fullname;
-    int email;
-    int icq;
-    int remark;
-    int state;
-    int version;
+DEFINE_NET_INDICES(Login, LOGIN_MSG)
+DEFINE_GET_INDICES(Login)
 
-    IndicesLogin();
-    NetworkMessageIndices* Clone() const override { return new IndicesLogin; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesLogin::IndicesLogin()
-{
-    dpnid = -1;
-    playerid = -1;
-    id = -1;
-    name = -1;
-    face = -1;
-    glasses = -1;
-    speaker = -1;
-    pitch = -1;
-    squad = -1;
-    fullname = -1;
-    email = -1;
-    icq = -1;
-    remark = -1;
-    state = -1;
-    version = -1;
-}
-
-void IndicesLogin::Scan(NetworkMessageFormatBase* format){
-    SCAN(dpnid) SCAN(playerid) SCAN(id) SCAN(name) SCAN(face) SCAN(glasses) SCAN(speaker) SCAN(pitch) SCAN(squad)
-        SCAN(fullname) SCAN(email) SCAN(icq) SCAN(remark) SCAN(state) SCAN(version)}
-
-IndicesPlayerUpdate::IndicesPlayerUpdate()
-{
-    dpnid = -1;
-    minPing = -1;
-    avgPing = -1;
-    maxPing = -1;
-    minBandwidth = -1;
-    avgBandwidth = -1;
-    maxBandwidth = -1;
-    desync = -1;
-    rights = -1;
-}
-
-void IndicesPlayerUpdate::Scan(NetworkMessageFormatBase* format)
-{
-    SCAN(dpnid);
-    SCAN(minPing)
-    SCAN(avgPing)
-    SCAN(maxPing)
-    SCAN(minBandwidth)
-    SCAN(avgBandwidth)
-    SCAN(maxBandwidth)
-    SCAN(desync)
-    SCAN(rights)
-}
-
-// Create network message indices for IndicesPlayerUpdate class
-NetworkMessageIndices* GetIndicesLogin()
-{
-    return new IndicesLogin();
-}
-
-// Create network message indices for IndicesPlayerUpdate class position update
-NetworkMessageIndices* GetIndicesPlayerUpdate()
-{
-    return new IndicesPlayerUpdate();
-}
+DEFINE_NET_INDICES(PlayerUpdate, PLAYER_UPDATE_MSG)
+DEFINE_GET_INDICES(PlayerUpdate)
 
 PlayerIdentity::PlayerIdentity()
 {
@@ -429,44 +348,10 @@ NetworkMessageFormat& PlayerIdentity::CreateFormat(NetworkMessageClass cls, Netw
     switch (cls)
     {
         case NMCUpdatePosition:
-            format.Add("dpnid", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Client (player) ID"));
-            format.Add("minPing", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 10), DOC_MSG("Ping range estimation"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MINOR);
-            format.Add("avgPing", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 100), DOC_MSG("Ping range estimation"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("maxPing", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 1000), DOC_MSG("Ping range estimation"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MINOR);
-            format.Add("minBandwidth", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 2),
-                       DOC_MSG("Bandwidth estimation (in kbps)"), ET_ABS_DIF, ERR_COEF_VALUE_MINOR);
-            format.Add("avgBandwidth", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 14),
-                       DOC_MSG("Bandwidth estimation (in kbps)"), ET_ABS_DIF, ERR_COEF_VALUE_MINOR);
-            format.Add("maxBandwidth", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 28),
-                       DOC_MSG("Bandwidth estimation (in kbps)"), ET_ABS_DIF, ERR_COEF_VALUE_MINOR);
-            format.Add("desync", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0),
-                       DOC_MSG("Current desync level (max. error of unsent messages)"), ET_ABS_DIF,
-                       ERR_COEF_VALUE_MAJOR);
-            format.Add("rights", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0),
-                       DOC_MSG("Special rights of given player"), ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
+            PLAYER_UPDATE_MSG(MSG_FORMAT)
             return format;
         default:
-            format.Add("dpnid", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Client (player) ID"));
-            format.Add("playerid", NDTInteger, NCTNone, DEFVALUE(int, 0),
-                       DOC_MSG("ID unique in session (shorter than dpnid)"));
-            format.Add("id", NDTString, NCTNone, DEFVALUE(RString, ""),
-                       DOC_MSG("Unique id of player (derivated from CD key)"));
-            format.Add("name", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Nick (short) name of player"));
-            format.Add("face", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Selected face"));
-            format.Add("glasses", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Selected glasses"));
-            format.Add("speaker", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Selected speaker"));
-            format.Add("pitch", NDTFloat, NCTNone, DEFVALUE(float, 1.0f), DOC_MSG("Selected voice pitch"));
-            format.Add("squad", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("unique id (URL) of squad"));
-            format.Add("fullname", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Full name of player"));
-            format.Add("email", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("E-mail of player"));
-            format.Add("icq", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("ICQ of player"));
-            format.Add("remark", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Remark about player"));
-            format.Add("state", NDTInteger, NCTNone, DEFVALUE(int, NGSNone),
-                       DOC_MSG("State of player's network client"));
-            format.Add("version", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Version player is using"));
+            LOGIN_MSG(MSG_FORMAT)
             return format;
     }
 }
