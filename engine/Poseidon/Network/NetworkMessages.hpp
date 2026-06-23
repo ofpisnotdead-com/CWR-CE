@@ -561,22 +561,11 @@ struct UpdateWeaponsMessage : public NetworkSimpleObject
 	TMError TransferMsg(NetworkMessageContext &ctx) override;
 };
 
-// Message for transfer message who is responsible to destroy vehicle to other clients
-struct VehicleDestroyedMessage : public NetworkSimpleObject
-{
-	// destroyed vehicle
-	EntityAI *killed;
-	// who is responsible for destroying
-	EntityAI *killer;
+#define VEHICLE_DESTROYED_MSG(XX) \
+	XX(OLink<EntityAI>, killed, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Destroyed vehicle"), IdxTransferRef) \
+	XX(OLink<EntityAI>, killer, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is responsible for destroying"), IdxTransferRef)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTVehicleDestroyed;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(VehicleDestroyed, VEHICLE_DESTROYED_MSG)
 
 // Message for transfer info about (user made) marker was deleted to other clients
 struct MarkerDeleteMessage : public NetworkSimpleObject

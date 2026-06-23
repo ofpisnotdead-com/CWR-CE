@@ -224,49 +224,8 @@ TMError VehicleInitCmd::TransferMsg(NetworkMessageContext& ctx)
     return TMOK;
 }
 
-// network message indices for VehicleDestroyedMessage class
-class IndicesVehicleDestroyed : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int killed;
-    int killer;
-
-    IndicesVehicleDestroyed();
-    NetworkMessageIndices* Clone() const override { return new IndicesVehicleDestroyed; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesVehicleDestroyed::IndicesVehicleDestroyed()
-{
-    killed = -1;
-    killer = -1;
-}
-
-void IndicesVehicleDestroyed::Scan(NetworkMessageFormatBase* format){SCAN(killed) SCAN(killer)}
-
-// Create network message indices for VehicleDestroyedMessage class
-NetworkMessageIndices* GetIndicesVehicleDestroyed()
-{
-    return new IndicesVehicleDestroyed();
-}
-
-NetworkMessageFormat& VehicleDestroyedMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("killed", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Destroyed vehicle"));
-    format.Add("killer", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is responsible for destroying"));
-    return format;
-}
-
-TMError VehicleDestroyedMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesVehicleDestroyed*>(ctx.GetIndices()))
-    const IndicesVehicleDestroyed* indices = static_cast<const IndicesVehicleDestroyed*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransferRef(indices->killed, killed))
-    TMCHECK(ctx.IdxTransferRef(indices->killer, killer))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(VehicleDestroyed, VEHICLE_DESTROYED_MSG)
+DEFINE_GET_INDICES(VehicleDestroyed)
 
 // network message indices for MarkerDeleteMessage class
 class IndicesMarkerDelete : public NetworkMessageIndices
