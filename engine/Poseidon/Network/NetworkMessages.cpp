@@ -230,58 +230,8 @@ DEFINE_GET_INDICES(VehicleDestroyed)
 DEFINE_NET_MESSAGE(MarkerDelete, MARKER_DELETE_MSG)
 DEFINE_GET_INDICES(MarkerDelete)
 
-IndicesMarkerCreate::IndicesMarkerCreate()
-{
-    channel = -1;
-    sender = -1;
-    units = -1;
-
-    IndicesMarker* GetIndicesMarker();
-    marker = GetIndicesMarker();
-}
-
-IndicesMarkerCreate::~IndicesMarkerCreate()
-{
-    void DeleteIndicesMarker(IndicesMarker * marker);
-    DeleteIndicesMarker(marker);
-}
-
-void IndicesMarkerCreate::Scan(NetworkMessageFormatBase* format)
-{
-    SCAN(channel)
-    SCAN(sender)
-    SCAN(units)
-
-    void ScanIndicesMarker(IndicesMarker * marker, NetworkMessageFormatBase * format);
-    ScanIndicesMarker(marker, format);
-}
-
-// Create network message indices for MarkerCreateMessage class
-NetworkMessageIndices* GetIndicesMarkerCreate()
-{
-    return new IndicesMarkerCreate();
-}
-
-NetworkMessageFormat& MarkerCreateMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("channel", NDTInteger, NCTSmallSigned, DEFVALUE(int, 0),
-               DOC_MSG("Chat channel (who will see the marker)"));
-    format.Add("sender", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Sender unit"));
-    format.Add("units", NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("List of receiving units"));
-    ArcadeMarkerInfo::CreateFormat(format);
-    return format;
-}
-
-TMError MarkerCreateMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesMarkerCreate*>(ctx.GetIndices()))
-    const IndicesMarkerCreate* indices = static_cast<const IndicesMarkerCreate*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->channel, channel))
-    TMCHECK(ctx.IdxTransferRef(indices->sender, sender))
-    TMCHECK(ctx.IdxTransferRefs(indices->units, units))
-    return marker.TransferMsg(ctx, indices->marker);
-}
+DEFINE_NET_MESSAGE(MarkerCreate, MARKER_CREATE_MSG)
+DEFINE_GET_INDICES(MarkerCreate)
 
 DEFINE_NET_MESSAGE(NetworkCommand, NETWORK_COMMAND_MSG)
 DEFINE_GET_INDICES(NetworkCommand)
