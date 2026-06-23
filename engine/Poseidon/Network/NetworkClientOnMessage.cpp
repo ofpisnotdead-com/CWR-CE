@@ -829,13 +829,13 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             ExplosionDammageEffectsMessage ask;
             ask.TransferMsg(ctx);
             Ref<AmmoType> ammo;
-            if (ask.type.GetLength() > 0)
+            if (ask._type.GetLength() > 0)
             {
-                VehicleNonAIType* type = VehicleTypes.New(ask.type);
+                VehicleNonAIType* type = VehicleTypes.New(ask._type);
                 ammo = dynamic_cast<AmmoType*>(type);
             }
-            GLandscape->ExplosionDammageEffects(ask.owner, ask.shot, ask.directHit, ask.pos, ask.dir, ammo,
-                                                ask.enemyDammage);
+            GLandscape->ExplosionDammageEffects(ask._owner, ask._shot, ask._directHit, ask._pos, ask._dir, ammo,
+                                                ask._enemyDammage);
         }
         break;
         case NMTAskForGetIn:

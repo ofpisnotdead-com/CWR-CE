@@ -1785,13 +1785,13 @@ void NetworkClient::ExplosionDammageEffects(EntityAI* owner, Shot* shot, Object*
     }
 
     ExplosionDammageEffectsMessage msg;
-    msg.owner = owner;
-    msg.shot = shot;
-    msg.directHit = directHit;
-    msg.pos = pos;
-    msg.dir = dir;
-    msg.type = type->GetName();
-    msg.enemyDammage = enemyDammage;
+    msg._owner = owner;
+    msg._shot = shot;
+    msg._directHit = directHit;
+    msg._pos = pos;
+    msg._dir = dir;
+    msg._type = type->GetName();
+    msg._enemyDammage = enemyDammage;
     SendMsg(&msg, NMFGuaranteed);
 }
 
