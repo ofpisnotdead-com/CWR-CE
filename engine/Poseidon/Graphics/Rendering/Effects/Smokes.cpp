@@ -1921,38 +1921,17 @@ NetworkMessageType Explosion::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesCreateExplosion : public IndicesCreateVehicle
-{
-    typedef IndicesCreateVehicle base;
+#define CREATE_EXPLOSION_MSG(XX) \
+	XX(OLink<Vehicle>, owner, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is responsible for explosion"), IdxTransferRef) \
+	XX(float, duration, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Duration of explosion"), IdxTransfer)
 
-  public:
-    int owner;
-    int duration;
-
-    IndicesCreateExplosion();
-    NetworkMessageIndices* Clone() const override { return new IndicesCreateExplosion; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesCreateExplosion::IndicesCreateExplosion()
-{
-    owner = -1;
-    duration = -1;
-}
-
-void IndicesCreateExplosion::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(owner)
-    SCAN(duration)
-}
+DECLARE_NET_INDICES_EX(CreateExplosion, CreateVehicle, CREATE_EXPLOSION_MSG)
+DEFINE_NET_INDICES_EX(CreateExplosion, CreateVehicle, CREATE_EXPLOSION_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesCreateExplosion()
-{
-    return new Poseidon::IndicesCreateExplosion();
-}
+
+DEFINE_GET_INDICES(CreateExplosion)
+
 namespace Poseidon
 {
 
@@ -1962,8 +1941,7 @@ NetworkMessageFormat& Explosion::CreateFormat(NetworkMessageClass cls, NetworkMe
     {
         case NMCCreate:
             base::CreateFormat(cls, format);
-            format.Add("owner", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is responsible for explosion"));
-            format.Add("duration", NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Duration of explosion"));
+            CREATE_EXPLOSION_MSG(MSG_FORMAT)
             break;
         default:
             base::CreateFormat(cls, format);
