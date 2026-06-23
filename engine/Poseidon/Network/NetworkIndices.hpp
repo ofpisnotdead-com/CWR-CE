@@ -160,20 +160,6 @@ public:
 	void Scan(NetworkMessageFormatBase *format) override;
 };
 
-// network message indices for AskForAmmoMessage class
-class IndicesAskForAmmo : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int weapon;
-	int burst;
-
-	IndicesAskForAmmo();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForAmmo;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
 // network message indices for AskForMoveVectorMessage class
 class IndicesAskForMoveVector : public NetworkMessageIndices
 {

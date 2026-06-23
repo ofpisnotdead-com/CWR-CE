@@ -1689,9 +1689,9 @@ void NetworkClient::AskForAmmo(EntityAI* vehicle, int weapon, int burst)
     }
 
     AskForAmmoMessage msg;
-    msg.vehicle = vehicle;
-    msg.weapon = weapon;
-    msg.burst = burst;
+    msg._vehicle = vehicle;
+    msg._weapon = weapon;
+    msg._burst = burst;
     SendMsg(&msg, NMFGuaranteed);
 }
 
