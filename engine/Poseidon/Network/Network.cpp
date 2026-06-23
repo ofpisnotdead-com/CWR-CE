@@ -1020,43 +1020,5 @@ DEFINE_GET_INDICES(TransferMissionFile)
 DEFINE_NET_INDICES_EX(TransferFileToServer, TransferFile, TRANSFER_MISSION_FILE_MSG)
 DEFINE_GET_INDICES(TransferFileToServer)
 
-// network message indices for AskMissionFileMessage class
-class IndicesAskMissionFile : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int valid;
-
-    IndicesAskMissionFile();
-    NetworkMessageIndices* Clone() const override { return new IndicesAskMissionFile; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesAskMissionFile::IndicesAskMissionFile()
-{
-    valid = -1;
-}
-
-void IndicesAskMissionFile::Scan(NetworkMessageFormatBase* format){SCAN(valid)}
-
-// Create network message indices for AskMissionFileMessage class
-NetworkMessageIndices* GetIndicesAskMissionFile()
-{
-    return new IndicesAskMissionFile();
-}
-
-NetworkMessageFormat& AskMissionFileMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("valid", NDTBool, NCTNone, DEFVALUE(bool, false),
-               DOC_MSG("Mission file is valid (present on client computer)"));
-    return format;
-}
-
-TMError AskMissionFileMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskMissionFile*>(ctx.GetIndices()))
-    const IndicesAskMissionFile* indices = static_cast<const IndicesAskMissionFile*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->valid, valid))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(AskMissionFile, ASK_MISSION_FILE_MSG)
+DEFINE_GET_INDICES(AskMissionFile)
