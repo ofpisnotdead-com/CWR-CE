@@ -1596,9 +1596,9 @@ void NetworkClient::AskForGetIn(Person* soldier, Transport* vehicle, GetInPositi
     );
     */
     AskForGetInMessage msg;
-    msg.soldier = soldier;
-    msg.vehicle = vehicle;
-    msg.position = position;
+    msg._soldier = soldier;
+    msg._vehicle = vehicle;
+    msg._position = position;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1620,9 +1620,9 @@ void NetworkClient::AskForGetOut(Person* soldier, Transport* vehicle, bool parac
     */
 
     AskForGetOutMessage msg;
-    msg.soldier = soldier;
-    msg.vehicle = vehicle;
-    msg.parachute = parachute;
+    msg._soldier = soldier;
+    msg._vehicle = vehicle;
+    msg._parachute = parachute;
     SendMsg(&msg, NMFGuaranteed);
 }
 
