@@ -975,14 +975,14 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForAimWeaponMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle)
+            if (ask._vehicle)
             {
-                int weapon = ask.vehicle->SelectedWeapon();
+                int weapon = ask._vehicle->SelectedWeapon();
                 if (weapon < 0)
                 {
-                    weapon = ask.weapon;
+                    weapon = ask._weapon;
                 }
-                ask.vehicle->AimWeapon(weapon, ask.dir);
+                ask._vehicle->AimWeapon(weapon, ask._dir);
             }
         }
         break;
@@ -990,9 +990,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForAimObserverMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle)
+            if (ask._vehicle)
             {
-                ask.vehicle->AimObserver(ask.dir);
+                ask._vehicle->AimObserver(ask._dir);
             }
         }
         break;
