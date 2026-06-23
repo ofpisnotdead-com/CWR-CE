@@ -965,9 +965,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForChangePositionMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle && ask.soldier)
+            if (ask._vehicle && ask._soldier)
             {
-                ask.vehicle->ChangePosition(ask.type, ask.soldier);
+                ask._vehicle->ChangePosition((UIActionType)ask._type, ask._soldier);
             }
         }
         break;
