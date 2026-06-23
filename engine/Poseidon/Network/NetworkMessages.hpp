@@ -401,30 +401,15 @@ DECLARE_NET_MESSAGE(DeleteObject, DELETE_OBJECT_MSG)
 
 DECLARE_NET_MESSAGE(DeleteCommand, DELETE_COMMAND_MSG)
 
-// Message for ask object owner for damage of object
-struct AskForDammageMessage : public NetworkSimpleObject
-{
-	// damaged object
-	Object *who;
-	// who is responsible for damage
-	EntityAI *owner;
-	// position of damage
-	Vector3 modelPos;
-	// amount of damage
-	float val;
-	// range of damage
-	float valRange;
-	// ammunition type
-	RString ammo;
+#define ASK_FOR_DAMMAGE_MSG(XX) \
+	XX(OLink<Object>, who, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Damaged object"), IdxTransferRef) \
+	XX(OLink<EntityAI>, owner, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is responsible for damage"), IdxTransferRef) \
+	XX(Vector3, modelPos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Position of damage"), IdxTransfer) \
+	XX(float, val, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Amount of damage"), IdxTransfer) \
+	XX(float, valRange, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Range of damage"), IdxTransfer) \
+	XX(RString, ammo, NDTString, NCTNone, DEFVALUE(RString, RString()), DOC_MSG("Ammunition type"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForDammage;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskForDammage, ASK_FOR_DAMMAGE_MSG)
 
 // Message for ask object owner for set of total damage of object
 struct AskForSetDammageMessage : public NetworkSimpleObject
