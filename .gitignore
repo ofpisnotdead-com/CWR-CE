@@ -23,6 +23,8 @@ lock*.txt
 imgui.ini
 .trident.env
 .trident_history
+/debug-data/
+*.gputrace
 
 # Local game data and fixtures
 /assets/

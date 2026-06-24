@@ -48,6 +48,51 @@ cmake --build build/win-x64-clang-rwdi
 
 On GNU/Linux, use the matching `linux-x64-clang-rwdi` preset.
 
+## How to Build and Run (macOS / Apple Silicon)
+
+One-time setup — vcpkg, if you don't already have it:
+
+```sh
+git clone https://github.com/microsoft/vcpkg ~/vcpkg
+~/vcpkg/bootstrap-vcpkg.sh
+export VCPKG_ROOT=~/vcpkg   # add to your shell profile to persist
+```
+
+Configure and build (RelWithDebInfo; swap in `macos-arm64-clang` for a Debug
+build or `macos-arm64-clang-rel` for Release):
+
+```sh
+cmake --preset macos-arm64-clang-rwdi
+cmake --build build/macos-arm64-clang-rwdi --target PoseidonGame -j8
+```
+
+Game data: drop your Demo or retail game data into `packages/Remaster/`
+(git-ignored local staging dir — see [Getting game data](#getting-game-data-to-run-what-you-build)).
+Point the game at that directory with `-C`/`--work-dir` rather than `cd`-ing
+into it:
+
+```sh
+# Native Metal backend (this fork's experimental renderer, Apple Silicon only)
+build/macos-arm64-clang-rwdi/apps/cwr/Game/PoseidonGame -C packages/Remaster --render mtl --window
+
+# GL33 baseline (cross-platform default renderer, for comparison)
+build/macos-arm64-clang-rwdi/apps/cwr/Game/PoseidonGame -C packages/Remaster --render gl33 --window
+```
+
+`--window` runs windowed instead of fullscreen — useful for debugging, since
+fullscreen puts the game on its own macOS Space. Other useful flags:
+`--width`/`-w` and `--height`/`-h` to set resolution, `--no-splash` to skip
+the splash screen.
+
+To debug under lldb, wrap the same invocation:
+
+```sh
+lldb -o "run -C packages/Remaster --render mtl --window" -- build/macos-arm64-clang-rwdi/apps/cwr/Game/PoseidonGame
+```
+
+See [`METAL_PORT_PROGRESS.md`](METAL_PORT_PROGRESS.md) for the Metal
+backend's current status and known issues.
+
 ## Layout
 
 - [Apps](apps/README.md) - executable targets

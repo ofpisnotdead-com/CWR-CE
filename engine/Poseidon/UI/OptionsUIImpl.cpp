@@ -2008,9 +2008,16 @@ void DisplayOptions::OnButtonClicked(int idc)
             break;
         case IDC_OPTIONS_CONFIGURE:
         {
-            auto* shell = new OptionsShell(this, _enableSimulation, false);
-            shell->PushPage(std::make_unique<ControlsPage>());
-            CreateChild(shell);
+            if (Res.FindEntry("RscOptionsShell"))
+            {
+                auto* shell = new OptionsShell(this, _enableSimulation, false);
+                shell->PushPage(std::make_unique<ControlsPage>());
+                CreateChild(shell);
+            }
+            else
+            {
+                CreateChild(new DisplayConfigure(this, _enableSimulation));
+            }
         }
             break;
         case IDC_OPTIONS_DIFFICULTY:

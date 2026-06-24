@@ -6,13 +6,20 @@
 #include <Poseidon/Core/Config/EngineConfig.hpp>
 #include <Poseidon/Graphics/Shared/WindowPlacement.hpp>
 #include <Poseidon/Graphics/Core/TLVertex.hpp>
+#include <Poseidon/Graphics/Core/MatrixConversion.hpp>
 #include <Poseidon/Graphics/Rendering/Shape/ClipShape.hpp>
+#include <Poseidon/Graphics/Rendering/Shape/Shape.hpp>
+#include <Poseidon/Graphics/Rendering/Lighting/Lights.hpp>
+#include <Poseidon/World/Scene/Scene.hpp>
+#include <Poseidon/World/Scene/Camera/Camera.hpp>
 #include <PoseidonMTL/TextBankMTL.hpp>
 #include <PoseidonMTL/TextureMTL.hpp>
+#include <PoseidonMTL/VertexBufferMTL.hpp>
 #include <Poseidon/Foundation/Logging/Logging.hpp>
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 
 namespace Poseidon
 {
@@ -146,22 +153,60 @@ EngineMTL::~EngineMTL()
     }
 }
 
-void EngineMTL::Clear(bool /*clearZ*/, bool clear, PackedColor color)
+void EngineMTL::Clear(bool clearZ, bool clear, PackedColor color)
 {
-    static bool sLoggedPipelineStatus = false;
-    if (!sLoggedPipelineStatus)
-    {
-        LOG_INFO(Graphics, "MTL: DEBUG pipeline ready = {}", _bootstrap.IsPipelineReady());
-        sLoggedPipelineStatus = true;
-    }
     bool began = _bootstrap.BeginFrame(color.R8() / 255.0f, color.G8() / 255.0f, color.B8() / 255.0f,
-                                       color.A8() / 255.0f, clear);
+                                       color.A8() / 255.0f, clear, clearZ);
     static int sBeginFailCount = 0;
     if (!began && sBeginFailCount < 5)
     {
         LOG_INFO(Graphics, "MTL: DEBUG BeginFrame FAILED #{}", sBeginFailCount);
         sBeginFailCount++;
     }
+}
+
+void EngineMTL::InitDraw(bool clear, PackedColor color)
+{
+    if (_frameOpen)
+    {
+        LOG_DEBUG(Graphics, "MTL: InitDraw done twice");
+        return;
+    }
+
+    static bool sLoggedPipelineStatus = false;
+    if (!sLoggedPipelineStatus)
+    {
+        LOG_INFO(Graphics, "MTL: pipeline ready = {}", _bootstrap.IsPipelineReady());
+        sLoggedPipelineStatus = true;
+    }
+
+    bool began = _bootstrap.BeginFrame(color.R8() / 255.0f, color.G8() / 255.0f, color.B8() / 255.0f,
+                                       color.A8() / 255.0f, clear, /*clearZ=*/true);
+    static int sInitDrawFailCount = 0;
+    if (!began && sInitDrawFailCount < 5)
+    {
+        LOG_INFO(Graphics, "MTL: DEBUG InitDraw BeginFrame FAILED #{}", sInitDrawFailCount);
+        sInitDrawFailCount++;
+    }
+
+    if (_textBank)
+        _textBank->StartFrame();
+
+    Engine::InitDraw(clear, color);
+    _frameOpen = true;
+}
+
+void EngineMTL::FinishDraw()
+{
+    if (!_frameOpen)
+        return;
+
+    Engine::FinishDraw();
+
+    if (_textBank)
+        _textBank->FinishFrame();
+
+    _frameOpen = false;
 }
 
 void EngineMTL::NextFrame()
@@ -221,16 +266,6 @@ void EngineMTL::Draw2D(const Draw2DPars& pars, const Rect2DAbs& rect, const Rect
         pars.uTL, pars.vTL, pars.uTR, pars.vTR, pars.uBR, pars.vBR, pars.uBL, pars.vBL,
     };
     const PackedColor colors[4] = {pars.colorTL, pars.colorTR, pars.colorBR, pars.colorBL};
-
-    static int sDraw2DCount = 0;
-    if (sDraw2DCount < 40)
-    {
-        int texHandle = GpuHandleOf(pars.mip._texture);
-        LOG_INFO(Graphics, "MTL: DEBUG Draw2D #{} rect=({},{},{},{}) tex={} colorTL=({},{},{},{})", sDraw2DCount,
-                 rect.x, rect.y, rect.w, rect.h, texHandle, pars.colorTL.R8(), pars.colorTL.G8(), pars.colorTL.B8(),
-                 pars.colorTL.A8());
-    }
-    sDraw2DCount++;
 
     DrawFan2D(xy, uv, colors, 4, GpuHandleOf(pars.mip._texture), clip);
 }
@@ -330,6 +365,126 @@ void EngineMTL::DrawIndexedFan3D(const VertexIndex* indices, int n)
 void EngineMTL::PrepareTriangle(const MipInfo& mip, int /*specFlags*/)
 {
     _currentTriTexture = mip.IsOK() ? GpuHandleOf(mip._texture) : 0;
+}
+
+VertexBuffer* EngineMTL::CreateVertexBuffer(const Shape& src, VBType type)
+{
+    auto* buf = new VertexBufferMTL(_bootstrap);
+    if (buf->Init(src, type))
+        return buf;
+    delete buf;
+    return nullptr;
+}
+
+// GL33's UploadVSMaterialConstants (EngineGL33_Shaders.cpp): pre-combine the
+// sun with the material on the CPU side, same formula -- ambient folds in
+// `forcedDiffuse` (the difuse-to-ambient transfer used by half-lit special
+// cases), diffuse is straight sun-diffuse * material-diffuse. The vertex
+// shader (kShaderSourceMesh) just does NdotL*diffuse + ambient + emissive.
+void EngineMTL::SetMaterial(const TLMaterial& mat, const LightList& /*lights*/, const render::LegacySpec& /*spec*/)
+{
+    if (GScene == nullptr)
+        return;
+    LightSun* sun = GScene->MainLight();
+    if (sun == nullptr)
+        return;
+
+    const Color dif = sun->Diffuse() * mat.diffuse;
+    const Color amb = sun->Ambient() * mat.ambient + sun->Diffuse() * mat.forcedDiffuse;
+
+    _tlObject.ambient[0] = amb.R();
+    _tlObject.ambient[1] = amb.G();
+    _tlObject.ambient[2] = amb.B();
+    _tlObject.ambient[3] = amb.A();
+    _tlObject.diffuse[0] = dif.R();
+    _tlObject.diffuse[1] = dif.G();
+    _tlObject.diffuse[2] = dif.B();
+    _tlObject.diffuse[3] = dif.A();
+    _tlObject.emissive[0] = mat.emmisive.R();
+    _tlObject.emissive[1] = mat.emmisive.G();
+    _tlObject.emissive[2] = mat.emmisive.B();
+    _tlObject.emissive[3] = mat.emmisive.A();
+}
+
+// Per-section texture hook -- Shape::Draw (via ShapeSection::PrepareTL) calls
+// this right before each DrawSectionTL, same role PrepareTriangle plays for
+// the legacy path (GL33's equivalent is the SetTexture call PolyProperties::
+// PrepareTL makes via PrepareTriangleTL).
+void EngineMTL::PrepareTriangleTL(const MipInfo& mip, const render::LegacySpec& /*spec*/)
+{
+    _tlCurrentTexture = mip.IsOK() ? GpuHandleOf(mip._texture) : 0;
+}
+
+// Ported from GL33's PrepareMeshTL/PrepareMeshTLImpl (EngineGL33_Mesh.cpp).
+// v1 simplification: rebuilds the per-frame constants (camera/sun/fog) on
+// every call instead of caching them across a pass's whole run of draws --
+// correctness over performance for this milestone.
+void EngineMTL::PrepareMeshTL(const LightList& /*lights*/, const Matrix4& modelToWorld,
+                              const render::LegacySpec& /*spec*/)
+{
+    if (GScene == nullptr)
+        return;
+    Camera* camera = GScene->GetCamera();
+    LightSun* sun = GScene->MainLight();
+    if (camera == nullptr || sun == nullptr)
+        return;
+
+    // Per-frame: view (rotation only -- camera-relative rendering zeroes the
+    // translation) and projection.
+    GfxMatrix view;
+    ConvertMatrix(view, camera->InverseScaled());
+    view._41 = view._42 = view._43 = 0;
+    std::memcpy(_tlFrame.view.m, &view, sizeof(view));
+
+    GfxMatrix projection;
+    ConvertProjectionMatrix(projection, camera->ProjectionNormal(), CanZBias() ? 0 : _bias);
+    std::memcpy(_tlFrame.projection.m, &projection, sizeof(projection));
+
+    const Vector3 sunDir = sun->Direction();
+    _tlFrame.sunDirAndEnabled[0] = static_cast<float>(sunDir.X());
+    _tlFrame.sunDirAndEnabled[1] = static_cast<float>(sunDir.Y());
+    _tlFrame.sunDirAndEnabled[2] = static_cast<float>(sunDir.Z());
+    _tlFrame.sunDirAndEnabled[3] = _sunEnabled ? 1.0f : 0.0f;
+
+    const float fogStart = GScene->GetFogMinRange();
+    const float fogEnd = GScene->GetFogMaxRange();
+    _tlFrame.fogParams[0] = fogStart;
+    _tlFrame.fogParams[1] = (fogEnd > fogStart) ? 1.0f / (fogEnd - fogStart) : 0.0f;
+    _tlFrame.fogParams[2] = 1.0f;
+    _tlFrame.fogParams[3] = 0.0f;
+    _tlFrame.fogColor[0] = _fogColor.R();
+    _tlFrame.fogColor[1] = _fogColor.G();
+    _tlFrame.fogColor[2] = _fogColor.B();
+    _tlFrame.fogColor[3] = 1.0f;
+
+    // Per-object: camera-relative world matrix (translation has the camera
+    // position subtracted), same as GL33's PrepareMeshTLImpl.
+    GfxMatrix world;
+    ConvertMatrix(world, modelToWorld);
+    const Vector3 camPos = camera->Position();
+    world._41 -= static_cast<float>(camPos.X());
+    world._42 -= static_cast<float>(camPos.Y());
+    world._43 -= static_cast<float>(camPos.Z());
+    std::memcpy(_tlObject.world.m, &world, sizeof(world));
+}
+
+void EngineMTL::BeginMeshTL(const Shape& sMesh, int /*spec*/, bool dynamic)
+{
+    if (VertexBuffer* buf = sMesh.GetVertexBuffer())
+        buf->Update(sMesh, dynamic);
+}
+
+void EngineMTL::DrawSectionTL(const Shape& sMesh, int beg, int end)
+{
+    auto* buf = static_cast<VertexBufferMTL*>(sMesh.GetVertexBuffer());
+    int firstIndex = 0, indexCount = 0;
+    if (buf == nullptr)
+        return;
+    if (!buf->ResolveRange(beg, end, firstIndex, indexCount))
+        return;
+
+    _bootstrap.DrawSectionTL(buf->VertexBufferHandle(), buf->IndexBufferHandle(), firstIndex, indexCount,
+                             _tlCurrentTexture, _tlObject, _tlFrame);
 }
 
 void EngineMTL::DrawPolygon(const VertexIndex* i, int n)

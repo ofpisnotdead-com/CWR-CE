@@ -260,6 +260,12 @@ void ProgressSystem::Frame()
     // no progress drawing on dedicated server
     if (GEngine->InitDrawDone())
     {
+        static int sProgressFrameLogCount = 0; // DEBUG (Alex, temp): does this fire during menu load?
+        if (sProgressFrameLogCount < 30)
+        {
+            LOG_INFO(Core, "[progress dbg] ProgressSystem::Frame() extra NextFrame() #{}", sProgressFrameLogCount);
+            sProgressFrameLogCount++;
+        }
         Draw();
         GEngine->FinishDraw();
         GEngine->NextFrame();

@@ -8,30 +8,35 @@ namespace Poseidon
 {
 
 class TextBankMTL;
+class VertexBufferMTL;
 
 // First real Metal Engine backend: implements the full IGraphicsEngine /
 // Engine contract so it can register with GraphicsEngineFactory and run
 // through GameApplication's normal lifecycle.
 //
-// 2D screen-space drawing (Draw2D/DrawPoly/DrawLine) and the legacy/software
-// T&L 3D mesh path (PrepareTriangle/BeginMesh/DrawSection/DrawPolygon) are
-// both real. Both end up at the same place: by the time the engine sees a
-// TLVertex, the CPU (Scene/TLVertexTable, see TransLight.cpp) has already
-// done the full model->view->projection->perspective-divide transform --
-// positions are already screen-space pixels. That means the 3D path needs no
-// matrix math on the GPU side either; it reuses the exact same DrawFan2D
-// helper as the 2D path, just sourcing vertices from the bound TLVertexTable
-// instead of Vertex2DAbs/Draw2DPars. No lighting/shadows yet (flat per-vertex
-// color from the CPU-side TLVertex.color) -- good enough to render sky/cloud/
-// sun/moon and simple geometry without crashing; the hardware-TL path
-// (PrepareMeshTL/BeginMeshTL/DrawSectionTL, used for terrain/vehicles) is a
-// separate, not-yet-implemented milestone.
+// Three drawing paths are real:
+//  - 2D screen-space (Draw2D/DrawPoly/DrawLine) -> DrawTriangles2D.
+//  - Legacy/software T&L (PrepareTriangle/BeginMesh/DrawSection/DrawPolygon):
+//    the CPU (Scene/TLVertexTable, see TransLight.cpp) has already done the
+//    full model->view->projection->perspective-divide transform, so this
+//    reuses DrawFan2D, just sourcing vertices from the bound TLVertexTable
+//    instead of Vertex2DAbs/Draw2DPars. No lighting (flat per-vertex color
+//    from the CPU-side TLVertex.color); still the only path for content the
+//    engine doesn't route through hardware T&L.
+//  - Hardware T&L (PrepareMeshTL/BeginMeshTL/DrawSectionTL/CreateVertexBuffer
+//    /SetMaterial, used for terrain/vehicles/characters -- GetTL() returns
+//    true) -- the GPU does the transform from a per-Shape vertex buffer
+//    (VertexBufferMTL) via its own pipeline/shader (kShaderSourceMesh in
+//    EngineMTLBootstrap.cpp). v1 lighting is sun + ambient + emissive + fog
+//    only (no local lights/specular/shadows/instancing yet -- see
+//    METAL_PORT_PROGRESS.md for that follow-up scope), ported from GL33's
+//    EngineGL33_Mesh.cpp/_Material.cpp/_Shaders.cpp.
 //
 // All actual Metal calls go through EngineMTLBootstrap (AttachToWindow /
-// BeginFrame / DrawTriangles2D / etc.) rather than metal-cpp types directly
-// -- metal-cpp's Foundation headers can't be included in the same
-// translation unit as Poseidon's core headers (see EngineMTLBootstrap.hpp
-// for why), and this file needs Engine.hpp.
+// BeginFrame / DrawTriangles2D / DrawSectionTL / etc.) rather than metal-cpp
+// types directly -- metal-cpp's Foundation headers can't be included in the
+// same translation unit as Poseidon's core headers (see
+// EngineMTLBootstrap.hpp for why), and this file needs Engine.hpp.
 class EngineMTL : public Engine
 {
   public:
@@ -39,6 +44,20 @@ class EngineMTL : public Engine
     ~EngineMTL() override;
 
     void Clear(bool clearZ = true, bool clear = true, PackedColor color = PackedColor(0)) override;
+    // The real per-frame begin/end-scene pair -- World::Simulate calls
+    // InitDraw()/FinishDraw() unconditionally once per frame for every
+    // backend (see World.cpp's GEngine->InitDraw(clear, color) /
+    // GEngine->FinishDraw() call sites). Clear() above is NOT that: it's a
+    // narrow utility only called from 2-3 special-case depth-only-preview
+    // call sites (UIContainers.cpp, TransportCore.cpp). Without overriding
+    // InitDraw, EngineMTL fell back to the base Engine::InitDraw (just eye-
+    // adaptation bookkeeping, no GPU work at all) -- meaning the Metal
+    // drawable/encoder were never acquired during normal menu/gameplay
+    // rendering and every draw call silently no-op'd on its
+    // currentEncoder==nullptr guard.
+    void InitDraw(bool clear = false, PackedColor color = PackedColor(0)) override;
+    void FinishDraw() override;
+    bool InitDrawDone() override { return _frameOpen; }
     void NextFrame() override;
     void Pause() override {}
     void Restore() override {}
@@ -85,6 +104,17 @@ class EngineMTL : public Engine
     void BeginMesh(TLVertexTable& mesh, const render::LegacySpec& /*spec*/) override { _mesh = &mesh; }
     void EndMesh(TLVertexTable& /*mesh*/) override { _mesh = nullptr; }
 
+    // --- Hardware T&L mesh path (terrain/vehicles/characters) ---
+    bool GetTL() const override { return true; }
+    VertexBuffer* CreateVertexBuffer(const Shape& src, VBType type) override;
+    void EnableSunLight(bool enable) override { _sunEnabled = enable; }
+    void SetMaterial(const TLMaterial& mat, const LightList& lights, const render::LegacySpec& spec) override;
+    void PrepareTriangleTL(const MipInfo& mip, const render::LegacySpec& spec) override;
+    void PrepareMeshTL(const LightList& lights, const Matrix4& modelToWorld, const render::LegacySpec& spec) override;
+    void BeginMeshTL(const Shape& sMesh, int spec, bool dynamic = false) override;
+    void EndMeshTL(const Shape& sMesh) override {}
+    void DrawSectionTL(const Shape& sMesh, int beg, int end) override;
+
     AbstractTextBank* TextBank() override;
     void TextureDestroyed(Texture* /*tex*/) override {}
 
@@ -124,6 +154,7 @@ class EngineMTL : public Engine
     SDL_Window* _sdlWindow = nullptr;
     SDLEventWindow _eventWindow;
     EngineMTLBootstrap _bootstrap;
+    bool _frameOpen = false; // true between InitDraw() and FinishDraw() -- mirrors EngineGL33::_frameOpen
 
     TextBankMTL* _textBank = nullptr;
 
@@ -132,6 +163,18 @@ class EngineMTL : public Engine
     // DrawPolygon/DrawSection to resolve each fan's vertices/texture.
     TLVertexTable* _mesh = nullptr;
     int _currentTriTexture = 0;
+
+    // Hardware T&L mesh path state. `_tlFrame`/`_tlObject` are rebuilt on
+    // every PrepareMeshTL call (v1 simplicity -- GL33 caches its equivalent
+    // across a pass's whole run of draws; not worth the extra state machine
+    // here yet). `_tlCurrentTexture` is set by PrepareTriangleTL, the
+    // per-section hook Shape::Draw calls (via ShapeSection::PrepareTL) right
+    // before each DrawSectionTL -- kept separate from `_currentTriTexture`
+    // so the two draw paths never cross-talk if both are active in one frame.
+    FrameConstantsMTL _tlFrame = {};
+    ObjectConstantsMTL _tlObject = {};
+    int _tlCurrentTexture = 0;
+    bool _sunEnabled = false;
 
     void CreateWindowAndDevice();
 

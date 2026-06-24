@@ -1,200 +1,351 @@
 # Metal Port — Progress Notes (WIP)
 
-Status as of this commit. Written so a future session (or another contributor)
-can pick this up without re-deriving context.
+Status as of the latest commit on `feature/metal-renderer`. Written so a
+future session can pick this up cold without re-deriving context.
 
-## Where things stand
+## Repo structure (as of the last restructuring pass)
 
-**The main menu renders and is interactive, on native Metal, on Apple
-Silicon, against real retail game data.** Confirmed by hand: launched the
-game, the menu appeared, clicked a button, a settings (sub-)menu opened.
-This is the milestone the whole session was aimed at.
+- `upstream` — exact untouched mirror of `BohemiaInteractive/CWR`.
+- `main` — upstream + ARM64/Apple-Silicon portability fixes only (sse2neon,
+  `finite()`→`isfinite()`, Linux-header gating, pthread portability, Apple
+  linker workaround). No Metal code. GL33 is the only renderer; confirmed it
+  renders the **entire** game correctly on Apple Silicon (menus, fonts, 3D
+  content) — this is the proven-good baseline to diff against whenever Metal
+  output looks wrong.
+- `feature/metal-renderer` (current branch) — `main` + the Metal backend
+  (`engine/PoseidonMTL/`).
 
-Earlier in this session the window appeared solid black; debug
-instrumentation (left in place per request -- see `DEBUG` log lines in
-`EngineMTL::Clear`/`Draw2D`) proved real draw calls with real textures/colors
-were reaching the GPU even then. The black screen turned out to not be the
-final state -- once actually interacted with, the real menu was there
-underneath/after. Root cause of the initial black appearance wasn't
-conclusively isolated (candidates: a loading-screen fade, or the visible
-content simply needing a frame/input nudge) -- worth a closer look next
-session, but no longer blocking.
+GitHub fork: `McArdle-Systems/Poseidon-ARM64` (renamed from `Poseidon-Metal` —
+the ARM64 portability work is the broadly useful part; Metal is the
+experimental extra on its own branch).
 
+## This session's milestone: hardware T&L mesh pipeline
+
+The actual blocker for "no 3D models render" turned out to be architectural,
+not a small bug: `EngineMTL` had never implemented the hardware
+transform+lighting virtuals (`BeginMeshTL`/`PrepareMeshTL`/`EndMeshTL`/
+`DrawSectionTL`/`CreateVertexBuffer`/`SetMaterial`) — these are the *only*
+path that draws terrain/vehicles/characters (`Shape::Draw`, see
+`engine/Poseidon/Graphics/Rendering/Shape/ShapeDraw.cpp:78`, checks
+`engine->GetTL() && _buffer`). Everything was silently falling through to a
+much simpler legacy/software-TL fallback that was only ever meant for
+sky/cloud/sun/moon-style flat-colored content.
+
+Implemented tonight, scoped deliberately minimal (see "Known limitations /
+explicit follow-up scope" below):
+
+- `engine/PoseidonMTL/VertexBufferMTL.{hpp,cpp}` (**new**) — per-`Shape`
+  vertex+index GPU buffer pair, mirrors `VertexBufferGL33`
+  (`engine/PoseidonGL33/EngineGL33_VertexBuffer.cpp`) almost line-for-line:
+  same 32-byte vertex layout (pos/negated-norm/uv), same fan-triangulation,
+  same per-section index-range bookkeeping. Holds opaque mesh-buffer handles
+  from `EngineMTLBootstrap`, not `MTL::Buffer*` directly (same
+  metal-cpp/Poseidon-core header-collision constraint as everything else in
+  this backend).
+- `engine/PoseidonMTL/EngineMTLBootstrap.{hpp,cpp}`:
+  - New POD types (`VertexMeshMTL`, `Mat4RowsMTL`, `FrameConstantsMTL`,
+    `ObjectConstantsMTL`) and mesh-buffer handle bank
+    (`CreateMeshBuffer`/`UpdateMeshBuffer`/`DestroyMeshBuffer`, same pattern
+    as the existing texture handle bank).
+  - A second render pipeline (`pipelineStateTL`) with its own embedded MSL
+    shader (`kShaderSourceMesh`) — separate from the 2D pipeline because the
+    vertex layout differs. Both pipelines share one render pass/encoder per
+    frame; `DrawTriangles2D` and `DrawSectionTL` each explicitly rebind their
+    own pipeline/depth-state/scissor at the top of the call now, since draw
+    order between the two paths within one frame isn't guaranteed.
+  - A real depth buffer (`MTL::PixelFormatDepth32Float`, recreated on
+    resize) — didn't exist before this session at all. Two
+    `MTL::DepthStencilState`s: test+write for 3D mesh draws, always-pass/no-
+    write for 2D UI draws sharing the same pass.
+  - `BeginFrame()` gained a `clearZ` parameter (was always implicitly "don't
+    care" before) so the engine's existing `Clear(bool clearZ, bool clear,
+    ...)` split actually does something for the depth attachment now.
+  - `setMaximumDrawableCount(2)` pinned in `SetupDevice()` — unrelated to
+    this milestone, a leftover from chasing a ghosting bug earlier in the
+    session (see "Dead-end investigated" below); kept because it's a
+    correct, low-risk default independent of whether it fixed that bug.
+- `engine/PoseidonMTL/EngineMTL.{hpp,cpp}`: new overrides —
+  `CreateVertexBuffer`, `SetMaterial` (CPU-side sun+material color
+  combination, ported from `EngineGL33_Material.cpp`'s
+  `UploadVSMaterialConstants`), `PrepareTriangleTL` (per-section texture
+  hook), `PrepareMeshTL` (per-frame camera/sun/fog + per-object
+  camera-relative world matrix, ported from `EngineGL33_Mesh.cpp`),
+  `BeginMeshTL`/`DrawSectionTL`, and `GetTL() override { return true; }` —
+  this last one is the actual switch that makes every `Shape` with a GPU
+  vertex buffer (sky, the menu's 3D prop, terrain, vehicles, characters) use
+  this new path instead of the legacy fallback, in one shot, repo-wide.
+
+### Two real bugs found and fixed in the new shader (both empirically diagnosed, not guessed)
+
+1. **Ambient/diffuse incorrectly zeroed.** The shader multiplied *both*
+   ambient and diffuse by a `sunEnabled` uniform. `SetMaterial`'s CPU-side
+   sun+material combination (mirroring GL33) happens *unconditionally* —
+   the colors already have the sun baked in regardless of whether
+   `EnableSunLight(true)` was ever called for that scene. The menu's 3D
+   scene has `sunEnabled=false` (confirmed via temporary logging), so
+   multiplying by it zeroed everything except emissive (which is 0 for most
+   props) → pure black. Fix: only gate the literal per-vertex `NdotL`
+   falloff by `sunEnabled` (a directional term genuinely needs a real sun
+   direction to mean anything); ambient/emissive are never gated.
+2. **Alpha output bug.** Fragment shader returned `texColor.a` instead of
+   `1.0`, contradicting this v1's own "opaque-only" design. Legacy
+   diffuse-only textures commonly have an empty/zero alpha channel (no real
+   alpha data was ever authored) — combined with the pipeline's blending
+   state, that composited as fully transparent, again showing through to
+   the black clear color. Fix: hardcode output alpha to `1.0`.
+
+### Verified working (by direct user observation, windowed `--render mtl --window`)
+
+The network-games menu screen (`Down`, `Enter` from the main menu) — the 3D
+laptop prop and its UI highlight now render correctly: lit, no corruption,
+no ghosting. This was the "radiating fin pattern" bug from earlier in the
+session — root-caused as the legacy-path object now correctly routing
+through the new hardware-TL pipeline instead, not the swap-chain theory
+that was tried and ruled out first (see below).
+
+### Terrain/vehicles/characters — verified in a later session, mixed results
+
+See "Real per-frame render hookup" below for the full writeup (that session
+also fixed the bug that was blocking *any* of this from rendering at all).
+Short version: vehicles render well after a backface-culling fix; terrain
+has some remaining holes; one animated/multi-part character model renders
+exploded (root cause not yet found).
+
+### Dead-end investigated (for the record, so it isn't re-tried blind)
+
+Earlier in the session, before the hardware-TL gap was identified, the menu
+prop's corruption looked like classic frame-buffer ghosting (multiple stale
+swap-chain buffers showing simultaneously). Pinned `CAMetalLayer`
+`maximumDrawableCount` to 2 to match GL33's strict double-buffering
+assumption — rebuilt, retested, **no change**, which is what actually led to
+digging into `GetTL()`/`ShapeDraw.cpp` and finding the real cause. The
+drawable-count pin is still in the tree (it's a reasonable default on its
+own merits), but credit the actual fix to the hardware-TL implementation +
+the two shader bugs above, not that change.
+
+## Known limitations / explicit follow-up scope (not regressions — deliberately deferred)
+
+- **Lighting**: sun + ambient + emissive + linear fog only. No local
+  point/spot lights, no specular, no shadow maps, no instancing (grass
+  etc.). GL33's equivalent (`EngineGL33_Mesh.cpp`/`_Material.cpp`/
+  `_Shaders.cpp`) has all of these; porting them is real future work, not a
+  quick fix — see those files for the exact uniform layouts/math when that
+  work starts (`VSConst::MaxLocalLights = 8`, Blinn-Phong specular, PCF
+  cascaded shadows).
+- **Alpha test / blend passes**: v1 is opaque-only (output alpha hardcoded
+  to 1). Cutout/Transparent `PassId`s (`engine/Poseidon/Graphics/Core/
+  RenderState.hpp`) aren't distinguished yet — every section draws through
+  the same opaque-ish blend state.
+- **Queue/pass batching**: GL33 batches draws by texture/material for
+  performance (`EngineGL33_Queue.cpp`). v1 emits one immediate
+  `drawIndexedPrimitives` per `DrawSectionTL` call — correct, just not
+  batched. Fine at menu/early-mission scale; revisit if profiling shows it
+  matters.
+- **`PrepareMeshTL` recomputes per-frame constants on every call** (every
+  object), not cached across a pass's whole run of draws the way GL33's
+  `_frameState`/`BeginPass`'s `IsIn3DPass()` check does. Correctness over
+  performance for this milestone; an easy follow-up if it shows up in
+  profiling.
+
+## Audio backend now initializes on macOS (this session, separate from the Metal/T&L work)
+
+**Root cause:** `engine/PoseidonOpenAL/OpenALRuntime.hpp` `dlopen`s OpenAL by
+filename at runtime instead of being link-time-linked (deliberate, per
+`cmake/vcpkg-triplets/x64-windows-clang.cmake`'s "LGPL: openal-soft must be
+dynamically linked so users can replace the implementation" comment — same
+intent applies to all platforms). The loader only tried Linux `.so` names, so
+on macOS it always failed to find anything and `RegisterOpenALAudioBackend()`
+silently lost out to the Dummy backend in `AudioFactory`'s priority order —
+**no error was ever logged**, audio was just silently absent. Compounding
+this: even with the right filename, `ResolveFunctions()` required *every*
+listed symbol (including the 8 `EFX`/`ALC_EXT_EFX` reverb functions) to
+resolve or it failed the whole load. macOS does ship a system
+`OpenAL.framework` (deprecated since 10.15 but present and functional —
+confirmed core AL/ALC symbols resolve via a standalone `dlopen` test), but it
+implements core OpenAL 1.1 only, no EFX — so even pointing `dlopen` at it
+would still have failed without also fixing the all-or-nothing resolution.
+
+**Fix** (`engine/PoseidonOpenAL/OpenALRuntime.hpp`):
+- Split `OPENAL_RUNTIME_FUNCTIONS` into `OPENAL_CORE_FUNCTIONS` (required) and
+  `OPENAL_EFX_FUNCTIONS` (resolved best-effort, left null if missing — safe
+  because `SoundSystemOAL.cpp` already gates every EFX call behind a runtime
+  `alcIsExtensionPresent(ALC_EXT_EFX)` check and never calls
+  `InitEFX`/`alGenEffects`/etc. unless that passed).
+- Added an `__APPLE__` branch to `TryLoadModule()`: tries `libopenal.1.dylib`
+  / `libopenal.dylib` (bare names, in case of a Homebrew openal-soft on
+  `DYLD_LIBRARY_PATH`), then the Homebrew keg-only install paths directly
+  (`/opt/homebrew/opt/openal-soft/lib/...`, `/usr/local/opt/...` for Intel),
+  then falls back to `/System/Library/Frameworks/OpenAL.framework/OpenAL`,
+  which is always present.
+
+**Verified**: windowed `--render mtl --window` run now logs
+`[AUDIO] EFX extension: not available` (expected — system framework, no EFX)
+followed by `[AUDIO] Init OK: MacBook Pro Speakers` — a real OpenAL device is
+opened where before this fix the backend silently never loaded at all. No
+audio-related errors/warnings in the run.
+
+**Not yet verified**: actual audible output from in-game content (menu
+music/UI sounds, weapon/footstep SFX in a loaded mission) — only backend
+*initialization* was confirmed this session via log inspection, not a human
+listening to speaker output. Do this next if picking up audio work again.
+
+## Real per-frame render hookup — the actual fix for "nothing renders" (this session)
+
+**This supersedes the old theory below it.** The top-level main menu's
+black screen, the runaway uncapped FPS (thousands of FPS instead of a real
+~40-60), and "nothing visible during normal gameplay" were all **one root
+cause**, not three separate bugs and not the GModeIntro/audio theory from
+the previous write-up of this section.
+
+**Root cause:** `World::Simulate()` calls `GEngine->InitDraw(clear, color)`
+**unconditionally once per frame, for every backend** (`World.cpp:1364`) —
+this is the real per-frame begin-scene call, not `Clear()`. `EngineMTL` never
+overrode `InitDraw`/`InitDrawDone`/`FinishDraw` at all, so it silently fell
+back to the base `Engine::InitDraw()`, which only does eye-adaptation
+brightness bookkeeping — **zero GPU work**. The only place `EngineMTL` ever
+acquired a Metal drawable/opened a render encoder was inside `Clear()` (→
+`BeginFrame()`), and `Clear()` is called from just three places in the whole
+codebase (a map-screen 3D preview, a vehicle-transport preview, and the
+unrelated Tetris app) — **never during normal menu/gameplay rendering.**
+Confirmed empirically: instrumented `Clear()`/`BeginFrame()`/`EndFrame()` —
+zero `Clear()` calls, zero `BeginFrame()` entries, `EndFrame()` early-
+returning on every single one of 12,000+ calls in a 6-second run, while the
+CPU spun at 100% re-simulating the same instant (`deltaT≈0` forever, since
+nothing ever blocked on real GPU/vsync work either — same root cause as the
+uncapped-FPS symptom).
+
+**Fix** (`EngineMTL.hpp`/`.cpp`): added real `InitDraw`/`FinishDraw`/
+`InitDrawDone` overrides mirroring `EngineGL33`'s (`_frameOpen` flag, calls
+`_bootstrap.BeginFrame(...)` to actually acquire the drawable + open the
+encoder, `_textBank->StartFrame()/FinishFrame()`). `Clear()` is untouched
+and still works for its narrow existing call sites — `BeginFrame()`'s
+existing "first pass vs. mid-frame reuse" branch already handles either one
+calling it first in a given frame.
+
+**Verified**: the actual top-level main menu now renders — title art, all
+menu items, the background scene's terrain/vehicles. Frame pacing is now
+real (~40-50 FPS matching GL33, not thousands). `deltaT` reflects real
+elapsed time, so the intro cutscene plays at the correct speed instead of
+being frozen.
+
+**Two more real bugs found and fixed alongside this** (both in
+`EngineMTLBootstrap.cpp`, both pre-existing in the hardware-TL pipeline,
+unmasked by the above fix actually letting frames render):
+1. **Clear color was hardcoded to pure red** in the TL pass's
+   `RenderPassColorAttachmentDescriptor` (`MTL::ClearColor::Make(1.0, 0.0,
+   0.0, 1.0)` — a leftover debug override, literally commented `// DEBUG:
+   force-red clear`). Fixed to use the actual passed-in `r,g,b,a`.
+2. **Backface culling was never enabled anywhere** (`MTLCullModeNone` is
+   Metal's default, and nothing ever called `setCullMode`/
+   `setFrontFacingWinding`). Both triangle winding directions of every mesh
+   were rendering — solid-hulled vehicles (e.g. the M113) showed their
+   back-facing interior walls through gaps in the hull. Fixed:
+   `setCullMode(MTL::CullModeBack)` + `setFrontFacingWinding(
+   MTL::WindingClockwise)` in `DrawSectionTL`, matching GL33's default
+   (`EngineGL33_Queue.cpp`: `cull::Back()` + `cull::FrontFaceCW()`).
+
+**`displaySyncEnabled(true)`** was also added to the `CAMetalLayer` in
+`SetupDevice()` as part of investigating the FPS issue — real vsync pacing
+that GL33 gets for free from `SDL_GL_SwapWindow`, that Metal needs to ask
+for explicitly. Kept as a correct default even though the `InitDraw` fix
+turned out to be the actual cause of the unthrottled loop.
+
+**Still open / found by interactive testing after this fix landed:**
+- **A specific animated/multi-part model (a 3rd-person soldier w/ M16) renders
+  as an exploded mass of long spike triangles** — body parts flung to wrong
+  positions while still internally connected, like a bone/attachment
+  transform gone wrong. Investigated and ruled out: the per-object camera-
+  relative world transform (`PrepareMeshTL`) — checked for NaN/Inf and gross
+  non-orthonormality across real captures, zero hits. Also ruled out: raw
+  local-space vertex source data (`Shape::Pos()/Norm()` via
+  `VertexBufferMTL::CopyVertices`) — bounding-box-sanity-checked down to a
+  3-unit threshold for dynamic/animated shapes specifically, every hit was a
+  legitimate normal-sized LOD level. **So the corruption is downstream of
+  both of those** — leading suspects: the index buffer / fan-triangulation
+  in `VertexBufferMTL::Init()` (no `poly.N() >= 3` guard, unlike GL33's
+  `PoseidonAssert`), or `VertexBufferMTL::Update()`/`UpdateMeshBuffer()` not
+  validating that a dynamic shape's vertex count hasn't changed since
+  `Init()` (`UpdateMeshBuffer` silently drops the write if `byteSize >
+  buf->length()` — would leave the GPU buffer stale while section/index
+  ranges assume the new layout, classic out-of-bounds-read territory).
+  A tank's camo netting shows a similar (smaller-scale) spiky artifact and is
+  much more reliably reproducible than the soldier (same point in the menu's
+  background scene every run) — better repro target than the soldier for
+  next session. A real GPU Frame Capture of the corrupted draw call (Xcode →
+  attach or launch via a scheme → Debug → Capture GPU Frame, inspect the
+  bound vertex/index buffer contents directly) will settle this far faster
+  than more printf-style instrumentation.
+- **Some terrain still shows holes/missing patches.** Not yet root-caused.
+  Candidate: `EngineMTL` never overrides `GetTLOnSurface()` (base class
+  defaults to `false`; GL33 explicitly returns `true`,
+  `EngineGL33.hpp:797`) — under Metal this forces all `OnSurface`-flagged
+  content (roads, ground decals) through the legacy/software path
+  unconditionally regardless of whether a GPU buffer exists for it. Base
+  terrain ground itself draws with `spec=0` (not `OnSurface`) so this
+  specific gap shouldn't affect it directly, but is still a real, easy,
+  worthwhile fix on its own.
+- **Minor residual ghosting in the black letterbox margins** outside the
+  actual rendered viewport (window mode, aspect-ratio bars) — cosmetic, low
+  priority, not investigated this session either.
+
+<details>
+<summary>Superseded theory (kept for history, was wrong)</summary>
+
+The previous write-up of this section speculated the black main menu was
+caused by the `GModeIntro` intro-mission world failing to load/start under
+Metal, based on the render log showing zero lines mentioning "intro" and
+audio being silent. Both of those signals turned out to be artifacts of
+*other* bugs (the log-capture working directory, and the audio dlopen bug,
+respectively) — the intro mission loads and plays fine; it just never got
+drawn because of the `InitDraw` gap above.
+
+</details>
+
+## Verification commands
+
+```sh
+export VCPKG_ROOT=/Users/alex/vcpkg
+cmake --build build/macos-arm64-clang-rwdi --target PoseidonGame -j8
+
+# Windowed is important for debugging -- fullscreen puts the game on its own
+# macOS Space, which makes `screencapture`/System Events unreliable. -w/-h
+# bump the window past the default 800x600 -- much easier to read screenshots.
+cd packages/Remaster
+/Users/alex/Projects/Poseidon-ARM64/build/macos-arm64-clang-rwdi/apps/cwr/Game/PoseidonGame \
+  --render mtl --window -w 1600 -h 1200
+
+# GL33 baseline for comparison, same flags pattern:
+/Users/alex/Projects/Poseidon-ARM64/build/macos-arm64-clang-rwdi/apps/cwr/Game/PoseidonGame \
+  --render gl33 --window -w 1600 -h 1200
 ```
-config → Metal device init (Apple M-series) → display/graphics config
-  → asset banks mounted (packages/Remaster) → landscape loaded
-  → fonts initialized → scene preloader initialized
-  → enters World::Simulate / RenderFrame, runs continuously (no crash)
-  → real Draw2D / DrawPoly / 3D-mesh-fan draw calls confirmed flowing
-    through the Metal pipeline with live data (debug logging left in,
-    see EngineMTL::Clear/Draw2D)
-  → main menu renders and is interactive (confirmed by hand)
-```
 
-## Debug logging currently left in (intentional, per request)
+No debug logging is currently left in the tree as of this commit. This
+session's instrumentation (per-frame path-usage tallies, `nextDrawable()`
+timing, `Clear`/`BeginFrame`/`EndFrame` entry counters, a `PrepareMeshTL`
+transform-anomaly check, a `CopyVertices` local-bbox-anomaly check) all
+served their diagnostic purpose and were removed before committing — see
+git log for what they found rather than re-adding blind. If you need similar
+instrumentation again, the working pattern throughout this file is a
+`static long long` call counter + `LOG_INFO` gated to `% N == 1` (or `< N`
+for a one-time cap), e.g. `EngineMTL::Clear`'s `sBeginFailCount`.
 
-- `EngineMTL::Clear`: logs `IsPipelineReady()` once, and the first 5
-  `BeginFrame()` failures if any.
-- `EngineMTL::Draw2D`: logs rect/texture-handle/colorTL for the first 40 calls.
-- `EngineMTLBootstrap::IsPipelineReady()`: new accessor backing the above --
-  added because this class's own error logging goes through raw
-  `fprintf(stderr, ...)` (it can't include Poseidon's `LOG_*` macros --
-  metal-cpp/Poseidon header collision, see the class comment), and a host
-  process redirecting/capturing stderr could silently swallow those
-  messages. Worth remembering if a *real* shader-compile/pipeline-creation
-  failure ever needs diagnosing: check `IsPipelineReady()` via `LOG_*` from
-  EngineMTL, don't trust the absence of an `EngineMTLBootstrap: ...` stderr
-  line as proof nothing failed.
+## Current working-tree state (branch `feature/metal-renderer`)
 
-Strip all of the above once the black-screen-at-startup question is closed
-out and the menu's visual correctness (colors, text, art) is verified.
-
-## Milestones completed
-
-### Milestone 0 — bare Metal pipeline (`engine/PoseidonMTL/EngineMTLBootstrap.*`)
-Standalone proof that SDL3 → `CAMetalLayer` → `MTLDevice` → clear → present
-works at all. Exercised by `apps/tools/MetalSmokeTest`. No Poseidon engine
-dependency — deliberately isolated because metal-cpp's `Foundation.hpp` and
-Poseidon's core headers can't be included in the same translation unit (see
-`EngineMTLBootstrap.hpp`'s top comment for why).
-
-### Milestone 1 — real `Poseidon::Engine` backend (`engine/PoseidonMTL/EngineMTL.*`)
-`EngineMTL` implements the full `IGraphicsEngine`/`Engine` virtual contract
-(~38 methods) and registers as backend `"mtl"` via
-`GraphicsEngineFactory`/`RegisterMetalGraphicsBackend()`, selectable with
-`--render mtl` (macOS-only CLI option, added in `AppConfig.cpp`). Window
-creation, display-mode switching, and event handling reuse the same
-`WindowPlacement` resolver and `SDLEventWindow` helper GL33 uses.
-
-### Milestone 1.5 — macOS/ARM64 portability fixes to Poseidon core
-None of this is Metal-specific; it was blocking `Poseidon` (the engine core
-library) from compiling on Apple Silicon **at all**, regardless of graphics
-backend:
-
-- `finite()` → `isfinite()`/`__builtin_isfinite` (macOS libc++ doesn't have
-  the BSD/glibc `finite()` compat function). `platform.hpp`, `MathOpt.cpp`.
-- x86 SSE/MMX intrinsics have no ARM64 equivalent. Vendored
-  [sse2neon](https://github.com/DLTcollab/sse2neon) (`thirdparty/sse2neon/`)
-  and added `engine/Poseidon/Foundation/Common/X86IntrinsicsCompat.hpp` as
-  the single redirect point + the handful of legacy MMX intrinsics
-  (`_mm_packs_pi32`, `_mm_packs_pu16`, `_mm_set1_pi8`, `_mm_cmpgt_pi8`,
-  `_mm_and_si64`/`_mm_or_si64`/`_mm_andnot_si64`) sse2neon doesn't cover,
-  hand-implemented against NEON matching Intel's documented semantics.
-- Linux-only headers (`link.h`, `linux/sysinfo.h`, `malloc.h`) gated/replaced
-  with macOS equivalents or stubs (`CrashHandler.cpp` build-ID capture,
-  `MemGrow.cpp` OOM diagnostics via `sysctlbyname("vm.swapusage", ...)`).
-- `PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP` (glibc-only) replaced with the
-  portable `pthread_mutexattr_settype(PTHREAD_MUTEX_RECURSIVE)` form.
-- `apps/cwr/Game/CMakeLists.txt` needed its own `elseif(APPLE)` branch --
-  Apple's linker has no `--start-group`/`--end-group` equivalent.
-
-### Milestone 2 — real 2D draw path + texture bank + minimal 3D mesh path
-This is today's milestone. Three things landed together because the crash
-chain forced the issue (see "Where it stops" history below):
-
-**Real 2D rendering** (`EngineMTL::Draw2D`/`DrawPoly`/`DrawLine`,
-`EngineMTLBootstrap::BeginFrame`/`DrawTriangles2D`/`EndFrame`): pixel-space
-vertices convert to NDC on the CPU (no GPU matrix math needed for 2D), get
-fanned into triangles, and draw through one embedded MSL shader (manual
-vertex-id fetch, no `MTLVertexDescriptor` -- see `kShaderSource2D` in
-`EngineMTLBootstrap.cpp`). Per-draw scissor rect replaces GL33's manual
-UV-remapping clip math. Alpha blending is on (straight, non-premultiplied).
-
-**Real texture bank** (`TextureMTL`/`TextBankMTL`): `Load()` reads bytes
-through `GFileServer` (works for PBO-packed textures), decodes via the
-existing `DecodePAABuffer` utility (handles every PAA/PAC source format,
-decompressing DXT to RGBA8 on the CPU since Apple Silicon has no BC/DXT
-hardware decode), and uploads as a single-mip `MTLTexture`. No mip chain, no
-LRU eviction/budget -- load-once-keep-forever, fine for menu-scale texture
-counts, revisit if/when this backend needs to stream 3D world textures.
-
-**Minimal 3D mesh path** (`EngineMTL::PrepareTriangle`/`BeginMesh`/`EndMesh`/
-`DrawPolygon`/`DrawSection`/`DrawLine(int,int)`): turned out to be required
-even for the *menu* -- sky/cloud/sun/moon render as real 3D objects
-unconditionally inside `Landscape::Draw()`, regardless of `--no-menu-scene`
-(that flag only skips the intro camera fly-through). The key finding that
-made this tractable: by the time the engine sees a `TLVertex`, the CPU
-(`TLVertexTable`, see `TransLight.cpp`) has already done the full
-model→view→projection→perspective-divide transform -- positions are already
-screen-space pixels. So the 3D path needs no GPU matrix math either; it
-reuses the *same* `DrawFan2D` helper as the 2D path, just sourcing vertices
-from the bound `TLVertexTable` by index instead of `Vertex2DAbs`. No
-lighting/shadows yet (flat per-vertex color). The hardware-TL path
-(`PrepareMeshTL`/`BeginMeshTL`/`DrawSectionTL`, used for terrain/vehicles) is
-a separate, not-yet-implemented milestone.
-
-**Two pre-existing engine bugs fixed** (`engine/Poseidon/World/Terrain/LandscapeRender.cpp`,
-not Metal-specific -- these would crash identically on Linux/Windows GL33
-given the same data): `Landscape::DrawSky()` and `DrawHorizont()`
-unconditionally dereferenced `_skyObject`/`_starsObject`/`_sunObject`/
-`_moonObject`/`_horizontObject` even though the engine's own logging
-("Landscape sky slot 'X' has no model configured") proves it already knows
-these can be null when a landscape config omits a sky slot. `DrawClouds()`
-right next to them already guarded its per-cloud objects the same way
-(`if (!object) continue;`) -- `DrawSky`/`DrawHorizont` just never got the
-same treatment. Added the missing null guards, matching the existing
-defensive pattern instead of introducing a new one.
-
-### Real-data validation
-Tested against the user's actual retail `packages/Remaster` install (DTA/BIN/
-AddOns/Missions/Worlds PBOs — Windows-only DLLs and the 99MB DirectX/OpenAL
-installer redistributables stripped out, dead weight on macOS). Two genuine
-data gaps found (both data, not code): missing
-`fonts/{cwr_title,cwr_body,cwr_mono,cwr_serif,cwr_hand}.ttf` (loose files at
-the content root, not packed in a PBO -- pulled from the official Remaster
-Demo zip), and a missing vehicle texture (`biscamel\icamel2.paa`, logged as a
-warning, not fatal). `packages/` is gitignored; nothing data-related is in
-this repo.
-
-## Where it stops
-
-The app no longer crashes -- it runs the per-frame loop continuously. The
-window renders **solid black**. Confirmed via temporary debug logging (added,
-checked, then removed before this commit) that real draw calls *are*
-reaching the Metal pipeline with live data:
-
-- 3D mesh fan draws: real `TLVertexTable` data, real non-zero texture handle.
-- 2D UI draws (`Draw2D`): real rects (including two very large ones —
-  `33600×12150` at large negative coordinates, consistent with letterbox/
-  pillarbox bars), but **texture handle 0** on all of them, meaning the
-  underlying `TextureMTL::LoadPixels()` did not succeed for those textures.
-
-Handle 0 is *not* "render nothing" -- `DrawTriangles2D` substitutes an opaque
-white 1×1 fallback texture for handle 0, multiplied by the per-vertex color.
-So a failed texture load alone should show as a flat white/vertex-colored
-quad, not black. For these to render black, the vertex color itself
-(`Draw2DPars::colorTL/TR/BL/BR`) would have to be black or near-black, which
-wasn't logged this session. **Next step: log the actual color values (not
-just texture handle) for these draws**, and separately check why those
-specific textures are failing to load (could be missing assets, like the
-fonts/vehicle-texture gaps already found, or a real bug in `TextureMTL`).
-Also worth a sanity check: is this a brief black fade-in transition that
-brightens after more frames, or genuinely stuck black indefinitely? Watch
-longer than a few seconds before concluding it's a bug.
-
-## Next milestone (not started)
-
-Once the black-screen question is resolved:
-- Lighting (the per-vertex `TLVertex.color` is already CPU-computed and
-  flowing through correctly -- this may turn out to need no extra GPU work)
-- MSL shader equivalents of the 9 GLSL sources in
-  `engine/PoseidonGL33/EngineGL33_Shaders.cpp` for the *hardware*-TL path
-  (40 linked-program permutations there; worth spiking whether SPIRV-Cross
-  can semi-automate GLSL→SPIR-V→MSL before hand-porting)
-- Map the existing 3 UBOs (VS constants, PS constants, WorldInstances) onto
-  Metal's buffer-index binding model for that hardware-TL path
-- Shadow maps / SSAA / instancing are later still — see the original M0 plan
-  roadmap for the full GL33 feature surface still to match
+Committed. `git log --oneline -5` on this branch for the actual commits;
+don't trust a stale file listing here to stay accurate across sessions.
 
 ## Key files
 
 | File | Purpose |
 |------|---------|
-| `engine/PoseidonMTL/EngineMTL.{hpp,cpp}` | The real `Poseidon::Engine` backend -- 2D + minimal 3D mesh draw path |
-| `engine/PoseidonMTL/EngineMTLBootstrap.{hpp,cpp}` | Metal device/layer/queue/pipeline/texture wrapper (Engine-agnostic, metal-cpp-isolated) |
+| `engine/PoseidonMTL/EngineMTL.{hpp,cpp}` | The real `Poseidon::Engine` backend — 2D + legacy software-TL + hardware-TL mesh paths |
+| `engine/PoseidonMTL/EngineMTLBootstrap.{hpp,cpp}` | Metal device/layer/queue/pipeline/texture/mesh-buffer wrapper (Engine-agnostic, metal-cpp-isolated) |
+| `engine/PoseidonMTL/VertexBufferMTL.{hpp,cpp}` | Per-Shape GPU vertex/index buffer for the hardware-TL path |
 | `engine/PoseidonMTL/TextureMTL.{hpp,cpp}` / `TextBankMTL.{hpp,cpp}` | Real PAA decode + GPU texture upload |
 | `engine/PoseidonMTL/GraphicsBackendMTL.cpp` | Factory registration (`"mtl"`) |
 | `engine/PoseidonMTL/MetalCppImpl.cpp` | metal-cpp's `*_PRIVATE_IMPLEMENTATION` macros (one definition per binary) |
-| `engine/Poseidon/Foundation/Common/X86IntrinsicsCompat.hpp` | x86 SIMD → sse2neon redirect + MMX shims |
-| `engine/Poseidon/World/Terrain/LandscapeRender.cpp` | `DrawSky`/`DrawHorizont` null-guard fixes (pre-existing bug, not Metal-specific) |
 | `apps/tools/MetalSmokeTest/` | Milestone-0 standalone smoke test |
+
+Reference (GL33, what the Metal hardware-TL path was ported from):
+`engine/PoseidonGL33/EngineGL33_VertexBuffer.cpp`,
+`EngineGL33_Mesh.cpp`, `EngineGL33_Material.cpp`, `EngineGL33_Shaders.cpp`.

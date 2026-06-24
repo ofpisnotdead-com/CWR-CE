@@ -18,6 +18,51 @@ struct Vertex2DMTL
     float r, g, b, a;
 };
 
+// 3D mesh vertex for the hardware T&L path -- same 32-byte layout as GL33's
+// SVertex (pos, negated normal, UV), local/object space (GPU does the
+// transform, unlike the 2D/legacy-TL paths where the CPU pre-transforms).
+struct VertexMeshMTL
+{
+    float px, py, pz;
+    float nx, ny, nz;
+    float u, v;
+};
+
+// Row-major 4x4, same memory layout as Poseidon's GfxMatrix (v' = v * M,
+// translation in row 3 / m[12..15]). Passed to MSL as raw floats and
+// multiplied explicitly there -- see kShaderSourceMesh -- rather than via
+// MSL's float4x4, to avoid any ambiguity about that type's assumed
+// row/column-major convention.
+struct Mat4RowsMTL
+{
+    float m[16];
+};
+
+// Per-frame constants for the TL mesh pipeline (sun, fog, camera-relative
+// view/projection). One of these is uploaded per DrawSectionTL call for now
+// (v1 simplicity) rather than cached across the run of draws within a pass.
+struct FrameConstantsMTL
+{
+    Mat4RowsMTL view;       // rotation only, translation zeroed (camera-relative)
+    Mat4RowsMTL projection; // camera projection (with z-bias already folded in)
+    float sunDirAndEnabled[4]; // xyz = direction, w = 1.0/0.0 enabled
+    float fogParams[4];        // start, invRange, enabled, 0
+    float fogColor[4];         // rgb, a=1
+};
+
+// Per-object constants for one DrawSectionTL call -- world matrix already
+// camera-relative (translation has the camera position subtracted, matching
+// GL33's PrepareMeshTLImpl), plus the material colors GL33 pre-combines with
+// the sun on the CPU side before upload (see EngineGL33's
+// UploadVSMaterialConstants).
+struct ObjectConstantsMTL
+{
+    Mat4RowsMTL world;
+    float ambient[4];
+    float diffuse[4];
+    float emissive[4];
+};
+
 // Native Metal device/layer/queue wrapper (macOS / Apple Silicon). Used two
 // ways:
 //  - Milestone 0 (MetalSmokeTest): Init() creates its own SDL_WINDOW_METAL
@@ -34,6 +79,10 @@ struct Vertex2DMTL
 // the same translation unit. Keeping this class's header metal-cpp-free
 // (PIMPL'd) lets EngineMTL.cpp include Poseidon headers freely and talk to
 // Metal only through this opaque interface.
+//
+// Log.hpp specifically is the one exception: it only pulls in
+// <spdlog/spdlog.h>, not Types.hpp/Memtype.h, so the .cpp includes it
+// directly and logs real LOG_ERROR/LOG_INFO instead of raw stderr.
 class EngineMTLBootstrap
 {
   public:
@@ -71,10 +120,10 @@ class EngineMTLBootstrap
 
     // True once EnsurePipeline() has successfully built the render pipeline
     // state (lazily, on first BeginFrame). False before that, or if shader
-    // compile / pipeline creation failed -- check this via the engine's own
-    // logging (LOG_*) rather than relying on this class's stderr-only error
-    // output, which a host process redirecting/capturing stderr could
-    // silently swallow.
+    // compile / pipeline creation failed (see LOG_ERROR(Graphics, ...) in
+    // EnsurePipeline()/EnsureTLPipeline() in the .cpp -- Log.hpp doesn't
+    // collide with metal-cpp, only the broader Poseidon headers do, so this
+    // class logs through the real engine logger now, not raw stderr).
     bool IsPipelineReady() const;
 
     // --- Real 2D rendering (Piece 2) ---
@@ -89,7 +138,11 @@ class EngineMTLBootstrap
     // Must be paired with one EndFrame(). Returns false if no drawable was
     // available (caller should skip the frame -- no DrawTriangles2D/EndFrame
     // calls in that case).
-    bool BeginFrame(float r, float g, float b, float a, bool clear);
+    // `clearZ` independently controls the depth attachment's load action --
+    // engine code clears color and depth on different calls (e.g. a depth-only
+    // clear before a UI 3D-preview pass), same as GL33's Clear(bool clearZ,
+    // bool clear, ...) split.
+    bool BeginFrame(float r, float g, float b, float a, bool clear, bool clearZ);
 
     // Uploads `vertCount` vertices + `indexCount` uint16 indices and issues
     // one indexed-triangle draw call sampling `textureHandle` (0 = an opaque
@@ -116,10 +169,34 @@ class EngineMTLBootstrap
     // assumption GL33's UpdateRGBA makes.
     void UpdateTexture(int handle, int width, int height, const uint8_t* rgba);
 
+    // --- 3D hardware T&L mesh rendering ---
+
+    // Uploads `byteSize` bytes as a new GPU buffer (vertex or index data --
+    // this is backend storage only, the caller tracks which is which).
+    // `dynamic` buffers are expected to be refreshed via UpdateMeshBuffer
+    // (animated meshes); static ones are uploaded once and never touched
+    // again. Returns a handle (>0), or 0 on failure -- same handle-bank
+    // pattern as CreateTexture.
+    int CreateMeshBuffer(const void* data, size_t byteSize, bool dynamic);
+    void UpdateMeshBuffer(int handle, const void* data, size_t byteSize);
+    void DestroyMeshBuffer(int handle);
+
+    // Binds the given vertex/index buffers + texture, uploads per-object and
+    // per-frame constants, and issues one indexed triangle draw (uint16
+    // indices, `firstIndex` is index-element-relative). Must be called
+    // between BeginFrame/EndFrame, same as DrawTriangles2D -- and can be
+    // freely interleaved with DrawTriangles2D calls within one frame; both
+    // explicitly rebind their own pipeline/depth state so draw order doesn't
+    // matter.
+    void DrawSectionTL(int vertexBufferHandle, int indexBufferHandle, int firstIndex, int indexCount,
+                       int textureHandle, const ObjectConstantsMTL& obj, const FrameConstantsMTL& frame);
+
   private:
     bool SetupDevice(); // shared by Init() and AttachToWindow()
-    void EnsurePipeline();         // lazy: compiles the embedded MSL shader + pipeline state
+    void EnsurePipeline();         // lazy: compiles the embedded 2D MSL shader + pipeline state + depth states
+    void EnsureTLPipeline();       // lazy: compiles the embedded mesh MSL shader + pipeline state
     void EnsureFallbackResources(); // lazy: 1x1 opaque white texture + sampler
+    void EnsureDepthTarget(int width, int height); // (re)creates the depth texture to match the drawable size
 
     struct Impl;
     Impl* _impl = nullptr;

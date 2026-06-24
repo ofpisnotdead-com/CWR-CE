@@ -119,6 +119,8 @@ RString GetAppVersion()
 {
 #if defined(_M_X64) || defined(__x86_64__)
     const char* platform = "x64";
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    const char* platform = "arm64";
 #else
     const char* platform = "x86";
 #endif
@@ -1863,7 +1865,10 @@ void DisplayMain::OnButtonClicked(int idc)
         case IDC_MAIN_OPTIONS:
             // Offer the Credits button only when CfgCredits is configured (the demo
             // ships none, matching the original 2001 demo).
-            CreateChild(new OptionsShell(this, true, IsCreditsConfigured()));
+            if (Res.FindEntry("RscOptionsShell"))
+                CreateChild(new OptionsShell(this, true, IsCreditsConfigured()));
+            else
+                CreateChild(new DisplayOptions(this, true, IsCreditsConfigured()));
             break;
         case IDC_MAIN_CUSTOM:
             CreateChild(new DisplayCustomArcade(this));

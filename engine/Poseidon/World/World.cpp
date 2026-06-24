@@ -857,6 +857,23 @@ void World::Simulate(float deltaT, bool& enableDraw)
         {
             _cutEffect->Simulate(deltaT);
         }
+        static int sTitDbgCount = 0;
+        if (sTitDbgCount < 30)
+        {
+            LOG_INFO(World, "[tit dbg] deltaT={} titleEffect={} cutEffect={}", deltaT,
+                     static_cast<void*>(static_cast<TitleEffect*>(_titleEffect)),
+                     static_cast<void*>(static_cast<TitleEffect*>(_cutEffect)));
+            sTitDbgCount++;
+        }
+    }
+    else
+    {
+        static int sSimDisabledLogCount = 0;
+        if (sSimDisabledLogCount < 10)
+        {
+            LOG_INFO(World, "[tit dbg] simulation DISABLED, deltaT={}", deltaT);
+            sSimDisabledLogCount++;
+        }
     }
 
     if (camVehicle)
@@ -1382,6 +1399,15 @@ void World::Simulate(float deltaT, bool& enableDraw)
 
         if (enableDraw)
         {
+            static int menuSceneGateLogCount = 0;
+            if (menuSceneGateLogCount < 20 && !ENGINE_CONFIG.landEditor)
+            {
+                LOG_INFO(World, "[world draw gate] enableDraw={} showMap={} display={} landscape={} camera={} options={}",
+                         enableDraw ? 1 : 0, _showMap ? 1 : 0, IsDisplayEnabled() ? 1 : 0,
+                         static_cast<void*>(_scene.GetLandscape()), static_cast<void*>(_scene.GetCamera()),
+                         _options ? 1 : 0);
+                menuSceneGateLogCount++;
+            }
             if (!_showMap && IsDisplayEnabled())
             {
                 {

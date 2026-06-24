@@ -9,6 +9,8 @@ add_library(PoseidonMTL STATIC
     TextureMTL.hpp
     TextBankMTL.cpp
     TextBankMTL.hpp
+    VertexBufferMTL.cpp
+    VertexBufferMTL.hpp
 )
 
 target_link_libraries(PoseidonMTL PUBLIC Poseidon)

@@ -1967,7 +1967,10 @@ void DisplayInterrupt::OnButtonClicked(int idc)
     switch (idc)
     {
         case IDC_INT_OPTIONS:
-            CreateChild(new OptionsShell(this, false, false));
+            if (Res.FindEntry("RscOptionsShell"))
+                CreateChild(new OptionsShell(this, false, false));
+            else
+                CreateChild(new DisplayOptions(this, false, false));
             break;
         default:
             Exit(idc);
@@ -2104,6 +2107,7 @@ bool ContinueSaved = true;
 
 void StartRandomCutscene(RString world)
 {
+    static int logCount = 0;
     if (world.GetLength() == 0)
     {
         world = GetMenuInitWorld();
@@ -2111,6 +2115,15 @@ void StartRandomCutscene(RString world)
 
     const ParamEntry& cls = Pars >> "CfgWorlds" >> world >> "cutscenes";
     int n = cls.GetSize();
+    if (n <= 0)
+    {
+        if (logCount < 8)
+        {
+            LOG_INFO(UI, "[menu cutscene] world='{}' has no configured cutscenes", (const char*)world);
+            logCount++;
+        }
+        return;
+    }
     int i = toIntFloor(n * GRandGen.RandomValue());
 
     RString name = cls[i];
@@ -2119,9 +2132,17 @@ void StartRandomCutscene(RString world)
     //	SetCampaign("");
     SetBaseDirectory("");
 
-    ParseIntro();
+    bool parsed = ParseIntro();
 
-    if (CurrentTemplate.groups.Size() > 0)
+    if (logCount < 8)
+    {
+        LOG_INFO(UI, "[menu cutscene] world='{}' cutscene='{}' parsed={} groups={} addons={}",
+                 (const char*)world, (const char*)name, parsed ? 1 : 0,
+                 CurrentTemplate.groups.Size(), CurrentTemplate.addOns.Size());
+        logCount++;
+    }
+
+    if (parsed && CurrentTemplate.groups.Size() > 0)
     {
         GLOB_WORLD->SwitchLandscape(GetWorldName(world));
         GWorld->ActivateAddons(CurrentTemplate.addOns);
