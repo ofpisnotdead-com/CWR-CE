@@ -118,3 +118,28 @@ jobs:
         env:
           CTEST_EXCLUDE: ${{ matrix.ctest_exclude }}
         run: ctest --test-dir '${{ matrix.build_dir }}' --output-on-failure -E "$env:CTEST_EXCLUDE"
+
+  steamrt4:
+    name: SteamRT4 Release
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build SteamRT4 SDK image
+        run: docker build -t cwr-steamrt4 docker/steamrt4
+
+      - name: Build inside SteamRT4 container
+        run: |
+          set -o pipefail
+          docker run --rm \
+            -e OFPR_TARGETS=all \
+            -v "${{ github.workspace }}:/work/ofpr" \
+            cwr-steamrt4 2>&1 | tee steamrt4-build.log
+
+      - name: Upload SteamRT4 build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: steamrt4-build-log
+          path: steamrt4-build.log
