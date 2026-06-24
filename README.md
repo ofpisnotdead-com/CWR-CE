@@ -1,4 +1,4 @@
-# Poseidon-ARM64 — a community fork (+ experimental Metal backend)
+# CWR-arm64 — a community fork (+ experimental Metal backend)
 
 > **This is a modified, unofficial community fork**, not the original program
 > and not affiliated with or endorsed by Bohemia Interactive. The base of this
