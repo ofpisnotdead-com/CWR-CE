@@ -18,7 +18,7 @@
     "enkits",
     {
       "name": "imgui",
-      "features": ["sdl3-binding", "sdl3-renderer-binding", "opengl3-binding", "freetype"]
+      "features": ["sdl3-binding", "sdl3-renderer-binding", "opengl3-binding", "freetype", "test-engine"]
     },
     {
       "name": "spdlog",
@@ -32,6 +32,11 @@
   ],
   "builtin-baseline": "fa9a5b330aed997a68310ed56418617b87a3b83d",
   "overrides": [
+    {
+      "name": "imgui",
+      "version": "1.92.8",
+      "port-version": 1
+    },
     {
       "name": "catch2",
       "version": "3.5.2"
