@@ -123,20 +123,54 @@ jobs:
   steamrt4:
     name: SteamRT4 Release
     runs-on: ubuntu-24.04
+    env:
+      STEAMRT4_PRESET: linux-x64-steamrt4
+      STEAMRT4_VCPKG_TRIPLET: x64-linux-clang
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build SteamRT4 SDK image
-        run: docker build -t cwr-steamrt4 docker/steamrt4
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/steamrt4
+          load: true
+          tags: cwr-steamrt4:latest
+          cache-from: type=gha,scope=steamrt4-sdk
+          cache-to: type=gha,mode=max,scope=steamrt4-sdk
+
+      - name: Restore SteamRT4 compiler cache
+        uses: actions/cache@v4
+        with:
+          path: tmp/steamrt4-ccache
+          key: ccache-SteamRT4-${{ env.STEAMRT4_PRESET }}-${{ github.sha }}
+          restore-keys: |
+            ccache-SteamRT4-${{ env.STEAMRT4_PRESET }}-
+
+      - name: Restore SteamRT4 vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: .vcpkg-bincache/${{ env.STEAMRT4_VCPKG_TRIPLET }}
+          key: vcpkg-SteamRT4-${{ env.STEAMRT4_VCPKG_TRIPLET }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/vcpkg-triplets/**', 'cmake/vcpkg-overlay-ports/**') }}
+          restore-keys: |
+            vcpkg-SteamRT4-${{ env.STEAMRT4_VCPKG_TRIPLET }}-
 
       - name: Build inside SteamRT4 container
         run: |
           set -o pipefail
+          mkdir -p \
+            "${{ github.workspace }}/tmp/steamrt4-ccache" \
+            "${{ github.workspace }}/.vcpkg-bincache/${{ env.STEAMRT4_VCPKG_TRIPLET }}"
           docker run --rm \
             -e OFPR_TARGETS=all \
+            -e VCPKG_BINARY_SOURCES="clear;files,/work/ofpr/.vcpkg-bincache/${{ env.STEAMRT4_VCPKG_TRIPLET }},readwrite" \
+            -e VCPKG_DEFAULT_BINARY_CACHE="/work/ofpr/.vcpkg-bincache/${{ env.STEAMRT4_VCPKG_TRIPLET }}" \
+            -e VCPKG_DEFAULT_TRIPLET="${{ env.STEAMRT4_VCPKG_TRIPLET }}" \
             -v "${{ github.workspace }}:/work/ofpr" \
-            cwr-steamrt4 2>&1 | tee steamrt4-build.log
+            cwr-steamrt4:latest 2>&1 | tee steamrt4-build.log
 
       - name: Upload SteamRT4 build log
         if: always()
