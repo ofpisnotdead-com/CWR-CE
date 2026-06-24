@@ -10,7 +10,7 @@
     "stb",
     "mimalloc",
     "zstd",
-    "sdl3",
+    { "name": "sdl3", "version>=": "3.4.10#1" },
     "openal-soft",
     "opus",
     "libogg",
