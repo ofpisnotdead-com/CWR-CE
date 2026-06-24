@@ -1,15 +1,23 @@
-# Poseidon-ARM64 — a community fork
+# Poseidon-ARM64 — a community fork (+ experimental Metal backend)
 
 > **This is a modified, unofficial community fork**, not the original program
-> and not affiliated with or endorsed by Bohemia Interactive. It makes the
-> engine build and run natively on Apple Silicon (arm64 macOS) — x86 SSE/MMX
-> intrinsics ported to NEON, a couple of glibc/Linux-only API gaps closed, and
-> the toolchain/linker pieces needed for a clean macOS build — on top of the
-> upstream source. Renders via the existing cross-platform GL33 backend; no
-> renderer changes. No rights to "ARMA", "Operation Flashpoint", or any other
-> Bohemia Interactive trademark are claimed or implied — see the Additional
-> Terms in [`LICENSE`](LICENSE). Upstream:
-> <https://github.com/BohemiaInteractive/CWR>.
+> and not affiliated with or endorsed by Bohemia Interactive. The base of this
+> fork (see the `main` branch) makes the engine build and run natively on
+> Apple Silicon (arm64 macOS) — x86 SSE/MMX intrinsics ported to NEON, a
+> couple of glibc/Linux-only API gaps closed, and the toolchain/linker pieces
+> needed for a clean macOS build — rendering via the existing cross-platform
+> GL33 backend; no renderer changes there.
+>
+> **This branch (`feature/metal-renderer`) additionally adds a second,
+> experimental native Metal rendering backend** (`--render mtl`,
+> `engine/PoseidonMTL/`) on top of that ARM64 base, as an alternative to
+> GL33 on macOS. It is a work in progress — see
+> [`METAL_PORT_PROGRESS.md`](METAL_PORT_PROGRESS.md) for current status and
+> known issues. GL33 remains the default and is unaffected.
+>
+> No rights to "ARMA", "Operation Flashpoint", or any other Bohemia
+> Interactive trademark are claimed or implied — see the Additional Terms in
+> [`LICENSE`](LICENSE). Upstream: <https://github.com/BohemiaInteractive/CWR>.
 
 # Arma: Cold War Assault - Remastered
 
