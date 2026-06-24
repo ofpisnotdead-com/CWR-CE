@@ -51,6 +51,7 @@ jobs:
             automake \
             clang \
             libtool \
+            libltdl-dev \
             pkg-config \
             libgl1-mesa-dev \
             libx11-dev \
