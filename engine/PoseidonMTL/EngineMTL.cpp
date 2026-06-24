@@ -157,12 +157,8 @@ void EngineMTL::Clear(bool clearZ, bool clear, PackedColor color)
 {
     bool began = _bootstrap.BeginFrame(color.R8() / 255.0f, color.G8() / 255.0f, color.B8() / 255.0f,
                                        color.A8() / 255.0f, clear, clearZ);
-    static int sBeginFailCount = 0;
-    if (!began && sBeginFailCount < 5)
-    {
-        LOG_INFO(Graphics, "MTL: DEBUG BeginFrame FAILED #{}", sBeginFailCount);
-        sBeginFailCount++;
-    }
+    if (!began)
+        LOG_WARN(Graphics, "MTL: Clear's BeginFrame failed (no drawable -- window minimized/occluded?)");
 }
 
 void EngineMTL::InitDraw(bool clear, PackedColor color)
@@ -173,21 +169,10 @@ void EngineMTL::InitDraw(bool clear, PackedColor color)
         return;
     }
 
-    static bool sLoggedPipelineStatus = false;
-    if (!sLoggedPipelineStatus)
-    {
-        LOG_INFO(Graphics, "MTL: pipeline ready = {}", _bootstrap.IsPipelineReady());
-        sLoggedPipelineStatus = true;
-    }
-
     bool began = _bootstrap.BeginFrame(color.R8() / 255.0f, color.G8() / 255.0f, color.B8() / 255.0f,
                                        color.A8() / 255.0f, clear, /*clearZ=*/true);
-    static int sInitDrawFailCount = 0;
-    if (!began && sInitDrawFailCount < 5)
-    {
-        LOG_INFO(Graphics, "MTL: DEBUG InitDraw BeginFrame FAILED #{}", sInitDrawFailCount);
-        sInitDrawFailCount++;
-    }
+    if (!began)
+        LOG_WARN(Graphics, "MTL: InitDraw's BeginFrame failed (no drawable -- window minimized/occluded?)");
 
     if (_textBank)
         _textBank->StartFrame();

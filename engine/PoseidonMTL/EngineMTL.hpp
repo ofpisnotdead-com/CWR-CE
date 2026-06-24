@@ -61,7 +61,18 @@ class EngineMTL : public Engine
     void NextFrame() override;
     void Pause() override {}
     void Restore() override {}
-    void FogColorChanged(ColorVal /*fogColor*/) override {}
+    // World.cpp:1342 sources the per-frame clear/background color from
+    // GEngine->FogColor() (the base Engine's _fogColor) -- without this,
+    // _fogColor never leaves its default (black), so every frame clears to
+    // black "sky" regardless of the mission's actual fog/sky color, even
+    // though sun/ambient lighting on models is unaffected (that path reads
+    // _fogColor independently via PrepareMeshTL/_tlFrame.fogColor). Sets
+    // _fogColor directly rather than calling Engine::SetFogColor (which
+    // would call FogColorChanged(_fogColor) right back here -- infinite
+    // recursion. GL33 avoids that because EngineGL33::SetFogColor shadows
+    // the base method with a non-recursing GL-upload version instead;
+    // EngineMTL has no such shadow, so this stays a plain member set).
+    void FogColorChanged(ColorVal fogColor) override { _fogColor = fogColor; }
 
     bool SwitchRes(int w, int h, int bpp) override;
     bool SwitchRefreshRate(int refresh) override;

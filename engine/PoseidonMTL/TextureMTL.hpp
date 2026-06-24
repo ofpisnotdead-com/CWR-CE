@@ -3,6 +3,9 @@
 #include <Poseidon/Graphics/Textures/TextureBank.hpp>
 #include <Poseidon/Foundation/Types/LLinks.hpp>
 
+#include <cstdint>
+#include <vector>
+
 namespace Poseidon
 {
 
@@ -49,14 +52,25 @@ class TextureMTL : public Texture
     AbstractMipmapLevel& AMipmap(int /*level*/) override { return _mip; }
     const AbstractMipmapLevel& AMipmap(int /*level*/) const override { return _mip; }
 
-    // Not used by the 2D draw path (textures are sampled on the GPU); only
-    // here to satisfy the pure virtual. Real per-texel readback (e.g. for
-    // gameplay queries) isn't implemented yet.
-    Color GetPixel(int /*level*/, float /*u*/, float /*v*/) const override { return HBlack; }
+    // Not sampled from the GPU texture (Metal has no CPU readback path
+    // wired up here) -- reads the CPU-side RGBA copy `_rgba` kept
+    // specifically for this, mirroring TextureGL33::GetPixel's pixel
+    // lookup (same u/v-times-extent, clamp-to-edge convention as
+    // PacLevelMem::GetPixel, Pactext.cpp:1445). This used to unconditionally
+    // return HBlack, which silently fed black into anything that samples a
+    // single representative texel -- e.g. Scene::CalculateSkyColor reads
+    // the sky texture's corner pixel (Scene.cpp:196) to derive the
+    // landscape's fog/background color, so the stub was the actual cause of
+    // a black sky on this backend even when CfgLandscapeSky's "sky" model
+    // itself was configured and fine.
+    Color GetPixel(int level, float u, float v) const override;
 
     bool IsTransparent() const override { return _isTransparent; }
     bool IsAlpha() const override { return _isAlpha; }
-    Color GetColor() override { return HBlack; }
+    // Same CPU-side-copy reasoning as GetPixel -- average over all texels
+    // instead of a single corner sample (matches TextureGL33::GetColor's
+    // GetAverageColor contract).
+    Color GetColor() override;
 
     bool VerifyChecksum(const MipInfo& /*mip*/) const override { return true; }
 
@@ -66,6 +80,7 @@ class TextureMTL : public Texture
     bool _isAlpha = false;
     bool _isTransparent = false;
     PacLevelMem _mip; // unused placeholder -- AMipmap() must return a reference to something
+    std::vector<uint8_t> _rgba; // CPU-side copy of the uploaded RGBA8 data, kept only for GetPixel/GetColor
 };
 
 } // namespace Poseidon
