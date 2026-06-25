@@ -67,7 +67,6 @@
 	{ \
 		MSG_FORMAT_DEF(MSG_ISCAN) \
 	} \
-	NetworkMessageIndices *GetIndices##MessageName() {return new Indices##MessageName();} \
 	void DeleteIndices##MessageName(Indices##MessageName *indices) {delete indices;}
 
 #define DEFINE_NET_INDICES_ERR(MessageName,MSG_FORMAT_DEF) \
@@ -79,7 +78,6 @@
 	{ \
 		MSG_FORMAT_DEF(MSG_ISCAN_ERR) \
 	} \
-	NetworkMessageIndices *GetIndices##MessageName() {return new Indices##MessageName();} \
 	void DeleteIndices##MessageName(Indices##MessageName *indices) {delete indices;}
 
 #define DECLARE_NET_INDICES_EX(MessageName,BaseMessageName,MSG_FORMAT_DEF) \
@@ -116,7 +114,6 @@
 		base::Scan(format); \
 		MSG_FORMAT_DEF(MSG_ISCAN) \
 	} \
-	NetworkMessageIndices *GetIndices##MessageName() {return new Indices##MessageName();} \
 	void DeleteIndices##MessageName(Indices##MessageName *indices) {delete indices;}
 
 #define DEFINE_NET_INDICES_EX_ERR(MessageName,BaseMessageName,MSG_FORMAT_DEF) \
@@ -129,7 +126,6 @@
 		base::Scan(format); \
 		MSG_FORMAT_DEF(MSG_ISCAN_ERR) \
 	} \
-	NetworkMessageIndices *GetIndices##MessageName() {return new Indices##MessageName();} \
 	void DeleteIndices##MessageName(Indices##MessageName *indices) {delete indices;}
 
 #define DECLARE_NET_MESSAGE(MessageName,MSG_FORMAT_DEF) \
@@ -172,3 +168,10 @@
 
 #define DECLARE_DEFINE_NETWORK_OBJECT_SIMPLE(MessageName) \
 	NetworkMessageType GetNMType(NetworkMessageClass cls) const {return NMT##MessageName;}
+
+#define DEFINE_GET_INDICES(MessageName) \
+	NetworkMessageIndices *GetIndices##MessageName() \
+	{ \
+		using namespace Poseidon; \
+		return new Indices##MessageName(); \
+	}
