@@ -29,6 +29,11 @@ In short: the code is free software, the name is not, and the game data comes se
 - [Ninja](https://ninja-build.org/)
 - [vcpkg](https://vcpkg.io/)
 
+On Windows, run `winget install Kitware.CMake LLVM.LLVM Ninja-build.Ninja`
+and follow the instructions for [setting up
+vcpkg](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-powershell)
+to get the required software.
+
 ### Compiling
 
 ```sh
