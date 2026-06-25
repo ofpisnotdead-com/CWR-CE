@@ -30,18 +30,37 @@ jobs:
             vcpkg_triplet: x64-linux-clang
             build_dir: build/linux-x64-clang-rwdi
             ctest_exclude: 'PoseidonTests - OAL -'
-            binaries_upload: 'Linux-x64-rwdi'
+            artifact_prefix: 'Linux-x64-rwdi'
+            dist_dir: dist/x64-linux-rwdi
+            game_artifact_path: dist/x64-linux-rwdi/PoseidonGame
+            game_demo_artifact_path: dist/x64-linux-rwdi/PoseidonGameDemo
+            server_artifact_path: dist/x64-linux-rwdi/PoseidonServer
           - name: Windows RelWithDebInfo
             os: windows-2022
             preset: win-x64-clang-rwdi
             vcpkg_triplet: x64-windows-clang
             build_dir: build/win-x64-clang-rwdi
             ctest_exclude: 'PoseidonTests - (OAL -|PAAEncoder -|Image - Save to \.paa|World state file format --|PreviewImage - saveToFile writes|PreviewImageRGB - saveToFile writes)'
-            binaries_upload: 'Windows-x64-rwdi'
+            artifact_prefix: 'Windows-x64-rwdi'
+            dist_dir: dist/x64-win-rwdi
+            game_artifact_path: |
+              dist/x64-win-rwdi/PoseidonGame.exe
+              dist/x64-win-rwdi/OpenAL32.dll
+              dist/x64-win-rwdi/OpenAL-Soft.LICENSE.txt
+            game_demo_artifact_path: |
+              dist/x64-win-rwdi/PoseidonGameDemo.exe
+              dist/x64-win-rwdi/OpenAL32.dll
+              dist/x64-win-rwdi/OpenAL-Soft.LICENSE.txt
+            server_artifact_path: dist/x64-win-rwdi/PoseidonServer.exe
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Build metadata
+        id: build_metadata
+        shell: bash
+        run: echo "sha_short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Install Linux system packages
         if: runner.os == 'Linux'
@@ -116,23 +135,43 @@ jobs:
       - name: Build
         run: cmake --build ${{ matrix.build_dir }} --parallel 2
 
-      - name: Upload binaries
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.binaries_upload }}
-          path: |
-            ${{ matrix.build_dir }}/apps/cwr/Game/PoseidonGame
-            ${{ matrix.build_dir }}/apps/cwr/Game/PoseidonGame.exe
-            ${{ matrix.build_dir }}/apps/cwr/GameDemo/PoseidonGameDemo
-            ${{ matrix.build_dir }}/apps/cwr/GameDemo/PoseidonGameDemo.exe
-            ${{ matrix.build_dir }}/apps/cwr/Server/PoseidonServer
-            ${{ matrix.build_dir }}/apps/cwr/Server/PoseidonServer.exe
-
       - name: Test
         shell: pwsh
         env:
           CTEST_EXCLUDE: ${{ matrix.ctest_exclude }}
         run: ctest --test-dir '${{ matrix.build_dir }}' --output-on-failure -E "$env:CTEST_EXCLUDE"
+
+      - name: Upload Game
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_prefix }}-Game-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ matrix.game_artifact_path }}
+          if-no-files-found: error
+
+      - name: Upload GameDemo
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_prefix }}-GameDemo-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ matrix.game_demo_artifact_path }}
+          if-no-files-found: error
+
+      - name: Upload Server
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_prefix }}-Server-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ matrix.server_artifact_path }}
+          if-no-files-found: error
+
+      - name: Upload symbols
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_prefix }}-Symbols-${{ steps.build_metadata.outputs.sha_short }}
+          path: |
+            ${{ matrix.dist_dir }}/PoseidonGame.pdb
+            ${{ matrix.dist_dir }}/PoseidonGameDemo.pdb
+            ${{ matrix.dist_dir }}/PoseidonServer.pdb
+          if-no-files-found: error
 
   steamrt4:
     name: SteamRT4 Release
