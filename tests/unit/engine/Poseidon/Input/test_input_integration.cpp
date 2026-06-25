@@ -482,6 +482,12 @@ TEST_CASE("InputSubsystem config settings round-trip", "[input][integration]")
     sub.ToggleJoystickEnabled();
     REQUIRE(sub.IsJoystickEnabled() == origJoy);
 
+    bool origRevJoy = sub.IsReverseJoystick();
+    sub.SetReverseJoystick(!origRevJoy);
+    REQUIRE(sub.IsReverseJoystick() == !origRevJoy);
+    sub.ToggleReverseJoystick();
+    REQUIRE(sub.IsReverseJoystick() == origRevJoy);
+
     bool origButtons = sub.IsMouseButtonsReversed();
     sub.SetMouseButtonsReversed(!origButtons);
     REQUIRE(sub.IsMouseButtonsReversed() == !origButtons);

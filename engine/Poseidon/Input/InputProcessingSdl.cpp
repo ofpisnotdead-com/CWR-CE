@@ -504,7 +504,7 @@ void ProcessJoystick_SDL()
         if (GInput.gameFocusLost <= 0)
         {
             GInput.cursor.aimDeltaX += moveX;
-            GInput.cursor.aimDeltaY += GInput.mouse.reverseY ? -moveY : moveY;
+            GInput.cursor.aimDeltaY += GInput.gamepad.reverseYStick ? -moveY : moveY;
         }
         GInput.cursor.cursorX += moveX;
         GInput.cursor.cursorY += moveY;

@@ -20,6 +20,7 @@ struct GamepadState
 
     // Configuration (persisted to UserInfo.cfg)
     bool enabled = true;
+    bool reverseYStick = false;
     float deadzoneStick = 0.21f;
     float deadzoneTrigger = 0.10f;
     float lookSensitivity = 1.0f;

@@ -170,6 +170,9 @@ class InputSubsystem
     void ToggleReverseMouse();
     void SetJoystickEnabled(bool v);
     void ToggleJoystickEnabled();
+    bool IsReverseJoystick() const;
+    void SetReverseJoystick(bool v);
+    void ToggleReverseJoystick();
     bool IsMouseButtonsReversed() const;
     void SetMouseButtonsReversed(bool v);
     void ToggleMouseButtonsReversed();
