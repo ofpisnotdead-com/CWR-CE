@@ -148,6 +148,8 @@ jobs:
           VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/cmake/vcpkg-overlay-ports
           VCPKG_OVERLAY_TRIPLETS: ${{ github.workspace }}/cmake/vcpkg-triplets
         with:
+          vcpkgDirectory: ${{ runner.tool_cache }}/vcpkg
+          vcpkgGitCommitId: 15cd15b0da3c48a0c7720e4c87e0b6030334feed
           runVcpkgInstall: true
           vcpkgJsonGlob: 'vcpkg.json'
 
