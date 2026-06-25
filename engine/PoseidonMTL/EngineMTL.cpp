@@ -399,9 +399,14 @@ void EngineMTL::PrepareTriangleTL(const MipInfo& mip, const render::LegacySpec& 
 {
     _tlCurrentTexture = mip.IsOK() ? GpuHandleOf(mip._texture) : 0;
     // Runs after SetMaterial (Shape::Draw's PrepareTL call order), right
-    // before DrawSectionTL consumes _tlObject -- see fsMesh's useTexAlpha
-    // note for why this can't just always read texColor.a.
-    _tlObject.flags[0] = (mip.IsOK() && mip._texture && mip._texture->IsAlpha()) ? 1.0f : 0.0f;
+    // before DrawSectionTL consumes _tlObject/_tlSectionIsBlend -- see
+    // fsMeshOpaque/fsMeshBlend's comments for why opaque, cutout and blend
+    // textures each need different treatment.
+    Texture* tex = mip.IsOK() ? mip._texture : nullptr;
+    const bool isAlpha = tex && tex->IsAlpha();
+    const bool isCutout = tex && tex->IsTransparent();
+    _tlObject.flags[0] = isCutout ? 1.0f : 0.0f;
+    _tlSectionIsBlend = isAlpha && !isCutout;
 }
 
 // Ported from GL33's PrepareMeshTL/PrepareMeshTLImpl (EngineGL33_Mesh.cpp).
@@ -473,7 +478,7 @@ void EngineMTL::DrawSectionTL(const Shape& sMesh, int beg, int end)
         return;
 
     _bootstrap.DrawSectionTL(buf->VertexBufferHandle(), buf->IndexBufferHandle(), firstIndex, indexCount,
-                             _tlCurrentTexture, _tlObject, _tlFrame);
+                             _tlCurrentTexture, _tlObject, _tlFrame, _tlSectionIsBlend);
 }
 
 void EngineMTL::DrawPolygon(const VertexIndex* i, int n)

@@ -61,12 +61,12 @@ struct ObjectConstantsMTL
     float ambient[4];
     float diffuse[4];
     float emissive[4];
-    // x = 1.0 if the bound texture's alpha channel is meaningful (Cutout/
-    // Blend per AlphaStats -- Texture::IsAlpha()), 0.0 if it's an ordinary
-    // opaque texture whose alpha channel may just be uninitialized/garbage
-    // (common for diffuse-only legacy textures). fsMesh uses this to decide
-    // whether to multiply texColor.a into the output alpha at all -- doing
-    // it unconditionally would make garbage-alpha opaque textures vanish.
+    // x = 1.0 if the bound texture is AlphaStats::Cutout (Texture::IsAlpha()
+    // && !blend) -- fsMeshOpaque alpha-tests texColor.a against GL33's
+    // cutout ref (0xc0/255, see BuildRenderPassDescriptor.hpp) and discards
+    // below it. 0.0 for ordinary opaque textures (no discard at all) and for
+    // true Blend textures (those draw with fsMeshBlend instead, see
+    // DrawSectionTL's blendEnabled parameter).
     float flags[4];
 };
 
@@ -216,8 +216,17 @@ class EngineMTLBootstrap
     // freely interleaved with DrawTriangles2D calls within one frame; both
     // explicitly rebind their own pipeline/depth state so draw order doesn't
     // matter.
+    //
+    // `blendEnabled` selects which of the two TL pipeline variants binds for
+    // this section, mirroring GL33's per-section opaque/blend split
+    // (ShapeDraw.cpp's GSectionFilter routing + SceneDraw.cpp's BlendOnly
+    // pass): true Blend sections (AlphaStats::Blend) draw with blending on
+    // and texColor.a folded into the output alpha; every other section
+    // (Opaque or Cutout) draws with blending off, so texture-alpha noise in
+    // ordinary diffuse textures never makes part of the model see-through.
     void DrawSectionTL(int vertexBufferHandle, int indexBufferHandle, int firstIndex, int indexCount,
-                       int textureHandle, const ObjectConstantsMTL& obj, const FrameConstantsMTL& frame);
+                       int textureHandle, const ObjectConstantsMTL& obj, const FrameConstantsMTL& frame,
+                       bool blendEnabled);
 
   private:
     bool SetupDevice(); // shared by Init() and AttachToWindow()

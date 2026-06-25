@@ -194,6 +194,9 @@ class EngineMTL : public Engine
     FrameConstantsMTL _tlFrame = {};
     ObjectConstantsMTL _tlObject = {};
     int _tlCurrentTexture = 0;
+    // True only for AlphaStats::Blend textures (set alongside _tlObject by
+    // PrepareTriangleTL) -- selects DrawSectionTL's blend-enabled pipeline.
+    bool _tlSectionIsBlend = false;
     bool _sunEnabled = false;
 
     void CreateWindowAndDevice();

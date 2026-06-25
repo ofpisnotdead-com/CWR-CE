@@ -128,7 +128,7 @@ struct VSOutMesh {
     float2 uv;
     float4 color;
     float fogFactor;
-    float useTexAlpha; // see fsMesh -- obj.flags.x passed through from vsMesh
+    float isCutout; // obj.flags.x passed through -- see fsMeshOpaque
 };
 
 vertex VSOutMesh vsMesh(uint vid [[vertex_id]], const device VertexMesh* verts [[buffer(0)]],
@@ -176,35 +176,42 @@ vertex VSOutMesh vsMesh(uint vid [[vertex_id]], const device VertexMesh* verts [
     out.uv = v.uv;
     out.color = float4(lit, obj.ambient.w);
     out.fogFactor = fogFactor;
-    // TODO: obj.flags.x (Texture::IsAlpha(), see ObjectConstantsMTL::flags)
-    // is plumbed through but deliberately unused here. GL33 only lets
-    // texColor.a affect the final pixel for sections it draws in its
-    // dedicated back-to-front BlendOnly pass (SceneDraw.cpp:1782-1788) --
-    // opaque+cutout sections draw with blending off regardless of what's in
-    // their texture's alpha channel. Metal has just one always-blend-
-    // enabled TL pipeline for every section of every pass, so multiplying
-    // texColor.a in unconditionally here (tried and reverted) let real
-    // partial-alpha noise in ordinary vehicle textures (e.g. ijeepmg.paa,
-    // ~7% genuinely partial texels) show through as "see the other side of
-    // the model" -- GL33 never has this problem because that texture's
-    // sections never reach a blend-enabled draw call in its opaque pass.
-    // Properly fixing this needs Metal to implement the same two-pass
-    // opaque/blend split (a second, blend-disabled pipeline variant; or gate
-    // blending per-section via the existing GSectionFilter signal), not just
-    // a per-pixel alpha tweak in one shared shader.
-    out.useTexAlpha = 0.0;
+    // obj.flags.x is 1.0 only for AlphaStats::Cutout textures (set by
+    // EngineMTL::PrepareTriangleTL) -- see fsMeshOpaque's discard test.
+    out.isCutout = obj.flags.x;
     return out;
 }
 
-fragment float4 fsMesh(VSOutMesh in [[stage_in]], constant FrameConstants& frame [[buffer(0)]],
-                       texture2d<float> tex [[texture(0)]], sampler samp [[sampler(0)]])
+// Opaque-pipeline fragment shader (blending disabled at the pipeline level,
+// pipelineStateTLOpaque) -- used for every section EXCEPT true Blend
+// (AlphaStats::Blend) ones, matching GL33's pass split: opaque+cutout
+// sections never reach a blend-enabled draw, so partial-alpha noise in
+// ordinary diffuse textures (e.g. ijeepmg.paa, ~7% genuinely partial texels)
+// can't make part of the model see-through. Cutout sections still alpha-test
+// (ref = 0xc0/255, same threshold BuildRenderPassDescriptor.hpp uses for
+// AlphaMode::Test on WorldCutout) so fences/foliage punch through cleanly.
+fragment float4 fsMeshOpaque(VSOutMesh in [[stage_in]], constant FrameConstants& frame [[buffer(0)]],
+                             texture2d<float> tex [[texture(0)]], sampler samp [[sampler(0)]])
+{
+    float4 texColor = tex.sample(samp, in.uv);
+    if (in.isCutout > 0.5 && texColor.a < (192.0 / 255.0))
+        discard_fragment();
+    float3 litColor = texColor.rgb * in.color.rgb;
+    float3 finalColor = mix(litColor, frame.fogColor.rgb, in.fogFactor);
+    return float4(finalColor, in.color.a);
+}
+
+// Blend-pipeline fragment shader (blending enabled, pipelineStateTLBlend) --
+// used only for true Blend (AlphaStats::Blend) sections, where texColor.a is
+// real per-pixel data (glass, fences seen through, smoke) and is meant to
+// paint back-to-front over whatever is already in the framebuffer.
+fragment float4 fsMeshBlend(VSOutMesh in [[stage_in]], constant FrameConstants& frame [[buffer(0)]],
+                            texture2d<float> tex [[texture(0)]], sampler samp [[sampler(0)]])
 {
     float4 texColor = tex.sample(samp, in.uv);
     float3 litColor = texColor.rgb * in.color.rgb;
     float3 finalColor = mix(litColor, frame.fogColor.rgb, in.fogFactor);
-    // Material alpha only (in.color.a) -- see vsMesh's useTexAlpha TODO for
-    // why texColor.a isn't factored in here (yet).
-    return float4(finalColor, in.color.a);
+    return float4(finalColor, in.color.a * texColor.a);
 }
 )";
 } // namespace
@@ -221,10 +228,14 @@ struct EngineMTLBootstrap::Impl
     MTL::Texture* fallbackWhite = nullptr;
     std::vector<MTL::Texture*> textures; // handle = index + 1; 0 reserved for "none"
 
-    // 3D hardware T&L mesh pipeline (separate from the 2D one above -- the
+    // 3D hardware T&L mesh pipelines (separate from the 2D one above -- the
     // vertex layout differs, pos/norm/uv vs. the 2D path's screen-space
-    // pos/uv/color).
-    MTL::RenderPipelineState* pipelineStateTL = nullptr;
+    // pos/uv/color). Two variants sharing vsMesh, split by fragment shader +
+    // blending so opaque/cutout sections never have blending enabled, same
+    // split GL33 gets from its opaque-pass-vs-BlendOnly-pass routing (see
+    // DrawSectionTL's blendEnabled parameter).
+    MTL::RenderPipelineState* pipelineStateTL = nullptr;       // fsMeshOpaque, blending disabled
+    MTL::RenderPipelineState* pipelineStateTLBlend = nullptr;  // fsMeshBlend, blending enabled
     // Depth test+write for 3D mesh draws, vs. always-pass/no-write for 2D UI
     // draws sharing the same encoder/pass -- both pipelines declare the same
     // depthAttachmentPixelFormat (required by Metal once the pass has a
@@ -506,24 +517,20 @@ void EngineMTLBootstrap::EnsureTLPipeline()
     }
 
     MTL::Function* vsFn = library->newFunction(NS::String::string("vsMesh", NS::StringEncoding::UTF8StringEncoding));
-    MTL::Function* fsFn = library->newFunction(NS::String::string("fsMesh", NS::StringEncoding::UTF8StringEncoding));
+    MTL::Function* fsFnOpaque =
+        library->newFunction(NS::String::string("fsMeshOpaque", NS::StringEncoding::UTF8StringEncoding));
+    MTL::Function* fsFnBlend =
+        library->newFunction(NS::String::string("fsMeshBlend", NS::StringEncoding::UTF8StringEncoding));
 
     MTL::RenderPipelineDescriptor* desc = MTL::RenderPipelineDescriptor::alloc()->init();
     desc->setVertexFunction(vsFn);
-    desc->setFragmentFunction(fsFn);
+    desc->setFragmentFunction(fsFnOpaque);
     MTL::RenderPipelineColorAttachmentDescriptor* colorDesc = desc->colorAttachments()->object(0);
     colorDesc->setPixelFormat(MTL::PixelFormatBGRA8Unorm);
-    // v1 opaque-only: alpha is always 1 from fsMesh, so this blend setup is
-    // visually a no-op but keeps the descriptor consistent with the 2D
-    // pipeline. Alpha test / blend (Cutout/Transparent passes) is a known
-    // follow-up -- see METAL_PORT_PROGRESS.md.
-    colorDesc->setBlendingEnabled(true);
-    colorDesc->setRgbBlendOperation(MTL::BlendOperationAdd);
-    colorDesc->setAlphaBlendOperation(MTL::BlendOperationAdd);
-    colorDesc->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
-    colorDesc->setSourceAlphaBlendFactor(MTL::BlendFactorSourceAlpha);
-    colorDesc->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
-    colorDesc->setDestinationAlphaBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+    // Opaque+cutout sections: blending off, matching GL33's opaque pass --
+    // see fsMeshOpaque's comment for why this matters for ordinary vehicle
+    // textures with alpha-channel noise.
+    colorDesc->setBlendingEnabled(false);
     desc->setDepthAttachmentPixelFormat(MTL::PixelFormatDepth32Float);
 
     _impl->pipelineStateTL = _impl->device->newRenderPipelineState(desc, &error);
@@ -533,9 +540,29 @@ void EngineMTLBootstrap::EnsureTLPipeline()
                   error ? error->localizedDescription()->utf8String() : "(unknown)");
     }
 
+    // Blend variant: same vertex stage + depth format, fsMeshBlend fragment
+    // function, blending on (one TL pipeline can't serve both -- Metal's
+    // blend state is fixed-function, baked into the pipeline at creation).
+    desc->setFragmentFunction(fsFnBlend);
+    colorDesc->setBlendingEnabled(true);
+    colorDesc->setRgbBlendOperation(MTL::BlendOperationAdd);
+    colorDesc->setAlphaBlendOperation(MTL::BlendOperationAdd);
+    colorDesc->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
+    colorDesc->setSourceAlphaBlendFactor(MTL::BlendFactorSourceAlpha);
+    colorDesc->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+    colorDesc->setDestinationAlphaBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+
+    _impl->pipelineStateTLBlend = _impl->device->newRenderPipelineState(desc, &error);
+    if (_impl->pipelineStateTLBlend == nullptr)
+    {
+        LOG_ERROR(Graphics, "EngineMTLBootstrap: mesh blend pipeline state creation failed: {}",
+                  error ? error->localizedDescription()->utf8String() : "(unknown)");
+    }
+
     desc->release();
     vsFn->release();
-    fsFn->release();
+    fsFnOpaque->release();
+    fsFnBlend->release();
     library->release();
 }
 
@@ -814,13 +841,14 @@ void EngineMTLBootstrap::DestroyMeshBufferDeferred(int handle)
 }
 
 void EngineMTLBootstrap::DrawSectionTL(int vertexBufferHandle, int indexBufferHandle, int firstIndex, int indexCount,
-                                       int textureHandle, const ObjectConstantsMTL& obj, const FrameConstantsMTL& frame)
+                                       int textureHandle, const ObjectConstantsMTL& obj, const FrameConstantsMTL& frame,
+                                       bool blendEnabled)
 {
     if (_impl->currentEncoder == nullptr || indexCount <= 0)
         return;
 
     EnsureTLPipeline();
-    if (_impl->pipelineStateTL == nullptr)
+    if (_impl->pipelineStateTL == nullptr || _impl->pipelineStateTLBlend == nullptr)
         return;
 
     if (vertexBufferHandle <= 0 || static_cast<size_t>(vertexBufferHandle) > _impl->meshBuffers.size())
@@ -841,8 +869,11 @@ void EngineMTLBootstrap::DrawSectionTL(int vertexBufferHandle, int indexBufferHa
     }
 
     // Explicit rebind -- see DrawTriangles2D's matching comment: draw order
-    // between the two paths within one encoder is not guaranteed.
-    _impl->currentEncoder->setRenderPipelineState(_impl->pipelineStateTL);
+    // between the two paths within one encoder is not guaranteed. Pipeline
+    // choice mirrors GL33's opaque-pass/BlendOnly-pass split (see this
+    // method's header comment) -- blendEnabled is true only for sections
+    // whose texture is true AlphaStats::Blend.
+    _impl->currentEncoder->setRenderPipelineState(blendEnabled ? _impl->pipelineStateTLBlend : _impl->pipelineStateTL);
     _impl->currentEncoder->setDepthStencilState(_impl->depthStateTL);
     // Metal's cull mode defaults to None (draw both faces) and was never set
     // anywhere in this backend -- meshes with closed/solid hulls (e.g. the
@@ -957,6 +988,11 @@ void EngineMTLBootstrap::Shutdown()
     {
         _impl->pipelineStateTL->release();
         _impl->pipelineStateTL = nullptr;
+    }
+    if (_impl->pipelineStateTLBlend != nullptr)
+    {
+        _impl->pipelineStateTLBlend->release();
+        _impl->pipelineStateTLBlend = nullptr;
     }
     if (_impl->depthStateTL != nullptr)
     {
