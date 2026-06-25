@@ -22,6 +22,15 @@ In short: the code is free software, the name is not, and the game data comes se
 
 ## Quick Start
 
+### Build Requirements
+
+- [Clang](https://clang.llvm.org/)
+- [CMake](https://cmake.org/)
+- [Ninja](https://ninja-build.org/)
+- [vcpkg](https://vcpkg.io/)
+
+### Compiling
+
 ```sh
 cmake --preset win-x64-clang-rwdi
 cmake --build build/win-x64-clang-rwdi
