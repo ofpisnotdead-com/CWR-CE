@@ -22,6 +22,20 @@ In short: the code is free software, the name is not, and the game data comes se
 
 ## Quick Start
 
+### Build Requirements
+
+- [Clang](https://clang.llvm.org/)
+- [CMake](https://cmake.org/)
+- [Ninja](https://ninja-build.org/)
+- [vcpkg](https://vcpkg.io/)
+
+On Windows, run `winget install Kitware.CMake LLVM.LLVM Ninja-build.Ninja`
+and follow the instructions for [setting up
+vcpkg](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-powershell)
+to get the required software.
+
+### Compiling
+
 ```sh
 cmake --preset win-x64-clang-rwdi
 cmake --build build/win-x64-clang-rwdi
