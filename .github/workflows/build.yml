@@ -85,6 +85,7 @@ jobs:
           command -v clang
           command -v clang++
           command -v clang-format
+          command -v pkg-config
 
       - name: Setup MSVC developer environment
         if: runner.os == 'Windows'
@@ -128,7 +129,7 @@ jobs:
           ninja --version
           ccache --version
           clang-cl --version
-          link.exe /?
+          Get-Command link.exe
 
       - name: Restore vcpkg binary cache
         uses: actions/cache@v4
