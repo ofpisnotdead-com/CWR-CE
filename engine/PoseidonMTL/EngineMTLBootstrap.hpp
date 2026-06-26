@@ -50,7 +50,31 @@ struct FrameConstantsMTL
     float sunDirAndEnabled[4]; // xyz = direction, w = 1.0/0.0 enabled
     float fogParams[4];        // start, invRange, enabled, 0
     float fogColor[4];         // rgb, a=1
+    // Real (non-camera-relative) camera world position -- needed only for
+    // the specular view-direction term, mirrors GL33's separate camPos
+    // uniform (EngineGL33_Shaders.cpp VSConstants.camPos, c17). Every other
+    // field in this struct is deliberately camera-relative; this one isn't,
+    // ported as-is to match GL33's actual formula -- see vsMesh's specular
+    // comment for the apparent inconsistency this carries forward
+    // (GL33 computes viewDir from an absolute camPos against an already
+    // camera-relative worldPos, which looks dimensionally off, but this is
+    // GL33's shipped behavior and the port targets parity, not a unilateral
+    // fix).
+    float camPosWorld[4]; // xyz, w unused
 };
+
+// One local point/spot light, matching GL33's per-light VSConstants layout
+// (EngineGL33.hpp's SlotLightPos/Diffuse/Ambient/Dir, EngineGL33_Shaders.cpp's
+// UploadVSLights) field-for-field.
+struct LightMTL
+{
+    float posAndAtten[4];  // xyz world pos, camera-relative (matches world matrix); w = startAtten
+    float dirAndIsSpot[4]; // xyz beam direction (world), w = 1.0 if spot else 0.0
+    float diffuse[4];      // rgb = light diffuse * nightEffect * material diffuse; a unused
+    float ambient[4];      // rgb = light ambient * nightEffect * material ambient; a unused
+};
+
+constexpr int kMaxLocalLightsMTL = 8; // matches GL33's VSConst::MaxLocalLights
 
 // Per-object constants for one DrawSectionTL call -- world matrix already
 // camera-relative (translation has the camera position subtracted, matching
@@ -70,6 +94,18 @@ struct ObjectConstantsMTL
     // true Blend textures (those draw with fsMeshBlend instead, see
     // DrawSectionTL's blendEnabled parameter).
     float flags[4];
+    // Local point/spot lights (street lamps, vehicle headlights) -- ported
+    // from GL33's UploadVSLights. Only ever non-empty when the sun's
+    // NightEffect() > 0 or the material carries DisableSun (forced to full
+    // night) -- matches GL33's gate exactly, see EngineMTL::SetMaterial.
+    float lightCount[4]; // x = active count (0..kMaxLocalLightsMTL), rest unused
+    LightMTL lights[kMaxLocalLightsMTL];
+    // Specular: sun-direction-only highlight -- GL33 doesn't apply specular
+    // from local lights either, only the sun. rgb = sun diffuse * material
+    // specular color, w = material specular power. specEnabled.x gates it
+    // (mat.specularPower > 0), matching GL33's SelectPixelShaderSpecular split.
+    float specular[4];    // rgb + power(w)
+    float specEnabled[4]; // x = 1.0/0.0, rest unused
 };
 
 // Native Metal device/layer/queue wrapper (macOS / Apple Silicon). Used two

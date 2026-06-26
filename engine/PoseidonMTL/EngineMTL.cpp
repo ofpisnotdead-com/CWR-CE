@@ -384,7 +384,7 @@ VertexBuffer* EngineMTL::CreateVertexBuffer(const Shape& src, VBType type)
 // `forcedDiffuse` (the difuse-to-ambient transfer used by half-lit special
 // cases), diffuse is straight sun-diffuse * material-diffuse. The vertex
 // shader (kShaderSourceMesh) just does NdotL*diffuse + ambient + emissive.
-void EngineMTL::SetMaterial(const TLMaterial& mat, const LightList& /*lights*/, const render::LegacySpec& /*spec*/)
+void EngineMTL::SetMaterial(const TLMaterial& mat, const LightList& lights, const render::LegacySpec& spec)
 {
     if (GScene == nullptr)
         return;
@@ -407,6 +407,76 @@ void EngineMTL::SetMaterial(const TLMaterial& mat, const LightList& /*lights*/, 
     _tlObject.emissive[1] = mat.emmisive.G();
     _tlObject.emissive[2] = mat.emmisive.B();
     _tlObject.emissive[3] = mat.emmisive.A();
+
+    // Local point/spot lights -- ported from GL33's UploadVSLights
+    // (EngineGL33_Shaders.cpp). Night-gated exactly like GL33: local lights
+    // (street lamps, vehicle headlights) only ever illuminate geometry once
+    // the sun's NightEffect kicks in, except DisableSun materials (cockpit
+    // interiors etc.), which the legacy SetupLights forces to full night
+    // regardless of the actual time of day.
+    float night = sun->NightEffect();
+    if (render::Has(spec.material, render::Material::DisableSun))
+        night = 1.0f;
+
+    int n = 0;
+    if (night > 0.0f && GScene->GetCamera() != nullptr)
+    {
+        const Vector3 camPos = GScene->GetCamera()->Position();
+        const Color matDif = mat.diffuse * night;
+        const Color matAmb = mat.ambient * night;
+        for (int i = 0; i < lights.Size() && n < kMaxLocalLightsMTL; i++)
+        {
+            Light* light = lights[i];
+            if (!light)
+                continue;
+            LightDescription desc;
+            light->GetDescription(desc);
+            const bool isSpot = desc.type == LTSpotLight;
+            if (desc.type != LTPoint && !isSpot)
+                continue; // point + spot lights; directional (sun) handled separately
+
+            LightMTL& l = _tlObject.lights[n];
+            // Camera-relative, matching the world matrix's convention (every
+            // other position-like field in ObjectConstantsMTL is already in
+            // this space).
+            l.posAndAtten[0] = static_cast<float>(desc.pos.X() - camPos.X());
+            l.posAndAtten[1] = static_cast<float>(desc.pos.Y() - camPos.Y());
+            l.posAndAtten[2] = static_cast<float>(desc.pos.Z() - camPos.Z());
+            l.posAndAtten[3] = desc.startAtten;
+
+            Vector3 beam = desc.dir;
+            beam.Normalize();
+            l.dirAndIsSpot[0] = static_cast<float>(beam.X());
+            l.dirAndIsSpot[1] = static_cast<float>(beam.Y());
+            l.dirAndIsSpot[2] = static_cast<float>(beam.Z());
+            l.dirAndIsSpot[3] = isSpot ? 1.0f : 0.0f;
+
+            const Color ldif = desc.diffuse * matDif;
+            l.diffuse[0] = ldif.R();
+            l.diffuse[1] = ldif.G();
+            l.diffuse[2] = ldif.B();
+            l.diffuse[3] = 0.0f;
+
+            const Color lamb = desc.ambient * matAmb;
+            l.ambient[0] = lamb.R();
+            l.ambient[1] = lamb.G();
+            l.ambient[2] = lamb.B();
+            l.ambient[3] = 0.0f;
+
+            n++;
+        }
+    }
+    _tlObject.lightCount[0] = static_cast<float>(n);
+
+    // Specular: sun-direction-only (GL33 doesn't apply specular from local
+    // lights either) -- EngineGL33::DoSetMaterial's SelectPixelShaderSpecular
+    // split, ported as a uniform flag instead of a separate shader variant.
+    const Color specCol = sun->Diffuse() * mat.specular;
+    _tlObject.specular[0] = specCol.R();
+    _tlObject.specular[1] = specCol.G();
+    _tlObject.specular[2] = specCol.B();
+    _tlObject.specular[3] = static_cast<float>(mat.specularPower);
+    _tlObject.specEnabled[0] = mat.specularPower > 0 ? 1.0f : 0.0f;
 }
 
 // Per-section texture hook -- Shape::Draw (via ShapeSection::PrepareTL) calls
@@ -513,6 +583,13 @@ void EngineMTL::PrepareMeshTL(const LightList& /*lights*/, const Matrix4& modelT
     world._42 -= static_cast<float>(camPos.Y());
     world._43 -= static_cast<float>(camPos.Z());
     std::memcpy(_tlObject.world.m, &world, sizeof(world));
+
+    // Real (non-relative) camera world position -- see FrameConstantsMTL's
+    // camPosWorld doc comment (specular viewDir term only).
+    _tlFrame.camPosWorld[0] = static_cast<float>(camPos.X());
+    _tlFrame.camPosWorld[1] = static_cast<float>(camPos.Y());
+    _tlFrame.camPosWorld[2] = static_cast<float>(camPos.Z());
+    _tlFrame.camPosWorld[3] = 0.0f;
 }
 
 void EngineMTL::BeginMeshTL(const Shape& sMesh, int /*spec*/, bool dynamic)

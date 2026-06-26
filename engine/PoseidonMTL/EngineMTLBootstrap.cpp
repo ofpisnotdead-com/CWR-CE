@@ -101,6 +101,20 @@ struct FrameConstants {
     float4 sunDirAndEnabled;
     float4 fogParams;
     float4 fogColor;
+    // Real (non-camera-relative) camera world position -- specular viewDir
+    // term only, see FrameConstantsMTL::camPosWorld's doc comment
+    // (EngineMTLBootstrap.hpp) for the GL33-parity rationale.
+    float4 camPosWorld;
+};
+
+// One local point/spot light -- mirrors LightMTL (EngineMTLBootstrap.hpp)
+// field-for-field, ported from GL33's per-vertex lighting loop
+// (EngineGL33_Shaders.cpp's s_vsTransformGLSL).
+struct LocalLight {
+    float4 posAndAtten;  // xyz camera-relative world pos, w = startAtten
+    float4 dirAndIsSpot; // xyz beam direction, w = 1.0 if spot else 0.0
+    float4 diffuse;
+    float4 ambient;
 };
 
 struct ObjectConstants {
@@ -109,6 +123,10 @@ struct ObjectConstants {
     float4 diffuse;
     float4 emissive;
     float4 flags; // x = 1.0 if texColor.a is meaningful (see ObjectConstantsMTL::flags)
+    float4 lightCount; // x = active local-light count (0..8)
+    LocalLight lights[8];
+    float4 specular;    // rgb + power(w) -- sun-direction-only highlight
+    float4 specEnabled; // x = 1.0/0.0
 };
 
 static inline float4 mulRowVec4(float4 p, Mat4Rows m)
@@ -127,6 +145,11 @@ struct VSOutMesh {
     float4 position [[position]];
     float2 uv;
     float4 color;
+    // Sun-only specular highlight (ported from GL33's vSpecColor) -- added
+    // post-texture-sample in the fragment shaders, unmodulated by texColor
+    // (mirrors GL33's PSNormal: `r0.rgb += vSpecColor.rgb;` after the
+    // texture*vColor multiply).
+    float4 specColor;
     float fogFactor;
     float isCutout; // obj.flags.x passed through -- see fsMeshOpaque
 };
@@ -157,9 +180,75 @@ vertex VSOutMesh vsMesh(uint vid [[vertex_id]], const device VertexMesh* verts [
     float NdotL = max(dot(worldNorm, frame.sunDirAndEnabled.xyz), 0.0) * sunEnabled;
     float3 lit = obj.ambient.rgb + NdotL * obj.diffuse.rgb + obj.emissive.rgb;
 
+    // Local point/spot lights (street lamps, vehicle headlights) -- ported
+    // from GL33's per-vertex loop (EngineGL33_Shaders.cpp's
+    // s_vsTransformGLSL). obj.lightCount.x is 0 whenever EngineMTL::
+    // SetMaterial's night-effect gate didn't pass, so this loop is a no-op
+    // in ordinary daytime scenes -- matches GL33 exactly, not a Metal-only
+    // simplification. Spotlights additionally gate by a cone factor: full
+    // inside cos 8deg, zero outside cos 12deg, linear in cos^2 between.
+    constexpr float kMinInside2 = 0.95677279; // (cos 12deg)^2
+    constexpr float kMaxInside2 = 0.98063081; // (cos 8deg)^2
+    int nLights = int(obj.lightCount.x);
+    for (int i = 0; i < nLights; i++)
+    {
+        float3 toLight = obj.lights[i].posAndAtten.xyz - worldPos4.xyz;
+        float size2 = dot(toLight, toLight);
+        float startAtten2 = obj.lights[i].posAndAtten.w * obj.lights[i].posAndAtten.w;
+        float endAtten2 = startAtten2 * 100.0;
+        if (size2 >= endAtten2)
+            continue;
+
+        float cone = 1.0;
+        if (obj.lights[i].dirAndIsSpot.w > 0.5)
+        {
+            // inside = (vertex - light) . beamDir; cos^2(angleFromAxis) = inside^2/size2
+            float inside = -dot(toLight, obj.lights[i].dirAndIsSpot.xyz);
+            if (inside <= 0.0)
+                continue;
+            float cos2 = (inside * inside) / size2;
+            if (cos2 < kMinInside2)
+                continue;
+            cone = clamp((cos2 - kMinInside2) / (kMaxInside2 - kMinInside2), 0.0, 1.0);
+        }
+
+        float atten = (size2 >= startAtten2) ? (startAtten2 / size2) : 1.0;
+        float cosFi = dot(toLight, worldNorm);
+        float3 contrib;
+        if (cosFi > 0.0)
+        {
+            cosFi *= rsqrt(size2);
+            contrib = (obj.lights[i].diffuse.rgb * cosFi + obj.lights[i].ambient.rgb) * (atten * cone);
+        }
+        else
+        {
+            contrib = obj.lights[i].ambient.rgb * atten;
+        }
+        lit += contrib;
+    }
+    lit = clamp(lit, 0.0, 1.0);
+
     float dist = length(worldPos4.xyz);
     float fogFactor =
         frame.fogParams.z > 0.5 ? clamp((dist - frame.fogParams.x) * frame.fogParams.y, 0.0, 1.0) : 0.0;
+
+    // Sun-only specular highlight (GL33 doesn't apply specular from local
+    // lights either). viewDir mixes an absolute camPos against an already
+    // camera-relative worldPos4 -- ported as-is from GL33's own formula
+    // (EngineGL33_Shaders.cpp), see FrameConstantsMTL::camPosWorld's doc
+    // comment for why this looks dimensionally odd but is intentional
+    // parity, not a bug introduced here. frame.sunDirAndEnabled.xyz is
+    // already the "-sunDir" GL33 uses for its own NdotL (confirmed by the
+    // unnegated NdotL line above), so no extra negation here either.
+    float3 specOut = float3(0.0);
+    if (obj.specEnabled.x > 0.5 && sunEnabled > 0.0)
+    {
+        float3 viewDir = normalize(frame.camPosWorld.xyz - worldPos4.xyz);
+        float3 halfVec = normalize(frame.sunDirAndEnabled.xyz + viewDir);
+        float NdotH = max(dot(worldNorm, halfVec), 0.0);
+        float specPow = max(1.0, obj.specular.w);
+        specOut = obj.specular.rgb * pow(NdotH, specPow) * sunEnabled;
+    }
 
     // Material alpha. obj.ambient.w carries TLMaterial::ambient's alpha
     // through unmodified from EngineMTL::SetMaterial; for ordinary opaque
@@ -175,6 +264,7 @@ vertex VSOutMesh vsMesh(uint vid [[vertex_id]], const device VertexMesh* verts [
     out.position = clipPos;
     out.uv = v.uv;
     out.color = float4(lit, obj.ambient.w);
+    out.specColor = float4(clamp(specOut, 0.0, 1.0), 0.0);
     out.fogFactor = fogFactor;
     // obj.flags.x is 1.0 only for AlphaStats::Cutout textures (set by
     // EngineMTL::PrepareTriangleTL) -- see fsMeshOpaque's discard test.
@@ -196,7 +286,7 @@ fragment float4 fsMeshOpaque(VSOutMesh in [[stage_in]], constant FrameConstants&
     float4 texColor = tex.sample(samp, in.uv);
     if (in.isCutout > 0.5 && texColor.a < (192.0 / 255.0))
         discard_fragment();
-    float3 litColor = texColor.rgb * in.color.rgb;
+    float3 litColor = texColor.rgb * in.color.rgb + in.specColor.rgb;
     float3 finalColor = mix(litColor, frame.fogColor.rgb, in.fogFactor);
     return float4(finalColor, in.color.a);
 }
@@ -209,7 +299,7 @@ fragment float4 fsMeshBlend(VSOutMesh in [[stage_in]], constant FrameConstants& 
                             texture2d<float> tex [[texture(0)]], sampler samp [[sampler(0)]])
 {
     float4 texColor = tex.sample(samp, in.uv);
-    float3 litColor = texColor.rgb * in.color.rgb;
+    float3 litColor = texColor.rgb * in.color.rgb + in.specColor.rgb;
     float3 finalColor = mix(litColor, frame.fogColor.rgb, in.fogFactor);
     return float4(finalColor, in.color.a * texColor.a);
 }
