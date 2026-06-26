@@ -201,6 +201,11 @@ class EngineMTL : public Engine
     // the Shadow case -- see those methods' doc comments.
     render::DepthMode _currentTriDepthMode = render::DepthMode::Disabled;
     render::BlendMode _currentTriBlendMode = render::BlendMode::AlphaBlend;
+    // Filter + wrap addressing for the same section, derived directly from
+    // Backend::PointSampling/ClampU/ClampV spec bits (BuildRenderPassDescriptor.hpp's
+    // exact mapping) -- defaults to Linear+ClampToEdge, this path's existing
+    // behavior, for ordinary 2D/UI callers that never set it.
+    render::SamplerMode _currentTriSampler = {render::SamplerFilter::Linear, true, true};
 
     // Hardware T&L mesh path state. `_tlFrame`/`_tlObject` are rebuilt on
     // every PrepareMeshTL call (v1 simplicity -- GL33 caches its equivalent
@@ -219,6 +224,12 @@ class EngineMTL : public Engine
     // DrawSectionTL maps these to the matching pipeline/depth-stencil state.
     render::DepthMode _tlSectionDepthMode = render::DepthMode::Normal;
     render::BlendMode _tlSectionBlendMode = render::BlendMode::Opaque;
+    // Same derivation as _currentTriSampler (legacy path) -- see its doc
+    // comment. Defaults to Linear+no-clamp (wrap/repeat both axes): the
+    // common case for tiled hardware-TL mesh textures (e.g. a chain-link
+    // fence panel's pattern, repeated via UV coordinates >1 across a much
+    // larger surface) is wrap addressing, not clamp.
+    render::SamplerMode _tlSectionSampler = {render::SamplerFilter::Linear, false, false};
     bool _sunEnabled = false;
 
     void CreateWindowAndDevice();
@@ -229,16 +240,17 @@ class EngineMTL : public Engine
     // Converts up to kMaxPolyVerts already-pixel-space/colored/UV'd vertices
     // into a triangle fan and issues one DrawTriangles2D call. Shared by
     // Draw2D (always a 4-vertex quad), both DrawPoly overloads, and
-    // DrawIndexedFan3D (the legacy 3D fan path). `depthMode`/`blendMode`
-    // default to ordinary 2D/UI state -- only DrawIndexedFan3D passes a
-    // real (possibly Shadow) value through from PrepareTriangle.
+    // DrawIndexedFan3D (the legacy 3D fan path). `depthMode`/`blendMode`/
+    // `sampler` default to ordinary 2D/UI state -- only DrawIndexedFan3D
+    // passes a real value through from PrepareTriangle.
     enum
     {
         kMaxPolyVerts = 32
     };
     void DrawFan2D(const float* xy, const float* uv, const PackedColor* colors, int n, int textureHandle,
                    const Rect2DAbs& clip, render::DepthMode depthMode = render::DepthMode::Disabled,
-                   render::BlendMode blendMode = render::BlendMode::AlphaBlend);
+                   render::BlendMode blendMode = render::BlendMode::AlphaBlend,
+                   render::SamplerMode sampler = {render::SamplerFilter::Linear, true, true});
 
     // Reads up to kMaxPolyVerts vertices from the bound _mesh by index and
     // draws them as a fan via DrawFan2D (unclipped -- full backbuffer rect).

@@ -174,10 +174,19 @@ class EngineMTLBootstrap
     /// distinguishes "ordinary 2D" from "shadow". Generalize if a caller
     /// other than the legacy shadow fan-draw ever needs a real depth test or
     /// additive blending through DrawTriangles2D.
+    //
+    // `sampler` selects filter + wrap addressing, same SamplerMode
+    // BuildRenderPassDescriptor produces -- defaults to Linear+ClampToEdge
+    // (this pipeline's traditional behavior), matching ordinary 2D/UI
+    // content (fonts, icons) which is never tiled. Only the legacy 3D
+    // fan-draw path (DrawIndexedFan3D) passes a real per-section value --
+    // see EngineMTLBootstrap.cpp's sampler-state cache for why this matters
+    // (tiled textures need wrap/repeat addressing, not clamp).
     void DrawTriangles2D(const Vertex2DMTL* verts, int vertCount, const uint16_t* indices, int indexCount,
                          int textureHandle, int clipX, int clipY, int clipW, int clipH,
                          Poseidon::render::DepthMode depthMode = Poseidon::render::DepthMode::Disabled,
-                         Poseidon::render::BlendMode blendMode = Poseidon::render::BlendMode::AlphaBlend);
+                         Poseidon::render::BlendMode blendMode = Poseidon::render::BlendMode::AlphaBlend,
+                         Poseidon::render::SamplerMode sampler = {Poseidon::render::SamplerFilter::Linear, true, true});
 
     // Ends encoding, presents the drawable, commits the command buffer.
     void EndFrame();
@@ -255,9 +264,18 @@ class EngineMTLBootstrap
     // stays at Metal's default (0) for the whole frame, which is exactly
     // what both this EQUAL-0 test and every ordinary draw's ALWAYS+REPLACE
     // reset want.
+    //
+    // `sampler` selects filter + wrap addressing from the same SamplerMode
+    // BuildRenderPassDescriptor produces (Backend::PointSampling/ClampU/
+    // ClampV spec bits) -- see EngineMTLBootstrap.cpp's sampler-state cache.
+    // Tiled textures (e.g. a small chain-link pattern repeated across a
+    // fence panel via UV coordinates >1) need wrap/repeat addressing; a
+    // hardcoded clamp-to-edge sampler just repeats the texture's edge pixel
+    // across the whole surface instead of tiling it.
     void DrawSectionTL(int vertexBufferHandle, int indexBufferHandle, int firstIndex, int indexCount,
                        int textureHandle, const ObjectConstantsMTL& obj, const FrameConstantsMTL& frame,
-                       Poseidon::render::DepthMode depthMode, Poseidon::render::BlendMode blendMode);
+                       Poseidon::render::DepthMode depthMode, Poseidon::render::BlendMode blendMode,
+                       Poseidon::render::SamplerMode sampler);
 
   private:
     bool SetupDevice(); // shared by Init() and AttachToWindow()

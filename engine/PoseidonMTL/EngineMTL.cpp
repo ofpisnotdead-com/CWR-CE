@@ -209,7 +209,8 @@ void EngineMTL::PixelToNDC(float px, float py, float& ndcX, float& ndcY) const
 }
 
 void EngineMTL::DrawFan2D(const float* xy, const float* uv, const PackedColor* colors, int n, int textureHandle,
-                          const Rect2DAbs& clip, render::DepthMode depthMode, render::BlendMode blendMode)
+                          const Rect2DAbs& clip, render::DepthMode depthMode, render::BlendMode blendMode,
+                          render::SamplerMode sampler)
 {
     if (n < 3 || n > kMaxPolyVerts)
         return;
@@ -237,7 +238,7 @@ void EngineMTL::DrawFan2D(const float* xy, const float* uv, const PackedColor* c
 
     _bootstrap.DrawTriangles2D(verts, n, indices, idxCount, textureHandle, static_cast<int>(clip.x),
                                static_cast<int>(clip.y), static_cast<int>(clip.w), static_cast<int>(clip.h), depthMode,
-                               blendMode);
+                               blendMode, sampler);
 }
 
 void EngineMTL::Draw2D(const Draw2DPars& pars, const Rect2DAbs& rect, const Rect2DAbs& clip)
@@ -346,7 +347,8 @@ void EngineMTL::DrawIndexedFan3D(const VertexIndex* indices, int n)
     }
 
     const Rect2DAbs fullScreen(0, 0, static_cast<float>(_w), static_cast<float>(_h));
-    DrawFan2D(xy, uv, colors, n, _currentTriTexture, fullScreen, _currentTriDepthMode, _currentTriBlendMode);
+    DrawFan2D(xy, uv, colors, n, _currentTriTexture, fullScreen, _currentTriDepthMode, _currentTriBlendMode,
+              _currentTriSampler);
 }
 
 // GL33's equivalent is the legacy/queued path's FlushQueue -> ApplyPassState
@@ -365,6 +367,7 @@ void EngineMTL::PrepareTriangle(const MipInfo& mip, int specFlags)
     const render::RenderPassDescriptor d = render::BuildRenderPassDescriptor(render::SplitLegacy(specFlags));
     _currentTriDepthMode = d.depth;
     _currentTriBlendMode = d.blend;
+    _currentTriSampler = d.sampler;
 }
 
 VertexBuffer* EngineMTL::CreateVertexBuffer(const Shape& src, VBType type)
@@ -421,6 +424,16 @@ void EngineMTL::PrepareTriangleTL(const MipInfo& mip, const render::LegacySpec& 
     const bool isAlpha = tex && tex->IsAlpha();
     const bool isCutout = tex && tex->IsTransparent();
     _tlObject.flags[0] = isCutout ? 1.0f : 0.0f;
+
+    // Same mapping BuildRenderPassDescriptor.hpp uses for d.sampler -- no
+    // competing signal to special-case around here (unlike blend mode's
+    // texture-stat override above), so this is a direct, unconditional
+    // mirror of the spec-bit -> SamplerMode translation.
+    _tlSectionSampler.filter =
+        render::Has(spec.backend, render::Backend::PointSampling) ? render::SamplerFilter::Point
+                                                                    : render::SamplerFilter::Linear;
+    _tlSectionSampler.clampU = render::Has(spec.backend, render::Backend::ClampU);
+    _tlSectionSampler.clampV = render::Has(spec.backend, render::Backend::ClampV);
 
     // Shadow polys (Shadow.cpp's MakeShadow) carry no texture and always
     // resolve to BuildRenderPassDescriptor's isShadow branch
@@ -518,7 +531,8 @@ void EngineMTL::DrawSectionTL(const Shape& sMesh, int beg, int end)
         return;
 
     _bootstrap.DrawSectionTL(buf->VertexBufferHandle(), buf->IndexBufferHandle(), firstIndex, indexCount,
-                             _tlCurrentTexture, _tlObject, _tlFrame, _tlSectionDepthMode, _tlSectionBlendMode);
+                             _tlCurrentTexture, _tlObject, _tlFrame, _tlSectionDepthMode, _tlSectionBlendMode,
+                             _tlSectionSampler);
 }
 
 void EngineMTL::DrawPolygon(const VertexIndex* i, int n)

@@ -240,6 +240,14 @@ fragment float4 fsShadow(VSOutMesh in [[stage_in]], texture2d<float> tex [[textu
     return float4(0.0, 0.0, 0.0, a);
 }
 )";
+
+// Bit layout matches GL33's CreateSamplerStates (EngineGL33_State.cpp) so the
+// two backends pick the same permutation from the same SamplerMode fields.
+int SamplerIndex(Poseidon::render::SamplerMode mode)
+{
+    return (mode.filter == Poseidon::render::SamplerFilter::Point ? 4 : 0) | (mode.clampU ? 1 : 0) |
+           (mode.clampV ? 2 : 0);
+}
 } // namespace
 
 struct EngineMTLBootstrap::Impl
@@ -250,7 +258,15 @@ struct EngineMTLBootstrap::Impl
     MTL::CommandQueue* commandQueue = nullptr;
 
     MTL::RenderPipelineState* pipelineState = nullptr;
-    MTL::SamplerState* samplerState = nullptr;
+    // 8 permutations (point/linear x clampU x clampV), mirroring GL33's
+    // CreateSamplerStates (EngineGL33_State.cpp) bit-for-bit: index =
+    // (point?4:0)|(clampU?1:0)|(clampV?2:0). A single hardcoded
+    // clamp-to-edge sampler (the previous design) silently breaks any tiled
+    // texture -- a small repeating pattern (e.g. a fence's chain-link
+    // texture, UV-tiled across a much larger panel) just repeats its edge
+    // pixel across the whole surface instead of tiling, since clamp-to-edge
+    // has no wraparound. See SamplerIndex()/EnsureSamplerStates().
+    MTL::SamplerState* samplerStates[8] = {};
     MTL::Texture* fallbackWhite = nullptr;
     std::vector<MTL::Texture*> textures; // handle = index + 1; 0 reserved for "none"
 
@@ -557,13 +573,21 @@ void EngineMTLBootstrap::EnsurePipeline()
     fsFn->release();
     library->release();
 
-    MTL::SamplerDescriptor* sampDesc = MTL::SamplerDescriptor::alloc()->init();
-    sampDesc->setMinFilter(MTL::SamplerMinMagFilterLinear);
-    sampDesc->setMagFilter(MTL::SamplerMinMagFilterLinear);
-    sampDesc->setSAddressMode(MTL::SamplerAddressModeClampToEdge);
-    sampDesc->setTAddressMode(MTL::SamplerAddressModeClampToEdge);
-    _impl->samplerState = _impl->device->newSamplerState(sampDesc);
-    sampDesc->release();
+    // 8 permutations, mirroring GL33's CreateSamplerStates -- see
+    // Impl::samplerStates' doc comment and SamplerIndex() for the bit layout.
+    for (int i = 0; i < 8; i++)
+    {
+        const bool point = (i & 4) != 0;
+        const bool clampU = (i & 1) != 0;
+        const bool clampV = (i & 2) != 0;
+        MTL::SamplerDescriptor* sampDesc = MTL::SamplerDescriptor::alloc()->init();
+        sampDesc->setMinFilter(point ? MTL::SamplerMinMagFilterNearest : MTL::SamplerMinMagFilterLinear);
+        sampDesc->setMagFilter(point ? MTL::SamplerMinMagFilterNearest : MTL::SamplerMinMagFilterLinear);
+        sampDesc->setSAddressMode(clampU ? MTL::SamplerAddressModeClampToEdge : MTL::SamplerAddressModeRepeat);
+        sampDesc->setTAddressMode(clampV ? MTL::SamplerAddressModeClampToEdge : MTL::SamplerAddressModeRepeat);
+        _impl->samplerStates[i] = _impl->device->newSamplerState(sampDesc);
+        sampDesc->release();
+    }
 
     // Stencil ALWAYS + REPLACE(ref=0): every pixel a Normal/NoWrite draw
     // touches gets its stencil reset to 0 -- GL33's depthstencil::Normal/
@@ -871,7 +895,11 @@ bool EngineMTLBootstrap::BeginFrame(float r, float g, float b, float a, bool cle
     // against a fixed reference of 0 (see their stencil descriptors) -- set
     // once per pass rather than before every DrawSectionTL call.
     _impl->currentEncoder->setStencilReferenceValue(0);
-    _impl->currentEncoder->setFragmentSamplerState(_impl->samplerState, 0);
+    // Default Linear+ClampToEdge (index 1|2=3) -- matches this pipeline's
+    // traditional behavior for the first draw of the frame. DrawSectionTL/
+    // DrawTriangles2D explicitly rebind per-draw from their own SamplerMode
+    // afterward, same as their pipeline/depth-state rebinds.
+    _impl->currentEncoder->setFragmentSamplerState(_impl->samplerStates[3], 0);
 
     passDesc->release();
     pool->release();
@@ -880,7 +908,8 @@ bool EngineMTLBootstrap::BeginFrame(float r, float g, float b, float a, bool cle
 
 void EngineMTLBootstrap::DrawTriangles2D(const Vertex2DMTL* verts, int vertCount, const uint16_t* indices,
                                          int indexCount, int textureHandle, int clipX, int clipY, int clipW, int clipH,
-                                         Poseidon::render::DepthMode depthMode, Poseidon::render::BlendMode blendMode)
+                                         Poseidon::render::DepthMode depthMode, Poseidon::render::BlendMode blendMode,
+                                         Poseidon::render::SamplerMode sampler)
 {
     if (_impl->currentEncoder == nullptr || vertCount <= 0 || indexCount <= 0)
         return;
@@ -899,6 +928,7 @@ void EngineMTLBootstrap::DrawTriangles2D(const Vertex2DMTL* verts, int vertCount
         blendMode == Poseidon::render::BlendMode::Shadow || depthMode == Poseidon::render::DepthMode::Shadow;
     _impl->currentEncoder->setRenderPipelineState(isShadow ? _impl->pipelineState2DShadow : _impl->pipelineState);
     _impl->currentEncoder->setDepthStencilState(isShadow ? _impl->depthStateShadow : _impl->depthStateDisabled);
+    _impl->currentEncoder->setFragmentSamplerState(_impl->samplerStates[SamplerIndex(sampler)], 0);
 
     // Clamp to the drawable -- Metal's setScissorRect raises a validation
     // error if the rect extends past the render target.
@@ -1033,7 +1063,8 @@ void EngineMTLBootstrap::DestroyMeshBufferDeferred(int handle)
 
 void EngineMTLBootstrap::DrawSectionTL(int vertexBufferHandle, int indexBufferHandle, int firstIndex, int indexCount,
                                        int textureHandle, const ObjectConstantsMTL& obj, const FrameConstantsMTL& frame,
-                                       Poseidon::render::DepthMode depthMode, Poseidon::render::BlendMode blendMode)
+                                       Poseidon::render::DepthMode depthMode, Poseidon::render::BlendMode blendMode,
+                                       Poseidon::render::SamplerMode sampler)
 {
     if (_impl->currentEncoder == nullptr || indexCount <= 0)
         return;
@@ -1098,6 +1129,7 @@ void EngineMTLBootstrap::DrawSectionTL(int vertexBufferHandle, int indexBufferHa
     else if (depthMode == Poseidon::render::DepthMode::Disabled)
         depthState = _impl->depthStateDisabled;
     _impl->currentEncoder->setDepthStencilState(depthState);
+    _impl->currentEncoder->setFragmentSamplerState(_impl->samplerStates[SamplerIndex(sampler)], 0);
     // Metal's cull mode defaults to None (draw both faces) and was never set
     // anywhere in this backend -- meshes with closed/solid hulls (e.g. the
     // M113's interior) showed their back-facing interior walls through gaps
@@ -1197,10 +1229,13 @@ void EngineMTLBootstrap::Shutdown()
         _impl->fallbackWhite->release();
         _impl->fallbackWhite = nullptr;
     }
-    if (_impl->samplerState != nullptr)
+    for (MTL::SamplerState*& s : _impl->samplerStates)
     {
-        _impl->samplerState->release();
-        _impl->samplerState = nullptr;
+        if (s != nullptr)
+        {
+            s->release();
+            s = nullptr;
+        }
     }
     if (_impl->pipelineState != nullptr)
     {
