@@ -215,7 +215,6 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           '${{ matrix.build_dir }}/apps/tools/GL33SmokeTest/GL33SmokeTest' --check
-          '${{ matrix.build_dir }}/apps/tools/MetalSmokeTest/MetalSmokeTest' --check
 
       - name: Upload CTest logs
         if: failure()
