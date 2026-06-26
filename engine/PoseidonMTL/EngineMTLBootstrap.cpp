@@ -743,6 +743,18 @@ void EngineMTLBootstrap::EnsurePipeline()
         sampDesc->setMipFilter(point ? MTL::SamplerMipFilterNearest : MTL::SamplerMipFilterLinear);
         sampDesc->setSAddressMode(clampU ? MTL::SamplerAddressModeClampToEdge : MTL::SamplerAddressModeRepeat);
         sampDesc->setTAddressMode(clampV ? MTL::SamplerAddressModeClampToEdge : MTL::SamplerAddressModeRepeat);
+        // GL33's CreateSamplerStates (EngineGL33_State.cpp) enables up to 16x
+        // anisotropic filtering on every non-point sampler -- its own comment
+        // documents why: without it, oblique/grazing-angle surfaces (terrain
+        // stretching to the horizon, fence tops) sample an overly-blurry
+        // isotropic LOD. Metal has no equivalent capability query (unlike
+        // GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT); 16 is the practical cap on
+        // Apple GPUs and matches GL33's clamped value on hardware that
+        // reports >=16 anyway.
+        if (!point)
+        {
+            sampDesc->setMaxAnisotropy(16);
+        }
         _impl->samplerStates[i] = _impl->device->newSamplerState(sampDesc);
         sampDesc->release();
     }
