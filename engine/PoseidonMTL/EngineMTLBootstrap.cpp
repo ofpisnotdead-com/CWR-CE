@@ -429,6 +429,23 @@ EngineMTLBootstrap::~EngineMTLBootstrap()
     delete _impl;
 }
 
+static void SetDepthBiasForDescriptor(MTL::RenderCommandEncoder* encoder, Poseidon::render::SurfaceMode surface,
+                                      Poseidon::render::ShaderFamily shader)
+{
+    if (encoder == nullptr)
+        return;
+
+    // Metal's setDepthBias(depthBias, slopeScale, clamp) maps to GL's
+    // glPolygonOffset(factor, units) as constant bias first, slope term
+    // second. Match GL33's named helpers in GLPipelineState.hpp.
+    if (shader == Poseidon::render::ShaderFamily::Shadow)
+        encoder->setDepthBias(-64.0f, -1.0f, 0.0f);
+    else if (surface == Poseidon::render::SurfaceMode::OnSurface)
+        encoder->setDepthBias(-1.0f, -1.0f, 0.0f);
+    else
+        encoder->setDepthBias(0.0f, 0.0f, 0.0f);
+}
+
 bool EngineMTLBootstrap::Init(const char* title, int width, int height)
 {
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
@@ -1005,7 +1022,8 @@ bool EngineMTLBootstrap::BeginFrame(float r, float g, float b, float a, bool cle
 void EngineMTLBootstrap::DrawTriangles2D(const Vertex2DMTL* verts, int vertCount, const uint16_t* indices,
                                          int indexCount, int textureHandle, int clipX, int clipY, int clipW, int clipH,
                                          Poseidon::render::DepthMode depthMode, Poseidon::render::BlendMode blendMode,
-                                         Poseidon::render::SamplerMode sampler)
+                                         Poseidon::render::SamplerMode sampler, Poseidon::render::SurfaceMode surface,
+                                         Poseidon::render::ShaderFamily shader)
 {
     if (_impl->currentEncoder == nullptr || vertCount <= 0 || indexCount <= 0)
         return;
@@ -1025,6 +1043,8 @@ void EngineMTLBootstrap::DrawTriangles2D(const Vertex2DMTL* verts, int vertCount
     _impl->currentEncoder->setRenderPipelineState(isShadow ? _impl->pipelineState2DShadow : _impl->pipelineState);
     _impl->currentEncoder->setDepthStencilState(isShadow ? _impl->depthStateShadow : _impl->depthStateDisabled);
     _impl->currentEncoder->setFragmentSamplerState(_impl->samplerStates[SamplerIndex(sampler)], 0);
+    SetDepthBiasForDescriptor(_impl->currentEncoder, surface, isShadow ? Poseidon::render::ShaderFamily::Shadow
+                                                                       : shader);
 
     // Clamp to the drawable -- Metal's setScissorRect raises a validation
     // error if the rect extends past the render target.
@@ -1160,7 +1180,8 @@ void EngineMTLBootstrap::DestroyMeshBufferDeferred(int handle)
 void EngineMTLBootstrap::DrawSectionTL(int vertexBufferHandle, int indexBufferHandle, int firstIndex, int indexCount,
                                        int textureHandle, const ObjectConstantsMTL& obj, const FrameConstantsMTL& frame,
                                        Poseidon::render::DepthMode depthMode, Poseidon::render::BlendMode blendMode,
-                                       Poseidon::render::SamplerMode sampler)
+                                       Poseidon::render::SamplerMode sampler, Poseidon::render::SurfaceMode surface,
+                                       Poseidon::render::ShaderFamily shader)
 {
     if (_impl->currentEncoder == nullptr || indexCount <= 0)
         return;
@@ -1226,6 +1247,7 @@ void EngineMTLBootstrap::DrawSectionTL(int vertexBufferHandle, int indexBufferHa
         depthState = _impl->depthStateDisabled;
     _impl->currentEncoder->setDepthStencilState(depthState);
     _impl->currentEncoder->setFragmentSamplerState(_impl->samplerStates[SamplerIndex(sampler)], 0);
+    SetDepthBiasForDescriptor(_impl->currentEncoder, surface, shader);
     // Metal's cull mode defaults to None (draw both faces) and was never set
     // anywhere in this backend -- meshes with closed/solid hulls (e.g. the
     // M113's interior) showed their back-facing interior walls through gaps

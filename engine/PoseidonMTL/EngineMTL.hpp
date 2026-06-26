@@ -201,6 +201,8 @@ class EngineMTL : public Engine
     // the Shadow case -- see those methods' doc comments.
     render::DepthMode _currentTriDepthMode = render::DepthMode::Disabled;
     render::BlendMode _currentTriBlendMode = render::BlendMode::AlphaBlend;
+    render::SurfaceMode _currentTriSurfaceMode = render::SurfaceMode::Default;
+    render::ShaderFamily _currentTriShader = render::ShaderFamily::Normal;
     // Filter + wrap addressing for the same section, derived directly from
     // Backend::PointSampling/ClampU/ClampV spec bits (BuildRenderPassDescriptor.hpp's
     // exact mapping) -- defaults to Linear+ClampToEdge, this path's existing
@@ -224,6 +226,8 @@ class EngineMTL : public Engine
     // DrawSectionTL maps these to the matching pipeline/depth-stencil state.
     render::DepthMode _tlSectionDepthMode = render::DepthMode::Normal;
     render::BlendMode _tlSectionBlendMode = render::BlendMode::Opaque;
+    render::SurfaceMode _tlSectionSurfaceMode = render::SurfaceMode::Default;
+    render::ShaderFamily _tlSectionShader = render::ShaderFamily::Normal;
     // Same derivation as _currentTriSampler (legacy path) -- see its doc
     // comment. Defaults to Linear+no-clamp (wrap/repeat both axes): the
     // common case for tiled hardware-TL mesh textures (e.g. a chain-link
@@ -250,7 +254,9 @@ class EngineMTL : public Engine
     void DrawFan2D(const float* xy, const float* uv, const PackedColor* colors, int n, int textureHandle,
                    const Rect2DAbs& clip, render::DepthMode depthMode = render::DepthMode::Disabled,
                    render::BlendMode blendMode = render::BlendMode::AlphaBlend,
-                   render::SamplerMode sampler = {render::SamplerFilter::Linear, true, true});
+                   render::SamplerMode sampler = {render::SamplerFilter::Linear, true, true},
+                   render::SurfaceMode surface = render::SurfaceMode::Default,
+                   render::ShaderFamily shader = render::ShaderFamily::Normal);
 
     // Reads up to kMaxPolyVerts vertices from the bound _mesh by index and
     // draws them as a fan via DrawFan2D (unclipped -- full backbuffer rect).

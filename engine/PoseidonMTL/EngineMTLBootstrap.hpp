@@ -222,7 +222,9 @@ class EngineMTLBootstrap
                          int textureHandle, int clipX, int clipY, int clipW, int clipH,
                          Poseidon::render::DepthMode depthMode = Poseidon::render::DepthMode::Disabled,
                          Poseidon::render::BlendMode blendMode = Poseidon::render::BlendMode::AlphaBlend,
-                         Poseidon::render::SamplerMode sampler = {Poseidon::render::SamplerFilter::Linear, true, true});
+                         Poseidon::render::SamplerMode sampler = {Poseidon::render::SamplerFilter::Linear, true, true},
+                         Poseidon::render::SurfaceMode surface = Poseidon::render::SurfaceMode::Default,
+                         Poseidon::render::ShaderFamily shader = Poseidon::render::ShaderFamily::Normal);
 
     // Ends encoding, presents the drawable, commits the command buffer.
     void EndFrame();
@@ -333,7 +335,8 @@ class EngineMTLBootstrap
     void DrawSectionTL(int vertexBufferHandle, int indexBufferHandle, int firstIndex, int indexCount,
                        int textureHandle, const ObjectConstantsMTL& obj, const FrameConstantsMTL& frame,
                        Poseidon::render::DepthMode depthMode, Poseidon::render::BlendMode blendMode,
-                       Poseidon::render::SamplerMode sampler);
+                       Poseidon::render::SamplerMode sampler, Poseidon::render::SurfaceMode surface,
+                       Poseidon::render::ShaderFamily shader);
 
   private:
     bool SetupDevice(); // shared by Init() and AttachToWindow()
