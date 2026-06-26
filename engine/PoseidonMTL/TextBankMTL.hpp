@@ -10,8 +10,8 @@ namespace Poseidon
 class EngineMTLBootstrap;
 
 // Real Metal-backed texture bank. Load-once-keep-forever (no LRU/memory
-// budget -- see TextureMTL.hpp for why that's an acceptable simplification
-// right now).
+// budget -- TODO(metal-parity), see TextureMTL.hpp for the full gap
+// writeup and why it's a real GL33 parity item, not just a v1 shortcut).
 class TextBankMTL : public AbstractTextBank
 {
   public:

@@ -24,8 +24,21 @@ class EngineMTLBootstrap;
 // once up front and stays resident forever, same as the original single-
 // level design, just with real lower-resolution levels for the GPU to
 // sample now instead of just one. Good enough for menu-scale texture
-// counts; revisit (TextBankGL33's adaptive streaming system) if/when this
-// backend needs to bound 3D-world texture memory.
+// counts.
+//
+// TODO(metal-parity): this is a real, deliberately-deferred GL33 parity
+// gap, not just a v1 simplification -- TextBankGL33/TextureGL33 implement
+// a genuine adaptive streaming system (small/big surface split, 5-list
+// frame LRU, VRAM-budget-driven eviction with surface pooling -- see
+// TextureGL33.hpp / TextureGL33_Loading.cpp / TextureBankGL33_Cache.cpp /
+// TextureBankGL33_Core.cpp) that bounds GPU texture memory under load;
+// Metal currently has no upper bound at all. Per-frame visible-level
+// tracking already exists here (_levelNeededThisFrame/LastFrame,
+// FinishFrameUseTracking) but nothing consumes it yet. Porting the full
+// system is harder on Metal than GL: an MTLTexture's mip range is fixed at
+// creation, so "evicting" levels means destroying and recreating the
+// texture (no GL-style drop-big-keep-small in place). Revisit when a real
+// VRAM-pressure symptom shows up, or before shipping.
 class TextureMTL : public Texture
 {
   public:
