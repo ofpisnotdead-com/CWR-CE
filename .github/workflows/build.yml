@@ -30,24 +30,28 @@ jobs:
             vcpkg_triplet: x64-linux-clang
             build_dir: build/linux-x64-clang-rwdi
             ctest_exclude: 'PoseidonTests - OAL -'
+            binaries_upload: 'Linux-x64-rwdi'
           - name: macOS arm64 RelWithDebInfo
             os: macos-26
             preset: darwin-arm64-clang-rwdi
             vcpkg_triplet: arm64-darwin-clang
             build_dir: build/darwin-arm64-clang-rwdi
             ctest_exclude: 'PoseidonTests - OAL -'
+            binaries_upload: 'macOS-arm64-rwdi'
           - name: macOS x64 RelWithDebInfo
             os: macos-26-intel
             preset: darwin-x64-clang-rwdi
             vcpkg_triplet: x64-darwin-clang
             build_dir: build/darwin-x64-clang-rwdi
             ctest_exclude: 'PoseidonTests - OAL -'
+            binaries_upload: 'macOS-x64-rwdi'
           - name: Windows RelWithDebInfo
             os: windows-2022
             preset: win-x64-clang-rwdi
             vcpkg_triplet: x64-windows-clang
             build_dir: build/win-x64-clang-rwdi
             ctest_exclude: 'PoseidonTests - (OAL -|PAAEncoder -|Image - Save to \.paa|World state file format --|PreviewImage - saveToFile writes|PreviewImageRGB - saveToFile writes)'
+            binaries_upload: 'Windows-x64-rwdi'
 
     steps:
       - name: Checkout
@@ -63,6 +67,7 @@ jobs:
             automake \
             clang \
             libtool \
+            libltdl-dev \
             pkg-config \
             libgl1-mesa-dev \
             libx11-dev \
@@ -131,8 +136,79 @@ jobs:
       - name: Build
         run: cmake --build ${{ matrix.build_dir }} --parallel 2
 
+      - name: Upload binaries
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.binaries_upload }}
+          path: |
+            ${{ matrix.build_dir }}/apps/cwr/Game/PoseidonGame
+            ${{ matrix.build_dir }}/apps/cwr/Game/PoseidonGame.exe
+            ${{ matrix.build_dir }}/apps/cwr/GameDemo/PoseidonGameDemo
+            ${{ matrix.build_dir }}/apps/cwr/GameDemo/PoseidonGameDemo.exe
+            ${{ matrix.build_dir }}/apps/cwr/Server/PoseidonServer
+            ${{ matrix.build_dir }}/apps/cwr/Server/PoseidonServer.exe
+
       - name: Test
         shell: pwsh
         env:
           CTEST_EXCLUDE: ${{ matrix.ctest_exclude }}
         run: ctest --test-dir '${{ matrix.build_dir }}' --output-on-failure -E "$env:CTEST_EXCLUDE"
+
+  steamrt4:
+    name: SteamRT4 Release
+    runs-on: ubuntu-24.04
+    env:
+      STEAMRT4_PRESET: linux-x64-steamrt4
+      STEAMRT4_VCPKG_TRIPLET: x64-linux-clang
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build SteamRT4 SDK image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/steamrt4
+          load: true
+          tags: cwr-steamrt4:latest
+          cache-from: type=gha,scope=steamrt4-sdk
+          cache-to: type=gha,mode=max,scope=steamrt4-sdk
+
+      - name: Restore SteamRT4 compiler cache
+        uses: actions/cache@v4
+        with:
+          path: tmp/steamrt4-ccache
+          key: ccache-SteamRT4-${{ env.STEAMRT4_PRESET }}-${{ github.sha }}
+          restore-keys: |
+            ccache-SteamRT4-${{ env.STEAMRT4_PRESET }}-
+
+      - name: Restore SteamRT4 vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: .vcpkg-bincache/${{ env.STEAMRT4_VCPKG_TRIPLET }}
+          key: vcpkg-SteamRT4-${{ env.STEAMRT4_VCPKG_TRIPLET }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/vcpkg-triplets/**', 'cmake/vcpkg-overlay-ports/**') }}
+          restore-keys: |
+            vcpkg-SteamRT4-${{ env.STEAMRT4_VCPKG_TRIPLET }}-
+
+      - name: Build inside SteamRT4 container
+        run: |
+          set -o pipefail
+          mkdir -p \
+            "${{ github.workspace }}/tmp/steamrt4-ccache" \
+            "${{ github.workspace }}/.vcpkg-bincache/${{ env.STEAMRT4_VCPKG_TRIPLET }}"
+          docker run --rm \
+            -e OFPR_TARGETS=all \
+            -e VCPKG_BINARY_SOURCES="clear;files,/work/ofpr/.vcpkg-bincache/${{ env.STEAMRT4_VCPKG_TRIPLET }},readwrite" \
+            -e VCPKG_DEFAULT_BINARY_CACHE="/work/ofpr/.vcpkg-bincache/${{ env.STEAMRT4_VCPKG_TRIPLET }}" \
+            -e VCPKG_DEFAULT_TRIPLET="${{ env.STEAMRT4_VCPKG_TRIPLET }}" \
+            -v "${{ github.workspace }}:/work/ofpr" \
+            cwr-steamrt4:latest 2>&1 | tee steamrt4-build.log
+
+      - name: Upload SteamRT4 build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: steamrt4-build-log
+          path: steamrt4-build.log
