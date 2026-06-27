@@ -1151,6 +1151,9 @@ void NetworkClient::Disconnect(RString message)
     _state = NGSNone;
     _serverState = NGSNone;
 
+    // Leaving the server: difficulty reverts to the local profile.
+    USER_CONFIG.ClearServerDifficulty();
+
     const PlayerIdentity* id = FindIdentity(_player);
     if (id)
     {

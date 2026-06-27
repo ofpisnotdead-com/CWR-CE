@@ -113,9 +113,29 @@ void UserConfig::InitDifficulties()
 
 bool UserConfig::IsEnabled(DifficultyType type) const
 {
+    if (_serverDifficultyActive)
+        return _serverDifficulty[type];
+
     if (easyMode)
         return cadetDifficulty[type];
     else
         return veteranDifficulty[type];
+}
+
+void UserConfig::SetServerDifficulty(const bool* flags)
+{
+    if (!flags)
+    {
+        ClearServerDifficulty();
+        return;
+    }
+    for (int i = 0; i < DTN; i++)
+        _serverDifficulty[i] = flags[i];
+    _serverDifficultyActive = true;
+}
+
+void UserConfig::ClearServerDifficulty()
+{
+    _serverDifficultyActive = false;
 }
 } // namespace Poseidon

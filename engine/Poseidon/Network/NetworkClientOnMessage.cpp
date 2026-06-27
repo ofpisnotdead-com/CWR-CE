@@ -612,6 +612,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             }
 
             USER_CONFIG.easyMode = _missionHeader.cadetMode;
+            // Difficulty is server-authoritative in multiplayer: adopt the host's settings so
+            // name tags, HUD and map markers match the server, not this client's local profile.
+            USER_CONFIG.SetServerDifficulty(_missionHeader.difficulty.Data());
             _playerRoles.Resize(0);
 
             // check if mission file is valid
