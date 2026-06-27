@@ -119,7 +119,7 @@ Object* Man::GetProxy(LODShapeWithShadow*& shape, int level, Matrix4& transform,
             const WeaponType* weapon = nullptr;
             for (int i = 0; i < NWeaponSystems(); i++)
             {
-                if (GetWeaponSystem(i)->_weaponType & MaskSlotBinocular)
+                if (GetWeaponSystem(i)->_weaponType & MaskSlotBinocular && stricmp(GetWeaponSystem(i)->GetName(), "binocular") == 0)
                 {
                     weapon = GetWeaponSystem(i);
                     break;
@@ -138,7 +138,7 @@ Object* Man::GetProxy(LODShapeWithShadow*& shape, int level, Matrix4& transform,
             const WeaponType* weapon = nullptr;
             for (int i = 0; i < NWeaponSystems(); i++)
             {
-                if (GetWeaponSystem(i)->_weaponType & MaskSlotBinocular)
+                if (GetWeaponSystem(i)->_weaponType & MaskSlotBinocular && stricmp(GetWeaponSystem(i)->GetName(), "binocular") == 0)
                 {
                     weapon = GetWeaponSystem(i);
                     break;
@@ -291,7 +291,7 @@ void Man::DrawProxies(int level, ClipFlags clipFlags, const Matrix4& transform, 
             {
                 for (int i = 0; i < NWeaponSystems(); i++)
                 {
-                    if (GetWeaponSystem(i)->_weaponType & MaskSlotBinocular)
+                    if (GetWeaponSystem(i)->_weaponType & MaskSlotBinocular && stricmp(GetWeaponSystem(i)->GetName(), "binocular") == 0)
                     {
                         weapon = GetWeaponSystem(i);
                         break;
@@ -309,7 +309,7 @@ void Man::DrawProxies(int level, ClipFlags clipFlags, const Matrix4& transform, 
             {
                 for (int i = 0; i < NWeaponSystems(); i++)
                 {
-                    if (GetWeaponSystem(i)->_weaponType & MaskSlotBinocular)
+                    if (GetWeaponSystem(i)->_weaponType & MaskSlotBinocular && stricmp(GetWeaponSystem(i)->GetName(), "binocular") == 0)
                     {
                         weapon = GetWeaponSystem(i);
                         break;
