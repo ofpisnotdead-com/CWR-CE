@@ -14,7 +14,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   DEMO_ASSETS_URL: https://files.ofpisnotdead.com/CWR-demo-assets.zip
-  TRIDENT_TEST_PATH: tests/integration/flows/demo/full_game_demo_campaign_placeholder.test.sqf
+  TRIDENT_TEST_PATH: tests/integration/flows/demo/audio_preview_music.test.sqf
 
 jobs:
   smoke:
