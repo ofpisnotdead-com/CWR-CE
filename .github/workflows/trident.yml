@@ -14,6 +14,8 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   DEMO_ASSETS_URL: https://files.ofpisnotdead.com/CWR-demo-assets.zip
+  TRIDENT_RENDER: gl33
+  TRIDENT_AUDIO: openal
   TRIDENT_TEST_PATH: tests/integration
 
 jobs:
@@ -97,6 +99,18 @@ jobs:
           Remove-Item -LiteralPath (Join-Path $dataDir '.git') -Recurse -Force -ErrorAction SilentlyContinue
           Get-ChildItem -LiteralPath $dataDir -Recurse -Include *.exe,*.dll,*.pdb -File | Remove-Item -Force
 
+          $packagesDir = Join-Path $env:GITHUB_WORKSPACE 'packages'
+          $compatDemoDir = Join-Path $packagesDir 'Demo'
+          New-Item -ItemType Directory -Force -Path $packagesDir | Out-Null
+          Remove-Item -LiteralPath $compatDemoDir -Recurse -Force -ErrorAction SilentlyContinue
+          try {
+            New-Item -ItemType SymbolicLink -Path $compatDemoDir -Target $dataDir | Out-Null
+            Write-Host "Created compatibility demo data symlink: $compatDemoDir -> $dataDir"
+          } catch {
+            Copy-Item -LiteralPath $dataDir -Destination $compatDemoDir -Recurse -Force
+            Write-Host "Copied compatibility demo data directory: $compatDemoDir"
+          }
+
           $files = @(Get-ChildItem -LiteralPath $dataDir -Recurse -File -ErrorAction SilentlyContinue)
           $totalBytes = ($files | Measure-Object -Property Length -Sum).Sum
           Write-Host "Demo content directory: $dataDir"
@@ -135,9 +149,39 @@ jobs:
             libxinerama-dev \
             libxkbcommon-dev \
             libwayland-dev \
+            libopenal1 \
+            alsa-utils \
+            mesa-utils \
+            pulseaudio-utils \
             wayland-protocols \
             xvfb \
             xauth
+
+      - name: Probe CI host capabilities
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Write-Host "RUNNER_OS=$env:RUNNER_OS"
+          Write-Host "DISPLAY=$env:DISPLAY"
+          Write-Host "TRIDENT_RENDER=$env:TRIDENT_RENDER"
+          Write-Host "TRIDENT_AUDIO=$env:TRIDENT_AUDIO"
+          Get-Command Xvfb, xvfb-run, xdpyinfo, glxinfo, pactl, aplay -ErrorAction SilentlyContinue | Format-Table -AutoSize Source,Name,CommandType
+          if ($env:RUNNER_OS -eq 'Linux') {
+            $probeScript = @'
+          echo DISPLAY=$DISPLAY
+          xdpyinfo | sed -n '1,60p'
+          glxinfo -B
+          pactl info
+          pactl list short sinks
+          aplay -l
+          '@
+            $probePath = Join-Path $env:RUNNER_TEMP 'ci-host-probe.sh'
+            Set-Content -LiteralPath $probePath -Value $probeScript -NoNewline
+            xvfb-run -a --server-args='-screen 0 1280x720x24' bash $probePath
+          } elseif ($env:RUNNER_OS -eq 'Windows') {
+            Get-CimInstance Win32_VideoController | Format-List Name,DriverVersion,VideoModeDescription,CurrentHorizontalResolution,CurrentVerticalResolution
+            Get-CimInstance Win32_SoundDevice | Format-List Name,Status,Manufacturer
+          }
 
       - name: Setup LLVM and Clang
         if: runner.os == 'Windows'
@@ -219,15 +263,20 @@ jobs:
         shell: pwsh
         env:
           OFPR_GAME_DIR: ${{ github.workspace }}/${{ matrix.dist_dir }}
+          ALSOFT_DRIVERS: 'null'
         run: |
           $ErrorActionPreference = 'Stop'
           $exeName = if ($env:RUNNER_OS -eq 'Windows') { 'PoseidonGame.exe' } else { 'PoseidonGame' }
           $gameExe = Join-Path $env:OFPR_GAME_DIR $exeName
           $stdoutLog = Join-Path $env:RUNNER_TEMP 'game-startup.stdout.log'
           $stderrLog = Join-Path $env:RUNNER_TEMP 'game-startup.stderr.log'
-          $gameArgs = @('-C', $env:TRIDENT_DATA_DIR, '--window', '--check', '--log-format', 'jsonl', '--render', 'dummy', '--nosound', '--no-strict')
+          $gameArgs = @('-C', $env:TRIDENT_DATA_DIR, '--window', '--check', '--log-format', 'jsonl', '--render', $env:TRIDENT_RENDER, '--audio', $env:TRIDENT_AUDIO, '--no-strict')
           Get-ChildItem -LiteralPath $env:OFPR_GAME_DIR -Force | Format-Table -AutoSize Name,Length,LastWriteTime
-          $process = Start-Process -FilePath $gameExe -ArgumentList $gameArgs -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
+          if ($env:RUNNER_OS -eq 'Linux') {
+            $process = Start-Process -FilePath 'xvfb-run' -ArgumentList (@('-a', '--server-args=-screen 0 1280x720x24', $gameExe) + $gameArgs) -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
+          } else {
+            $process = Start-Process -FilePath $gameExe -ArgumentList $gameArgs -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
+          }
           $exitCode = $process.ExitCode
           Write-Host "Game startup exit code: $exitCode"
           foreach ($log in @($stdoutLog, $stderrLog)) {
@@ -243,12 +292,87 @@ jobs:
             throw "Game startup check failed with exit code $exitCode"
           }
 
-      - name: Run Trident smoke test
+      - name: Run Trident capability probes
+        shell: pwsh
+        continue-on-error: true
+        env:
+          OFPR_GAME_DIR: ${{ github.workspace }}/${{ matrix.dist_dir }}
+          TRI_OUTPUT_DIR: ${{ github.workspace }}/trident-output
+          RUST_LOG: debug
+          ALSOFT_DRIVERS: 'null'
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $triExe = if ($env:RUNNER_OS -eq 'Windows') { 'engine/Trident/target/rwdi/tri.exe' } else { 'engine/Trident/target/rwdi/tri' }
+          $probes = @(
+            @{
+              Name = 'dummy-smoke'
+              Render = 'dummy'
+              Test = 'tests/integration/flows/demo/ci_smoke.test.sqf'
+              GameArgs = @('--nosound', '--no-strict')
+            },
+            @{
+              Name = 'gl33-colorbar'
+              Render = 'gl33'
+              Test = 'tests/integration/rendering/vertex_color_byte_order.test.sqf'
+              GameArgs = @('--audio', $env:TRIDENT_AUDIO, '--no-strict')
+            },
+            @{
+              Name = 'gl33-screenshot'
+              Render = 'gl33'
+              Test = 'tests/integration/ui/main_menu/options_shell.test.sqf'
+              GameArgs = @('--audio', $env:TRIDENT_AUDIO, '--no-strict')
+            },
+            @{
+              Name = 'openal-audio'
+              Render = 'dummy'
+              Test = 'tests/integration/ui/options/audio/audio_engine_layer.test.sqf'
+              GameArgs = @('--audio', $env:TRIDENT_AUDIO, '--no-strict')
+            }
+          )
+
+          $failed = @()
+          foreach ($probe in $probes) {
+            $outDir = Join-Path $env:TRI_OUTPUT_DIR "probe-$($probe.Name)"
+            $args = @(
+              'test',
+              '--game-dir', $env:OFPR_GAME_DIR,
+              '--data-dir', $env:TRIDENT_DATA_DIR,
+              '--output-dir', $outDir,
+              '--render', $probe.Render,
+              '--retries', '0'
+            )
+            foreach ($gameArg in $probe.GameArgs) {
+              $args += @('--game-arg', $gameArg)
+            }
+            $args += $probe.Test
+
+            Write-Host "::group::Trident probe $($probe.Name)"
+            if ($env:RUNNER_OS -eq 'Linux') {
+              xvfb-run -a --server-args='-screen 0 1280x720x24' $triExe @args
+            } else {
+              & $triExe @args
+            }
+            $exitCode = $LASTEXITCODE
+            Write-Host "Probe $($probe.Name) exit code: $exitCode"
+            Write-Host '::endgroup::'
+            if ($exitCode -ne 0) {
+              $failed += "$($probe.Name)=$exitCode"
+            }
+          }
+
+          if ($failed.Count -gt 0) {
+            Write-Host "Failed probes: $($failed -join ', ')"
+          } else {
+            Write-Host 'All capability probes passed.'
+          }
+
+      - name: Run Trident full suite
         shell: pwsh
         env:
           OFPR_GAME_DIR: ${{ github.workspace }}/${{ matrix.dist_dir }}
           TRI_OUTPUT_DIR: ${{ github.workspace }}/trident-output
           RUST_LOG: debug
+          ALSOFT_DRIVERS: 'null'
         run: |
           $ErrorActionPreference = 'Stop'
           $commonArgs = @(
@@ -256,14 +380,15 @@ jobs:
             '--game-dir', $env:OFPR_GAME_DIR,
             '--data-dir', $env:TRIDENT_DATA_DIR,
             '--output-dir', $env:TRI_OUTPUT_DIR,
-            '--render', 'dummy',
+            '--render', $env:TRIDENT_RENDER,
             '--retries', '0',
-            '--game-arg', '--nosound',
+            '--game-arg', '--audio',
+            '--game-arg', $env:TRIDENT_AUDIO,
             '--game-arg', '--no-strict',
             $env:TRIDENT_TEST_PATH
           )
           if ($env:RUNNER_OS -eq 'Linux') {
-            xvfb-run -a engine/Trident/target/rwdi/tri @commonArgs
+            xvfb-run -a --server-args='-screen 0 1280x720x24' engine/Trident/target/rwdi/tri @commonArgs
           } else {
             & engine/Trident/target/rwdi/tri.exe @commonArgs
           }
