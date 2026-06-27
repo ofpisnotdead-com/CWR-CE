@@ -1604,6 +1604,37 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             }
         }
         break;
+        case NMTAddSmokeSource:
+        {
+            AddSmokeSourceMessage info;
+            info.TransferMsg(ctx);
+
+            if (info._object)
+            {
+                info._object->AddSmokeSource();
+            }
+        }
+        break;
+        case NMTAskForGunnerHidden:
+        {
+            AskForGunnerHiddenMessage ask;
+            ask.TransferMsg(ctx);
+            if (ask._vehicle)
+            {
+                ask._vehicle->HideGunner(ask._hidden);
+            }
+        }
+        break;
+        case NMTAskForCommanderHidden:
+        {
+            AskForCommanderHiddenMessage ask;
+            ask.TransferMsg(ctx);
+            if (ask._vehicle)
+            {
+                ask._vehicle->HideCommander(ask._hidden);
+            }
+        }
+        break;
         case NMTCopyUnitInfo:
         {
             CopyUnitInfoMessage copy;

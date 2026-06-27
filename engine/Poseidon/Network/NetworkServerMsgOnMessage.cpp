@@ -519,6 +519,8 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         case NMTMsgVFireFailed:
         case NMTGroupRespawnDone:
         case NMTAskForReceiveUnitAnswer:
+        case NMTAskForGunnerHidden:
+        case NMTAskForCommanderHidden:
             OnAskForMessage(from, msg, type, ctx);
             break;
         case NMTMarkerDelete:
@@ -547,6 +549,7 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         case NMTCopyUnitInfo:
         case NMTVehicleDamaged:
         case NMTIncomingMissile:
+        case NMTAddSmokeSource:
             // send to all except from (state Play expected)
             for (int i = 0; i < _players.Size(); i++)
             {
@@ -2048,6 +2051,22 @@ void NetworkServer::OnAskForMessage(int from, NetworkMessage* msg, NetworkMessag
             index1 = indices->to;
             // it is not vehicle index, but it does not matter
             // all we need is to be able to get owner of given network object
+        }
+            goto LabelAskWithVehicle;
+        case NMTAskForGunnerHidden:
+        {
+            NET_ERROR(dynamic_cast<const IndicesAskForGunnerHidden*>(ctx.GetIndices()))
+            const IndicesAskForGunnerHidden* indices =
+                static_cast<const IndicesAskForGunnerHidden *>(ctx.GetIndices());
+            index1 = indices->vehicle;
+        }
+            goto LabelAskWithVehicle;
+        case NMTAskForCommanderHidden:
+        {
+            NET_ERROR(dynamic_cast<const IndicesAskForCommanderHidden*>(ctx.GetIndices()))
+            const IndicesAskForCommanderHidden* indices =
+                static_cast<const IndicesAskForCommanderHidden *>(ctx.GetIndices());
+            index1 = indices->vehicle;
         }
             goto LabelAskWithVehicle;
     }

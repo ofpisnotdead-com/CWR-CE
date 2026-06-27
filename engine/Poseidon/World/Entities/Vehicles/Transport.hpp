@@ -661,6 +661,8 @@ public:
 	int comFireTarget;
 	int lock;
 	int driverHiddenWanted;
+	int gunnerHiddenWanted;
+	int commanderHiddenWanted;
 	int fuel;
 	int engineOff;
 
