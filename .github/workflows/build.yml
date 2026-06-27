@@ -79,6 +79,7 @@ jobs:
             autoconf-archive \
             automake \
             clang \
+            clang-format \
             libtool \
             pkg-config \
             libgl1-mesa-dev \
