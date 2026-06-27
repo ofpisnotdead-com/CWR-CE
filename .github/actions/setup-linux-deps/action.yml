@@ -1,0 +1,29 @@
+name: Setup Linux build dependencies
+description: Install the apt packages required to build CWR/Poseidon on Linux runners.
+
+runs:
+  using: composite
+  steps:
+    - name: Install Linux system packages
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          autoconf \
+          autoconf-archive \
+          automake \
+          clang \
+          libtool \
+          libltdl-dev \
+          pkg-config \
+          libgl1-mesa-dev \
+          libx11-dev \
+          libxext-dev \
+          libxrandr-dev \
+          libxcursor-dev \
+          libxi-dev \
+          libxtst-dev \
+          libxinerama-dev \
+          libxkbcommon-dev \
+          libwayland-dev \
+          wayland-protocols

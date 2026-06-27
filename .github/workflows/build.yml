@@ -62,84 +62,13 @@ jobs:
         shell: bash
         run: echo "sha_short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
-      - name: Install Linux system packages
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            autoconf-archive \
-            automake \
-            clang \
-            libtool \
-            libltdl-dev \
-            pkg-config \
-            libgl1-mesa-dev \
-            libx11-dev \
-            libxext-dev \
-            libxrandr-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libxtst-dev \
-            libxinerama-dev \
-            libxkbcommon-dev \
-            libwayland-dev \
-            wayland-protocols
-
-      - name: Setup LLVM and Clang
-        if: runner.os == 'Windows'
-        uses: KyleMayes/install-llvm-action@v2
+      - name: Build and test
+        uses: ./.github/actions/build-cwr
         with:
-          version: '19'
-          arch: 'x64'
-          directory: 'C:\Program Files\LLVM'
-
-      - name: Setup compiler cache
-        uses: hendrikmuhs/ccache-action@v1.2.23
-        with:
-          variant: ccache
-          key: ${{ runner.os }}-${{ matrix.preset }}-pch
-          max-size: 1G
-
-      - name: Setup CMake and Ninja
-        uses: lukka/get-cmake@latest
-
-      - name: Restore vcpkg binary cache
-        uses: actions/cache@v4
-        with:
-          path: .vcpkg-bincache/${{ matrix.vcpkg_triplet }}
-          key: vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/vcpkg-triplets/**', 'cmake/vcpkg-overlay-ports/**') }}
-          restore-keys: |
-            vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-
-
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        env:
-          VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-bincache/${{ matrix.vcpkg_triplet }},readwrite
-          VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-bincache/${{ matrix.vcpkg_triplet }}
-          VCPKG_DEFAULT_TRIPLET: ${{ matrix.vcpkg_triplet }}
-          VCPKG_INSTALLED_DIR: ${{ github.workspace }}/${{ matrix.build_dir }}/vcpkg_installed
-          VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/cmake/vcpkg-overlay-ports
-          VCPKG_OVERLAY_TRIPLETS: ${{ github.workspace }}/cmake/vcpkg-triplets
-        with:
-          runVcpkgInstall: true
-          vcpkgJsonGlob: 'vcpkg.json'
-
-      - name: Configure
-        run: >
-          cmake
-          --preset ${{ matrix.preset }}
-          -DCMAKE_C_COMPILER_LAUNCHER=ccache
-          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-
-      - name: Build
-        run: cmake --build ${{ matrix.build_dir }} --parallel 2
-
-      - name: Test
-        shell: pwsh
-        env:
-          CTEST_EXCLUDE: ${{ matrix.ctest_exclude }}
-        run: ctest --test-dir '${{ matrix.build_dir }}' --output-on-failure -E "$env:CTEST_EXCLUDE"
+          preset: ${{ matrix.preset }}
+          vcpkg-triplet: ${{ matrix.vcpkg_triplet }}
+          build-dir: ${{ matrix.build_dir }}
+          ctest-exclude: ${{ matrix.ctest_exclude }}
 
       - name: Upload Game
         uses: actions/upload-artifact@v7
