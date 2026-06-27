@@ -125,6 +125,7 @@ MipInfo TextBankMTL::UseMipmap(Texture* texture, int level, int levelTop)
 
     TextureMTL* mtlTexture = static_cast<TextureMTL*>(texture);
     const int selectedLevel = mtlTexture->NoteMipmapUse(level, levelTop);
+    mtlTexture->EnsureBigSurface(*_bootstrap, selectedLevel);
     return MipInfo(texture, selectedLevel);
 }
 

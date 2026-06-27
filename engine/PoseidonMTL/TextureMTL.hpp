@@ -15,30 +15,33 @@ class EngineMTLBootstrap;
 // Real Metal-backed texture: decodes every mip level via the shared
 // PAADecoder utility (handles every PAA/PAC source format -- DXT1/3/5,
 // ARGB8888/4444/1555, AI88, P8 -- decompressing to RGBA8888 on the CPU,
-// since Apple Silicon GPUs have no BC/DXT hardware decode) and uploads the
-// full chain as a real mipmapped RGBA8Unorm MTLTexture via
-// EngineMTLBootstrap::CreateTextureMipped.
+// since Apple Silicon GPUs have no BC/DXT hardware decode).
 //
-// Still simpler than TextureGL33 in one real way: no per-frame visible-
-// mip-level streaming or LRU eviction/memory budget -- every level loads
-// once up front and stays resident forever, same as the original single-
-// level design, just with real lower-resolution levels for the GPU to
-// sample now instead of just one. Good enough for menu-scale texture
-// counts.
+// Milestone 1 of the GL33-parity texture-streaming port (see
+// metal_texture_streaming_2026-06-25/metal_idle_shadow_black_fixed memory
+// for the full design): every level is still decoded up front (cheap,
+// CPU-only) and kept in `_levelPixels`, but only the coarse tail (below
+// `_smallCutoffLevel`, sized like GL33's `_maxSmallTexturePixels` --
+// TextureBankGL33_Core.cpp) uploads to GPU immediately, as `_smallGpuHandle`
+// -- a tiny, always-resident texture so nothing ever fully disappears.
+// Finer detail uploads on demand into a separate `_bigGpuHandle` texture
+// (see EnsureBigSurface) only once the screen-space-driven level tracking
+// (`NoteMipmapUse`/`_levelNeededThisFrame`) actually asks for it. `GpuHandle()`
+// prefers the big surface, falling back to small.
 //
-// TODO(metal-parity): this is a real, deliberately-deferred GL33 parity
-// gap, not just a v1 simplification -- TextBankGL33/TextureGL33 implement
-// a genuine adaptive streaming system (small/big surface split, 5-list
-// frame LRU, VRAM-budget-driven eviction with surface pooling -- see
-// TextureGL33.hpp / TextureGL33_Loading.cpp / TextureBankGL33_Cache.cpp /
-// TextureBankGL33_Core.cpp) that bounds GPU texture memory under load;
-// Metal currently has no upper bound at all. Per-frame visible-level
-// tracking already exists here (_levelNeededThisFrame/LastFrame,
-// FinishFrameUseTracking) but nothing consumes it yet. Porting the full
-// system is harder on Metal than GL: an MTLTexture's mip range is fixed at
-// creation, so "evicting" levels means destroying and recreating the
-// texture (no GL-style drop-big-keep-small in place). Revisit when a real
-// VRAM-pressure symptom shows up, or before shipping.
+// Still simpler than TextureGL33 in one real way: no memory budget or LRU
+// eviction yet -- once a big surface is created it stays resident forever
+// (matches pre-Milestone-1 behavior as a safe floor). That's Milestone 2.
+//
+// TODO(metal-parity): budget + LRU eviction (Milestone 2) and GPU-surface
+// pooling (Milestone 3, stretch) are the remaining real GL33 parity gaps --
+// see TextureGL33.hpp / TextureGL33_Loading.cpp / TextureBankGL33_Cache.cpp /
+// TextureBankGL33_Core.cpp for the reference implementation. Porting full
+// eviction is harder on Metal than GL: an MTLTexture's mip range is fixed at
+// creation, so "evicting" the big surface means destroying and recreating
+// the texture object (no GL-style in-place glTexSubImage drop), unlike the
+// small/big *split* itself (this milestone), which maps cleanly since each
+// tier is already its own texture object.
 class TextureMTL : public Texture
 {
   public:
@@ -71,9 +74,23 @@ class TextureMTL : public Texture
     bool InitFromRGBA(EngineMTLBootstrap& bootstrap, int w, int h, const void* rgba);
     void UpdateRGBA(EngineMTLBootstrap& bootstrap, const void* rgba);
 
-    int GpuHandle() const { return _gpuHandle; }
+    // Prefers the on-demand big surface (real requested detail); falls back
+    // to the always-resident small surface when no big surface has been
+    // created yet (or it was evicted, once Milestone 2 adds that) -- never
+    // 0 once LoadPixels has succeeded once, matching the "texture never
+    // fully disappears" floor GL33's own small surface guarantees.
+    int GpuHandle() const { return _bigGpuHandle != 0 ? _bigGpuHandle : _smallGpuHandle; }
 
-    bool IsGpuValid() const override { return _gpuHandle != 0; }
+    bool IsGpuValid() const override { return GpuHandle() != 0; }
+
+    // Called from TextBankMTL::UseMipmap right after NoteMipmapUse computes
+    // the screen-space-driven `level` -- creates (or recreates, if a finer
+    // level than the current big surface covers is now needed) the big
+    // surface spanning [level, _smallCutoffLevel). A no-op if `level` falls
+    // within what the small surface already covers, or the current big
+    // surface already covers `level`. See TextureMTL.hpp's class doc
+    // comment for the overall small/big design.
+    void EnsureBigSurface(EngineMTLBootstrap& bootstrap, int level);
 
     void SetMaxSize(int maxSize) override { _maxSize = maxSize; }
     int AMaxSize() const override { return _maxSize; }
@@ -87,8 +104,8 @@ class TextureMTL : public Texture
     void SetMipmapRange(int min, int max) override;
 
     // Not sampled from the GPU texture (Metal has no CPU readback path
-    // wired up here) -- reads the CPU-side RGBA copy `_rgba` kept
-    // specifically for this, mirroring TextureGL33::GetPixel's pixel
+    // wired up here) -- reads the top level of `_levelPixels`, the CPU-side
+    // RGBA copy kept for this, mirroring TextureGL33::GetPixel's pixel
     // lookup (same u/v-times-extent, clamp-to-edge convention as
     // PacLevelMem::GetPixel, Pactext.cpp:1445). This used to unconditionally
     // return HBlack, which silently fed black into anything that samples a
@@ -122,7 +139,20 @@ class TextureMTL : public Texture
     int LevelHeight(int level) const;
 
     int _w = 0, _h = 0;
-    int _gpuHandle = 0; // EngineMTLBootstrap texture handle; 0 = none/failed (renders fallback white)
+    // EngineMTLBootstrap texture handles; 0 = none/failed. Small is set once
+    // by LoadPixels and never changes thereafter (until Milestone 2 adds
+    // eviction); big is 0 until the first EnsureBigSurface call actually
+    // needs finer detail than small provides.
+    int _smallGpuHandle = 0;
+    int _bigGpuHandle = 0;
+    // Finest original-chain level the current big surface covers; INT_MAX
+    // when there is no big surface. Levels are numbered finest-first (0 =
+    // top/largest), matching the rest of this class and GL33's convention.
+    int _bigStartLevel = INT_MAX;
+    // First (numerically; coarsest-adjacent) level the small surface covers
+    // -- i.e. small spans [_smallCutoffLevel, _nMipmaps), big spans
+    // [requested level, _smallCutoffLevel) on demand. Set once in LoadPixels.
+    int _smallCutoffLevel = 0;
     int _nMipmaps = 1;  // real decoded level count for LoadPixels; always 1 for InitFromRGBA (dynamic/UI textures)
     int _maxSize = 4096;
     int _largestUsed = 0;
@@ -132,7 +162,11 @@ class TextureMTL : public Texture
     bool _isTransparent = false;
     PacLevelMem _mip; // unused placeholder -- AMipmap() must return a reference to something
     std::vector<LevelInfo> _levels;
-    std::vector<uint8_t> _rgba; // CPU-side copy of the uploaded RGBA8 data, kept only for GetPixel/GetColor
+    // CPU-side RGBA8 copy of every decoded level, indexed the same as
+    // _levels -- GetPixel/GetColor only ever read [0] (the top level, same
+    // contract as before this milestone); EnsureBigSurface reads the levels
+    // a big-surface promotion needs without re-decoding from the VFS.
+    std::vector<std::vector<uint8_t>> _levelPixels;
 };
 
 } // namespace Poseidon
