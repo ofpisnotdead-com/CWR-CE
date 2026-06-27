@@ -326,3 +326,119 @@ tbody tr:nth-child(odd) {
         grid-template-columns: 1fr;
     }
 }
+
+@media (max-width: 520px) {
+    body {
+        padding: 8px;
+    }
+
+    .browser-table-wrap {
+        overflow: visible;
+    }
+
+    .browser-table-wrap table,
+    .browser-table-wrap thead,
+    .browser-table-wrap tbody,
+    .browser-table-wrap tr,
+    .browser-table-wrap th,
+    .browser-table-wrap td {
+        display: block;
+    }
+
+    .browser-table-wrap table {
+        border: 0;
+    }
+
+    .browser-table-wrap thead {
+        display: none;
+    }
+
+    .browser-table-wrap tbody tr {
+        border: 1px solid #0e9b0e;
+        margin-bottom: 10px;
+        background: #020902;
+    }
+
+    .browser-table-wrap tbody tr:nth-child(odd) {
+        background: #030f03;
+    }
+
+    .browser-table-wrap td {
+        display: block;
+        border-width: 0 0 1px;
+        min-width: 0;
+    }
+
+    .browser-table-wrap td:last-child {
+        border-bottom: 0;
+    }
+
+    .browser-table-wrap td::before {
+        color: #79b979;
+        content: "";
+        display: block;
+        font-size: 12px;
+        margin-bottom: 4px;
+    }
+
+    .browser-table-wrap td[colspan] {
+        display: block;
+    }
+
+    .browser-table-wrap td[colspan]::before {
+        content: none;
+    }
+
+    #browser-table td:nth-child(1),
+    #landing-table td:nth-child(1) {
+        display: none;
+    }
+
+    #browser-table td:nth-child(2)::before,
+    #landing-table td:nth-child(2)::before {
+        content: "#";
+        display: inline;
+        margin-bottom: 0;
+        margin-right: 8px;
+    }
+
+    #browser-table td:nth-child(3)::before,
+    #landing-table td:nth-child(3)::before {
+        content: "Mission";
+    }
+
+    #browser-table td:nth-child(4)::before,
+    #landing-table td:nth-child(4)::before {
+        content: "Status";
+    }
+
+    #browser-table td:nth-child(5)::before,
+    #landing-table td:nth-child(5)::before {
+        content: "Players";
+    }
+
+    #browser-table td:nth-child(6)::before,
+    #landing-table td:nth-child(6)::before {
+        content: "Address";
+    }
+
+    #mods-table td:nth-child(1)::before {
+        content: "Mod";
+    }
+
+    #mods-table td:nth-child(2)::before {
+        content: "Version";
+    }
+
+    #mods-table td:nth-child(3)::before {
+        content: "Size";
+    }
+
+    #mods-table td:nth-child(4)::before {
+        content: "Links";
+    }
+
+    #mods-table td:nth-child(5)::before {
+        content: "Action";
+    }
+}
