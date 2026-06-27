@@ -13,15 +13,13 @@ env:
   CCACHE_NOHASHDIR: true
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
-  STEAM_APP_ID: '4819000'
-  TRIDENT_TEST_PATH: tests/integration
+  DEMO_ASSETS_URL: https://files.ofpisnotdead.com/CWR-demo-assets.zip
+  TRIDENT_TEST_PATH: tests/integration/flows/demo/full_game_demo_campaign_placeholder.test.sqf
 
 jobs:
   smoke:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    env:
-      STEAM_SHARED_SECRET: ${{ secrets.STEAM_SHARED_SECRET }}
 
     strategy:
       fail-fast: false
@@ -44,25 +42,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup SteamCMD
-        uses: andriivitiv/setup-steamcmd@v1
-
-      - name: Generate Steam auth code
-        id: steam_totp
-        if: env.STEAM_SHARED_SECRET != ''
-        uses: andriivitiv/steam-totp@v1
-        env:
-          STEAM_SHARED_SECRET: ${{ secrets.STEAM_SHARED_SECRET }}
-        with:
-          shared_secret: ${{ secrets.STEAM_SHARED_SECRET }}
-
-      - name: Try Steam demo game data
+      - name: Download demo game data
         shell: pwsh
         env:
-          GAME_DATA_DIR: ${{ github.workspace }}/.game-data/remaster-demo
-          STEAM_USERNAME: ${{ secrets.STEAM_USERNAME }}
-          STEAM_PASSWORD: ${{ secrets.STEAM_PASSWORD }}
-          STEAM_TOTP_CODE: ${{ steps.steam_totp.outputs.code }}
+          GAME_DATA_ROOT: ${{ github.workspace }}/.game-data
         run: |
           $ErrorActionPreference = 'Stop'
           $requiredFiles = @(
@@ -75,75 +58,61 @@ jobs:
             'Missions/Demo.Demo/mission.sqm'
           )
 
-          function Test-DemoContent {
-            param([string] $Path)
+          Remove-Item -LiteralPath $env:GAME_DATA_ROOT -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $env:GAME_DATA_ROOT
+          $zipPath = Join-Path $env:RUNNER_TEMP 'CWR-demo-assets.zip'
 
+          Write-Host "Downloading demo assets from $env:DEMO_ASSETS_URL"
+          Invoke-WebRequest -Uri $env:DEMO_ASSETS_URL -OutFile $zipPath
+          Get-Item -LiteralPath $zipPath | Format-List FullName,Length,LastWriteTime
+
+          Expand-Archive -LiteralPath $zipPath -DestinationPath $env:GAME_DATA_ROOT -Force
+          $candidates = @(
+            (Join-Path $env:GAME_DATA_ROOT 'CWR-demo-assets'),
+            $env:GAME_DATA_ROOT
+          )
+
+          $dataDir = $null
+          foreach ($candidate in $candidates) {
             $ok = $true
             foreach ($required in $requiredFiles) {
-              $requiredPath = Join-Path $Path $required
+              $requiredPath = Join-Path $candidate $required
               $exists = Test-Path -LiteralPath $requiredPath
-              Write-Host "Steam required content $required = $exists"
+              Write-Host "Required demo content $required in $candidate = $exists"
               if (-not $exists) {
                 $ok = $false
               }
             }
-            return $ok
-          }
 
-          $hasSteamCredentials = -not [string]::IsNullOrWhiteSpace($env:STEAM_USERNAME) -and -not [string]::IsNullOrWhiteSpace($env:STEAM_PASSWORD)
-          Write-Host "Steam authenticated login configured: $hasSteamCredentials"
-
-          foreach ($platform in @('', 'windows', 'linux')) {
-            $label = if ($platform) { $platform } else { 'native' }
-            $attemptDir = Join-Path $env:GAME_DATA_DIR $label
-            Remove-Item -LiteralPath $attemptDir -Recurse -Force -ErrorAction SilentlyContinue
-            New-Item -ItemType Directory -Force -Path $attemptDir
-
-            $loginArgs = if ($hasSteamCredentials) {
-              if ([string]::IsNullOrWhiteSpace($env:STEAM_TOTP_CODE)) {
-                @('+login', $env:STEAM_USERNAME, $env:STEAM_PASSWORD)
-              } else {
-                @('+login', $env:STEAM_USERNAME, $env:STEAM_PASSWORD, $env:STEAM_TOTP_CODE)
-              }
-            } else {
-              @('+login', 'anonymous')
-            }
-
-            $steamArgs = @('+force_install_dir', $attemptDir) + $loginArgs + @('+app_license_request', $env:STEAM_APP_ID, '+app_update', $env:STEAM_APP_ID, 'validate', '+quit')
-            if ($platform) {
-              $steamArgs = @('+@sSteamCmdForcePlatformType', $platform) + $steamArgs
-            }
-
-            Write-Host "Trying Steam demo content platform: $label"
-            & steamcmd @steamArgs
-            $steamExit = $LASTEXITCODE
-            if ($steamExit -ne 0) {
-              Write-Warning "SteamCMD app_update failed for platform $label with exit code $steamExit"
-            }
-
-            $files = @(Get-ChildItem -LiteralPath $attemptDir -Recurse -File -ErrorAction SilentlyContinue)
-            $totalBytes = ($files | Measure-Object -Property Length -Sum).Sum
-            Write-Host "Steam content directory: $attemptDir"
-            Write-Host "Steam content file count: $($files.Count)"
-            Write-Host "Steam content total bytes: $totalBytes"
-            $root = (Resolve-Path -LiteralPath $attemptDir).Path
-            $files |
-              Sort-Object FullName |
-              Select-Object -First 120 |
-              ForEach-Object {
-                $relative = $_.FullName.Substring($root.Length).TrimStart([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
-                Write-Host ("Steam file {0} ({1} bytes)" -f $relative, $_.Length)
-              }
-
-            if ((Test-DemoContent -Path $attemptDir) -and $steamExit -eq 0) {
-              Get-ChildItem -LiteralPath $attemptDir -Recurse -Include *.exe,*.dll,*.pdb -File | Remove-Item -Force
-              "TRIDENT_DATA_DIR=$attemptDir" | Add-Content -LiteralPath $env:GITHUB_ENV
-              Write-Host "Using Trident data directory: $attemptDir"
-              exit 0
+            if ($ok) {
+              $dataDir = $candidate
+              break
             }
           }
 
-          throw "Steam demo content was not available from native, windows, or linux SteamCMD installs."
+          if (-not $dataDir) {
+            throw "Downloaded demo assets did not contain the required game data layout."
+          }
+
+          Remove-Item -LiteralPath (Join-Path $dataDir '.git') -Recurse -Force -ErrorAction SilentlyContinue
+          Get-ChildItem -LiteralPath $dataDir -Recurse -Include *.exe,*.dll,*.pdb -File | Remove-Item -Force
+
+          $files = @(Get-ChildItem -LiteralPath $dataDir -Recurse -File -ErrorAction SilentlyContinue)
+          $totalBytes = ($files | Measure-Object -Property Length -Sum).Sum
+          Write-Host "Demo content directory: $dataDir"
+          Write-Host "Demo content file count: $($files.Count)"
+          Write-Host "Demo content total bytes: $totalBytes"
+          $root = (Resolve-Path -LiteralPath $dataDir).Path
+          $files |
+            Sort-Object FullName |
+            Select-Object -First 120 |
+            ForEach-Object {
+              $relative = $_.FullName.Substring($root.Length).TrimStart([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+              Write-Host ("Demo file {0} ({1} bytes)" -f $relative, $_.Length)
+            }
+
+          "TRIDENT_DATA_DIR=$dataDir" | Add-Content -LiteralPath $env:GITHUB_ENV
+          Write-Host "Using Trident data directory: $dataDir"
 
       - name: Install Linux system packages
         if: runner.os == 'Linux'
@@ -217,7 +186,7 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build C++ game
-        run: cmake --build ${{ matrix.build_dir }} --target PoseidonGame --parallel 2
+        run: cmake --build ${{ matrix.build_dir }} --target PoseidonGame PoseidonGameDemo --parallel 2
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
