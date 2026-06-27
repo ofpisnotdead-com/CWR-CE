@@ -1071,6 +1071,7 @@ void InputSubsystem::LoadKeys()
     GInput.mouse.tuning.extendedRange = mouse.extendedRange;
 
     GInput.gamepad.enabled = gamepad.enabled;
+    GInput.gamepad.reverseYStick = gamepad.reverseYStick;
     GInput.gamepad.deadzoneStick = gamepad.deadzoneStick;
     GInput.gamepad.deadzoneTrigger = gamepad.deadzoneTrigger;
     GInput.gamepad.lookSensitivity = gamepad.lookSensitivity;
@@ -1083,6 +1084,7 @@ void InputSubsystem::SaveKeys()
 
     GamepadConfig gamepad;
     gamepad.enabled = GInput.gamepad.enabled;
+    gamepad.reverseYStick = GInput.gamepad.reverseYStick;
     gamepad.deadzoneStick = GInput.gamepad.deadzoneStick;
     gamepad.deadzoneTrigger = GInput.gamepad.deadzoneTrigger;
     gamepad.lookSensitivity = GInput.gamepad.lookSensitivity;
@@ -1263,6 +1265,18 @@ void InputSubsystem::SetJoystickEnabled(bool v)
 void InputSubsystem::ToggleJoystickEnabled()
 {
     GInput.gamepad.enabled = !GInput.gamepad.enabled;
+}
+bool InputSubsystem::IsReverseJoystick() const
+{
+    return GInput.gamepad.reverseYStick;
+}
+void InputSubsystem::SetReverseJoystick(bool v)
+{
+    GInput.gamepad.reverseYStick = v;
+}
+void InputSubsystem::ToggleReverseJoystick()
+{
+    GInput.gamepad.reverseYStick = !GInput.gamepad.reverseYStick;
 }
 bool InputSubsystem::IsMouseButtonsReversed() const
 {

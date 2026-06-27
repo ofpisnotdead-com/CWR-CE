@@ -13,8 +13,7 @@ const UserAction kOnFoot[] = {
     // Movement
     UAMoveForward, UAMoveBack, UATurnLeft, UATurnRight, UAMoveLeft, UAMoveRight, UAMoveUp, UAMoveDown,
     UAMoveFastForward, UAMoveSlowForward, UATurbo,
-    // Walk lives in UserActionDesc as a hard-coded entry — UAN-1 is
-    // out of range for a generic enum, so we look it up by name later.
+    UASlow, // "Walk" — the slow-movement toggle (label/default key live in UserActionDesc)
     // Weapons & combat
     UAFire, UAReloadMagazine, UAToggleWeapons, UAHandgun, UALockTarget, UALockTargets, UARevealTarget, UAOptics,
     UAZoomIn, UAZoomOut,

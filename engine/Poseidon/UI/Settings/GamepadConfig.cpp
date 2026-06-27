@@ -31,6 +31,7 @@ bool GamepadConfig::IsGamepadCode(int packedCode)
 void GamepadConfig::LoadDefaults()
 {
     enabled = true;
+    reverseYStick = false;
     deadzoneStick = 0.21f;
     deadzoneTrigger = 0.10f;
     lookSensitivity = 1.0f;
@@ -70,6 +71,8 @@ bool GamepadConfig::Load(const std::string& path)
 
     if (auto* e = cfg.FindEntry("enabled"))
         enabled = (bool)*e;
+    if (auto* e = cfg.FindEntry("reverseYStick"))
+        reverseYStick = (bool)*e;
     if (auto* e = cfg.FindEntry("deadzoneStick"))
         deadzoneStick = (float)*e;
     if (auto* e = cfg.FindEntry("deadzoneTrigger"))
@@ -95,6 +98,7 @@ bool GamepadConfig::Save(const std::string& path) const
 
     ParamFile cfg;
     cfg.Add("enabled", enabled);
+    cfg.Add("reverseYStick", reverseYStick);
     cfg.Add("deadzoneStick", deadzoneStick);
     cfg.Add("deadzoneTrigger", deadzoneTrigger);
     cfg.Add("lookSensitivity", lookSensitivity);

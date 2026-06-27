@@ -1,6 +1,6 @@
 #define APP_VERSION_MAJOR 3
-#define APP_VERSION_MINOR 00
-#define APP_VERSION_TEXT "3.0"
+#define APP_VERSION_MINOR 01
+#define APP_VERSION_TEXT "3.01"
 
 #if _GALATEA
 #define APP_NAME				"Galatea"
