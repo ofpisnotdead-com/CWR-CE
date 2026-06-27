@@ -14,7 +14,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   DEMO_ASSETS_URL: https://files.ofpisnotdead.com/CWR-demo-assets.zip
-  TRIDENT_RENDER: gl33
+  TRIDENT_RENDER: dummy
   TRIDENT_AUDIO: openal
   TRIDENT_TEST_PATH: tests/integration
 
@@ -182,6 +182,19 @@ jobs:
             Get-CimInstance Win32_VideoController | Format-List Name,DriverVersion,VideoModeDescription,CurrentHorizontalResolution,CurrentVerticalResolution
             Get-CimInstance Win32_SoundDevice | Format-List Name,Status,Manufacturer
           }
+
+      - name: Select Trident CI runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $render = if ($env:RUNNER_OS -eq 'Linux') { 'gl33' } else { 'dummy' }
+          $audio = 'openal'
+          @(
+            "TRIDENT_RENDER=$render"
+            "TRIDENT_AUDIO=$audio"
+          ) | Add-Content -LiteralPath $env:GITHUB_ENV
+          Write-Host "Selected Trident render backend: $render"
+          Write-Host "Selected Trident audio backend: $audio"
 
       - name: Setup LLVM and Clang
         if: runner.os == 'Windows'
