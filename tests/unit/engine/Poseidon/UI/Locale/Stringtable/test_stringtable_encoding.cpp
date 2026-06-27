@@ -17,6 +17,9 @@
 #else
 #include <unistd.h>
 #include <limits.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 
 using Poseidon::GetLanguage;
 using Poseidon::LocalizeString;
@@ -39,6 +42,11 @@ static RString GetExeDir()
 #ifdef _WIN32
         GetModuleFileNameA(nullptr, p, MAX_PATH);
         char* slash = strrchr(p, '\\');
+#elif defined(__APPLE__)
+        uint32_t size = sizeof(p);
+        if (_NSGetExecutablePath(p, &size) != 0)
+            p[0] = '\0';
+        char* slash = strrchr(p, '/');
 #else
         ssize_t n = readlink("/proc/self/exe", p, sizeof(p) - 1);
         if (n > 0)

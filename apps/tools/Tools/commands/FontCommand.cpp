@@ -204,7 +204,7 @@ static void setupFontTextWidth(CLI::App& font)
     static std::string alias;
     static double sizeEx = 0.0;
     static std::string text;
-    static std::string dataDir = "packages/Remaster";
+    static std::string dataDir = "packages/Combined";
     static int width = 1920;
     static int height = 1080;
     static double fovTop = 0.75;
@@ -215,7 +215,7 @@ static void setupFontTextWidth(CLI::App& font)
     cmd->add_option("font", alias, "Font alias as used in a resource (e.g. SteelfishB64CE)")->required();
     cmd->add_option("sizeEx", sizeEx, "Control sizeEx (font height as a fraction of screen height)")->required();
     cmd->add_option("text", text, "Text to measure")->required();
-    cmd->add_option("--data-dir", dataDir, "Game data dir holding fonts/ (default packages/Remaster)");
+    cmd->add_option("--data-dir", dataDir, "Game data dir holding fonts/ (default packages/Combined)");
     cmd->add_option("--width", width, "Surface width px (default 1920)");
     cmd->add_option("--height", height, "Surface height px (default 1080)");
     cmd->add_option("--fov-top", fovTop, "Aspect topFOV (config fovTop, default 0.75)");

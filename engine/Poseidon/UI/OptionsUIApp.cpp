@@ -132,7 +132,7 @@ RString GetAppVersion()
     return buf;
 }
 
-// Main-menu IDC → STRINGTABLE key. Verified present in packages/Remaster/BIN/STRINGTABLE.CSV.
+// Main-menu IDC → STRINGTABLE key. Verified present in packages/Combined/BIN/STRINGTABLE.CSV.
 // IDC_MAIN_PLAYER is excluded (DisplayMain::OnDraw re-sets it every frame).
 // IDC_MAIN_VERSION and IDC_MAIN_DATE are excluded (non-translated strings).
 // IDC_MAIN_EDITOR maps to STR_DISP_MAIN_CUSTOM because the rendered button text is "MISSION EDITOR".

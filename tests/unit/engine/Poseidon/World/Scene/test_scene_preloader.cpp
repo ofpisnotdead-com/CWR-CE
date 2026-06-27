@@ -30,7 +30,7 @@ TEST_CASE("ScenePreloader reports the slot class set", "[scene][preloader]")
 TEST_CASE("ScenePreloader::IsAvailable is false before Initialize", "[scene][preloader]")
 {
     // The Initialize / Shutdown lifecycle is exercised end-to-end by the
-    // integration suite (PoseidonGame --check against packages/Remaster
+    // integration suite (PoseidonGame --check against packages/Combined
     // and PoseidonTetris against a stripped fixture).  Initialize needs
     // a live Scene, an open ParamFile, and the shape factory; standing
     // those up in a Catch2 process isn't worth the harness work — the

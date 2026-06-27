@@ -31,13 +31,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # [external-data] tests under PoseidonTests read real localization
+          # assets (equipment.utf8.html, STRINGTABLE_MAP.utf8.csv,
+          # STRINGTABLE_EQUIPMENT.utf8.csv) from packages/Combined/, which is
+          # gitignored and not distributed to the GitHub-hosted runners by
+          # design. The self-hosted macOS runner has the real data staged
+          # outside the checkout path (see "Stage Combined test data" below)
+          # and runs these for real; Linux/Windows exclude them by name.
           - name: Linux RelWithDebInfo
-            os: ubuntu-24.04
+            os: [self-hosted, debian-13, x64]
             preset: linux-x64-clang-rwdi
             vcpkg_triplet: x64-linux-clang
             build_dir: build/linux-x64-clang-rwdi
+            ctest_exclude: 'PoseidonTests - (STRINGTABLE_MAP\.utf8\.csv ships both legend keys with English fallbacks|STRINGTABLE_EQUIPMENT\.utf8\.csv ships M16 keys for all 8 languages|equipment\.utf8\.html lives loose and references STR_EQ_M16 tokens|equipment\.utf8\.html line endings are clean CRLF \(no doubled CR\)|equipment\.utf8\.html preserves every EQ_ anchor and weapon image)'
           - name: macOS (Apple Silicon) RelWithDebInfo
-            os: macos-26
+            os: [self-hosted, macOS, arm64]
             preset: macos-arm64-clang-rwdi
             vcpkg_triplet: arm64-osx
             build_dir: build/macos-arm64-clang-rwdi
@@ -46,11 +54,21 @@ jobs:
             preset: win-x64-clang-rwdi
             vcpkg_triplet: x64-windows-clang
             build_dir: build/win-x64-clang-rwdi
-            ctest_exclude: 'PoseidonTests - (OAL -|PAAEncoder -|Image - Save to \.paa|World state file format --|PreviewImage - saveToFile writes|PreviewImageRGB - saveToFile writes)'
+            ctest_exclude: 'PoseidonTests - (OAL -|PAAEncoder -|Image - Save to \.paa|World state file format --|PreviewImage - saveToFile writes|PreviewImageRGB - saveToFile writes|STRINGTABLE_MAP\.utf8\.csv ships both legend keys with English fallbacks|STRINGTABLE_EQUIPMENT\.utf8\.csv ships M16 keys for all 8 languages|equipment\.utf8\.html lives loose and references STR_EQ_M16 tokens|equipment\.utf8\.html line endings are clean CRLF \(no doubled CR\)|equipment\.utf8\.html preserves every EQ_ anchor and weapon image)'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # packages/ is gitignored and actions/checkout's clean:true wipes it
+      # (git clean -ffdx removes ignored files too) at the start of every
+      # run, so the real data lives outside the checkout at
+      # /Users/jarvis/ci-data/Combined and gets relinked in here each time.
+      - name: Stage Combined test data
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p packages
+          ln -sfn /Users/jarvis/ci-data/Combined packages/Combined
 
       - name: Install Linux system packages
         if: runner.os == 'Linux'
@@ -60,9 +78,16 @@ jobs:
             autoconf \
             autoconf-archive \
             automake \
+            ca-certificates \
             clang \
+            clang-format \
+            curl \
             libtool \
+            make \
+            perl \
             pkg-config \
+            tar \
+            zip \
             libgl1-mesa-dev \
             libx11-dev \
             libxext-dev \
@@ -73,13 +98,21 @@ jobs:
             libxinerama-dev \
             libxkbcommon-dev \
             libwayland-dev \
-            wayland-protocols
+            libopenal-dev \
+            wayland-protocols \
+            unzip
 
-      - name: Install macOS homebrew packages
+      - name: Verify macOS dependencies
         if: runner.os == 'macOS'
         run: |
-          brew install \
-            clang-format
+          command -v brew
+          command -v cmake
+          command -v ninja
+          command -v ccache
+          command -v clang
+          command -v clang++
+          command -v clang-format
+          command -v pkg-config
 
       - name: Setup MSVC developer environment
         if: runner.os == 'Windows'
@@ -103,21 +136,31 @@ jobs:
           max-size: 1G
 
       - name: Setup CMake and Ninja
+        if: runner.os != 'macOS'
         uses: lukka/get-cmake@latest
 
       - name: Show toolchain versions
+        if: runner.os != 'Windows'
+        run: |
+          cmake --version
+          ninja --version
+          ccache --version
+          clang --version
+          clang++ --version
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            pkg-config --modversion openal
+            /sbin/ldconfig -p | grep -E 'libopenal\.so(\.1)?'
+          fi
+
+      - name: Show Windows toolchain versions
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           cmake --version
           ninja --version
           ccache --version
-          if ("${{ runner.os }}" -eq "Windows") {
-            clang-cl --version
-            link.exe /?
-          } else {
-            clang --version
-            clang++ --version
-          }
+          clang-cl --version
+          Get-Command link.exe
 
       - name: Restore vcpkg binary cache
         uses: actions/cache@v4
@@ -137,6 +180,8 @@ jobs:
           VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/cmake/vcpkg-overlay-ports
           VCPKG_OVERLAY_TRIPLETS: ${{ github.workspace }}/cmake/vcpkg-triplets
         with:
+          vcpkgDirectory: ${{ runner.tool_cache }}/vcpkg
+          vcpkgGitCommitId: 15cd15b0da3c48a0c7720e4c87e0b6030334feed
           runVcpkgInstall: true
           vcpkgJsonGlob: 'vcpkg.json'
 
@@ -151,6 +196,19 @@ jobs:
         run: cmake --build ${{ matrix.build_dir }}
 
       - name: Test
+        if: runner.os != 'Windows'
+        env:
+          CTEST_EXCLUDE: ${{ matrix.ctest_exclude }}
+          ALSOFT_DRIVERS: ${{ runner.os == 'Linux' && 'null' || '' }}
+        run: |
+          if [ -z "${CTEST_EXCLUDE}" ]; then
+            ctest --test-dir '${{ matrix.build_dir }}' --output-on-failure
+          else
+            ctest --test-dir '${{ matrix.build_dir }}' --output-on-failure -E "${CTEST_EXCLUDE}"
+          fi
+
+      - name: Test
+        if: runner.os == 'Windows'
         shell: pwsh
         env:
           CTEST_EXCLUDE: ${{ matrix.ctest_exclude }}
@@ -163,9 +221,8 @@ jobs:
 
       - name: Smoke test macOS renderers
         if: runner.os == 'macOS'
-        shell: pwsh
         run: |
-          & '${{ matrix.build_dir }}/apps/tools/GL33SmokeTest/GL33SmokeTest' --check
+          '${{ matrix.build_dir }}/apps/tools/GL33SmokeTest/GL33SmokeTest' --check
 
       - name: Upload CTest logs
         if: failure()

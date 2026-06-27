@@ -69,7 +69,7 @@ target_link_libraries(PoseidonFoundationTests PRIVATE
 )
 
 target_compile_definitions(PoseidonFoundationTests PRIVATE
-    GAME_DATA_DIR="${CMAKE_SOURCE_DIR}/packages/Remaster"
+    GAME_DATA_DIR="${CMAKE_SOURCE_DIR}/packages/Combined"
 )
 
 target_include_directories(PoseidonFoundationTests PRIVATE

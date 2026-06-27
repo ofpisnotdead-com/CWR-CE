@@ -3,6 +3,11 @@
 #include <Poseidon/Foundation/Threads/PoThread.hpp>
 #include <Poseidon/Foundation/Containers/Array.hpp>
 
+#ifdef __APPLE__
+#include <condition_variable>
+#include <mutex>
+#endif
+
 namespace Poseidon::Foundation
 {
 // Portable simple semaphore.
@@ -12,6 +17,17 @@ class PoSemaphore : public RefCountSafe
 #ifdef _WIN32
 
     HANDLE handle;
+
+#elif defined(__APPLE__)
+
+    // Darwin has no working unnamed POSIX semaphore (sem_init() always fails
+    // with ENOSYS). dispatch_semaphore_t was tried as a replacement, but it
+    // traps on dispose if its count is below its creation value, which this
+    // class's wait/destroy usage doesn't guarantee — so this rolls its own
+    // counter instead.
+    mutable std::mutex mutex;
+    std::condition_variable cv;
+    long count;
 
 #else
 
