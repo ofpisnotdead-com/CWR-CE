@@ -22,6 +22,10 @@ In short: the code is free software, the name is not, and the game data comes se
 
 ## Quick Start
 
+### Development Builds
+
+The quickest way to get the game or server executables is to download the CI builds: <https://ofpisnotdead-com.github.io/CWR-CE-builds/>
+
 ### Build Requirements
 
 - [Clang](https://clang.llvm.org/)
