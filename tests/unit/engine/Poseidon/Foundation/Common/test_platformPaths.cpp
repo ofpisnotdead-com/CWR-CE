@@ -113,25 +113,29 @@ TEST_CASE("Different app names produce different directories", "[platformPaths]"
     fs::remove_all(dir2);
 }
 
-TEST_CASE("Config, data, and cache dirs are distinct on Linux", "[platformPaths]")
+TEST_CASE("Config/data, doc, and cache dirs are distinct on Linux", "[platformPaths]")
 {
     std::string config = Poseidon::Foundation::getUserConfigDir("TestApp_Distinct");
     std::string data = Poseidon::Foundation::getUserDataDir("TestApp_Distinct");
+    std::string doc = Poseidon::Foundation::getUserDocumentsDir("TestApp_Distinct");
     std::string cache = Poseidon::Foundation::getUserCacheDir("TestApp_Distinct");
 
 #ifndef _WIN32
+    REQUIRE(config == data);
     // On Linux with XDG defaults, these should be different base paths
-    REQUIRE(config != data);
+    REQUIRE(config != doc);
     REQUIRE(config != cache);
     REQUIRE(data != cache);
 #endif
     // All should contain the app name
     REQUIRE(config.find("TestApp_Distinct") != std::string::npos);
     REQUIRE(data.find("TestApp_Distinct") != std::string::npos);
+    REQUIRE(doc.find("TestApp_Distinct") != std::string::npos);
     REQUIRE(cache.find("TestApp_Distinct") != std::string::npos);
 
     fs::remove_all(config);
     fs::remove_all(data);
+    fs::remove_all(doc);
     fs::remove_all(cache);
 }
 
@@ -151,13 +155,27 @@ TEST_CASE("getUserConfigDir respects XDG_CONFIG_HOME", "[platformPaths]")
     fs::remove_all(tmpDir);
 }
 
-TEST_CASE("getUserDataDir respects XDG_DATA_HOME", "[platformPaths]")
+TEST_CASE("getUserDataDir respects XDG_CONFIG_HOME", "[platformPaths]")
+{
+    auto tmpDir = fs::temp_directory_path() / "test_xdg_data";
+    fs::create_directories(tmpDir);
+
+    ScopedEnv env("XDG_CONFIG_HOME", tmpDir.c_str());
+    std::string dir = Poseidon::Foundation::getUserDataDir("TestApp_XDG");
+    REQUIRE(dir.find(tmpDir.string()) == 0);
+    REQUIRE(dir.find("TestApp_XDG") != std::string::npos);
+    REQUIRE(dirExists(dir));
+
+    fs::remove_all(tmpDir);
+}
+
+TEST_CASE("getUserDocumentsDir respects XDG_DATA_HOME", "[platformPaths]")
 {
     auto tmpDir = fs::temp_directory_path() / "test_xdg_data";
     fs::create_directories(tmpDir);
 
     ScopedEnv env("XDG_DATA_HOME", tmpDir.c_str());
-    std::string dir = Poseidon::Foundation::getUserDataDir("TestApp_XDG");
+    std::string dir = Poseidon::Foundation::getUserDocumentsDir("TestApp_XDG");
     REQUIRE(dir.find(tmpDir.string()) == 0);
     REQUIRE(dir.find("TestApp_XDG") != std::string::npos);
     REQUIRE(dirExists(dir));
