@@ -89,7 +89,7 @@ int main(int argc, char** argv)
     Poseidon::Foundation::gSoftAssert = true;
     InitLibraryElement();
     Poseidon::InitDefaults();
-    GamePaths::Instance().Initialize("CWR", "ColdWarAssault");
+    GamePaths::Instance().Initialize("CWR", "ColdWarAssault", "Cold War Assault");
     Poseidon::GEngine = Poseidon::CreateEngineDummy();
     static ToolApplication toolApp;
 

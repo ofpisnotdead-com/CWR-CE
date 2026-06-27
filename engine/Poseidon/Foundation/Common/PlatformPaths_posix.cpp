@@ -43,7 +43,9 @@ std::string getUserConfigDir(const char* appName) {
 }
 
 std::string getUserDataDir(const char* appName) {
-    return getXdgDir("XDG_DATA_HOME", ".local/share", appName);
+    // While the XDG data dir is the best match by name, we mostly use the
+    // user data dir for configuration files, so use the XDG config dir.
+    return getXdgDir("XDG_CONFIG_HOME", ".config", appName);
 }
 
 std::string getUserCacheDir(const char* appName) {
