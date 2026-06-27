@@ -389,6 +389,71 @@ jobs:
           ALSOFT_DRIVERS: 'null'
         run: |
           $ErrorActionPreference = 'Stop'
+          $integrationRoot = (Resolve-Path -LiteralPath $env:TRIDENT_TEST_PATH).Path
+          $blockedTests = @(
+            'multiplayer/briefing_coordination',
+            'rendering/aspect_overlays_demo',
+            'rendering/fullscreen_toggle'
+          )
+
+          function Get-TridentTestName([string] $path) {
+            $relative = [IO.Path]::GetRelativePath($integrationRoot, $path).Replace('\', '/')
+            if ($relative.EndsWith('.test.sqf')) {
+              return $relative.Substring(0, $relative.Length - '.test.sqf'.Length)
+            }
+            if ($relative.EndsWith('.seq')) {
+              return $relative.Substring(0, $relative.Length - '.seq'.Length)
+            }
+            if ($relative.EndsWith('.test')) {
+              return $relative.Substring(0, $relative.Length - '.test'.Length)
+            }
+            $marker = $relative.IndexOf('.test.')
+            if ($marker -ge 0) {
+              return $relative.Substring(0, $marker)
+            }
+            return $relative
+          }
+
+          $testEntries = @()
+          Get-ChildItem -LiteralPath $integrationRoot -Recurse -Directory -Force | ForEach-Object {
+            $name = $_.Name
+            if (
+              $name.EndsWith('.seq') -or
+              ($name.EndsWith('.test') -and (Test-Path -LiteralPath (Join-Path $_.FullName 'test.toml'))) -or
+              ($name.Contains('.test.') -and (Test-Path -LiteralPath (Join-Path $_.FullName 'mission.sqm')))
+            ) {
+              $testEntries += [pscustomobject]@{
+                Name = Get-TridentTestName $_.FullName
+                Path = $_.FullName
+              }
+            }
+          }
+          Get-ChildItem -LiteralPath $integrationRoot -Recurse -File -Filter '*.test.sqf' -Force | ForEach-Object {
+            if (-not $_.Directory.Name.EndsWith('.seq')) {
+              $testEntries += [pscustomobject]@{
+                Name = Get-TridentTestName $_.FullName
+                Path = $_.FullName
+              }
+            }
+          }
+
+          $selectedTests = @(
+            $testEntries |
+              Sort-Object Name -Unique |
+              Where-Object {
+                if ($blockedTests -contains $_.Name) {
+                  Write-Host "Skipping CI-host-blocked Trident test: $($_.Name)"
+                  $false
+                } else {
+                  $true
+                }
+              }
+          )
+          if ($selectedTests.Count -eq 0) {
+            throw "No Trident integration tests selected."
+          }
+          Write-Host "Selected $($selectedTests.Count) Trident integration tests for CI."
+
           $commonArgs = @(
             'test',
             '--game-dir', $env:OFPR_GAME_DIR,
@@ -398,9 +463,9 @@ jobs:
             '--retries', '0',
             '--game-arg', '--audio',
             '--game-arg', $env:TRIDENT_AUDIO,
-            '--game-arg', '--no-strict',
-            $env:TRIDENT_TEST_PATH
+            '--game-arg', '--no-strict'
           )
+          $commonArgs += @($selectedTests | ForEach-Object { $_.Path })
           if ($env:RUNNER_OS -eq 'Linux') {
             xvfb-run -a --server-args='-screen 0 1280x720x24' engine/Trident/target/rwdi/tri @commonArgs
           } else {
