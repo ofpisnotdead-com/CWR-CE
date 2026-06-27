@@ -273,11 +273,12 @@ jobs:
           $gameArgs = @('-C', $env:TRIDENT_DATA_DIR, '--window', '--check', '--log-format', 'jsonl', '--render', $env:TRIDENT_RENDER, '--audio', $env:TRIDENT_AUDIO, '--no-strict')
           Get-ChildItem -LiteralPath $env:OFPR_GAME_DIR -Force | Format-Table -AutoSize Name,Length,LastWriteTime
           if ($env:RUNNER_OS -eq 'Linux') {
-            $process = Start-Process -FilePath 'xvfb-run' -ArgumentList (@('-a', '--server-args=-screen 0 1280x720x24', $gameExe) + $gameArgs) -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
+            & xvfb-run -a --server-args='-screen 0 1280x720x24' $gameExe @gameArgs > $stdoutLog 2> $stderrLog
+            $exitCode = $LASTEXITCODE
           } else {
             $process = Start-Process -FilePath $gameExe -ArgumentList $gameArgs -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
+            $exitCode = $process.ExitCode
           }
-          $exitCode = $process.ExitCode
           Write-Host "Game startup exit code: $exitCode"
           foreach ($log in @($stdoutLog, $stderrLog)) {
             if (Test-Path -LiteralPath $log) {
