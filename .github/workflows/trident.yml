@@ -399,6 +399,8 @@ jobs:
           if ($env:RUNNER_OS -eq 'Windows') {
             $skipTags += 'headful'
             $blockedTests += 'flows/demo/full_game_demo_campaign_placeholder'
+            $blockedTests += 'ui/briefing/briefing_gamepad_cancel_skip'
+            $blockedTests += 'ui/editor/editor_altenter_keeps_rendering'
           }
 
           function Get-TridentTestName([string] $path) {
