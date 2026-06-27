@@ -39,13 +39,13 @@ jobs:
           # outside the checkout path (see "Stage Combined test data" below)
           # and runs these for real; Linux/Windows exclude them by name.
           - name: Linux RelWithDebInfo
-            os: ubuntu-24.04
+            os: [self-hosted, debian-13, x64]
             preset: linux-x64-clang-rwdi
             vcpkg_triplet: x64-linux-clang
             build_dir: build/linux-x64-clang-rwdi
             ctest_exclude: 'PoseidonTests - (STRINGTABLE_MAP\.utf8\.csv ships both legend keys with English fallbacks|STRINGTABLE_EQUIPMENT\.utf8\.csv ships M16 keys for all 8 languages|equipment\.utf8\.html lives loose and references STR_EQ_M16 tokens|equipment\.utf8\.html line endings are clean CRLF \(no doubled CR\)|equipment\.utf8\.html preserves every EQ_ anchor and weapon image)'
           - name: macOS (Apple Silicon) RelWithDebInfo
-            os: [self-hosted, macOS, ARM64]
+            os: [self-hosted, macOS, arm64]
             preset: macos-arm64-clang-rwdi
             vcpkg_triplet: arm64-osx
             build_dir: build/macos-arm64-clang-rwdi
@@ -78,10 +78,16 @@ jobs:
             autoconf \
             autoconf-archive \
             automake \
+            ca-certificates \
             clang \
             clang-format \
+            curl \
             libtool \
+            make \
+            perl \
             pkg-config \
+            tar \
+            zip \
             libgl1-mesa-dev \
             libx11-dev \
             libxext-dev \
@@ -93,7 +99,8 @@ jobs:
             libxkbcommon-dev \
             libwayland-dev \
             libopenal-dev \
-            wayland-protocols
+            wayland-protocols \
+            unzip
 
       - name: Verify macOS dependencies
         if: runner.os == 'macOS'
@@ -142,7 +149,7 @@ jobs:
           clang++ --version
           if [ "${{ runner.os }}" = "Linux" ]; then
             pkg-config --modversion openal
-            ldconfig -p | grep -E 'libopenal\.so(\.1)?'
+            /sbin/ldconfig -p | grep -E 'libopenal\.so(\.1)?'
           fi
 
       - name: Show Windows toolchain versions
