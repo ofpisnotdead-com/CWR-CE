@@ -288,6 +288,7 @@ public:
 	WeaponType();
 	void Init(const char *name);
 	const RStringB &GetName() const {return _parClass->GetName();}
+	bool IsBinocular() const;
 	RStringB GetPictureName() const;
 	Texture *GetPicture() const {return _picture;}
 
@@ -301,6 +302,8 @@ public:
 	void InitShape() const;
 	void DeinitShape() const;
 };
+
+const WeaponType *FindBinocularWeapon(const RefArray<WeaponType> &weapons);
 
 typedef BankInitArray<MagazineType> MagazineTypeBank;
 typedef BankInitArray<WeaponType> WeaponTypeBank;
