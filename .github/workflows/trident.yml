@@ -17,28 +17,21 @@ env:
   TRIDENT_RENDER: dummy
   TRIDENT_AUDIO: openal
   TRIDENT_TEST_PATH: tests/integration
+  TRIDENT_XVFB_ARGS: -screen 0 1920x1080x24
 
 jobs:
   smoke:
-    name: ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
+    name: Linux
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: Linux
-            os: ubuntu-24.04
-            preset: linux-x64-clang-rwdi
+          - preset: linux-x64-clang-rwdi
             vcpkg_triplet: x64-linux-clang
             build_dir: build/linux-x64-clang-rwdi
             dist_dir: dist/x64-linux-rwdi
-          - name: Windows
-            os: windows-2022
-            preset: win-x64-clang-rwdi
-            vcpkg_triplet: x64-windows-clang
-            build_dir: build/win-x64-clang-rwdi
-            dist_dir: dist/x64-win-rwdi
 
     steps:
       - name: Checkout
@@ -153,6 +146,7 @@ jobs:
             alsa-utils \
             mesa-utils \
             pulseaudio-utils \
+            openbox \
             wayland-protocols \
             xvfb \
             xauth
@@ -165,9 +159,9 @@ jobs:
           Write-Host "DISPLAY=$env:DISPLAY"
           Write-Host "TRIDENT_RENDER=$env:TRIDENT_RENDER"
           Write-Host "TRIDENT_AUDIO=$env:TRIDENT_AUDIO"
-          Get-Command Xvfb, xvfb-run, xdpyinfo, glxinfo, pactl, aplay -ErrorAction SilentlyContinue | Format-Table -AutoSize Source,Name,CommandType
-          if ($env:RUNNER_OS -eq 'Linux') {
-            $probeScript = @'
+          Write-Host "TRIDENT_XVFB_ARGS=$env:TRIDENT_XVFB_ARGS"
+          Get-Command Xvfb, xvfb-run, xdpyinfo, glxinfo, pactl, aplay, openbox -ErrorAction SilentlyContinue | Format-Table -AutoSize Source,Name,CommandType
+          $probeScript = @'
           echo DISPLAY=$DISPLAY
           xdpyinfo | sed -n '1,60p'
           glxinfo -B
@@ -175,19 +169,15 @@ jobs:
           pactl list short sinks
           aplay -l
           '@
-            $probePath = Join-Path $env:RUNNER_TEMP 'ci-host-probe.sh'
-            Set-Content -LiteralPath $probePath -Value $probeScript -NoNewline
-            xvfb-run -a --server-args='-screen 0 1280x720x24' bash $probePath
-          } elseif ($env:RUNNER_OS -eq 'Windows') {
-            Get-CimInstance Win32_VideoController | Format-List Name,DriverVersion,VideoModeDescription,CurrentHorizontalResolution,CurrentVerticalResolution
-            Get-CimInstance Win32_SoundDevice | Format-List Name,Status,Manufacturer
-          }
+          $probePath = Join-Path $env:RUNNER_TEMP 'ci-host-probe.sh'
+          Set-Content -LiteralPath $probePath -Value $probeScript -NoNewline
+          xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" bash $probePath
 
       - name: Select Trident CI runtime
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $render = if ($env:RUNNER_OS -eq 'Linux') { 'gl33' } else { 'dummy' }
+          $render = 'gl33'
           $audio = 'openal'
           @(
             "TRIDENT_RENDER=$render"
@@ -195,14 +185,6 @@ jobs:
           ) | Add-Content -LiteralPath $env:GITHUB_ENV
           Write-Host "Selected Trident render backend: $render"
           Write-Host "Selected Trident audio backend: $audio"
-
-      - name: Setup LLVM and Clang
-        if: runner.os == 'Windows'
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: '19'
-          arch: 'x64'
-          directory: 'C:\Program Files\LLVM'
 
       - name: Setup compiler cache
         uses: hendrikmuhs/ccache-action@v1.2.23
@@ -279,19 +261,13 @@ jobs:
           ALSOFT_DRIVERS: 'null'
         run: |
           $ErrorActionPreference = 'Stop'
-          $exeName = if ($env:RUNNER_OS -eq 'Windows') { 'PoseidonGame.exe' } else { 'PoseidonGame' }
-          $gameExe = Join-Path $env:OFPR_GAME_DIR $exeName
+          $gameExe = Join-Path $env:OFPR_GAME_DIR 'PoseidonGame'
           $stdoutLog = Join-Path $env:RUNNER_TEMP 'game-startup.stdout.log'
           $stderrLog = Join-Path $env:RUNNER_TEMP 'game-startup.stderr.log'
           $gameArgs = @('-C', $env:TRIDENT_DATA_DIR, '--window', '--check', '--log-format', 'jsonl', '--render', $env:TRIDENT_RENDER, '--audio', $env:TRIDENT_AUDIO, '--no-strict')
           Get-ChildItem -LiteralPath $env:OFPR_GAME_DIR -Force | Format-Table -AutoSize Name,Length,LastWriteTime
-          if ($env:RUNNER_OS -eq 'Linux') {
-            & xvfb-run -a --server-args='-screen 0 1280x720x24' $gameExe @gameArgs > $stdoutLog 2> $stderrLog
-            $exitCode = $LASTEXITCODE
-          } else {
-            $process = Start-Process -FilePath $gameExe -ArgumentList $gameArgs -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
-            $exitCode = $process.ExitCode
-          }
+          & xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" $gameExe @gameArgs > $stdoutLog 2> $stderrLog
+          $exitCode = $LASTEXITCODE
           Write-Host "Game startup exit code: $exitCode"
           foreach ($log in @($stdoutLog, $stderrLog)) {
             if (Test-Path -LiteralPath $log) {
@@ -316,7 +292,7 @@ jobs:
           ALSOFT_DRIVERS: 'null'
         run: |
           $ErrorActionPreference = 'Continue'
-          $triExe = if ($env:RUNNER_OS -eq 'Windows') { 'engine/Trident/target/rwdi/tri.exe' } else { 'engine/Trident/target/rwdi/tri' }
+          $triExe = 'engine/Trident/target/rwdi/tri'
           $probes = @(
             @{
               Name = 'dummy-smoke'
@@ -361,11 +337,7 @@ jobs:
             $args += $probe.Test
 
             Write-Host "::group::Trident probe $($probe.Name)"
-            if ($env:RUNNER_OS -eq 'Linux') {
-              xvfb-run -a --server-args='-screen 0 1280x720x24' $triExe @args
-            } else {
-              & $triExe @args
-            }
+            xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" $triExe @args
             $exitCode = $LASTEXITCODE
             Write-Host "Probe $($probe.Name) exit code: $exitCode"
             Write-Host '::endgroup::'
@@ -378,6 +350,95 @@ jobs:
             Write-Host "Failed probes: $($failed -join ', ')"
           } else {
             Write-Host 'All capability probes passed.'
+          }
+
+      - name: Run Trident blocker probes
+        shell: pwsh
+        continue-on-error: true
+        env:
+          OFPR_GAME_DIR: ${{ github.workspace }}/${{ matrix.dist_dir }}
+          TRI_OUTPUT_DIR: ${{ github.workspace }}/trident-output
+          RUST_LOG: debug
+          ALSOFT_DRIVERS: 'null'
+          HARNESS_CMD_TIMEOUT_SEC: '180'
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $triExe = 'engine/Trident/target/rwdi/tri'
+          $wmWrapper = Join-Path $env:RUNNER_TEMP 'trident-openbox-wrapper.sh'
+          @'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          openbox &
+          wm_pid=$!
+          trap 'kill "$wm_pid" >/dev/null 2>&1 || true' EXIT
+          sleep 1
+          exec "$@"
+          '@ | Set-Content -LiteralPath $wmWrapper -NoNewline
+
+          $probes = @(
+            @{
+              Name = 'fullscreen-openbox'
+              Test = 'tests/integration/rendering/fullscreen_toggle.test.sqf'
+              Timeout = '60'
+              WindowManager = $true
+              GameArgs = @('--audio', $env:TRIDENT_AUDIO, '--no-strict')
+            },
+            @{
+              Name = 'aspect-overlays'
+              Test = 'tests/integration/rendering/aspect_overlays_demo.test.sqf'
+              Timeout = '180'
+              WindowManager = $false
+              GameArgs = @('--audio', $env:TRIDENT_AUDIO, '--no-strict')
+            },
+            @{
+              Name = 'multiplayer-briefing'
+              Test = 'tests/integration/multiplayer/briefing_coordination.test'
+              Timeout = '120'
+              WindowManager = $false
+              GameArgs = @('--audio', $env:TRIDENT_AUDIO, '--no-strict')
+            }
+          )
+
+          $failed = @()
+          foreach ($probe in $probes) {
+            if (-not (Test-Path -LiteralPath $probe.Test)) {
+              Write-Host "Skipping blocker probe $($probe.Name); missing path $($probe.Test)"
+              continue
+            }
+
+            $outDir = Join-Path $env:TRI_OUTPUT_DIR "blocker-$($probe.Name)"
+            $args = @(
+              '--timeout', $probe.Timeout,
+              'test',
+              '--game-dir', $env:OFPR_GAME_DIR,
+              '--data-dir', $env:TRIDENT_DATA_DIR,
+              '--output-dir', $outDir,
+              '--render', $env:TRIDENT_RENDER,
+              '--retries', '0'
+            )
+            foreach ($gameArg in $probe.GameArgs) {
+              $args += @('--game-arg', $gameArg)
+            }
+            $args += $probe.Test
+
+            Write-Host "::group::Trident blocker probe $($probe.Name)"
+            if ($probe.WindowManager) {
+              xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" bash $wmWrapper $triExe @args
+            } else {
+              xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" $triExe @args
+            }
+            $exitCode = $LASTEXITCODE
+            Write-Host "Blocker probe $($probe.Name) exit code: $exitCode"
+            Write-Host '::endgroup::'
+            if ($exitCode -ne 0) {
+              $failed += "$($probe.Name)=$exitCode"
+            }
+          }
+
+          if ($failed.Count -gt 0) {
+            Write-Host "Failed blocker probes: $($failed -join ', ')"
+          } else {
+            Write-Host 'All blocker probes passed.'
           }
 
       - name: Run Trident full suite
@@ -396,12 +457,6 @@ jobs:
             'rendering/fullscreen_toggle'
           )
           $skipTags = @()
-          if ($env:RUNNER_OS -eq 'Windows') {
-            $skipTags += 'headful'
-            $blockedTests += 'flows/demo/full_game_demo_campaign_placeholder'
-            $blockedTests += 'ui/briefing/briefing_gamepad_cancel_skip'
-            $blockedTests += 'ui/editor/editor_altenter_keeps_rendering'
-          }
 
           function Get-TridentTestName([string] $path) {
             $relative = [IO.Path]::GetRelativePath($integrationRoot, $path).Replace('\', '/')
@@ -479,11 +534,7 @@ jobs:
             $commonArgs += @('--skip-tag', $skipTag)
           }
           $commonArgs += @($selectedTests | ForEach-Object { $_.Path })
-          if ($env:RUNNER_OS -eq 'Linux') {
-            xvfb-run -a --server-args='-screen 0 1280x720x24' engine/Trident/target/rwdi/tri @commonArgs
-          } else {
-            & engine/Trident/target/rwdi/tri.exe @commonArgs
-          }
+          xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" engine/Trident/target/rwdi/tri @commonArgs
 
       - name: Dump Trident output
         if: failure()
@@ -506,6 +557,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: trident-output-${{ matrix.os }}
+          name: trident-output-linux
           path: trident-output
           if-no-files-found: ignore
