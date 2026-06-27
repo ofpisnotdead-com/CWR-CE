@@ -91,6 +91,24 @@ fragment float4 fs2d(VSOut in [[stage_in]], texture2d<float> tex [[texture(0)]],
     float3 rgb = mix(fogColor.rgb, lit.rgb, saturate(in.fogTC));
     return float4(rgb, lit.a);
 }
+
+// Legacy/2D counterpart to fsShadow (see that function's doc comment for the
+// single-pass stencil-exclusion rationale) -- most real shadow casters go
+// through this one, not fsShadow (see Shadow.cpp's Object::DrawShadow and
+// pipelineState2DShadow's doc comment). Mirrors fsShadow's body exactly
+// (texture alpha * vertex alpha, discard near-zero so transparent texels in
+// an IsAlpha/IsTransparent shadow caster's texture -- foliage gaps, torn
+// metal -- don't phantom-stamp the stencil and block a later legitimate
+// darken there) rather than fs2d's, which has no discard at all and skips
+// fs2d's detail/grass modulation and fog mix -- shadow polys carry neither
+// in GL33's PSShadow either.
+fragment float4 fs2dShadow(VSOut in [[stage_in]], texture2d<float> tex [[texture(0)]], sampler samp [[sampler(0)]])
+{
+    float a = in.color.a * tex.sample(samp, in.uv).a;
+    if (a < (1.0 / 255.0))
+        discard_fragment();
+    return float4(0.0, 0.0, 0.0, a);
+}
 )";
 
 // Hardware T&L mesh shader: GPU does the model->view->projection transform
@@ -364,6 +382,52 @@ fragment float4 fsMeshBlend(VSOutMesh in [[stage_in]], constant FrameConstants& 
     float4 detailed = applyDetailMode(texColor, diffuseLit, in.specColor.rgb, in, detailTex, detailSamp);
     float3 finalColor = mix(detailed.rgb, frame.fogColor.rgb, in.fogFactor);
     return float4(finalColor, in.color.a * detailed.a);
+}
+
+// Dedicated unlit vertex shader for shadow draws -- mirrors GL33's vsShadow
+// (EngineGL33_Shaders.cpp's s_vsShadowGLSL): no lighting, no NdotL, no
+// specular, vertex colour sourced directly from obj.diffuse. vsMesh's
+// alpha (obj.ambient.w) is the sun-ambient/forcedDiffuse combine
+// (EngineMTL::SetMaterial) and can legitimately exceed 1.0 for ordinary lit
+// materials (harmless there -- nothing reads alpha from an opaque/no-blend
+// pipeline) but Shadow.cpp's shadow material relies on forcedDiffuse=HBlack
+// (alpha 1, not 0) added on top of ambient's shadowFactor alpha, so
+// obj.ambient.w comes out as shadowFactor+1 -- GPU-clamped to fully opaque
+// black. Reusing vsMesh for the buffered/TL shadow pipeline (as a prior
+// version of this file did) inherited that overflow; GL33 never has this
+// problem because vsShadow bypasses the ambient combine entirely and reads
+// obj.diffuse.a (= shadowFactor alone, set explicitly via Color(0,0,0,
+// shadowFactor) in Shadow.cpp) directly, matching DX8's D3DRS_LIGHTING=FALSE
+// shadow behaviour. uv is still computed for fsShadow's alpha-cutout sample.
+//
+// TODO(metal-shadow-fog-fade): this outputs a flat shadowFactor alpha with no
+// distance-fog attenuation, matching GL33's own vsShadow exactly -- but
+// GL33's *legacy* shadow path (TLVertexTable::DoShadowLighting,
+// TransLight.cpp) additionally fades alpha by ShadowFog8(dist2), so on both
+// backends a caster's shadow can visibly change shade when it crosses the
+// dynamic(moving)/cached(idle) boundary at long range (verified present on
+// GL33 too, 2026-06-26 -- not a Metal-only gap). Worth revisiting later: add
+// the same distance-fade here (and to fsShadow, or thread a fog factor
+// through ObjectConstants) so Metal's two paths agree even where GL33's own
+// don't, rather than only matching GL33's existing inconsistency.
+vertex VSOutMesh vsShadow(uint vid [[vertex_id]], const device VertexMesh* verts [[buffer(0)]],
+                          constant ObjectConstants& obj [[buffer(1)]], constant FrameConstants& frame [[buffer(2)]])
+{
+    VertexMesh v = verts[vid];
+    float4 worldPos4 = mulRowVec4(float4(v.pos, 1.0), obj.world);
+    float4 viewPos = mulRowVec4(worldPos4, frame.view);
+    float4 clipPos = mulRowVec4(viewPos, frame.projection);
+
+    VSOutMesh out;
+    out.position = clipPos;
+    out.uv = v.uv;
+    out.uv1 = v.uv;
+    out.color = obj.diffuse;
+    out.specColor = float4(0.0);
+    out.fogFactor = 0.0;
+    out.isCutout = 0.0;
+    out.detailMode = 0.0;
+    return out;
 }
 
 // Single-pass shadow draw (pipelineStateTLShadow, color writes ON, Shadow
@@ -694,6 +758,8 @@ void EngineMTLBootstrap::EnsurePipeline()
 
     MTL::Function* vsFn = library->newFunction(NS::String::string("vs2d", NS::StringEncoding::UTF8StringEncoding));
     MTL::Function* fsFn = library->newFunction(NS::String::string("fs2d", NS::StringEncoding::UTF8StringEncoding));
+    MTL::Function* fsShadowFn =
+        library->newFunction(NS::String::string("fs2dShadow", NS::StringEncoding::UTF8StringEncoding));
 
     MTL::RenderPipelineDescriptor* desc = MTL::RenderPipelineDescriptor::alloc()->init();
     desc->setVertexFunction(vsFn);
@@ -739,11 +805,15 @@ void EngineMTLBootstrap::EnsurePipeline()
                   error ? error->localizedDescription()->utf8String() : "(unknown)");
     }
 
-    // Single-pass shadow variant for the legacy/2D fan-draw path: same
-    // vs2d/fs2d functions, but Shadow blend factors (Zero, OneMinusSourceAlpha)
-    // instead of the 2D pipeline's normal (SourceAlpha, OneMinusSourceAlpha)
-    // -- GL33's BlendMode::Shadow (GLBlendState.hpp). Paired with
-    // depthStateShadow below; see that field's doc comment.
+    // Single-pass shadow variant for the legacy/2D fan-draw path: fs2dShadow
+    // (not fs2d -- see that function's doc comment for why it needs its own
+    // fragment function, mirroring GL33's PSShadow being a genuinely separate
+    // shader from its ordinary pixel shader), with Shadow blend factors
+    // (Zero, OneMinusSourceAlpha) instead of the 2D pipeline's normal
+    // (SourceAlpha, OneMinusSourceAlpha) -- GL33's BlendMode::Shadow
+    // (GLBlendState.hpp). Paired with depthStateShadow below; see that
+    // field's doc comment.
+    desc->setFragmentFunction(fsShadowFn);
     colorDesc->setSourceRGBBlendFactor(MTL::BlendFactorZero);
     colorDesc->setSourceAlphaBlendFactor(MTL::BlendFactorOne);
     colorDesc->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
@@ -759,6 +829,7 @@ void EngineMTLBootstrap::EnsurePipeline()
     desc->release();
     vsFn->release();
     fsFn->release();
+    fsShadowFn->release();
     library->release();
 
     // 8 permutations, mirroring GL33's CreateSamplerStates -- see
@@ -896,6 +967,8 @@ void EngineMTLBootstrap::EnsureTLPipeline()
         library->newFunction(NS::String::string("fsMeshBlend", NS::StringEncoding::UTF8StringEncoding));
     MTL::Function* fsFnShadow =
         library->newFunction(NS::String::string("fsShadow", NS::StringEncoding::UTF8StringEncoding));
+    MTL::Function* vsFnShadow =
+        library->newFunction(NS::String::string("vsShadow", NS::StringEncoding::UTF8StringEncoding));
 
     MTL::RenderPipelineDescriptor* desc = MTL::RenderPipelineDescriptor::alloc()->init();
     desc->setVertexFunction(vsFn);
@@ -948,10 +1021,13 @@ void EngineMTLBootstrap::EnsureTLPipeline()
                   error ? error->localizedDescription()->utf8String() : "(unknown)");
     }
 
-    // Single-pass shadow variant: vsMesh/fsShadow, color writes ON, Shadow
-    // blend factors (Zero, OneMinusSourceAlpha) -- paired with
-    // depthStateShadow's stencil EQUAL 0 + INCREMENT (see fsShadow's and
-    // Impl::pipelineStateTLShadow's doc comments for why this is one pass).
+    // Single-pass shadow variant: vsShadow/fsShadow (not vsMesh -- see
+    // vsShadow's doc comment for why the general lit vertex shader's alpha
+    // is unsafe to reuse here), color writes ON, Shadow blend factors
+    // (Zero, OneMinusSourceAlpha) -- paired with depthStateShadow's stencil
+    // EQUAL 0 + INCREMENT (see fsShadow's and Impl::pipelineStateTLShadow's
+    // doc comments for why this is one pass).
+    desc->setVertexFunction(vsFnShadow);
     desc->setFragmentFunction(fsFnShadow);
     colorDesc->setWriteMask(MTL::ColorWriteMaskAll);
     colorDesc->setBlendingEnabled(true);
@@ -974,6 +1050,7 @@ void EngineMTLBootstrap::EnsureTLPipeline()
     fsFnOpaque->release();
     fsFnBlend->release();
     fsFnShadow->release();
+    vsFnShadow->release();
     library->release();
 }
 

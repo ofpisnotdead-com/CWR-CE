@@ -580,20 +580,18 @@ void Object::DrawShadow(Shape* shadow, Vector3Par shadowPos, ClipFlags clipFlags
     // (PSShadow is layout-agnostic).
     int spec = IsOnSurface | IsShadow | IsAlphaFog;
 
-    // TODO(metal-shadows): confirmed via live instrumentation (2026-06-25)
-    // that shadow casters in a typical scene mostly have shadow->GetVertexBuffer()
-    // == nullptr and so fall through to the legacy per-face path below
-    // (GEngine->DrawPolygon -> EngineMTL's 2D alpha-blend pipeline) instead
-    // of ever reaching DrawSectionTL's isShadow branch. That legacy path has
-    // no stencil exclusion at all, so it still reproduces the original
-    // "overlapping shadow pieces double-darken" bug on Metal -- the new
-    // BeginShadowPass/EndShadowPass mark+darken scheme (EngineMTLBootstrap)
-    // only fixes casters that actually get a HW vertex buffer. Need to find
-    // why GetVertexBuffer() is null here (ConvertToVBuffer is called
-    // unconditionally in RemmemberShadow::Init/Object::RecalcShadow) and
-    // either fix that, or give the legacy path its own stencil-mark route
-    // through EngineMTL (it currently has none -- DrawPolygon/DrawIndexedFan3D
-    // always goes through the plain 2D blend pipeline regardless of IsShadow).
+    // Both the buffered/TL path (GetVertexBuffer() != nullptr, below) and the
+    // legacy per-face path already share the same single-pass stencil
+    // EQUAL(0)+INCREMENT exclusion scheme (EngineMTLBootstrap's
+    // depthStateShadow, used by both pipelineStateTLShadow and
+    // pipelineState2DShadow) -- confirmed via live instrumentation
+    // (2026-06-26) that a prior comment here claiming the legacy path "has no
+    // stencil exclusion at all" was stale. The real bug that made idle
+    // vehicles' shadows flip solid black was in the buffered path's vertex
+    // shader reusing the general lit vsMesh (whose alpha output,
+    // obj.ambient.w, can exceed 1.0 for the shadow material specifically --
+    // see EngineMTLBootstrap.cpp's vsShadow doc comment); fixed 2026-06-26 by
+    // giving Metal its own dedicated unlit vsShadow, mirroring GL33's.
     if (GEngine->GetTL() && EnableHWTLState && shadow->GetVertexBuffer() && !(spec & OnSurface))
     {
         // T&L shadow drawing
