@@ -395,6 +395,11 @@ jobs:
             'rendering/aspect_overlays_demo',
             'rendering/fullscreen_toggle'
           )
+          $skipTags = @()
+          if ($env:RUNNER_OS -eq 'Windows') {
+            $skipTags += 'headful'
+            $blockedTests += 'flows/demo/full_game_demo_campaign_placeholder'
+          }
 
           function Get-TridentTestName([string] $path) {
             $relative = [IO.Path]::GetRelativePath($integrationRoot, $path).Replace('\', '/')
@@ -453,6 +458,9 @@ jobs:
             throw "No Trident integration tests selected."
           }
           Write-Host "Selected $($selectedTests.Count) Trident integration tests for CI."
+          if ($skipTags.Count -gt 0) {
+            Write-Host "Skipping Trident tags on this runner: $($skipTags -join ', ')"
+          }
 
           $commonArgs = @(
             'test',
@@ -465,6 +473,9 @@ jobs:
             '--game-arg', $env:TRIDENT_AUDIO,
             '--game-arg', '--no-strict'
           )
+          foreach ($skipTag in $skipTags) {
+            $commonArgs += @('--skip-tag', $skipTag)
+          }
           $commonArgs += @($selectedTests | ForEach-Object { $_.Path })
           if ($env:RUNNER_OS -eq 'Linux') {
             xvfb-run -a --server-args='-screen 0 1280x720x24' engine/Trident/target/rwdi/tri @commonArgs
