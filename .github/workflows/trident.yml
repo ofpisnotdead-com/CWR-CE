@@ -355,6 +355,7 @@ jobs:
       - name: Run Trident blocker probes
         shell: pwsh
         continue-on-error: true
+        timeout-minutes: 18
         env:
           OFPR_GAME_DIR: ${{ github.workspace }}/${{ matrix.dist_dir }}
           TRI_OUTPUT_DIR: ${{ github.workspace }}/trident-output
@@ -380,6 +381,7 @@ jobs:
               Name = 'fullscreen-openbox'
               Test = 'tests/integration/rendering/fullscreen_toggle.test.sqf'
               Timeout = '60'
+              OuterTimeout = '120s'
               WindowManager = $true
               GameArgs = @('--audio', $env:TRIDENT_AUDIO, '--no-strict')
             },
@@ -387,6 +389,7 @@ jobs:
               Name = 'aspect-overlays'
               Test = 'tests/integration/rendering/aspect_overlays_demo.test.sqf'
               Timeout = '180'
+              OuterTimeout = '420s'
               WindowManager = $false
               GameArgs = @('--audio', $env:TRIDENT_AUDIO, '--no-strict')
             },
@@ -394,6 +397,7 @@ jobs:
               Name = 'multiplayer-briefing'
               Test = 'tests/integration/multiplayer/briefing_coordination.test'
               Timeout = '120'
+              OuterTimeout = '240s'
               WindowManager = $false
               GameArgs = @('--audio', $env:TRIDENT_AUDIO, '--no-strict')
             }
@@ -423,9 +427,9 @@ jobs:
 
             Write-Host "::group::Trident blocker probe $($probe.Name)"
             if ($probe.WindowManager) {
-              xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" bash $wmWrapper $triExe @args
+              /usr/bin/timeout --foreground --kill-after=30s $probe.OuterTimeout xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" bash $wmWrapper $triExe @args
             } else {
-              xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" $triExe @args
+              /usr/bin/timeout --foreground --kill-after=30s $probe.OuterTimeout xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" $triExe @args
             }
             $exitCode = $LASTEXITCODE
             Write-Host "Blocker probe $($probe.Name) exit code: $exitCode"
