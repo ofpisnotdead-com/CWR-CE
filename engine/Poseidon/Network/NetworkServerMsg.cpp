@@ -612,8 +612,8 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
         SquadIdentity* squad = _squads[i];
         if (squad->picture.GetLength() > 0)
         {
-            RString src = Poseidon::BuildNetworkServerSquadPictureUploadPath(GetServerTmpDir(), squad->nick,
-                                                                              squad->picture);
+            RString src =
+                Poseidon::BuildNetworkServerSquadPictureUploadPath(GetServerTmpDir(), squad->nick, squad->picture);
             if (QIFStream::FileExists(src))
             {
                 RString dst = Poseidon::BuildNetworkSquadPictureTmpPath(squad->nick, squad->picture);

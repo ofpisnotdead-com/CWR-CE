@@ -457,8 +457,8 @@ bool CheckSquadObject::DoProcessXML()
             return true;
         }
 
-        _logoFile = Poseidon::BuildNetworkServerSquadPictureUploadPath(GetServerTmpDir(), _squad->nick,
-                                                                        _squad->picture);
+        _logoFile =
+            Poseidon::BuildNetworkServerSquadPictureUploadPath(GetServerTmpDir(), _squad->nick, _squad->picture);
         CreatePath(_logoFile);
     }
     else

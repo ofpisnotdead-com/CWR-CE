@@ -22,10 +22,7 @@ struct QuarterTurnFrame
 {
     int turns = 0;
 
-    QuarterTurnFrame operator*(const QuarterTurnFrame& other) const
-    {
-        return {NormalizeTurns(turns + other.turns)};
-    }
+    QuarterTurnFrame operator*(const QuarterTurnFrame& other) const { return {NormalizeTurns(turns + other.turns)}; }
 
     int RotateForwardToHeading() const { return NormalizeTurns(turns); }
 
@@ -94,10 +91,10 @@ TEST_CASE("tank camera stabilization separates gunner and mounted commander movi
     const QuarterTurnFrame bodyAfterHullTurn{1};
     const QuarterTurnTransform mainTurretCounterTurn{{-1}};
 
-    const QuarterTurnFrame mountedCommanderFrame = Poseidon::BuildCommanderTankTurretStabilizationFrame(
-        true, bodyAfterHullTurn, mainTurretCounterTurn);
-    const QuarterTurnFrame gunnerOrHullCommanderFrame = Poseidon::BuildCommanderTankTurretStabilizationFrame(
-        false, bodyAfterHullTurn, mainTurretCounterTurn);
+    const QuarterTurnFrame mountedCommanderFrame =
+        Poseidon::BuildCommanderTankTurretStabilizationFrame(true, bodyAfterHullTurn, mainTurretCounterTurn);
+    const QuarterTurnFrame gunnerOrHullCommanderFrame =
+        Poseidon::BuildCommanderTankTurretStabilizationFrame(false, bodyAfterHullTurn, mainTurretCounterTurn);
 
     REQUIRE(mountedCommanderFrame.RotateForwardToHeading() == 0);
     REQUIRE(gunnerOrHullCommanderFrame.RotateForwardToHeading() == 1);

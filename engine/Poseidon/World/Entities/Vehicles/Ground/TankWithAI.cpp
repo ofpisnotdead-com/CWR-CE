@@ -711,8 +711,8 @@ TMError TankWithAI::TransferMsg(NetworkMessageContext& ctx)
             Matrix3 oldTrans = Orientation();
             Matrix3 oldTurretTrans = Orientation() * TurretTransform().Orientation();
             TMCHECK(base::TransferMsg(ctx))
-            if (Poseidon::ShouldTransferNetworkTankTurretState(
-                    ctx.IsSending(), GunnerUnit() && GunnerUnit()->GetPerson()->IsLocal()))
+            if (Poseidon::ShouldTransferNetworkTankTurretState(ctx.IsSending(),
+                                                               GunnerUnit() && GunnerUnit()->GetPerson()->IsLocal()))
                 TMCHECK(ctx.IdxTransferObject(indices->mainTurret, _mainTurret))
             if (Poseidon::ShouldTransferNetworkTankTurretState(
                     ctx.IsSending(), ObserverUnit() && ObserverUnit()->GetPerson()->IsLocal()))

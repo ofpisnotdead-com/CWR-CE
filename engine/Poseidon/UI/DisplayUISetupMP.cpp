@@ -1565,8 +1565,8 @@ void DisplayMPPlayers::UpdatePlayerInfo()
     RString picture;
     if (squad && squad->picture.GetLength() > 0)
     {
-        picture = Poseidon::FindNetworkSquadPictureTmpPath(
-            squad->nick, squad->picture, [](const RString& path) { return QIFStream::FileExists(path); });
+        picture = Poseidon::FindNetworkSquadPictureTmpPath(squad->nick, squad->picture, [](const RString& path)
+                                                           { return QIFStream::FileExists(path); });
         if (picture.GetLength() > 0)
         {
             picture = RString("\\") + picture;

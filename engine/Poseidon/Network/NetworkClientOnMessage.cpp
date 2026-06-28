@@ -486,8 +486,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                         src = srcDir + RString("face.jpg");
                         if (QIFStream::FileExists(src) && FileSize(src) <= MaxCustomFaceSize)
                         {
-                            RString dst = Poseidon::BuildNetworkPlayerAssetTmpPath(identity.dpnid,
-                                                                                   RString("face.jpg"));
+                            RString dst = Poseidon::BuildNetworkPlayerAssetTmpPath(identity.dpnid, RString("face.jpg"));
                             ::CopyFile(src, dst, FALSE);
                             RString server = Poseidon::BuildNetworkServerPlayerAssetUploadPath(
                                 GetServerTmpDir(), identity.dpnid, RString("face.jpg"));
@@ -512,8 +511,8 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 {
                     RString srcDir = Poseidon::GetUserDirectory() + RString("sound/");
                     RString dstDir = Poseidon::BuildNetworkPlayerSoundTmpDir(identity.dpnid);
-                    RString serverDir = Poseidon::BuildNetworkServerPlayerSoundUploadDir(GetServerTmpDir(),
-                                                                                          identity.dpnid);
+                    RString serverDir =
+                        Poseidon::BuildNetworkServerPlayerSoundUploadDir(GetServerTmpDir(), identity.dpnid);
                     if (dstDir.GetLength() > 0 && serverDir.GetLength() > 0)
                     {
                         CreatePath(dstDir);
@@ -1472,9 +1471,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
                 if (info.creator == sound.creator && info.id == sound.soundId)
                 {
-                    const bool applied = Poseidon::ApplyReplicatedNetworkSoundState(
-                        info.wave, static_cast<SoundStateType>(sound.state),
-                        [](IWave* wave) { GSoundScene->DeleteSound(wave); });
+                    const bool applied =
+                        Poseidon::ApplyReplicatedNetworkSoundState(info.wave, static_cast<SoundStateType>(sound.state),
+                                                                   [](IWave* wave) { GSoundScene->DeleteSound(wave); });
                     if (!applied)
                     {
                         Fail("Sound state");

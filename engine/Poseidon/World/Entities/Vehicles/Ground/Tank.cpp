@@ -671,8 +671,8 @@ void Tank::StabilizeTurrets(Matrix3Val oldTrans, Matrix3Val newTrans, Matrix3Val
 {
     _mainTurret.Stabilize(this, Type()->_mainTurret, oldTrans, newTrans);
     // stabilize with relation to mainTurret
-    Matrix3 newTurretTrans = Poseidon::BuildCommanderTankTurretStabilizationFrame(
-        Type()->_comTurretOnMainTurret, newTrans, TurretTransform());
+    Matrix3 newTurretTrans = Poseidon::BuildCommanderTankTurretStabilizationFrame(Type()->_comTurretOnMainTurret,
+                                                                                  newTrans, TurretTransform());
     const Matrix3& oldComTurretFrame = Poseidon::SelectCommanderTankTurretOldStabilizationFrame(
         Type()->_comTurretOnMainTurret, oldTrans, oldTurretTrans);
     _comTurret.Stabilize(this, Type()->_comTurret, oldComTurretFrame, newTurretTrans);

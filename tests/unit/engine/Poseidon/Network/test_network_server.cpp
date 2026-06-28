@@ -123,6 +123,88 @@ TEST_CASE("Network constants are defined", "[network][networkServer]")
     REQUIRE(TO_SERVER == 1);
 }
 
+TEST_CASE("mission file transfer sends contiguous one kilobyte segments to invalid recipients",
+          "[network][mission][transfer]")
+{
+    struct Player
+    {
+        int dpid;
+        NetworkGameState state;
+        bool missionFileValid;
+    };
+    struct SentSegment
+    {
+        int dpid;
+        int offset;
+        int size;
+        int curSegment;
+        int totSegments;
+        char firstByte;
+    };
+
+    std::string payload(5 * Poseidon::NetworkMissionTransferSegmentSize + 17, '\0');
+    for (size_t i = 0; i < payload.size(); ++i)
+    {
+        payload[i] = static_cast<char>('A' + (i % 26));
+    }
+
+    std::vector<int> recipients{11, 13};
+    std::vector<Player> players{{11, NGSCreate, false},
+                                {12, NGSCreating, false},
+                                {13, NGSCreate, false},
+                                {14, NGSCreate, true},
+                                {99, NGSCreate, false}};
+    std::vector<SentSegment> sent;
+
+    const Poseidon::NetworkMissionFileSendResult result =
+        Poseidon::SendCurrentNetworkMissionFile<TransferMissionFileMessage>(
+            "throughput_test.Intro", payload.data(), static_cast<int>(payload.size()),
+            static_cast<int>(recipients.size()), [&recipients](int index) { return recipients[index]; }, 99,
+            [&sent](int dpid, TransferMissionFileMessage& msg)
+            { sent.push_back({dpid, msg.offset, msg.data.Size(), msg.curSegment, msg.totSegments, msg.data[0]}); },
+            static_cast<int>(players.size()), [&players](int index) -> Player& { return players[index]; }, NGSCreate);
+
+    const int expectedSegments = Poseidon::GetNetworkMissionTransferSegmentCount(static_cast<int>(payload.size()));
+    REQUIRE(Poseidon::NetworkMissionTransferSegmentSize == 1024);
+    REQUIRE(result.segmentCount == expectedSegments);
+    REQUIRE(result.sentCount == expectedSegments * static_cast<int>(recipients.size()));
+    REQUIRE(result.markedCount == 3);
+    REQUIRE(sent.size() == static_cast<size_t>(result.sentCount));
+
+    for (int segment = 0; segment < expectedSegments; ++segment)
+    {
+        const int offset = segment * Poseidon::NetworkMissionTransferSegmentSize;
+        const int expectedSize =
+            std::min(Poseidon::NetworkMissionTransferSegmentSize, static_cast<int>(payload.size()) - offset);
+        for (size_t recipient = 0; recipient < recipients.size(); ++recipient)
+        {
+            const SentSegment& item = sent[segment * recipients.size() + recipient];
+            REQUIRE(item.dpid == recipients[recipient]);
+            REQUIRE(item.curSegment == segment);
+            REQUIRE(item.totSegments == expectedSegments);
+            REQUIRE(item.offset == offset);
+            REQUIRE(item.size == expectedSize);
+            REQUIRE(item.firstByte == payload[static_cast<size_t>(offset)]);
+        }
+    }
+
+    REQUIRE_FALSE(players[1].missionFileValid);
+    REQUIRE(players[2].missionFileValid);
+    REQUIRE(players[3].missionFileValid);
+    REQUIRE_FALSE(players[4].missionFileValid);
+}
+
+TEST_CASE("mission transfer segment count scales linearly for benchmark payload sizes",
+          "[network][mission][transfer][benchmark]")
+{
+    REQUIRE(Poseidon::GetNetworkMissionTransferSegmentCount(0) == 0);
+    REQUIRE(Poseidon::GetNetworkMissionTransferSegmentCount(1) == 1);
+    REQUIRE(Poseidon::GetNetworkMissionTransferSegmentCount(1024) == 1);
+    REQUIRE(Poseidon::GetNetworkMissionTransferSegmentCount(1025) == 2);
+    REQUIRE(Poseidon::GetNetworkMissionTransferSegmentCount(1024 * 1024) == 1024);
+    REQUIRE(Poseidon::GetNetworkMissionTransferSegmentCount(5 * 1024 * 1024) == 5120);
+}
+
 TEST_CASE("mission params preserve explicit server.cfg values over description defaults",
           "[network][networkServer][missionParams]")
 {
@@ -199,14 +281,14 @@ TEST_CASE("replicated sound state clears stopped and last-looped waves", "[netwo
 
     Link<IWave> lastLoop = new TestWave();
     TestWave* lastLoopWave = static_cast<TestWave*>(lastLoop.GetRef());
-    REQUIRE(Poseidon::ApplyReplicatedNetworkSoundState(lastLoop, SSLastLoop, [](IWave*) { FAIL("unexpected delete"); }));
+    REQUIRE(
+        Poseidon::ApplyReplicatedNetworkSoundState(lastLoop, SSLastLoop, [](IWave*) { FAIL("unexpected delete"); }));
     REQUIRE(lastLoopWave->lastLooped);
     REQUIRE(lastLoop == nullptr);
 
     Link<IWave> stopped = new TestWave();
     bool deleted = false;
-    REQUIRE(Poseidon::ApplyReplicatedNetworkSoundState(stopped,
-                                                       SSStop,
+    REQUIRE(Poseidon::ApplyReplicatedNetworkSoundState(stopped, SSStop,
                                                        [&deleted](IWave* wave)
                                                        {
                                                            deleted = true;

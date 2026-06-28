@@ -238,10 +238,9 @@ TEST_CASE("Transferred custom asset paths are confined to expected temp namespac
 {
     REQUIRE(Poseidon::IsNetworkTransferredAssetSizeAllowed(128 * 1024, 128 * 1024));
     REQUIRE_FALSE(Poseidon::IsNetworkTransferredAssetSizeAllowed(128 * 1024 + 1, 128 * 1024));
-    REQUIRE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/players/42/face.jpg"), 128 * 1024,
-                                                          128 * 1024));
-    REQUIRE_FALSE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/players/42/face.jpg"),
-                                                                128 * 1024 + 1, 128 * 1024));
+    REQUIRE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/players/42/face.jpg"), 128 * 1024, 128 * 1024));
+    REQUIRE_FALSE(
+        Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/players/42/face.jpg"), 128 * 1024 + 1, 128 * 1024));
     REQUIRE_FALSE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("../outside.bin"), 1, 128 * 1024));
 
     REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/face.jpg")));
@@ -260,17 +259,17 @@ TEST_CASE("Transferred custom asset paths are confined to expected temp namespac
 
 TEST_CASE("Transferred custom asset probe maps semantic asset names to temp paths", "[network][assets]")
 {
-    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("player"), RString("42"),
-                                                              RString("face.jpg")) ==
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("player"), RString("42"), RString("face.jpg")) ==
             RString("tmp/players/42/face.jpg"));
-    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("playerFace"), RString("42"),
-                                                              RString("face.paa")) ==
-            RString("tmp/players/42/face.paa"));
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(
+                RString("playerFace"), RString("42"), RString("face.paa")) == RString("tmp/players/42/face.paa"));
 
-    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("unknown"), RString("Alice"),
-                                                              RString("face.jpg")).GetLength() == 0);
-    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("player"), RString("../Alice"),
-                                                              RString("face.jpg")).GetLength() == 0);
+    REQUIRE(
+        Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("unknown"), RString("Alice"), RString("face.jpg"))
+            .GetLength() == 0);
+    REQUIRE(
+        Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("player"), RString("../Alice"), RString("face.jpg"))
+            .GetLength() == 0);
 }
 
 TEST_CASE("Server player upload paths require safe player names and exact temp prefix", "[network][upload]")
@@ -284,29 +283,26 @@ TEST_CASE("Server player upload paths require safe player names and exact temp p
     REQUIRE(Poseidon::BuildNetworkServerPlayerAssetUploadPath(tmp, 42, RString("face.jpg")) ==
             playerDir + RString("face.jpg"));
     REQUIRE(Poseidon::IsSafeNetworkServerPlayerUploadPath(playerDir + RString("face.jpg"), tmp, 42));
-    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("server-tmp/players/Alice/face.jpg"),
-                                                                tmp, 42));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("server-tmp/players/Alice/face.jpg"), tmp, 42));
 
-    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("server-tmp/players/43/face.jpg"),
-                                                                tmp, 42));
-    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(playerDir + RString("../face.jpg"),
-                                                                tmp, 42));
-    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("server-tmp/players/4/2/face.jpg"),
-                                                                tmp, 42));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("server-tmp/players/43/face.jpg"), tmp, 42));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(playerDir + RString("../face.jpg"), tmp, 42));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("server-tmp/players/4/2/face.jpg"), tmp, 42));
 }
 
 TEST_CASE("Player custom sound paths reject unsafe path components", "[network][assets][sound]")
 {
-    const RString localSoundDir = RString("users") + RString(PATH_SEP_STR) + RString("Alice") +
-                                  RString(PATH_SEP_STR) + RString("sound") + RString(PATH_SEP_STR);
+    const RString localSoundDir = RString("users") + RString(PATH_SEP_STR) + RString("Alice") + RString(PATH_SEP_STR) +
+                                  RString("sound") + RString(PATH_SEP_STR);
 
     REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpDir(42) == RString("tmp/players/42/sound/"));
     REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpPath(42, RString("radio.ogg")) ==
             RString("tmp/players/42/sound/radio.ogg"));
     REQUIRE(Poseidon::BuildNetworkCustomRadioSoundPath(RString("42"), RString("radio.ogg"), localSoundDir) ==
             RString("tmp/players/42/sound/radio.ogg"));
-    REQUIRE(Poseidon::BuildNetworkCustomRadioSoundPath(RString("Alice"), RString("radio.ogg"), localSoundDir)
-                .GetLength() == 0);
+    REQUIRE(
+        Poseidon::BuildNetworkCustomRadioSoundPath(RString("Alice"), RString("radio.ogg"), localSoundDir).GetLength() ==
+        0);
     REQUIRE(Poseidon::BuildNetworkCustomRadioSoundPath(RString(), RString("radio.ogg"), localSoundDir) ==
             localSoundDir + RString("radio.ogg"));
 
@@ -314,10 +310,11 @@ TEST_CASE("Player custom sound paths reject unsafe path components", "[network][
     REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpPath(42, RString("../radio.ogg")).GetLength() == 0);
     REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpPath(42, RString("nested/radio.ogg")).GetLength() == 0);
     REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpPath(42, RString("C:radio.ogg")).GetLength() == 0);
-    REQUIRE(Poseidon::BuildNetworkCustomRadioSoundPath(RString("42"), RString("../radio.ogg"), localSoundDir)
-                .GetLength() == 0);
-    REQUIRE(Poseidon::BuildNetworkCustomRadioSoundPath(RString(), RString("../radio.ogg"), localSoundDir)
-                .GetLength() == 0);
+    REQUIRE(
+        Poseidon::BuildNetworkCustomRadioSoundPath(RString("42"), RString("../radio.ogg"), localSoundDir).GetLength() ==
+        0);
+    REQUIRE(Poseidon::BuildNetworkCustomRadioSoundPath(RString(), RString("../radio.ogg"), localSoundDir).GetLength() ==
+            0);
 }
 
 TEST_CASE("Transferred custom sound paths are confined to player temp sound directories", "[network][assets][sound]")
@@ -339,16 +336,17 @@ TEST_CASE("Transferred custom sound paths are confined to player temp sound dire
 TEST_CASE("Transferred custom sound probe maps semantic asset names to temp paths", "[network][assets][sound]")
 {
     REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("playerSound"), RString("42"),
-                                                              RString("radio.ogg")) ==
+                                                               RString("radio.ogg")) ==
             RString("tmp/players/42/sound/radio.ogg"));
-    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("sound"), RString("42"),
-                                                              RString("radio.ogg")) ==
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("sound"), RString("42"), RString("radio.ogg")) ==
             RString("tmp/players/42/sound/radio.ogg"));
 
     REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("playerSound"), RString("42"),
-                                                              RString("nested/radio.ogg")).GetLength() == 0);
+                                                               RString("nested/radio.ogg"))
+                .GetLength() == 0);
     REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("playerSound"), RString("../Alice"),
-                                                              RString("radio.ogg")).GetLength() == 0);
+                                                               RString("radio.ogg"))
+                .GetLength() == 0);
 }
 
 TEST_CASE("Server player upload paths accept custom sounds only under the player's safe prefix",
@@ -364,13 +362,10 @@ TEST_CASE("Server player upload paths accept custom sounds only under the player
             soundDir + RString("radio.ogg"));
     REQUIRE(Poseidon::IsSafeNetworkServerPlayerUploadPath(soundDir + RString("radio.ogg"), tmp, 42));
 
-    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(
-        soundDir + RString("nested/radio.ogg"), tmp, 42));
-    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(
-        RString("server-tmp/players/43/sound/radio.ogg"),
-        tmp, 42));
-    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(
-        soundDir + RString("../radio.ogg"), tmp, 42));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(soundDir + RString("nested/radio.ogg"), tmp, 42));
+    REQUIRE_FALSE(
+        Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("server-tmp/players/43/sound/radio.ogg"), tmp, 42));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(soundDir + RString("../radio.ogg"), tmp, 42));
 }
 
 TEST_CASE("Squad logo paths reject unsafe XML path components", "[network][squad][assets]")
@@ -390,12 +385,10 @@ TEST_CASE("Squad logo paths reject unsafe XML path components", "[network][squad
                 RString("https://gist.githubusercontent.com/simi/b4dbb7fea11cb4c7e7b1c090e5e065bc/raw/"
                         "synthetic_grid.paa")) == RString("synthetic_grid.paa"));
     REQUIRE(Poseidon::BuildNetworkSquadPictureTmpPath(
-                RString("CWR"),
-                RString("https://gist.githubusercontent.com/simi/b4dbb7fea11cb4c7e7b1c090e5e065bc/raw/"
-                        "synthetic_grid.paa")) == RString("tmp/squads/CWR/synthetic_grid.paa"));
+                RString("CWR"), RString("https://gist.githubusercontent.com/simi/b4dbb7fea11cb4c7e7b1c090e5e065bc/raw/"
+                                        "synthetic_grid.paa")) == RString("tmp/squads/CWR/synthetic_grid.paa"));
 
-    REQUIRE(Poseidon::BuildNetworkSquadPictureTmpPath(RString("CW/R"), RString("synthetic_grid.paa")).GetLength() ==
-            0);
+    REQUIRE(Poseidon::BuildNetworkSquadPictureTmpPath(RString("CW/R"), RString("synthetic_grid.paa")).GetLength() == 0);
     REQUIRE(Poseidon::BuildNetworkSquadPictureTmpPath(RString("CWR"), RString("../synthetic_grid.paa")).GetLength() ==
             0);
     REQUIRE(Poseidon::BuildNetworkSquadPictureDownloadUrl(
@@ -405,26 +398,29 @@ TEST_CASE("Squad logo paths reject unsafe XML path components", "[network][squad
                     "synthetic_grid.paa"));
     REQUIRE(Poseidon::BuildNetworkSquadPictureDownloadUrl(
                 RString("https://gist.githubusercontent.com/simi/b4dbb7fea11cb4c7e7b1c090e5e065bc/raw/squad.xml"),
-                RString("../synthetic_grid.paa")).GetLength() == 0);
+                RString("../synthetic_grid.paa"))
+                .GetLength() == 0);
     REQUIRE(Poseidon::BuildNetworkSquadPictureDownloadUrl(
                 RString("https://example.invalid/squad.xml"),
                 RString("https://cdn.example.invalid/assets/synthetic_grid.paa")) ==
             RString("https://cdn.example.invalid/assets/synthetic_grid.paa"));
     REQUIRE(Poseidon::BuildNetworkSquadPictureDownloadUrl(
                 RString("https://example.invalid/squad.xml"),
-                RString("https://cdn.example.invalid/assets/../synthetic_grid.paa")).GetLength() == 0);
+                RString("https://cdn.example.invalid/assets/../synthetic_grid.paa"))
+                .GetLength() == 0);
 }
 
 TEST_CASE("Transferred squad asset probe maps semantic names to temp paths", "[network][squad][assets]")
 {
     REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("squad"), RString("CWR"),
-                                                              RString("synthetic_grid.paa")) ==
+                                                               RString("synthetic_grid.paa")) ==
             RString("tmp/squads/CWR/synthetic_grid.paa"));
     REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("squadPicture"), RString("CWR"),
-                                                              RString("synthetic_grid.paa")) ==
+                                                               RString("synthetic_grid.paa")) ==
             RString("tmp/squads/CWR/synthetic_grid.paa"));
     REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("squad"), RString("CW/R"),
-                                                              RString("synthetic_grid.paa")).GetLength() == 0);
+                                                               RString("synthetic_grid.paa"))
+                .GetLength() == 0);
 }
 
 TEST_CASE("Player-role assignment request does not mutate the local role table", "[network][role]")
