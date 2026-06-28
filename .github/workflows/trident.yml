@@ -1,0 +1,545 @@
+name: C++ / Trident
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CCACHE_BASEDIR: ${{ github.workspace }}
+  CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+  CCACHE_NOHASHDIR: true
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  DEMO_ASSETS_URL: https://files.ofpisnotdead.com/CWR-demo-assets.zip
+  TRIDENT_RENDER: dummy
+  TRIDENT_AUDIO: openal
+  TRIDENT_TEST_PATH: tests/integration
+  TRIDENT_XVFB_ARGS: -screen 0 1920x1080x24
+
+jobs:
+  smoke:
+    name: Linux
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - preset: linux-x64-clang-rwdi
+            vcpkg_triplet: x64-linux-clang
+            build_dir: build/linux-x64-clang-rwdi
+            dist_dir: dist/x64-linux-rwdi
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download demo game data
+        shell: pwsh
+        env:
+          GAME_DATA_ROOT: ${{ github.workspace }}/.game-data
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $requiredFiles = @(
+            'BIN/RESOURCE.BIN',
+            'BIN/STRINGTABLE_MAINMENU.utf8.csv',
+            'BIN/optionsShell.hpp',
+            'DTA/Data.pbo',
+            'DTA/Fonts.pbo',
+            'fonts/cwr_title.ttf',
+            'Missions/Demo.Demo/mission.sqm'
+          )
+
+          Remove-Item -LiteralPath $env:GAME_DATA_ROOT -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $env:GAME_DATA_ROOT
+          $zipPath = Join-Path $env:RUNNER_TEMP 'CWR-demo-assets.zip'
+
+          Write-Host "Downloading demo assets from $env:DEMO_ASSETS_URL"
+          Invoke-WebRequest -Uri $env:DEMO_ASSETS_URL -OutFile $zipPath
+          Get-Item -LiteralPath $zipPath | Format-List FullName,Length,LastWriteTime
+
+          Expand-Archive -LiteralPath $zipPath -DestinationPath $env:GAME_DATA_ROOT -Force
+          $candidates = @(
+            (Join-Path $env:GAME_DATA_ROOT 'CWR-demo-assets'),
+            $env:GAME_DATA_ROOT
+          )
+
+          $dataDir = $null
+          foreach ($candidate in $candidates) {
+            $ok = $true
+            foreach ($required in $requiredFiles) {
+              $requiredPath = Join-Path $candidate $required
+              $exists = Test-Path -LiteralPath $requiredPath
+              Write-Host "Required demo content $required in $candidate = $exists"
+              if (-not $exists) {
+                $ok = $false
+              }
+            }
+
+            if ($ok) {
+              $dataDir = $candidate
+              break
+            }
+          }
+
+          if (-not $dataDir) {
+            throw "Downloaded demo assets did not contain the required game data layout."
+          }
+
+          Remove-Item -LiteralPath (Join-Path $dataDir '.git') -Recurse -Force -ErrorAction SilentlyContinue
+          Get-ChildItem -LiteralPath $dataDir -Recurse -Include *.exe,*.dll,*.pdb -File | Remove-Item -Force
+
+          $packagesDir = Join-Path $env:GITHUB_WORKSPACE 'packages'
+          $compatDemoDir = Join-Path $packagesDir 'Demo'
+          New-Item -ItemType Directory -Force -Path $packagesDir | Out-Null
+          Remove-Item -LiteralPath $compatDemoDir -Recurse -Force -ErrorAction SilentlyContinue
+          try {
+            New-Item -ItemType SymbolicLink -Path $compatDemoDir -Target $dataDir | Out-Null
+            Write-Host "Created compatibility demo data symlink: $compatDemoDir -> $dataDir"
+          } catch {
+            Copy-Item -LiteralPath $dataDir -Destination $compatDemoDir -Recurse -Force
+            Write-Host "Copied compatibility demo data directory: $compatDemoDir"
+          }
+
+          $files = @(Get-ChildItem -LiteralPath $dataDir -Recurse -File -ErrorAction SilentlyContinue)
+          $totalBytes = ($files | Measure-Object -Property Length -Sum).Sum
+          Write-Host "Demo content directory: $dataDir"
+          Write-Host "Demo content file count: $($files.Count)"
+          Write-Host "Demo content total bytes: $totalBytes"
+          $root = (Resolve-Path -LiteralPath $dataDir).Path
+          $files |
+            Sort-Object FullName |
+            Select-Object -First 120 |
+            ForEach-Object {
+              $relative = $_.FullName.Substring($root.Length).TrimStart([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+              Write-Host ("Demo file {0} ({1} bytes)" -f $relative, $_.Length)
+            }
+
+          "TRIDENT_DATA_DIR=$dataDir" | Add-Content -LiteralPath $env:GITHUB_ENV
+          Write-Host "Using Trident data directory: $dataDir"
+
+      - name: Install Linux system packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf \
+            autoconf-archive \
+            automake \
+            clang \
+            libtool \
+            pkg-config \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libxext-dev \
+            libxrandr-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxtst-dev \
+            libxinerama-dev \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libopenal1 \
+            alsa-utils \
+            mesa-utils \
+            pulseaudio-utils \
+            openbox \
+            wayland-protocols \
+            xvfb \
+            xauth
+
+      - name: Probe CI host capabilities
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Write-Host "RUNNER_OS=$env:RUNNER_OS"
+          Write-Host "DISPLAY=$env:DISPLAY"
+          Write-Host "TRIDENT_RENDER=$env:TRIDENT_RENDER"
+          Write-Host "TRIDENT_AUDIO=$env:TRIDENT_AUDIO"
+          Write-Host "TRIDENT_XVFB_ARGS=$env:TRIDENT_XVFB_ARGS"
+          Get-Command Xvfb, xvfb-run, xdpyinfo, glxinfo, pactl, aplay, openbox -ErrorAction SilentlyContinue | Format-Table -AutoSize Source,Name,CommandType
+          $probeScript = @'
+          echo DISPLAY=$DISPLAY
+          xdpyinfo | sed -n '1,60p'
+          glxinfo -B
+          pactl info
+          pactl list short sinks
+          aplay -l
+          '@
+          $probePath = Join-Path $env:RUNNER_TEMP 'ci-host-probe.sh'
+          Set-Content -LiteralPath $probePath -Value $probeScript -NoNewline
+          xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" bash $probePath
+
+      - name: Select Trident CI runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $render = 'gl33'
+          $audio = 'openal'
+          @(
+            "TRIDENT_RENDER=$render"
+            "TRIDENT_AUDIO=$audio"
+          ) | Add-Content -LiteralPath $env:GITHUB_ENV
+          Write-Host "Selected Trident render backend: $render"
+          Write-Host "Selected Trident audio backend: $audio"
+
+      - name: Setup compiler cache
+        uses: hendrikmuhs/ccache-action@v1.2.23
+        with:
+          variant: ccache
+          key: ${{ runner.os }}-${{ matrix.preset }}-pch
+          max-size: 1G
+
+      - name: Setup CMake and Ninja
+        uses: lukka/get-cmake@latest
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: .vcpkg-bincache/${{ matrix.vcpkg_triplet }}
+          key: vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/vcpkg-triplets/**', 'cmake/vcpkg-overlay-ports/**') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        env:
+          VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-bincache/${{ matrix.vcpkg_triplet }},readwrite
+          VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-bincache/${{ matrix.vcpkg_triplet }}
+          VCPKG_DEFAULT_TRIPLET: ${{ matrix.vcpkg_triplet }}
+          VCPKG_INSTALLED_DIR: ${{ github.workspace }}/${{ matrix.build_dir }}/vcpkg_installed
+          VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/cmake/vcpkg-overlay-ports
+          VCPKG_OVERLAY_TRIPLETS: ${{ github.workspace }}/cmake/vcpkg-triplets
+        with:
+          runVcpkgInstall: true
+          vcpkgJsonGlob: 'vcpkg.json'
+
+      - name: Configure C++
+        run: >
+          cmake
+          --preset ${{ matrix.preset }}
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build C++ game
+        run: cmake --build ${{ matrix.build_dir }} --target PoseidonGame PoseidonGameDemo --parallel 2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            engine/Trident -> target
+
+      - name: Build Trident
+        working-directory: engine/Trident
+        run: cargo build --locked --profile rwdi
+
+      - name: Write Trident env
+        shell: pwsh
+        env:
+          OFPR_GAME_DIR: ${{ github.workspace }}/${{ matrix.dist_dir }}
+          TRI_OUTPUT_DIR: ${{ github.workspace }}/trident-output
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            "OFPR_GAME_DIR=$env:OFPR_GAME_DIR"
+            "OFPR_DATA_DIR=$env:TRIDENT_DATA_DIR"
+            "TRI_OUTPUT_DIR=$env:TRI_OUTPUT_DIR"
+          ) | Set-Content -LiteralPath .trident.env -Encoding utf8
+          Get-Content -LiteralPath .trident.env
+
+      - name: Check game startup
+        shell: pwsh
+        env:
+          OFPR_GAME_DIR: ${{ github.workspace }}/${{ matrix.dist_dir }}
+          ALSOFT_DRIVERS: 'null'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $gameExe = Join-Path $env:OFPR_GAME_DIR 'PoseidonGame'
+          $stdoutLog = Join-Path $env:RUNNER_TEMP 'game-startup.stdout.log'
+          $stderrLog = Join-Path $env:RUNNER_TEMP 'game-startup.stderr.log'
+          $gameArgs = @('-C', $env:TRIDENT_DATA_DIR, '--window', '--check', '--log-format', 'jsonl', '--render', $env:TRIDENT_RENDER, '--audio', $env:TRIDENT_AUDIO, '--no-strict')
+          Get-ChildItem -LiteralPath $env:OFPR_GAME_DIR -Force | Format-Table -AutoSize Name,Length,LastWriteTime
+          & xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" $gameExe @gameArgs > $stdoutLog 2> $stderrLog
+          $exitCode = $LASTEXITCODE
+          Write-Host "Game startup exit code: $exitCode"
+          foreach ($log in @($stdoutLog, $stderrLog)) {
+            if (Test-Path -LiteralPath $log) {
+              Write-Host "::group::$log"
+              Get-Content -LiteralPath $log -ErrorAction Continue
+              Write-Host '::endgroup::'
+            }
+          }
+          if ($exitCode -ne 0) {
+            Get-ChildItem -Path $env:GITHUB_WORKSPACE,$env:RUNNER_TEMP -Recurse -Filter *.dmp -ErrorAction SilentlyContinue |
+              Format-Table -AutoSize FullName,Length,LastWriteTime
+            throw "Game startup check failed with exit code $exitCode"
+          }
+
+      - name: Run Trident capability probes
+        shell: pwsh
+        continue-on-error: true
+        env:
+          OFPR_GAME_DIR: ${{ github.workspace }}/${{ matrix.dist_dir }}
+          TRI_OUTPUT_DIR: ${{ github.workspace }}/trident-output
+          RUST_LOG: debug
+          ALSOFT_DRIVERS: 'null'
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $triExe = 'engine/Trident/target/rwdi/tri'
+          $probes = @(
+            @{
+              Name = 'dummy-smoke'
+              Render = 'dummy'
+              Test = 'tests/integration/flows/demo/ci_smoke.test.sqf'
+              GameArgs = @('--nosound', '--no-strict')
+            },
+            @{
+              Name = 'gl33-colorbar'
+              Render = 'gl33'
+              Test = 'tests/integration/rendering/vertex_color_byte_order.test.sqf'
+              GameArgs = @('--audio', $env:TRIDENT_AUDIO, '--no-strict')
+            },
+            @{
+              Name = 'gl33-screenshot'
+              Render = 'gl33'
+              Test = 'tests/integration/ui/main_menu/options_shell.test.sqf'
+              GameArgs = @('--audio', $env:TRIDENT_AUDIO, '--no-strict')
+            },
+            @{
+              Name = 'openal-audio'
+              Render = 'dummy'
+              Test = 'tests/integration/ui/options/audio/audio_engine_layer.test.sqf'
+              GameArgs = @('--audio', $env:TRIDENT_AUDIO, '--no-strict')
+            }
+          )
+
+          $failed = @()
+          foreach ($probe in $probes) {
+            $outDir = Join-Path $env:TRI_OUTPUT_DIR "probe-$($probe.Name)"
+            $args = @(
+              'test',
+              '--game-dir', $env:OFPR_GAME_DIR,
+              '--data-dir', $env:TRIDENT_DATA_DIR,
+              '--output-dir', $outDir,
+              '--render', $probe.Render,
+              '--retries', '0'
+            )
+            foreach ($gameArg in $probe.GameArgs) {
+              $args += @('--game-arg', $gameArg)
+            }
+            $args += $probe.Test
+
+            Write-Host "::group::Trident probe $($probe.Name)"
+            xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" $triExe @args
+            $exitCode = $LASTEXITCODE
+            Write-Host "Probe $($probe.Name) exit code: $exitCode"
+            Write-Host '::endgroup::'
+            if ($exitCode -ne 0) {
+              $failed += "$($probe.Name)=$exitCode"
+            }
+          }
+
+          if ($failed.Count -gt 0) {
+            Write-Host "Failed probes: $($failed -join ', ')"
+          } else {
+            Write-Host 'All capability probes passed.'
+          }
+
+      - name: Run Trident blocker probes
+        shell: pwsh
+        continue-on-error: true
+        timeout-minutes: 18
+        env:
+          OFPR_GAME_DIR: ${{ github.workspace }}/${{ matrix.dist_dir }}
+          TRI_OUTPUT_DIR: ${{ github.workspace }}/trident-output
+          RUST_LOG: debug
+          ALSOFT_DRIVERS: 'null'
+          HARNESS_CMD_TIMEOUT_SEC: '180'
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $triExe = 'engine/Trident/target/rwdi/tri'
+
+          $probes = @(
+            @{
+              Name = 'multiplayer-briefing'
+              Test = 'tests/integration/multiplayer/briefing_coordination.test'
+              Timeout = '120'
+              OuterTimeout = '240s'
+              WindowManager = $false
+              GameArgs = @('--audio', $env:TRIDENT_AUDIO, '--no-strict')
+            }
+          )
+
+          $failed = @()
+          foreach ($probe in $probes) {
+            if (-not (Test-Path -LiteralPath $probe.Test)) {
+              Write-Host "Skipping blocker probe $($probe.Name); missing path $($probe.Test)"
+              continue
+            }
+
+            $outDir = Join-Path $env:TRI_OUTPUT_DIR "blocker-$($probe.Name)"
+            $args = @(
+              '--timeout', $probe.Timeout,
+              'test',
+              '--game-dir', $env:OFPR_GAME_DIR,
+              '--data-dir', $env:TRIDENT_DATA_DIR,
+              '--output-dir', $outDir,
+              '--render', $env:TRIDENT_RENDER,
+              '--retries', '0'
+            )
+            foreach ($gameArg in $probe.GameArgs) {
+              $args += @('--game-arg', $gameArg)
+            }
+            $args += $probe.Test
+
+            Write-Host "::group::Trident blocker probe $($probe.Name)"
+            /usr/bin/timeout --foreground --kill-after=30s $probe.OuterTimeout xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" $triExe @args
+            $exitCode = $LASTEXITCODE
+            Write-Host "Blocker probe $($probe.Name) exit code: $exitCode"
+            Write-Host '::endgroup::'
+            if ($exitCode -ne 0) {
+              $failed += "$($probe.Name)=$exitCode"
+            }
+          }
+
+          if ($failed.Count -gt 0) {
+            Write-Host "Failed blocker probes: $($failed -join ', ')"
+          } else {
+            Write-Host 'All blocker probes passed.'
+          }
+
+      - name: Run Trident full suite
+        shell: pwsh
+        env:
+          OFPR_GAME_DIR: ${{ github.workspace }}/${{ matrix.dist_dir }}
+          TRI_OUTPUT_DIR: ${{ github.workspace }}/trident-output
+          RUST_LOG: debug
+          ALSOFT_DRIVERS: 'null'
+          HARNESS_CMD_TIMEOUT_SEC: '180'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $integrationRoot = (Resolve-Path -LiteralPath $env:TRIDENT_TEST_PATH).Path
+          $blockedTests = @(
+            'multiplayer/briefing_coordination'
+          )
+          $skipTags = @()
+          $wmWrapper = Join-Path $env:RUNNER_TEMP 'trident-openbox-wrapper.sh'
+          @'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          openbox &
+          wm_pid=$!
+          trap 'kill "$wm_pid" >/dev/null 2>&1 || true' EXIT
+          sleep 1
+          exec "$@"
+          '@ | Set-Content -LiteralPath $wmWrapper -NoNewline
+
+          function Get-TridentTestName([string] $path) {
+            $relative = [IO.Path]::GetRelativePath($integrationRoot, $path).Replace('\', '/')
+            if ($relative.EndsWith('.test.sqf')) {
+              return $relative.Substring(0, $relative.Length - '.test.sqf'.Length)
+            }
+            if ($relative.EndsWith('.seq')) {
+              return $relative.Substring(0, $relative.Length - '.seq'.Length)
+            }
+            if ($relative.EndsWith('.test')) {
+              return $relative.Substring(0, $relative.Length - '.test'.Length)
+            }
+            $marker = $relative.IndexOf('.test.')
+            if ($marker -ge 0) {
+              return $relative.Substring(0, $marker)
+            }
+            return $relative
+          }
+
+          $testEntries = @()
+          Get-ChildItem -LiteralPath $integrationRoot -Recurse -Directory -Force | ForEach-Object {
+            $name = $_.Name
+            if (
+              $name.EndsWith('.seq') -or
+              ($name.EndsWith('.test') -and (Test-Path -LiteralPath (Join-Path $_.FullName 'test.toml'))) -or
+              ($name.Contains('.test.') -and (Test-Path -LiteralPath (Join-Path $_.FullName 'mission.sqm')))
+            ) {
+              $testEntries += [pscustomobject]@{
+                Name = Get-TridentTestName $_.FullName
+                Path = $_.FullName
+              }
+            }
+          }
+          Get-ChildItem -LiteralPath $integrationRoot -Recurse -File -Filter '*.test.sqf' -Force | ForEach-Object {
+            if (-not $_.Directory.Name.EndsWith('.seq')) {
+              $testEntries += [pscustomobject]@{
+                Name = Get-TridentTestName $_.FullName
+                Path = $_.FullName
+              }
+            }
+          }
+
+          $selectedTests = @(
+            $testEntries |
+              Sort-Object Name -Unique |
+              Where-Object {
+                if ($blockedTests -contains $_.Name) {
+                  Write-Host "Skipping CI-host-blocked Trident test: $($_.Name)"
+                  $false
+                } else {
+                  $true
+                }
+              }
+          )
+          if ($selectedTests.Count -eq 0) {
+            throw "No Trident integration tests selected."
+          }
+          Write-Host "Selected $($selectedTests.Count) Trident integration tests for CI."
+          if ($skipTags.Count -gt 0) {
+            Write-Host "Skipping Trident tags on this runner: $($skipTags -join ', ')"
+          }
+
+          $commonArgs = @(
+            'test',
+            '--game-dir', $env:OFPR_GAME_DIR,
+            '--data-dir', $env:TRIDENT_DATA_DIR,
+            '--output-dir', $env:TRI_OUTPUT_DIR,
+            '--render', $env:TRIDENT_RENDER,
+            '--retries', '0',
+            '--game-arg', '--audio',
+            '--game-arg', $env:TRIDENT_AUDIO,
+            '--game-arg', '--no-strict'
+          )
+          foreach ($skipTag in $skipTags) {
+            $commonArgs += @('--skip-tag', $skipTag)
+          }
+          $commonArgs += @($selectedTests | ForEach-Object { $_.Path })
+          xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" bash $wmWrapper engine/Trident/target/rwdi/tri @commonArgs
+
+      - name: Dump Trident output
+        if: failure()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Test-Path -LiteralPath trident-output)) {
+            Write-Host 'No trident-output directory was created.'
+            exit 0
+          }
+
+          Get-ChildItem -LiteralPath trident-output -Recurse -Force | Format-Table -AutoSize FullName,Length,LastWriteTime
+          Get-ChildItem -LiteralPath trident-output -Recurse -File -Force | ForEach-Object {
+            Write-Host "::group::$($_.FullName)"
+            Get-Content -LiteralPath $_.FullName -Tail 200 -ErrorAction Continue
+            Write-Host '::endgroup::'
+          }
+
+      - name: Upload Trident output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trident-output-linux
+          path: trident-output
+          if-no-files-found: ignore
