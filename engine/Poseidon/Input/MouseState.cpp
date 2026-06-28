@@ -1,5 +1,6 @@
 #include <Poseidon/Input/MouseState.hpp>
 #include <cmath>
+#include <algorithm>
 #include <Poseidon/Foundation/Common/FltOpts.hpp>
 #include <Poseidon/Foundation/Time/Time.hpp>
 
@@ -88,9 +89,26 @@ bool MouseState::Update(CursorAccum& cursor, int gameFocusLost, bool lookAroundE
     rawDeltaX = bufDeltaX_;
     rawDeltaY = bufDeltaY_;
 
-    // Tuning pipeline, each stage a no-op at default tuning: smoothing → DPI → accel → sens·baseScale.
-    float inX = bufDeltaX_;
-    float inY = bufDeltaY_;
+    // Tuning pipeline, each stage a no-op at default tuning: DPI → dead zone → smoothing → accel → sens·baseScale.
+    const float dpi = tuning.DpiFactor();
+    float inX = bufDeltaX_ * dpi;
+    float inY = bufDeltaY_ * dpi;
+
+    if (tuning.inputDeadZone > 0.0f)
+    {
+        const float speed = std::sqrt(inX * inX + inY * inY);
+        if (speed <= tuning.inputDeadZone)
+        {
+            inX = 0.0f;
+            inY = 0.0f;
+        }
+        else
+        {
+            const float scale = (speed - tuning.inputDeadZone) / speed;
+            inX *= scale;
+            inY *= scale;
+        }
+    }
 
     if (tuning.smoothing > 0.0f)
     {
@@ -106,8 +124,6 @@ bool MouseState::Update(CursorAccum& cursor, int gameFocusLost, bool lookAroundE
         smoothY_ = inY;
     }
 
-    const float dpi = tuning.DpiFactor();
-
     if (tuning.acceleration && tuning.accelExponent > 1.0f)
     {
         const float speed = std::sqrt(inX * inX + inY * inY);
@@ -116,8 +132,8 @@ bool MouseState::Update(CursorAccum& cursor, int gameFocusLost, bool lookAroundE
         inY *= mult;
     }
 
-    deltaX = inX * sensitivityX * tuning.baseScale * dpi;
-    deltaY = inY * sensitivityY * tuning.baseScale * dpi;
+    deltaX = inX * sensitivityX * tuning.baseScale;
+    deltaY = inY * sensitivityY * tuning.baseScale;
     deltaZ = bufWheel_;
     bufDeltaX_ = bufDeltaY_ = bufWheel_ = 0;
 

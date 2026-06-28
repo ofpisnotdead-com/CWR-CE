@@ -741,10 +741,16 @@ TEST_CASE("MouseTuning: defaults reproduce classic feel", "[input][mouse][tuning
     REQUIRE(t.baseScale == 1.5f); // == the old hard-coded kSensitivityScale
     REQUIRE_FALSE(t.dpiNormalize);
     REQUIRE(t.DpiFactor() == 1.0f);
+    REQUIRE(t.inputDeadZone == 0.0f);
     REQUIRE(t.smoothing == 0.0f);
     REQUIRE_FALSE(t.acceleration);
     REQUIRE(t.menuCursorScale == 1.0f);
     REQUIRE_FALSE(t.extendedRange);
+    REQUIRE(t.aimMode == MouseAimMode::Classic);
+    REQUIRE(t.freeAimZoneX == Catch::Approx(MouseTuning::kClassicFreeAimZoneX));
+    REQUIRE(t.freeAimZoneY == Catch::Approx(MouseTuning::kClassicFreeAimZoneY));
+    REQUIRE(t.EffectiveFreeAimZoneX() == Catch::Approx(0.8f));
+    REQUIRE(t.EffectiveFreeAimZoneY() == Catch::Approx(0.5f));
     REQUIRE(t.SensMin() == 0.5f);
     REQUIRE(t.SensMax() == 2.0f);
 }
@@ -781,16 +787,24 @@ TEST_CASE("MouseTuning: Normalize clamps every field", "[input][mouse][tuning]")
     t.baseScale = 99.0f;
     t.mouseDpi = 0;
     t.referenceDpi = 999999;
+    t.inputDeadZone = 5.0f;
     t.smoothing = 5.0f;
     t.accelExponent = 9.0f;
     t.menuCursorScale = 99.0f;
+    t.aimMode = static_cast<MouseAimMode>(99);
+    t.freeAimZoneX = 10.0f;
+    t.freeAimZoneY = 10.0f;
     REQUIRE(t.Normalize());
     REQUIRE(t.baseScale == 3.0f);
     REQUIRE(t.mouseDpi == 100);
     REQUIRE(t.referenceDpi == 32000);
+    REQUIRE(t.inputDeadZone == MouseTuning::kInputDeadZoneMax);
     REQUIRE(t.smoothing == 0.95f);
     REQUIRE(t.accelExponent == 2.0f);
     REQUIRE(t.menuCursorScale == 4.0f);
+    REQUIRE(t.aimMode == MouseAimMode::Classic);
+    REQUIRE(t.freeAimZoneX == Catch::Approx(MouseTuning::kClassicFreeAimZoneX));
+    REQUIRE(t.freeAimZoneY == Catch::Approx(MouseTuning::kClassicFreeAimZoneY));
 
     // Already-in-range is a no-op.
     MouseTuning ok;
@@ -825,6 +839,31 @@ TEST_CASE("MouseTuning: DPI presets stay within the sensitivity coverage span", 
     }
 }
 
+TEST_CASE("MouseTuning: aim mode presets resolve to engine free-aim zones", "[input][mouse][tuning]")
+{
+    float x = -1.0f;
+    float y = -1.0f;
+
+    MouseTuning::AimZonesForMode(MouseAimMode::Classic, x, y);
+    REQUIRE(x == Catch::Approx(0.8f));
+    REQUIRE(y == Catch::Approx(0.5f));
+
+    MouseTuning::AimZonesForMode(MouseAimMode::Reduced, x, y);
+    REQUIRE(x == Catch::Approx(0.3f));
+    REQUIRE(y == Catch::Approx(0.2f));
+
+    MouseTuning::AimZonesForMode(MouseAimMode::Direct, x, y);
+    REQUIRE(x == Catch::Approx(0.0f));
+    REQUIRE(y == Catch::Approx(0.0f));
+
+    MouseTuning custom;
+    custom.aimMode = MouseAimMode::Custom;
+    custom.freeAimZoneX = 0.4f;
+    custom.freeAimZoneY = 0.25f;
+    REQUIRE(custom.EffectiveFreeAimZoneX() == Catch::Approx(0.4f));
+    REQUIRE(custom.EffectiveFreeAimZoneY() == Catch::Approx(0.25f));
+}
+
 // --- MouseState: tuning applied in Update ---
 
 TEST_CASE("MouseState: baseScale replaces the legacy 1.5 constant", "[input][mouse][tuning]")
@@ -852,6 +891,25 @@ TEST_CASE("MouseState: DPI normalization scales the delta", "[input][mouse][tuni
 
     // 10 * sens(1) * baseScale(1.5) * dpiFactor(0.5)
     REQUIRE(ms.deltaX == Catch::Approx(10.0f * 1.5f * 0.5f));
+}
+
+TEST_CASE("MouseState: input dead zone filters tiny movement after DPI normalization", "[input][mouse][tuning]")
+{
+    MouseState ms;
+    MouseState::CursorAccum cursor;
+    ms.tuning.inputDeadZone = 1.0f;
+
+    ms.BufferMotion(0.5f, 0.0f);
+    ms.Update(cursor, 0, false, UITime(), nullptr);
+    REQUIRE(ms.deltaX == Catch::Approx(0.0f));
+    REQUIRE(cursor.aimDeltaX == Catch::Approx(0.0f));
+
+    MouseState moved;
+    MouseState::CursorAccum cursor2;
+    moved.tuning.inputDeadZone = 1.0f;
+    moved.BufferMotion(3.0f, 0.0f);
+    moved.Update(cursor2, 0, false, UITime(), nullptr);
+    REQUIRE(moved.deltaX == Catch::Approx((3.0f - 1.0f) * 1.5f));
 }
 
 TEST_CASE("MouseState: smoothing low-passes motion across frames", "[input][mouse][tuning]")

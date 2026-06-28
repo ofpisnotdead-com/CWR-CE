@@ -55,9 +55,18 @@ bool MouseConfig::Normalize()
     clampF(baseScale, 0.1f, 3.0f);
     clampI(mouseDpi, 100, 32000);
     clampI(referenceDpi, 100, 32000);
+    clampF(inputDeadZone, MouseTuning::kInputDeadZoneMin, MouseTuning::kInputDeadZoneMax);
     clampF(smoothing, 0.0f, 0.95f);
     clampF(accelExponent, 1.0f, 2.0f);
     clampF(menuCursorScale, 0.1f, 4.0f);
+    clampF(freeAimZoneX, 0.0f, MouseTuning::kClassicFreeAimZoneX);
+    clampF(freeAimZoneY, 0.0f, MouseTuning::kClassicFreeAimZoneY);
+    const int mode = static_cast<int>(aimMode);
+    if (mode < static_cast<int>(MouseAimMode::Classic) || mode > static_cast<int>(MouseAimMode::Custom))
+    {
+        aimMode = MouseAimMode::Classic;
+        changed = true;
+    }
 
     return changed;
 }
@@ -104,6 +113,8 @@ bool MouseConfig::Load(const std::string& path)
             mouseDpi = (int)*e;
         if (auto* e = cfg.FindEntry("referenceDpi"))
             referenceDpi = (int)*e;
+        if (auto* e = cfg.FindEntry("inputDeadZone"))
+            inputDeadZone = (float)*e;
         if (auto* e = cfg.FindEntry("smoothing"))
             smoothing = (float)*e;
         if (auto* e = cfg.FindEntry("acceleration"))
@@ -114,6 +125,12 @@ bool MouseConfig::Load(const std::string& path)
             menuCursorScale = (float)*e;
         if (auto* e = cfg.FindEntry("extendedRange"))
             extendedRange = (bool)*e;
+        if (auto* e = cfg.FindEntry("aimMode"))
+            aimMode = static_cast<MouseAimMode>((int)*e);
+        if (auto* e = cfg.FindEntry("freeAimZoneX"))
+            freeAimZoneX = (float)*e;
+        if (auto* e = cfg.FindEntry("freeAimZoneY"))
+            freeAimZoneY = (float)*e;
     }
     else
     {
@@ -153,11 +170,15 @@ bool MouseConfig::Save(const std::string& path) const
     cfg.Add("dpiNormalize", dpiNormalize);
     cfg.Add("mouseDpi", mouseDpi);
     cfg.Add("referenceDpi", referenceDpi);
+    cfg.Add("inputDeadZone", inputDeadZone);
     cfg.Add("smoothing", smoothing);
     cfg.Add("acceleration", acceleration);
     cfg.Add("accelExponent", accelExponent);
     cfg.Add("menuCursorScale", menuCursorScale);
     cfg.Add("extendedRange", extendedRange);
+    cfg.Add("aimMode", static_cast<int>(aimMode));
+    cfg.Add("freeAimZoneX", freeAimZoneX);
+    cfg.Add("freeAimZoneY", freeAimZoneY);
 
     cfg.Save(RString(path.c_str()));
     return std::filesystem::exists(path, ec);

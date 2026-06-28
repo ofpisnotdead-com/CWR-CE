@@ -45,13 +45,23 @@ STR_DISP_OPT_MOUSE_SENSITIVITY_X_DESC,Horizontal mouse sensitivity. Range 0.5x t
 STR_DISP_OPT_MOUSE_SENSITIVITY_Y_DESC,Vertical mouse sensitivity. Range 0.5x to 2.0x.
 STR_DISP_OPT_MOUSE_DPI,Mouse DPI
 STR_DISP_OPT_MOUSE_DPI_DESC,Set this to your mouse's DPI (or close). Fine-tune with sensitivity for a smoother feel.
-STR_DISP_OPT_MOUSE_EXTENDED_RANGE,Advanced sensitivity range
-STR_DISP_OPT_MOUSE_EXTENDED_RANGE_DESC,Allow sensitivity sliders to use 0.05x to 3.0x.
+STR_DISP_OPT_MOUSE_SECTION_MOUSE,Mouse
+STR_DISP_OPT_MOUSE_SECTION_ADVANCED,Advanced Mouse
+STR_DISP_OPT_MOUSE_INPUT_DEAD_ZONE,Input dead zone
+STR_DISP_OPT_MOUSE_INPUT_DEAD_ZONE_DESC,Ignore very small mouse movement before it affects aiming. Range 0.00 to 2.00 normalized counts.
 STR_DISP_OPT_MOUSE_SMOOTHING,Mouse smoothing
-STR_DISP_OPT_MOUSE_SMOOTHING_DESC,Smooth uneven mouse input. Higher values add latency.
+STR_DISP_OPT_MOUSE_SMOOTHING_DESC,Smooth mouse movement over time. Higher values feel steadier but add delay.
 STR_DISP_OPT_MOUSE_ACCELERATION,Mouse acceleration
-STR_DISP_OPT_MOUSE_ACCELERATION_DESC,Increase large mouse movements while keeping fine aim slower.
-STR_DISP_OPT_MOUSE_ACCEL_STRENGTH,Acceleration strength
-STR_DISP_OPT_MOUSE_ACCEL_STRENGTH_DESC,Acceleration curve strength. Range 1.0x to 2.0x.
+STR_DISP_OPT_MOUSE_ACCELERATION_DESC,Increase turn speed for faster mouse movement. 0% disables acceleration.
+STR_DISP_OPT_MOUSE_AIM_MODE,Aim mode
+STR_DISP_OPT_MOUSE_AIM_MODE_DESC,Choose how much free-aim movement is allowed before the view turns. Custom unlocks the free-aim zone sliders.
+STR_DISP_OPT_MOUSE_AIM_MODE_CLASSIC,Classic
+STR_DISP_OPT_MOUSE_AIM_MODE_REDUCED,Reduced
+STR_DISP_OPT_MOUSE_AIM_MODE_DIRECT,Direct Aim
+STR_DISP_OPT_MOUSE_AIM_MODE_CUSTOM,Custom
+STR_DISP_OPT_MOUSE_FREE_AIM_ZONE_X,Free-aim zone X
+STR_DISP_OPT_MOUSE_FREE_AIM_ZONE_X_DESC,Horizontal free-aim zone in normalized cursor units. Range 0.00 to 0.80.
+STR_DISP_OPT_MOUSE_FREE_AIM_ZONE_Y,Free-aim zone Y
+STR_DISP_OPT_MOUSE_FREE_AIM_ZONE_Y_DESC,Vertical free-aim zone in normalized cursor units. Range 0.00 to 0.50.
 STR_DISP_OPT_MOUSE_MENU_CURSOR_SPEED,Menu cursor speed
 STR_DISP_OPT_MOUSE_MENU_CURSOR_SPEED_DESC,Menu cursor speed separate from aiming. Range 0.1x to 4.0x.

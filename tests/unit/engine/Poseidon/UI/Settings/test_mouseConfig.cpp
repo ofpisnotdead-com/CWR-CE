@@ -13,7 +13,9 @@
 #include <random>
 #include <string>
 
+using Poseidon::MouseAimMode;
 using Poseidon::MouseConfig;
+using Poseidon::MouseTuning;
 using Poseidon::ParamFile;
 using Poseidon::RString;
 
@@ -183,11 +185,15 @@ TEST_CASE("MouseConfig: v2 tuning fields default to classic / no-op feel", "[Set
     CHECK(c.dpiNormalize == false);
     CHECK(c.mouseDpi == 1600);
     CHECK(c.referenceDpi == 1600);
+    CHECK(c.inputDeadZone == 0.0f);
     CHECK(c.smoothing == 0.0f);
     CHECK(c.acceleration == false);
     CHECK(c.accelExponent == 1.0f);
     CHECK(c.menuCursorScale == 1.0f);
     CHECK(c.extendedRange == false);
+    CHECK(c.aimMode == MouseAimMode::Classic);
+    CHECK(c.freeAimZoneX == Catch::Approx(MouseTuning::kClassicFreeAimZoneX));
+    CHECK(c.freeAimZoneY == Catch::Approx(MouseTuning::kClassicFreeAimZoneY));
 }
 
 TEST_CASE("MouseConfig: MigrateSensitivity preserves feel across baseScale", "[Settings][MouseConfig]")
@@ -229,6 +235,10 @@ TEST_CASE("MouseConfig: a legacy (v1) file is detected and migrated on load", "[
     CHECK(dst.baseScale == 1.5f);
     CHECK(dst.dpiNormalize == false);
     CHECK(dst.menuCursorScale == 1.0f);
+    CHECK(dst.inputDeadZone == 0.0f);
+    CHECK(dst.aimMode == MouseAimMode::Classic);
+    CHECK(dst.freeAimZoneX == Catch::Approx(MouseTuning::kClassicFreeAimZoneX));
+    CHECK(dst.freeAimZoneY == Catch::Approx(MouseTuning::kClassicFreeAimZoneY));
 
     std::filesystem::remove(path);
 }
@@ -246,11 +256,15 @@ TEST_CASE("MouseConfig: v2 round-trips every tuning field", "[Settings][MouseCon
     src.dpiNormalize = true;
     src.mouseDpi = 1600;
     src.referenceDpi = 800;
+    src.inputDeadZone = 0.4f;
     src.smoothing = 0.3f;
     src.acceleration = true;
     src.accelExponent = 1.5f;
     src.menuCursorScale = 0.5f;
     src.extendedRange = true;
+    src.aimMode = MouseAimMode::Custom;
+    src.freeAimZoneX = 0.4f;
+    src.freeAimZoneY = 0.25f;
     REQUIRE(src.Save(path));
 
     MouseConfig dst;
@@ -263,11 +277,15 @@ TEST_CASE("MouseConfig: v2 round-trips every tuning field", "[Settings][MouseCon
     CHECK(dst.dpiNormalize == true);
     CHECK(dst.mouseDpi == 1600);
     CHECK(dst.referenceDpi == 800);
+    CHECK(dst.inputDeadZone == Catch::Approx(0.4f));
     CHECK(dst.smoothing == Catch::Approx(0.3f));
     CHECK(dst.acceleration == true);
     CHECK(dst.accelExponent == Catch::Approx(1.5f));
     CHECK(dst.menuCursorScale == Catch::Approx(0.5f));
     CHECK(dst.extendedRange == true);
+    CHECK(dst.aimMode == MouseAimMode::Custom);
+    CHECK(dst.freeAimZoneX == Catch::Approx(0.4f));
+    CHECK(dst.freeAimZoneY == Catch::Approx(0.25f));
 
     std::filesystem::remove(path);
 }
@@ -302,15 +320,23 @@ TEST_CASE("MouseConfig: Normalize clamps tuning fields and the extended sensitiv
     MouseConfig c;
     c.baseScale = 99.0f;
     c.mouseDpi = 0;
+    c.inputDeadZone = 5.0f;
     c.smoothing = 5.0f;
     c.accelExponent = 9.0f;
     c.menuCursorScale = 99.0f;
+    c.aimMode = static_cast<MouseAimMode>(99);
+    c.freeAimZoneX = 5.0f;
+    c.freeAimZoneY = 5.0f;
     REQUIRE(c.Normalize());
     CHECK(c.baseScale == 3.0f);
     CHECK(c.mouseDpi == 100);
+    CHECK(c.inputDeadZone == MouseTuning::kInputDeadZoneMax);
     CHECK(c.smoothing == 0.95f);
     CHECK(c.accelExponent == 2.0f);
     CHECK(c.menuCursorScale == 4.0f);
+    CHECK(c.aimMode == MouseAimMode::Classic);
+    CHECK(c.freeAimZoneX == Catch::Approx(MouseTuning::kClassicFreeAimZoneX));
+    CHECK(c.freeAimZoneY == Catch::Approx(MouseTuning::kClassicFreeAimZoneY));
 
     // With extendedRange, sensitivity clamps to the wider [0.05, 3.0] band.
     MouseConfig e;

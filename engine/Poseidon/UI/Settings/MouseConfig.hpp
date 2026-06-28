@@ -13,40 +13,45 @@
 //            range the original sensitivity sliders shipped with).
 //   3. UI:   MousePage applies values live and Saves on Unmount.
 
-#include <string>
+#include <Poseidon/Input/MouseTuning.hpp>
 
+#include <string>
 
 namespace Poseidon
 {
 class MouseConfig
 {
-public:
+  public:
     // Schema version.  A file with no `version` key is treated as v1 and
     // migrated to v2 on load (see Load).  Bump on every schema change.
-    static constexpr int kCurrentVersion = 2;
+    static constexpr int kCurrentVersion = 3;
     // baseScale the legacy v1 sensitivities were authored against (MigrateSensitivity).
     static constexpr float kLegacyBaseScale = 1.5f;
 
     // --- v1 fields (classic; unchanged on disk for downgrade safety) ---
-    bool  reverseY            = false;
-    bool  buttonsReversed     = false;
-    float sensitivityX        = 1.0f;
-    float sensitivityY        = 1.0f;
+    bool reverseY = false;
+    bool buttonsReversed = false;
+    float sensitivityX = 1.0f;
+    float sensitivityY = 1.0f;
 
     // --- v2 fields (HiDPI tuning; all default to classic / no-op feel) ---
-    float baseScale       = 1.5f;  // master look scale
-    bool  dpiNormalize    = false;
-    int   mouseDpi        = 1600;
-    int   referenceDpi    = 1600;  // DPI the feel is calibrated to
-    float smoothing       = 0.0f;
-    bool  acceleration    = false;
-    float accelExponent   = 1.0f;
+    float baseScale = 1.5f; // master look scale
+    bool dpiNormalize = false;
+    int mouseDpi = 1600;
+    int referenceDpi = 1600; // DPI the feel is calibrated to
+    float inputDeadZone = 0.0f;
+    float smoothing = 0.0f;
+    bool acceleration = false;
+    float accelExponent = 1.0f;
     float menuCursorScale = 1.0f;
-    bool  extendedRange   = false;
+    bool extendedRange = false;
+    MouseAimMode aimMode = MouseAimMode::Classic;
+    float freeAimZoneX = MouseTuning::kClassicFreeAimZoneX;
+    float freeAimZoneY = MouseTuning::kClassicFreeAimZoneY;
 
     // Version actually parsed from the file (kCurrentVersion for a fresh
     // instance / a v2 file; 1 for a legacy file that was migrated).
-    int   version         = kCurrentVersion;
+    int version = kCurrentVersion;
 
     // Reset every field to factory defaults.
     void LoadDefaults();

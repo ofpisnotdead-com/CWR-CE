@@ -1055,9 +1055,11 @@ void World::Simulate(float deltaT, bool& enableDraw)
                                 saturate(cursorY, -0.95, +0.95);
                             }
 
+                            const MouseTuning& mouseTuning = InputSubsystem::Instance().GetMouseTuning();
                             if (cameraVehicle->IsVirtualX(_camType))
                             {
-                                KeepNZone(_camHeading[_camType], cursorX, 0, 0.8, camera.Left());
+                                KeepNZone(_camHeading[_camType], cursorX, 0, mouseTuning.EffectiveFreeAimZoneX(),
+                                          camera.Left());
                                 _camHeadingWanted[_camType] = _camHeading[_camType];
                             }
                             else
@@ -1066,7 +1068,8 @@ void World::Simulate(float deltaT, bool& enableDraw)
                                 cameraVehicle->InitVirtual(_camType, initHead, initDive, initFOV);
                                 _camHeadingWanted[_camType] = initHead;
                             }
-                            KeepNZone(_camDive[_camType], -cursorY, 0, 0.5, camera.Top());
+                            KeepNZone(_camDive[_camType], -cursorY, 0, mouseTuning.EffectiveFreeAimZoneY(),
+                                      camera.Top());
                             _camDiveWanted[_camType] = _camDive[_camType];
                         }
                         Vector3 cursor = _ui->GetModelCursor();

@@ -12,18 +12,18 @@ triClickText "Mouse"
 triAssertEq [(triDisplay), 9099]
 triAssertIncludes [(triVisibleTexts), "Mouse sensitivity X"]
 
-// Sensitivity X is row 2 / slot 2.  Its slider click overlay is 527 and
-// visible text is 522.  Use the real pointer path, not triClick, so hover,
+// Sensitivity X is row 3 / slot 3 after the Mouse section header. Its slider click overlay is 537 and
+// visible text is 532.  Use the real pointer path, not triClick, so hover,
 // down/up, and Back-click routing match user input.
-triCursorMoveControl 527
+triCursorMoveControl 537
 triSimFrames 6
 triMouseLeft 1
 triSimFrames 6
 triMouseLeft 0
 triSimFrames 3
 
-private _chosen = triControlText 522;
-if (_chosen != " 50%") exitWith {
+private _chosen = triControlText 532;
+if (_chosen != "1.25x") exitWith {
     format ["FAIL:setup_mouse_sensitivity_not_50 got='%1'", _chosen]
 };
 
@@ -40,7 +40,7 @@ triAssertIncludes [(triVisibleTexts), "Keyboard & Mouse"]
 triClickText "Mouse"
 triAssertIncludes [(triVisibleTexts), "Mouse sensitivity X"]
 
-private _afterBack = triControlText 522;
+private _afterBack = triControlText 532;
 if (_afterBack != _chosen) exitWith {
     format ["FAIL:mouse_sensitivity_changed_after_back before=%1 after=%2", _chosen, _afterBack]
 };

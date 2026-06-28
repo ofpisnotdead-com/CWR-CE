@@ -1064,11 +1064,15 @@ void InputSubsystem::LoadKeys()
     GInput.mouse.tuning.dpiNormalize = mouse.dpiNormalize;
     GInput.mouse.tuning.mouseDpi = mouse.mouseDpi;
     GInput.mouse.tuning.referenceDpi = mouse.referenceDpi;
+    GInput.mouse.tuning.inputDeadZone = mouse.inputDeadZone;
     GInput.mouse.tuning.smoothing = mouse.smoothing;
     GInput.mouse.tuning.acceleration = mouse.acceleration;
     GInput.mouse.tuning.accelExponent = mouse.accelExponent;
     GInput.mouse.tuning.menuCursorScale = mouse.menuCursorScale;
     GInput.mouse.tuning.extendedRange = mouse.extendedRange;
+    GInput.mouse.tuning.aimMode = mouse.aimMode;
+    GInput.mouse.tuning.freeAimZoneX = mouse.freeAimZoneX;
+    GInput.mouse.tuning.freeAimZoneY = mouse.freeAimZoneY;
 
     GInput.gamepad.enabled = gamepad.enabled;
     GInput.gamepad.reverseYStick = gamepad.reverseYStick;
@@ -1099,11 +1103,15 @@ void InputSubsystem::SaveKeys()
     mouse.dpiNormalize = GInput.mouse.tuning.dpiNormalize;
     mouse.mouseDpi = GInput.mouse.tuning.mouseDpi;
     mouse.referenceDpi = GInput.mouse.tuning.referenceDpi;
+    mouse.inputDeadZone = GInput.mouse.tuning.inputDeadZone;
     mouse.smoothing = GInput.mouse.tuning.smoothing;
     mouse.acceleration = GInput.mouse.tuning.acceleration;
     mouse.accelExponent = GInput.mouse.tuning.accelExponent;
     mouse.menuCursorScale = GInput.mouse.tuning.menuCursorScale;
     mouse.extendedRange = GInput.mouse.tuning.extendedRange;
+    mouse.aimMode = GInput.mouse.tuning.aimMode;
+    mouse.freeAimZoneX = GInput.mouse.tuning.freeAimZoneX;
+    mouse.freeAimZoneY = GInput.mouse.tuning.freeAimZoneY;
     mouse.Save(MouseCfgPath());
 }
 

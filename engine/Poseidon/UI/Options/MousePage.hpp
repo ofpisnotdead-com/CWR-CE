@@ -1,16 +1,7 @@
 #pragma once
 
-// Mouse settings page — Y-axis inversion, button swap, sensitivity X / Y,
-// DPI, and advanced feel tuning.
-//
-// 10 rows + auto-appended Close.  All apply live (matching the
-// way the RscDisplayConfigure handled them).  Cancel via Close
-// snapshots the values on Mount and restores them — same pattern as
-// DisplayConfigure's `_old*` members, lifted into the page.
-//
-// Persistence: MouseConfig (mouse.cfg) — saved on Unmount via
-// InputSubsystem::SaveKeys(). Mouse button action bindings live in
-// contextControls.cfg through KbmPage.
+// Mouse settings page — basic mouse toggles/sensitivity plus advanced feel
+// tuning. All values apply live and are persisted through MouseConfig.
 
 #include <Poseidon/UI/Options/ScrollListPage.hpp>
 
@@ -29,9 +20,9 @@ class MousePage : public ScrollListPage
     static int FloatRangeToPercent(float value, float lo, float hi);
     static float PercentToFloatRange(int percent, float lo, float hi);
 
-    // Mouse DPI stepper mapping (pure, unit-tested).  Index 0 = "Off"; 1..N map to
-    // kMouseDpiPresets.  DpiToIndex returns the nearest preset for display without
-    // changing the stored value, so a hand-edited non-preset DPI survives.
+    // Mouse DPI stepper mapping (pure, unit-tested). Index 0 = "Off"; 1..N map to
+    // kMouseDpiPresets. DpiToIndex returns the nearest preset for display without
+    // changing the stored value, so a hand-edited non-preset mouseDpi survives.
     static int DpiToIndex(bool normalize, int mouseDpi);
     static int IndexToDpi(int index);
 
@@ -51,40 +42,47 @@ class MousePage : public ScrollListPage
       public:
         enum : int
         {
-            kRowReverseY = 0,
-            kRowButtonsReversed = 1,
-            kRowSensitivityX = 2,
-            kRowSensitivityY = 3,
-            kRowMouseDpi = 4,
-            kRowExtendedRange = 5,
-            kRowSmoothing = 6,
-            kRowAcceleration = 7,
-            kRowAccelExponent = 8,
-            kRowMenuCursorScale = 9,
-            kRowCount = 10,
+            kRowBasicHeader = 0,
+            kRowReverseY = 1,
+            kRowButtonsReversed = 2,
+            kRowSensitivityX = 3,
+            kRowSensitivityY = 4,
+            kRowMouseDpi = 5,
+            kRowAdvancedHeader = 6,
+            kRowInputDeadZone = 7,
+            kRowSmoothing = 8,
+            kRowAcceleration = 9,
+            kRowAimMode = 10,
+            kRowFreeAimZoneX = 11,
+            kRowFreeAimZoneY = 12,
+            kRowMenuCursorScale = 13,
+            kRowCount = 14,
         };
 
         int RowCount() const override { return kRowCount; }
         const char* RowLabel(int row) const override;
         const char* RowDescription(int row) const override;
         OptionsScrollList::RowDef RowFor(int row) const override;
+        OptionsScrollList::Kind RowKind(int row) const override;
+        bool IsDisabled(int row) const override;
         int RowValue(int row) const override;
         void SetRowValue(int row, int value) override;
+        const char* SliderValueText(int row) const override;
 
       private:
         void RefreshToggleTexts() const;
+        void RefreshAimModeTexts() const;
 
         mutable std::array<std::string, 2> m_toggleText;
         mutable std::array<const char*, 2> m_toggleOptions{};
+        mutable std::array<std::string, 4> m_aimModeText;
+        mutable std::array<const char*, 4> m_aimModeOptions{};
+        mutable std::string m_sliderValueText;
     };
 
     MouseProvider m_mouse;
     OptionsScrollList::WithCloseRow m_provider{m_mouse, CloseLabel(), CloseDescription()};
 
-    // Snapshotted on Mount, restored on Unmount-via-cancel (i.e. the
-    // page is unmounting without an explicit save action — same posture
-    // as DisplayPage's pending/applied bookkeeping, simpler shape since
-    // every Mouse setting applies live with no Apply button).
     bool m_savedReverseY = false;
     bool m_savedButtonsReversed = false;
     float m_savedSensitivityX = 1.0f;

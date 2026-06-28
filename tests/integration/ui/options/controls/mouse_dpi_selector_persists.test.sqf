@@ -13,19 +13,19 @@ triClickText "Mouse"
 triAssertEq [(triDisplay), 9099]
 triAssertIncludes [(triVisibleTexts), "Mouse DPI"]
 
-// Mouse DPI is row 4 / slot 4: label 540, stepper value 541, Next arrow 549.
-if ((triControlText 540) != "Mouse DPI") exitWith {
-    format ["FAIL:dpi_label actual='%1'", triControlText 540]
+// Mouse DPI is row 5 / slot 5 after the Mouse section header: label 550, stepper value 551, Next arrow 559.
+if ((triControlText 550) != "Mouse DPI") exitWith {
+    format ["FAIL:dpi_label actual='%1'", triControlText 550]
 };
 
 // Default is "Off" (normalization disabled = classic, backwards compatible).
-if ((triControlText 541) != "Off") exitWith {
-    format ["FAIL:dpi_default_not_off actual='%1'", triControlText 541]
+if ((triControlText 551) != "Off") exitWith {
+    format ["FAIL:dpi_default_not_off actual='%1'", triControlText 551]
 };
 
 // Cycle Next (Off -> 400 -> 800 -> 1200 -> 1600) until the value reads 1600.
-for "_i" from 0 to 9 do { if ((triControlText 541) == "1600") exitWith {}; triClick 549; triSimFrames 2 };
-private _chosen = triControlText 541;
+for "_i" from 0 to 9 do { if ((triControlText 551) == "1600") exitWith {}; triClick 559; triSimFrames 2 };
+private _chosen = triControlText 551;
 if (_chosen != "1600") exitWith {
     format ["FAIL:could_not_select_1600 actual='%1'", _chosen]
 };
@@ -44,7 +44,7 @@ triAssertIncludes [(triVisibleTexts), "Keyboard & Mouse"]
 triClickText "Mouse"
 triAssertIncludes [(triVisibleTexts), "Mouse DPI"]
 
-private _afterBack = triControlText 541;
+private _afterBack = triControlText 551;
 if (_afterBack != _chosen) exitWith {
     format ["FAIL:dpi_changed_after_back before=%1 after=%2", _chosen, _afterBack]
 };
