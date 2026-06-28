@@ -365,34 +365,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
           $triExe = 'engine/Trident/target/rwdi/tri'
-          $wmWrapper = Join-Path $env:RUNNER_TEMP 'trident-openbox-wrapper.sh'
-          @'
-          #!/usr/bin/env bash
-          set -euo pipefail
-          openbox &
-          wm_pid=$!
-          trap 'kill "$wm_pid" >/dev/null 2>&1 || true' EXIT
-          sleep 1
-          exec "$@"
-          '@ | Set-Content -LiteralPath $wmWrapper -NoNewline
 
           $probes = @(
-            @{
-              Name = 'fullscreen-openbox'
-              Test = 'tests/integration/rendering/fullscreen_toggle.test.sqf'
-              Timeout = '60'
-              OuterTimeout = '120s'
-              WindowManager = $true
-              GameArgs = @('--audio', $env:TRIDENT_AUDIO, '--no-strict')
-            },
-            @{
-              Name = 'aspect-overlays'
-              Test = 'tests/integration/rendering/aspect_overlays_demo.test.sqf'
-              Timeout = '180'
-              OuterTimeout = '420s'
-              WindowManager = $false
-              GameArgs = @('--audio', $env:TRIDENT_AUDIO, '--no-strict')
-            },
             @{
               Name = 'multiplayer-briefing'
               Test = 'tests/integration/multiplayer/briefing_coordination.test'
@@ -426,11 +400,7 @@ jobs:
             $args += $probe.Test
 
             Write-Host "::group::Trident blocker probe $($probe.Name)"
-            if ($probe.WindowManager) {
-              /usr/bin/timeout --foreground --kill-after=30s $probe.OuterTimeout xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" bash $wmWrapper $triExe @args
-            } else {
-              /usr/bin/timeout --foreground --kill-after=30s $probe.OuterTimeout xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" $triExe @args
-            }
+            /usr/bin/timeout --foreground --kill-after=30s $probe.OuterTimeout xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" $triExe @args
             $exitCode = $LASTEXITCODE
             Write-Host "Blocker probe $($probe.Name) exit code: $exitCode"
             Write-Host '::endgroup::'
@@ -452,15 +422,24 @@ jobs:
           TRI_OUTPUT_DIR: ${{ github.workspace }}/trident-output
           RUST_LOG: debug
           ALSOFT_DRIVERS: 'null'
+          HARNESS_CMD_TIMEOUT_SEC: '180'
         run: |
           $ErrorActionPreference = 'Stop'
           $integrationRoot = (Resolve-Path -LiteralPath $env:TRIDENT_TEST_PATH).Path
           $blockedTests = @(
-            'multiplayer/briefing_coordination',
-            'rendering/aspect_overlays_demo',
-            'rendering/fullscreen_toggle'
+            'multiplayer/briefing_coordination'
           )
           $skipTags = @()
+          $wmWrapper = Join-Path $env:RUNNER_TEMP 'trident-openbox-wrapper.sh'
+          @'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          openbox &
+          wm_pid=$!
+          trap 'kill "$wm_pid" >/dev/null 2>&1 || true' EXIT
+          sleep 1
+          exec "$@"
+          '@ | Set-Content -LiteralPath $wmWrapper -NoNewline
 
           function Get-TridentTestName([string] $path) {
             $relative = [IO.Path]::GetRelativePath($integrationRoot, $path).Replace('\', '/')
@@ -538,7 +517,7 @@ jobs:
             $commonArgs += @('--skip-tag', $skipTag)
           }
           $commonArgs += @($selectedTests | ForEach-Object { $_.Path })
-          xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" engine/Trident/target/rwdi/tri @commonArgs
+          xvfb-run -a --server-args="$env:TRIDENT_XVFB_ARGS" bash $wmWrapper engine/Trident/target/rwdi/tri @commonArgs
 
       - name: Dump Trident output
         if: failure()
