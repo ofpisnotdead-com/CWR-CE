@@ -4,7 +4,10 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <vector>
+#include <Poseidon/Network/NetTransportClientVoiceInit.hpp>
 #include <Poseidon/Network/RateLimit.hpp>
+#include <Poseidon/Network/NetTransportServerVoiceRouting.hpp>
 #include <Poseidon/Network/WireBounds.hpp>
 
 using namespace Poseidon;
@@ -146,4 +149,92 @@ TEST_CASE("a wire server name is rendered as data, never as a format", "[network
     int n = snprintf(out, sizeof(out), "%s", name);
     REQUIRE(n == (int)strlen(name));
     REQUIRE(strcmp(out, "%s%s%s%n") == 0); // conversion specifiers were not interpreted
+}
+
+TEST_CASE("VoN transport routes preserve selected chat channel", "[network][transport][VoN]")
+{
+    struct FakeVoNServer
+    {
+        uint32_t sender = 0;
+        VoNChatChannel channel = VoNChatChannel::Direct;
+        std::vector<uint32_t> targets;
+
+        void setRouting(uint32_t from, VoNChatChannel ch, const std::vector<uint32_t>& to)
+        {
+            sender = from;
+            channel = ch;
+            targets = to;
+        }
+    };
+
+    std::unordered_map<int, std::vector<int>> routes;
+    AutoArray<int, Foundation::MemAllocSA> targets;
+    targets.Add(11);
+    targets.Add(12);
+    FakeVoNServer server;
+    int loggedFrom = 0;
+    int loggedCount = 0;
+
+    SetNetTransportServerVoiceTargetsWithLog(
+        routes, 10, targets, CCGroup, [&]() { return &server; },
+        [&](int from, int count)
+        {
+            loggedFrom = from;
+            loggedCount = count;
+        });
+
+    REQUIRE(server.sender == 10);
+    REQUIRE(server.channel == VoNChatChannel::Group);
+    REQUIRE(server.targets == std::vector<uint32_t>{11, 12});
+    REQUIRE(loggedFrom == 10);
+    REQUIRE(loggedCount == 2);
+
+    REQUIRE(NetTransportChatChannelToVoN(CCGlobal) == VoNChatChannel::Global);
+    REQUIRE(NetTransportChatChannelToVoN(CCSide) == VoNChatChannel::Side);
+    REQUIRE(NetTransportChatChannelToVoN(CCGroup) == VoNChatChannel::Group);
+    REQUIRE(NetTransportChatChannelToVoN(CCVehicle) == VoNChatChannel::Vehicle);
+    REQUIRE(NetTransportChatChannelToVoN(CCDirect) == VoNChatChannel::Direct);
+}
+
+TEST_CASE("VoN client sender id follows acknowledged network player id", "[network][transport][VoN]")
+{
+    struct FakeVoNClient
+    {
+        uint32_t senderId = 0;
+
+        void setSenderId(uint32_t id) { senderId = id; }
+    };
+
+    FakeVoNClient client;
+
+    REQUIRE(SetNetTransportClientVoiceSenderId([&]() { return &client; }, 42));
+    REQUIRE(client.senderId == 42);
+    REQUIRE_FALSE(SetNetTransportClientVoiceSenderId([]() -> FakeVoNClient* { return nullptr; }, 7));
+}
+
+TEST_CASE("VoN client sender id ignores refused duplicate player acknowledgements", "[network][transport][VoN]")
+{
+    struct FakeVoNClient
+    {
+        uint32_t senderId = 0;
+
+        void setSenderId(uint32_t id) { senderId = id; }
+    };
+
+    FakeVoNClient client;
+
+    REQUIRE(SetNetTransportClientVoiceSenderIdIfAccepted(true, [&]() { return &client; }, 42));
+    REQUIRE(client.senderId == 42);
+    REQUIRE_FALSE(SetNetTransportClientVoiceSenderIdIfAccepted(false, [&]() { return &client; }, 99));
+    REQUIRE(client.senderId == 42);
+}
+
+TEST_CASE("VoN client sender id is updated only for accepted player acknowledgements", "[network][transport][VoN]")
+{
+    REQUIRE(IsNetTransportClientVoiceAckAccepted(CROK));
+    REQUIRE_FALSE(IsNetTransportClientVoiceAckAccepted(CRPassword));
+    REQUIRE_FALSE(IsNetTransportClientVoiceAckAccepted(CRVersion));
+    REQUIRE_FALSE(IsNetTransportClientVoiceAckAccepted(CRError));
+    REQUIRE_FALSE(IsNetTransportClientVoiceAckAccepted(CRSessionFull));
+    REQUIRE_FALSE(IsNetTransportClientVoiceAckAccepted(CRNone));
 }

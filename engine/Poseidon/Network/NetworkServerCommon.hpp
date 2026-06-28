@@ -66,6 +66,26 @@ inline NetworkMissionParams ResolveNetworkMissionParams(float currentParam1, flo
     };
 }
 
+namespace Poseidon
+{
+inline int SelectNetworkVoiceTargetPlayerId(int dpid, int)
+{
+    return dpid;
+}
+
+inline bool ShouldRefreshOtherNetworkVoiceRoute(int routeOwner, int changedPlayer, int ownerState, int ownerChannel,
+                                                int minimumState, int noneChannel)
+{
+    return routeOwner != changedPlayer && ownerState >= minimumState && ownerChannel != noneChannel;
+}
+
+inline bool ShouldNotifyJoinedPlayerAboutActiveDirectSpeaker(int routeOwner, int changedPlayer, int ownerState,
+                                                             int ownerChannel, int minimumState, int directChannel)
+{
+    return routeOwner != changedPlayer && ownerState >= minimumState && ownerChannel == directChannel;
+}
+} // namespace Poseidon
+
 // Free functions defined in networkServer.cpp
 bool IsUpdateTransport(NetworkMessageType type);
 QFBank* FindBank(const char* prefix);
@@ -76,4 +96,3 @@ int GetServerBanCount();
 // Whether the local server session is locked (rejecting new connections).
 bool GetServerLocked();
 void AddMissionList(NetworkCommandMessage& answer);
-

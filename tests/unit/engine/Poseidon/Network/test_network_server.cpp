@@ -60,6 +60,47 @@ TEST_CASE("mission params use description defaults when server.cfg omits values"
     REQUIRE(params.param2 == Catch::Approx(8.0f));
 }
 
+TEST_CASE("voice channel routing targets normal network player ids", "[network][VoN]")
+{
+    REQUIRE(Poseidon::SelectNetworkVoiceTargetPlayerId(42, 0) == 42);
+    REQUIRE(Poseidon::SelectNetworkVoiceTargetPlayerId(42, 99) == 42);
+}
+
+TEST_CASE("voice channel route refresh only targets other active speakers", "[network][VoN]")
+{
+    constexpr int changedPlayer = 10;
+    constexpr int createState = 2;
+    constexpr int noneChannel = 0;
+    constexpr int groupChannel = 2;
+
+    REQUIRE(Poseidon::ShouldRefreshOtherNetworkVoiceRoute(11, changedPlayer, createState, groupChannel, createState,
+                                                          noneChannel));
+    REQUIRE_FALSE(Poseidon::ShouldRefreshOtherNetworkVoiceRoute(changedPlayer, changedPlayer, createState, groupChannel,
+                                                                createState, noneChannel));
+    REQUIRE_FALSE(Poseidon::ShouldRefreshOtherNetworkVoiceRoute(11, changedPlayer, createState - 1, groupChannel,
+                                                                createState, noneChannel));
+    REQUIRE_FALSE(Poseidon::ShouldRefreshOtherNetworkVoiceRoute(11, changedPlayer, createState, noneChannel,
+                                                                createState, noneChannel));
+}
+
+TEST_CASE("direct voice route refresh notifies joining listener about active speaker", "[network][VoN]")
+{
+    constexpr int changedPlayer = 10;
+    constexpr int activeSpeaker = 11;
+    constexpr int createState = 2;
+    constexpr int groupChannel = 2;
+    constexpr int directChannel = 5;
+
+    REQUIRE(Poseidon::ShouldNotifyJoinedPlayerAboutActiveDirectSpeaker(activeSpeaker, changedPlayer, createState,
+                                                                       directChannel, createState, directChannel));
+    REQUIRE_FALSE(Poseidon::ShouldNotifyJoinedPlayerAboutActiveDirectSpeaker(
+        changedPlayer, changedPlayer, createState, directChannel, createState, directChannel));
+    REQUIRE_FALSE(Poseidon::ShouldNotifyJoinedPlayerAboutActiveDirectSpeaker(
+        activeSpeaker, changedPlayer, createState - 1, directChannel, createState, directChannel));
+    REQUIRE_FALSE(Poseidon::ShouldNotifyJoinedPlayerAboutActiveDirectSpeaker(activeSpeaker, changedPlayer, createState,
+                                                                             groupChannel, createState, directChannel));
+}
+
 TEST_CASE("NetworkPlayerInfo jip flag defaults to false", "[network][networkServer][jip]")
 {
     NetworkPlayerInfo info;

@@ -178,6 +178,47 @@ TEST_CASE("VoNServer does not forward to sender", "[VoN][app]")
     REQUIRE(fwdCount == 1); // only target 2, not sender 1
 }
 
+TEST_CASE("VoNServer drops packets whose chat channel does not match the active route", "[VoN][app]")
+{
+    VoNServer server;
+
+    int fwdCount = 0;
+    server.setForwarder([&](uint32_t, const void*, int) { ++fwdCount; });
+
+    server.setRouting(1, VoNChatChannel::Group, {2});
+
+    std::vector<uint8_t> raw(VoNDataPacket::HEADER_SIZE + 4);
+    auto* pkt = reinterpret_cast<VoNDataPacket*>(raw.data());
+    pkt->init(1, VoNChatChannel::Side, 0, 320, 4);
+
+    server.onDataPacket(raw.data(), static_cast<int>(raw.size()));
+    REQUIRE(fwdCount == 0);
+
+    pkt->init(1, VoNChatChannel::Group, 0, 320, 4);
+    server.onDataPacket(raw.data(), static_cast<int>(raw.size()));
+    REQUIRE(fwdCount == 1);
+}
+
+TEST_CASE("VoNServer drops pending packets whose chat channel does not match the later route", "[VoN][app]")
+{
+    VoNServer server;
+
+    int fwdCount = 0;
+    server.setForwarder([&](uint32_t, const void*, int) { ++fwdCount; });
+
+    std::vector<uint8_t> raw(VoNDataPacket::HEADER_SIZE + 4);
+    auto* pkt = reinterpret_cast<VoNDataPacket*>(raw.data());
+    pkt->init(1, VoNChatChannel::Side, 0, 320, 4);
+    server.onDataPacket(raw.data(), static_cast<int>(raw.size()));
+
+    server.setRouting(1, VoNChatChannel::Group, {2});
+    REQUIRE(fwdCount == 0);
+
+    pkt->init(1, VoNChatChannel::Group, 0, 320, 4);
+    server.onDataPacket(raw.data(), static_cast<int>(raw.size()));
+    REQUIRE(fwdCount == 1);
+}
+
 TEST_CASE("VoNServer removePlayer clears routing", "[VoN][app]")
 {
     VoNServer server;

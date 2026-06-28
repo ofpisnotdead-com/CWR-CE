@@ -437,6 +437,7 @@ class NetClient : public NetTranspClient
     bool IsVoicePlaying(int player) override;
     bool IsVoiceRecording() override;
     NetTranspSound3DBuffer* Create3DSoundBuffer(int player) override;
+    void SetVoiceChannel(int channel) override;
     void SetVoiceTransmit(bool on) override;
     int SendVoiceTestTone(int frames, int amplitude) override;
 
@@ -672,7 +673,7 @@ class NetServer : public NetTranspServer
     void ProcessVoicePlayers(CreateVoicePlayerCallback* callback, void* context) override;
     void RemoveVoicePlayers() override;
     void GetTransmitTargets(int from, AutoArray<int, MemAllocSA>& to) override;
-    void SetTransmitTargets(int from, AutoArray<int, MemAllocSA>& to) override;
+    void SetTransmitTargets(int from, AutoArray<int, MemAllocSA>& to, int channel) override;
 
     int GetSessionPort() override { return sessionPort; }
 

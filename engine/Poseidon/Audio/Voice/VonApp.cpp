@@ -318,6 +318,13 @@ void VoNServer::onDataPacket(const void* raw, int rawSize)
         return;
     }
 
+    if (it->second.channel != pkt.chatChan)
+    {
+        LOG_DEBUG(Audio, "VoN srv: dropping pkt for sender={} ch={} routedCh={}", pkt.channel,
+                  static_cast<int>(pkt.chatChan), static_cast<int>(it->second.channel));
+        return;
+    }
+
     LOG_TRACE(Audio, "VoN srv: routing ch={} to {} targets ({}B)", pkt.channel, it->second.targets.size(), rawSize);
     for (uint32_t target : it->second.targets)
     {
@@ -343,6 +350,18 @@ void VoNServer::flushPending(uint32_t sender, const Route& route)
     LOG_DEBUG(Audio, "VoN srv: flushing {} pending pkts for ch={}", pit->second.size(), sender);
     for (auto& pp : pit->second)
     {
+        if (static_cast<int>(pp.data.size()) < VoNDataPacket::HEADER_SIZE)
+            continue;
+
+        VoNDataPacket pkt;
+        std::memcpy(&pkt, pp.data.data(), VoNDataPacket::HEADER_SIZE);
+        if (!pkt.isValid() || pkt.chatChan != route.channel)
+        {
+            LOG_DEBUG(Audio, "VoN srv: dropping pending pkt for sender={} ch={} routedCh={}", sender,
+                      static_cast<int>(pkt.chatChan), static_cast<int>(route.channel));
+            continue;
+        }
+
         for (uint32_t target : route.targets)
         {
             if (target != sender && _forward)

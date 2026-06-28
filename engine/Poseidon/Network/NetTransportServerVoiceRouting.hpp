@@ -1,12 +1,31 @@
 #pragma once
 
+#include <Poseidon/Game/Chat.hpp>
 #include <Poseidon/Network/NetTransportVoicePlayerQueue.hpp>
 #include <Poseidon/Network/NetTransportVoiceRouting.hpp>
 #include <Poseidon/Audio/Voice/VonNet.hpp>
+#include <unordered_map>
 using Poseidon::VoNChatChannel;
 
 namespace Poseidon
 {
+inline VoNChatChannel NetTransportChatChannelToVoN(int channel)
+{
+    switch (channel)
+    {
+        case CCGlobal:
+            return VoNChatChannel::Global;
+        case CCSide:
+            return VoNChatChannel::Side;
+        case CCGroup:
+            return VoNChatChannel::Group;
+        case CCVehicle:
+            return VoNChatChannel::Vehicle;
+        case CCDirect:
+        default:
+            return VoNChatChannel::Direct;
+    }
+}
 
 template <class Allocator>
 void ReadNetTransportServerVoiceTargets(const std::unordered_map<int, std::vector<int>>& vonTargets, int from,
@@ -24,30 +43,30 @@ void GetNetTransportServerVoiceTargets(const std::unordered_map<int, std::vector
 
 template <class Allocator, class GetServerFn>
 void WriteNetTransportServerVoiceTargets(std::unordered_map<int, std::vector<int>>& vonTargets, int from,
-                                         const AutoArray<int, Allocator>& to, GetServerFn&& getServer)
+                                         const AutoArray<int, Allocator>& to, int channel, GetServerFn&& getServer)
 {
     const std::vector<uint32_t> targets = WriteNetTransportVoiceTargets(vonTargets, from, to);
     if (auto* server = getServer())
     {
-        server->setRouting(static_cast<uint32_t>(from), VoNChatChannel::Direct, targets);
+        server->setRouting(static_cast<uint32_t>(from), NetTransportChatChannelToVoN(channel), targets);
     }
 }
 
 template <class Allocator, class GetServerFn, class OnTargetsUpdatedFn>
 void SetNetTransportServerVoiceTargets(std::unordered_map<int, std::vector<int>>& vonTargets, int from,
-                                       const AutoArray<int, Allocator>& to, GetServerFn&& getServer,
+                                       const AutoArray<int, Allocator>& to, int channel, GetServerFn&& getServer,
                                        OnTargetsUpdatedFn&& onTargetsUpdated)
 {
-    WriteNetTransportServerVoiceTargets(vonTargets, from, to, std::forward<GetServerFn>(getServer));
+    WriteNetTransportServerVoiceTargets(vonTargets, from, to, channel, std::forward<GetServerFn>(getServer));
     std::forward<OnTargetsUpdatedFn>(onTargetsUpdated)(from, to.Size());
 }
 
 template <class Allocator, class GetServerFn, class LogTargetsUpdatedFn>
 void SetNetTransportServerVoiceTargetsWithLog(std::unordered_map<int, std::vector<int>>& vonTargets, int from,
-                                              const AutoArray<int, Allocator>& to, GetServerFn&& getServer,
+                                              const AutoArray<int, Allocator>& to, int channel, GetServerFn&& getServer,
                                               LogTargetsUpdatedFn&& logTargetsUpdated)
 {
-    SetNetTransportServerVoiceTargets(vonTargets, from, to, std::forward<GetServerFn>(getServer),
+    SetNetTransportServerVoiceTargets(vonTargets, from, to, channel, std::forward<GetServerFn>(getServer),
                                       std::forward<LogTargetsUpdatedFn>(logTargetsUpdated));
 }
 

@@ -225,6 +225,7 @@ public:
 	virtual bool IsVoicePlaying(int player) = 0;
 	virtual bool IsVoiceRecording() = 0;
 	virtual NetTranspSound3DBuffer *Create3DSoundBuffer(int player) = 0;
+	virtual void SetVoiceChannel(int channel) {}
 	virtual void SetVoiceTransmit(bool on) {}
 	virtual int SendVoiceTestTone(int frames, int amplitude) { return 0; }
 
@@ -285,7 +286,7 @@ public:
 	virtual bool GetURL(char *address, DWORD addressLen) = 0;
 
 	virtual void GetTransmitTargets(int from, AutoArray<int, Poseidon::Foundation::MemAllocSA> &to) = 0;
-	virtual void SetTransmitTargets(int from, AutoArray<int, Poseidon::Foundation::MemAllocSA> &to) = 0;
+	virtual void SetTransmitTargets(int from, AutoArray<int, Poseidon::Foundation::MemAllocSA> &to, int channel) = 0;
 
 	virtual void ProcessUserMessages(UserMessageServerCallback *callback, void *context) = 0;
 	virtual void RemoveUserMessages() = 0;

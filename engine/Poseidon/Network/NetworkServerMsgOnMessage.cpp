@@ -1168,18 +1168,25 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
                 info->channel = channel;
             }
-            _server->SetTransmitTargets(from, players);
+            _server->SetTransmitTargets(from, players, channel);
 
             // Refresh routes for all OTHER active voice players so they
             // include the newly-joined (or channel-changed) player.
             for (int i = 0; i < _players.Size(); i++)
             {
                 NetworkPlayerInfo& pi = _players[i];
-                if (pi.dpid == from || pi.state < NGSCreate || pi.channel == CCNone)
+                if (!Poseidon::ShouldRefreshOtherNetworkVoiceRoute(pi.dpid, from, pi.state, pi.channel, NGSCreate,
+                                                                   CCNone))
                     continue;
                 AUTO_STATIC_ARRAY(int, refreshed, 32);
                 GetPlayersOnChannel(refreshed, pi.channel, pi.dpid, true);
-                _server->SetTransmitTargets(pi.dpid, refreshed);
+                _server->SetTransmitTargets(pi.dpid, refreshed, pi.channel);
+                if (Poseidon::ShouldNotifyJoinedPlayerAboutActiveDirectSpeaker(pi.dpid, from, pi.state, pi.channel,
+                                                                               NGSCreate, CCDirect))
+                {
+                    SetSpeakerMessage message(pi.dpid, true, pi.person);
+                    SendMsg(from, &message, NMFGuaranteed);
+                }
             }
         }
         break;

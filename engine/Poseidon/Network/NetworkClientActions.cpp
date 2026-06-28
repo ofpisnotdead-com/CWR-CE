@@ -2097,7 +2097,10 @@ void NetworkClient::SetVoiceChannel(int channel)
     SetVoiceChannelMessage msg(channel);
     SendMsg(&msg, NMFGuaranteed);
     if (_client)
+    {
+        _client->SetVoiceChannel(channel);
         _client->SetVoiceTransmit(channel != CCNone);
+    }
 }
 
 void NetworkClient::SetVoiceChannel(int channel, RefArray<NetworkObject>& units)
@@ -2105,13 +2108,18 @@ void NetworkClient::SetVoiceChannel(int channel, RefArray<NetworkObject>& units)
     SetVoiceChannelMessage msg(channel, units);
     SendMsg(&msg, NMFGuaranteed);
     if (_client)
+    {
+        _client->SetVoiceChannel(channel);
         _client->SetVoiceTransmit(channel != CCNone);
+    }
 }
 
 int NetworkClient::SendVoiceTestTone(int frames, int amplitude)
 {
     SetVoiceChannelMessage msg(CCDirect);
     SendMsg(&msg, NMFGuaranteed);
+    if (_client)
+        _client->SetVoiceChannel(CCDirect);
     return _client ? _client->SendVoiceTestTone(frames, amplitude) : 0;
 }
 

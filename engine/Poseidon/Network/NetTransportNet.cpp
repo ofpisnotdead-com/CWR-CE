@@ -1,5 +1,7 @@
 #include <Poseidon/Network/NetTransportNetDecls.hpp>
 #include <Poseidon/Network/NetTransportNetInternal.hpp>
+#include <Poseidon/Network/NetTransportClientVoiceInit.hpp>
+#include <Poseidon/Network/NetTransportServerVoiceRouting.hpp>
 #ifndef _WIN32
 #include <arpa/inet.h>
 #endif
@@ -931,7 +933,7 @@ bool NetClient::InitVoice()
             SendMsg(const_cast<BYTE*>(pkt.data()), static_cast<int>(pkt.size()), msgID, NMFHighPriority);
         });
 
-    c->setSenderId(static_cast<uint32_t>(playerNo));
+    SetNetTransportClientVoiceSenderId([c]() { return c; }, static_cast<uint32_t>(playerNo));
 
     LOG_INFO(Network, "VoN client initialized (player={})", playerNo);
     return true;
@@ -968,6 +970,16 @@ NetTranspSound3DBuffer* NetClient::Create3DSoundBuffer(int player)
         LOG_INFO(Network, "VoN: created speaker for player {}", player);
     }
     return new VoNSound3DBuffer(spk.get());
+}
+
+void NetClient::SetVoiceChannel(int channel)
+{
+    auto* c = _vonSystem.client();
+    if (c)
+    {
+        c->setChatChannel(NetTransportChatChannelToVoN(channel));
+        LOG_DEBUG(Network, "VoN: SetVoiceChannel({})", channel);
+    }
 }
 
 void NetClient::SetVoiceTransmit(bool on)
@@ -1023,11 +1035,15 @@ NetStatus clientReceive(NetMessage* msg, NetStatus event, void* data)
                 if (len == sizeof(AckPlayerPacket))
                 {
                     AckPlayerPacket* app = (AckPlayerPacket*)msg->getData();
+                    const int playerNo = app->playerNo;
                     _client->enterSnd();
                     if (_client->ackPlayer == CRNone)
                     { // refuse duplicate messages
-                        _client->playerNo = app->playerNo;
+                        _client->playerNo = playerNo;
                         _client->ackPlayer = app->result;
+                        SetNetTransportClientVoiceSenderIdIfAccepted(
+                            IsNetTransportClientVoiceAckAccepted(static_cast<ConnectResult>(app->result)),
+                            [&]() { return _client->_vonSystem.client(); }, static_cast<uint32_t>(playerNo));
                     }
                     _client->leaveSnd();
                 }
@@ -2168,7 +2184,7 @@ void NetServer::GetTransmitTargets(int from, AutoArray<int, MemAllocSA>& to)
         to.Add(t);
 }
 
-void NetServer::SetTransmitTargets(int from, AutoArray<int, MemAllocSA>& to)
+void NetServer::SetTransmitTargets(int from, AutoArray<int, MemAllocSA>& to, int channel)
 {
     std::vector<uint32_t> targets;
     targets.reserve(to.Size());
@@ -2182,8 +2198,8 @@ void NetServer::SetTransmitTargets(int from, AutoArray<int, MemAllocSA>& to)
     }
     auto* srv = _vonSystem.server();
     if (srv)
-        srv->setRouting(static_cast<uint32_t>(from), VoNChatChannel::Direct, targets);
-    LOG_DEBUG(Network, "VoN srv: SetTransmitTargets from={} targets={}", from, to.Size());
+        srv->setRouting(static_cast<uint32_t>(from), NetTransportChatChannelToVoN(channel), targets);
+    LOG_DEBUG(Network, "VoN srv: SetTransmitTargets from={} channel={} targets={}", from, channel, to.Size());
 }
 
 void NetServer::ProcessVoicePlayers(CreateVoicePlayerCallback* callback, void* context)

@@ -422,10 +422,7 @@ void NetworkServer::GetPlayersOnChannel(AutoArray<int, MemAllocSA>& players, int
                     }
                     if (voice)
                     {
-                        if (info->dvid != 0)
-                        {
-                            players.Add(info->dvid);
-                        }
+                        players.Add(Poseidon::SelectNetworkVoiceTargetPlayerId(info->dpid, info->dvid));
                     }
                     else
                     {
@@ -475,10 +472,7 @@ void NetworkServer::GetPlayersOnChannel(AutoArray<int, MemAllocSA>& players, int
                     }
                     if (voice)
                     {
-                        if (info->dvid != 0)
-                        {
-                            players.Add(info->dvid);
-                        }
+                        players.Add(Poseidon::SelectNetworkVoiceTargetPlayerId(info->dpid, info->dvid));
                     }
                     else
                     {
@@ -530,10 +524,7 @@ void NetworkServer::GetPlayersOnChannel(AutoArray<int, MemAllocSA>& players, int
                     }
                     if (voice)
                     {
-                        if (info->dvid != 0)
-                        {
-                            players.Add(info->dvid);
-                        }
+                        players.Add(Poseidon::SelectNetworkVoiceTargetPlayerId(info->dpid, info->dvid));
                     }
                     else
                     {
