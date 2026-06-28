@@ -118,11 +118,10 @@ backend's current status and known issues.
 
 ## How to Build and Run (iOS / arm64)
 
-iOS builds use the Metal backend and Xcode generator. The device preset creates
-an installable `.app` bundle and copies game data from `packages/Combined/`
-into the bundle, preserving the runtime directory layout.
+iOS uses Metal only. `PoseidonGame` builds the app bundle and its `PoseidonMTL`
+dependency.
 
-For simulator:
+Simulator:
 
 ```sh
 cmake --preset ios-arm64-simulator-xcode
@@ -130,7 +129,7 @@ cmake --build build/ios-arm64-simulator-xcode --target PoseidonGame -j8
 open build/ios-arm64-simulator-xcode/CWR.xcodeproj
 ```
 
-For a physical device:
+Device:
 
 ```sh
 cmake --preset ios-arm64-device
@@ -138,13 +137,8 @@ cmake --build build/ios-arm64-device --target PoseidonGame -j8
 open build/ios-arm64-device/CWR.xcodeproj
 ```
 
-The checked-in device preset uses automatic Xcode signing. If you are building
-with a different Apple Developer Team, override
-`CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM` in your local CMake cache or preset.
-
-Useful launch arguments are the same as desktop where applicable:
-`--dev` enables the ImGui developer panel, `--show-fps` enables the lightweight
-FPS overlay, and `--no-splash` skips the splash screen.
+The device preset uses automatic Xcode signing; override
+`CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM` locally if needed.
 
 ## Layout
 
