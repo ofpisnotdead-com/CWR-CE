@@ -34,7 +34,7 @@ void MouseState::DiscardBuffered()
 }
 
 bool MouseState::Update(CursorAccum& cursor, int gameFocusLost, bool lookAroundEnabled, UITime currentTime,
-                        const CursorClamp* clamp)
+                        const CursorClamp* clamp, float viewportAspectRatio)
 {
     // Reset per-frame edge state
     leftToDo = false;
@@ -129,8 +129,8 @@ bool MouseState::Update(CursorAccum& cursor, int gameFocusLost, bool lookAroundE
     rightToDo = buttonsToDo[1];
     middleToDo = buttonsToDo[2];
 
-    // Cursor movement (matches Windows logic)
-    float moveX = deltaX * kCursorScaleX;
+    // Cursor movement, with aspect ratio correction and clamping
+    float moveX = deltaX * (kCursorScaleY / viewportAspectRatio);
     float moveY = deltaY * kCursorScaleY;
 
     saturate(moveX, -kCursorLimitX, +kCursorLimitX);
