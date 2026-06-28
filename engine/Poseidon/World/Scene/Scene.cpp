@@ -34,6 +34,7 @@ using Poseidon::Foundation::Time;
 #include <Poseidon/Graphics/Textures/TexturePreload.hpp>
 #include <Poseidon/World/Scene/Object.hpp>
 #include <Poseidon/World/Scene/SurfaceDrawOrder.hpp>
+#include <Poseidon/World/Scene/AlphaSortOrder.hpp>
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
 #include <Poseidon/Graphics/Rendering/Primitives/Poly.hpp>
 #include <Poseidon/Graphics/Shadow/ShadowMath.hpp>
@@ -892,6 +893,10 @@ void Scene::ObjectForDrawing(Object* obj, int forceLOD, ClipFlags clip)
         sObj->forceDrawLOD = forceLOD;
     }
 
+    // alpha-pass sort key: far extent (planar camera-space depth + radius), so the
+    // object's depth-writing blend sections draw before interpenetrating dust
+    sObj->zCoord = AlphaSort::AlphaObjectDepth((ScaledInvTransform() * pos).Z(), radius);
+
     // if object is near we use nearest distance instead of center distance
     // this avoid degenerate LODs when beign near
     // if radius is 0.25 of distance, it is considered significant
@@ -948,9 +953,6 @@ void Scene::CloudletForDrawing(Object* obj)
         return;
     }
 
-    // if we want to have alpha objects sorted correctly, we need to consider
-    // minimum distance
-
     float dist2 = _camera->Position().Distance2Inline(pos);
 
     // estimate area
@@ -977,6 +979,7 @@ void Scene::CloudletForDrawing(Object* obj)
     sObj->forceDrawLOD = 0;
     sObj->shadowLOD = LOD_INVISIBLE;
     sObj->distance2 = dist2;
+    sObj->zCoord = cPos.Z(); // alpha-pass sort key: centre camera-space depth (cPos computed above)
     sObj->radius = radius;
     sObj->passNum = 2; // all cloudlets drawn in alpha pass
     sObj->notUsed = false;
