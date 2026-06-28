@@ -240,8 +240,17 @@ void ProcessMouse_SDL(DWORD timeDelta)
         clampPtr = &clamp;
     }
 
-    bool markKeyboardTurn =
-        GInput.mouse.Update(GInput.cursor, GInput.gameFocusLost, GInput.lookAroundEnabled, Glob.uiTime, clampPtr);
+    // Default to the reference aspect ratio, override with the actual viewport aspect ratio if available
+    float viewportAspectRatio = MouseState::kBaseAspectRatio;
+    if (::Poseidon::GEngine)
+    {
+        const int viewH = ::Poseidon::GEngine->Height();
+        if (viewH > 0)
+            viewportAspectRatio = static_cast<float>(::Poseidon::GEngine->Width()) / static_cast<float>(viewH);
+    }
+
+    bool markKeyboardTurn = GInput.mouse.Update(GInput.cursor, GInput.gameFocusLost, GInput.lookAroundEnabled,
+                                                Glob.uiTime, clampPtr, viewportAspectRatio);
 
     if (markKeyboardTurn)
         GInput.keyboard.turnLastActive = Glob.uiTime;
