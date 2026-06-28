@@ -3,6 +3,7 @@
   "include": [
     "cmake/presets/windows.json",
     "cmake/presets/linux.json",
+    "cmake/presets/darwin.json",
     "cmake/presets/sanitizers.json"
   ]
 }

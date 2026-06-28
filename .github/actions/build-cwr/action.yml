@@ -39,6 +39,13 @@ runs:
       if: runner.os == 'Linux'
       uses: ./.github/actions/setup-linux-deps
 
+    - name: Install macOS homebrew packages
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        brew install \
+          clang-format
+
     - name: Setup LLVM and Clang
       if: runner.os == 'Windows'
       uses: KyleMayes/install-llvm-action@v2
@@ -52,7 +59,7 @@ runs:
       uses: hendrikmuhs/ccache-action@v1.2.23
       with:
         variant: ccache
-        key: ${{ runner.os }}-${{ inputs.preset }}-pch
+        key: ${{ runner.os }}-${{ inputs.preset }}-pch-${{ hashFiles('engine/Poseidon/Foundation/PoseidonPCH.hpp', 'engine/Poseidon/Foundation/platform.hpp') }}
         max-size: 1G
 
     - name: Setup CMake and Ninja

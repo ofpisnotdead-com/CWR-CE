@@ -50,10 +50,8 @@ if(WIN32)
     )
 else()
     target_link_libraries(PoseidonServer PRIVATE
-        -Wl,--start-group
         GameBase
         Poseidon
-        -Wl,--end-group
         pthread
         dl
     )

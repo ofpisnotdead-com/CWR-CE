@@ -20,9 +20,7 @@ if(WIN32)
     )
 else()
     target_link_libraries(PoseidonServerTests PRIVATE
-        -Wl,--start-group
         Poseidon
-        -Wl,--end-group
         pthread dl
     )
 endif()

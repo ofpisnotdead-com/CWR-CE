@@ -115,7 +115,9 @@ void InstallCrashHandler(const char*)
 #include <fcntl.h>
 #include <execinfo.h>
 #include <sys/resource.h>
+#if __linux__
 #include <link.h>
+#endif
 
 namespace Poseidon::Foundation
 {
@@ -258,6 +260,7 @@ void handler(int sig, siginfo_t* info, void* /*ucontext*/)
     raise(sig);
 }
 
+#if __linux__
 void captureBuildId()
 {
     g_buildId[0] = '\0';
@@ -297,6 +300,7 @@ void captureBuildId()
         },
         nullptr);
 }
+#endif // __linux__
 } // namespace
 
 void InstallCrashHandler(const char* crashDir)
@@ -312,7 +316,9 @@ void InstallCrashHandler(const char* crashDir)
         snprintf(g_crashPath, sizeof(g_crashPath), "crash_%d.txt", (int)getpid());
     }
 
+#if __linux__
     captureBuildId();
+#endif
 
     // Warm up the libgcc unwinder so the in-handler backtrace() never dlopen()s (not
     // async-signal-safe). One call here primes it.
