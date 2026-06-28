@@ -24,9 +24,6 @@ jobs:
       matrix:
         include:
           - name: Trident
-            os: ubuntu-24.04
-            project: engine/Trident
-          - name: Trident
             os: windows-2022
             project: engine/Trident
           - name: PapaBear Archive

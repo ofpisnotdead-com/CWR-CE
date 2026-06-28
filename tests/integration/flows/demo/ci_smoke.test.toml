@@ -1,0 +1,5 @@
+binary = "PoseidonGame"
+no_menu = true
+timeout = 60
+extra_args = ["--no-menu-scene"]
+tags = ["demo", "headless", "ci"]
