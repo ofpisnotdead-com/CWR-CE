@@ -597,13 +597,12 @@ static void SetDepthBiasForDescriptor(MTL::RenderCommandEncoder* encoder, Poseid
 
 bool EngineMTLBootstrap::Init(const char* title, int width, int height)
 {
-    // iOS/tvOS auto-show the on-screen keyboard as soon as a window exists
-    // (for physical-keyboard scancode support), even with nothing focused --
-    // this engine has no touch UI for it and no way to dismiss it, so
-    // suppress it at the source. The hint alone isn't sufficient (it only
-    // governs SDL_StartTextInput(), but the iOS backend enables text input
-    // on window creation regardless) -- explicitly stop it after creating
-    // the window too.
+    // Defensive default: if anything ever calls SDL_StartTextInput() on iOS
+    // in the future (e.g. a real touch chat box), don't auto-show the
+    // keyboard unless asked to. The actual cause of the keyboard appearing
+    // unconditionally on launch was SDLEventWindow::Attach() calling
+    // SDL_StartTextInput() unconditionally -- fixed there (PoseidonMTL's
+    // EngineMTL embeds that header-only class too).
     SDL_SetHint(SDL_HINT_ENABLE_SCREEN_KEYBOARD, "0");
 
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
@@ -619,7 +618,6 @@ bool EngineMTLBootstrap::Init(const char* title, int width, int height)
         return false;
     }
     _ownsWindow = true;
-    SDL_StopTextInput(_window);
 
     return SetupDevice();
 }

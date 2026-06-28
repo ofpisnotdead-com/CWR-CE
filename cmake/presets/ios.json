@@ -50,7 +50,9 @@
         "VCPKG_TARGET_TRIPLET": "arm64-ios",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/ios-device-arm64-clang.cmake",
         "CMAKE_C_COMPILER_LAUNCHER": "",
-        "CMAKE_CXX_COMPILER_LAUNCHER": ""
+        "CMAKE_CXX_COMPILER_LAUNCHER": "",
+        "CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM": "G75D5FBNYR",
+        "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE": "Automatic"
       }
     }
   ]
