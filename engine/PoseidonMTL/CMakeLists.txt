@@ -1,4 +1,8 @@
 add_library(PoseidonMTL STATIC
+    ${CMAKE_SOURCE_DIR}/thirdparty/imgui_backends/imgui_impl_metal.h
+    ${CMAKE_SOURCE_DIR}/thirdparty/imgui_backends/imgui_impl_metal.mm
+    DebugOverlayMetal.hpp
+    DebugOverlayMetal.mm
     MetalCppImpl.cpp
     EngineMTLBootstrap.cpp
     EngineMTLBootstrap.hpp
@@ -17,6 +21,7 @@ target_link_libraries(PoseidonMTL PUBLIC Poseidon)
 
 target_include_directories(PoseidonMTL SYSTEM PUBLIC
     ${CMAKE_SOURCE_DIR}/thirdparty/metal-cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/imgui_backends
 )
 
 find_package(SDL3 CONFIG REQUIRED)
@@ -33,6 +38,14 @@ target_link_libraries(PoseidonMTL PUBLIC
 
 target_compile_definitions(PoseidonMTL PRIVATE
     $<$<CONFIG:Debug>:_DEBUG>
+    IMGUI_IMPL_METAL_CPP
+)
+
+set_source_files_properties(
+    ${CMAKE_SOURCE_DIR}/thirdparty/imgui_backends/imgui_impl_metal.mm
+    DebugOverlayMetal.mm
+    PROPERTIES
+        COMPILE_FLAGS "-fno-objc-arc"
 )
 
 set_target_properties(PoseidonMTL PROPERTIES

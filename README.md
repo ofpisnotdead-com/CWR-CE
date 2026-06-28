@@ -1,4 +1,4 @@
-# CWR-arm64 — a community fork (+ experimental Metal backend)
+# CWR-arm64 — a community fork (+ experimental Metal and iOS support)
 
 > **This is a modified, unofficial community fork**, not the original program
 > and not affiliated with or endorsed by Bohemia Interactive. The base of this
@@ -8,12 +8,12 @@
 > needed for a clean macOS build — rendering via the existing cross-platform
 > GL33 backend; no renderer changes there.
 >
-> **This branch (`feature/metal-renderer`) additionally adds a second,
-> experimental native Metal rendering backend** (`--render mtl`,
-> `engine/PoseidonMTL/`) on top of that ARM64 base, as an alternative to
-> GL33 on macOS. It is a work in progress — see
-> [`METAL_PORT_PROGRESS.md`](METAL_PORT_PROGRESS.md) for current status and
-> known issues. GL33 remains the default and is unaffected.
+> **This branch (`feature/ios`) additionally adds the experimental native
+> Metal rendering backend** (`--render mtl`, `engine/PoseidonMTL/`) and brings
+> the game up on iOS simulator and physical iOS devices. On macOS, GL33 remains
+> available for comparison; on iOS, Metal is the only renderer. This is a work
+> in progress — see [`METAL_PORT_PROGRESS.md`](METAL_PORT_PROGRESS.md) for
+> current status and known issues.
 >
 > No rights to "ARMA", "Operation Flashpoint", or any other Bohemia
 > Interactive trademark are claimed or implied — see the Additional Terms in
@@ -115,6 +115,30 @@ lldb -o "run -C packages/Remaster --render mtl --window" -- build/macos-arm64-cl
 
 See [`METAL_PORT_PROGRESS.md`](METAL_PORT_PROGRESS.md) for the Metal
 backend's current status and known issues.
+
+## How to Build and Run (iOS / arm64)
+
+iOS uses Metal only. `PoseidonGame` builds the app bundle and its `PoseidonMTL`
+dependency; put game data in `packages/Combined/` so it is copied into the app.
+
+Simulator:
+
+```sh
+cmake --preset ios-arm64-simulator-xcode
+cmake --build build/ios-arm64-simulator-xcode --target PoseidonGame -j8
+open build/ios-arm64-simulator-xcode/CWR.xcodeproj
+```
+
+Device:
+
+```sh
+cmake --preset ios-arm64-device
+cmake --build build/ios-arm64-device --target PoseidonGame -j8
+open build/ios-arm64-device/CWR.xcodeproj
+```
+
+The device preset uses automatic Xcode signing; override
+`CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM` locally if needed.
 
 ## Layout
 

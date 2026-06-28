@@ -43,17 +43,28 @@ jobs:
             preset: linux-x64-clang-rwdi
             vcpkg_triplet: x64-linux-clang
             build_dir: build/linux-x64-clang-rwdi
+            build_target: ''
             ctest_exclude: 'PoseidonTests - (STRINGTABLE_MAP\.utf8\.csv ships both legend keys with English fallbacks|STRINGTABLE_EQUIPMENT\.utf8\.csv ships M16 keys for all 8 languages|equipment\.utf8\.html lives loose and references STR_EQ_M16 tokens|equipment\.utf8\.html line endings are clean CRLF \(no doubled CR\)|equipment\.utf8\.html preserves every EQ_ anchor and weapon image)'
           - name: macOS (Apple Silicon) RelWithDebInfo
             os: [self-hosted, macOS, arm64]
             preset: macos-arm64-clang-rwdi
             vcpkg_triplet: arm64-osx
             build_dir: build/macos-arm64-clang-rwdi
+            build_target: ''
+          - name: iOS Device Debug
+            os: [self-hosted, macOS, arm64]
+            preset: ios-arm64-device
+            vcpkg_triplet: arm64-ios
+            build_dir: build/ios-arm64-device
+            build_target: PoseidonGame
+            xcode: true
+            skip_tests: true
           - name: Windows RelWithDebInfo
             os: windows-2022
             preset: win-x64-clang-rwdi
             vcpkg_triplet: x64-windows-clang
             build_dir: build/win-x64-clang-rwdi
+            build_target: ''
             ctest_exclude: 'PoseidonTests - (OAL -|PAAEncoder -|Image - Save to \.paa|World state file format --|PreviewImage - saveToFile writes|PreviewImageRGB - saveToFile writes|STRINGTABLE_MAP\.utf8\.csv ships both legend keys with English fallbacks|STRINGTABLE_EQUIPMENT\.utf8\.csv ships M16 keys for all 8 languages|equipment\.utf8\.html lives loose and references STR_EQ_M16 tokens|equipment\.utf8\.html line endings are clean CRLF \(no doubled CR\)|equipment\.utf8\.html preserves every EQ_ anchor and weapon image)'
 
     steps:
@@ -113,6 +124,7 @@ jobs:
           command -v clang++
           command -v clang-format
           command -v pkg-config
+          command -v xcodebuild
 
       - name: Setup MSVC developer environment
         if: runner.os == 'Windows'
@@ -186,17 +198,36 @@ jobs:
           vcpkgJsonGlob: 'vcpkg.json'
 
       - name: Configure
+        if: matrix.xcode != true
         run: >
           cmake
           --preset ${{ matrix.preset }}
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+      - name: Configure Xcode
+        if: matrix.xcode == true
+        run: cmake --preset ${{ matrix.preset }}
+
       - name: Build
+        if: matrix.build_target == ''
         run: cmake --build ${{ matrix.build_dir }}
 
+      - name: Build target
+        if: matrix.build_target != '' && matrix.xcode != true
+        run: cmake --build ${{ matrix.build_dir }} --target ${{ matrix.build_target }}
+
+      - name: Build Xcode target
+        if: matrix.build_target != '' && matrix.xcode == true
+        run: >
+          cmake --build ${{ matrix.build_dir }}
+          --target ${{ matrix.build_target }}
+          --
+          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGNING_REQUIRED=NO
+
       - name: Test
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && matrix.skip_tests != true
         env:
           CTEST_EXCLUDE: ${{ matrix.ctest_exclude }}
           ALSOFT_DRIVERS: ${{ runner.os == 'Linux' && 'null' || '' }}
@@ -220,7 +251,7 @@ jobs:
           }
 
       - name: Smoke test macOS renderers
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && matrix.skip_tests != true
         run: |
           '${{ matrix.build_dir }}/apps/tools/GL33SmokeTest/GL33SmokeTest' --check
           '${{ matrix.build_dir }}/apps/tools/MetalSmokeTest/MetalSmokeTest' --check

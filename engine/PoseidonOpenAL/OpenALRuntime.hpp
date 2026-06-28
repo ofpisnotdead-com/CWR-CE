@@ -11,6 +11,10 @@
 #include <dlfcn.h>
 #endif
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
+
 #include <string>
 
 namespace OpenALRuntime
@@ -130,6 +134,12 @@ inline void UnloadModule()
 {
     if (ModuleHandle() == nullptr)
         return;
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+    // iOS: ModuleHandle() is the RTLD_DEFAULT sentinel (see TryLoadModule),
+    // not a real dlopen handle -- there's nothing to dlclose.
+    ModuleHandle() = nullptr;
+    return;
+#endif
 #ifdef _WIN32
     FreeLibrary(static_cast<HMODULE>(ModuleHandle()));
 #else
@@ -156,6 +166,14 @@ inline bool TryLoadModule()
         SetError("OpenAL32.dll is not available");
         return false;
     }
+#elif defined(__APPLE__) && TARGET_OS_IPHONE
+    // iOS/Simulator sandboxing prohibits dlopen of anything outside the app
+    // bundle, so there's no equivalent of macOS's Homebrew/system-framework
+    // probing below. openal-soft is link-time static for this platform (see
+    // cmake/vcpkg-triplets/arm64-ios-simulator.cmake) -- its symbols are
+    // already part of this binary, so "loading" is just resolving them out
+    // of the global symbol table via the RTLD_DEFAULT sentinel handle.
+    ModuleHandle() = RTLD_DEFAULT;
 #elif defined(__APPLE__)
     // Prefer a real openal-soft if the user has one (Homebrew installs it
     // keg-only since macOS already ships OpenAL.framework), then fall back

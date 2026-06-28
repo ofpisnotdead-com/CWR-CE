@@ -2,6 +2,7 @@
 
 #include <Poseidon/Graphics/Rendering/RenderPassDescriptor.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -61,7 +62,17 @@ struct FrameConstantsMTL
     float sunDirAndEnabled[4]; // xyz = direction, w = 1.0/0.0 enabled
     float fogParams[4];        // start, invRange, enabled, 0
     float fogColor[4];         // rgb, a=1
+    // GL33-compatible camPos uniform slot. Ordinary mesh draws upload zero
+    // here even though FrameState tracks the true camera position; specular
+    // and fog operate on camera-relative worldPos. Must stay the last field
+    // and stay in sync with the MSL-side FrameConstants struct's camPosWorld
+    // (EngineMTLBootstrap.cpp) so Metal validation sees the full 192-byte
+    // constant payload.
+    float gl33CamPosZero[4];
 };
+
+static_assert(offsetof(FrameConstantsMTL, gl33CamPosZero) == 176, "FrameConstantsMTL camPos slot offset must match MSL");
+static_assert(sizeof(FrameConstantsMTL) == 192, "FrameConstantsMTL size must match MSL FrameConstants");
 
 // One local point/spot light, matching GL33's per-light VSConstants layout
 // (EngineGL33.hpp's SlotLightPos/Diffuse/Ambient/Dir, EngineGL33_Shaders.cpp's
@@ -165,6 +176,11 @@ class EngineMTLBootstrap
 
     // Metal device name (e.g. "Apple M2 Pro"), empty if not yet initialized.
     std::string GetRendererName() const;
+
+    bool InitDebugOverlayRenderer();
+    void BeginDebugOverlayFrame();
+    void RenderDebugOverlay();
+    void ShutdownDebugOverlayRenderer();
 
     // True once EnsurePipeline() has successfully built the render pipeline
     // state (lazily, on first BeginFrame). False before that, or if shader

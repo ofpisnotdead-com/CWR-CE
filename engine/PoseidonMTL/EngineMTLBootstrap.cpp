@@ -1,4 +1,5 @@
 #include <PoseidonMTL/EngineMTLBootstrap.hpp>
+#include <PoseidonMTL/DebugOverlayMetal.hpp>
 
 // metal-cpp implementation macros live in MetalCppImpl.cpp (one definition
 // per binary); this file only needs the declarations.
@@ -148,9 +149,8 @@ struct FrameConstants {
     float4 sunDirAndEnabled;
     float4 fogParams;
     float4 fogColor;
-    // Real (non-camera-relative) camera world position -- specular viewDir
-    // term only, see FrameConstantsMTL::camPosWorld's doc comment
-    // (EngineMTLBootstrap.hpp) for the GL33-parity rationale.
+    // GL33-compatible camPos slot. Ordinary mesh draws upload zero here;
+    // specular/fog use the camera-relative worldPos directly.
     float4 camPosWorld;
 };
 
@@ -597,6 +597,14 @@ static void SetDepthBiasForDescriptor(MTL::RenderCommandEncoder* encoder, Poseid
 
 bool EngineMTLBootstrap::Init(const char* title, int width, int height)
 {
+    // Defensive default: if anything ever calls SDL_StartTextInput() on iOS
+    // in the future (e.g. a real touch chat box), don't auto-show the
+    // keyboard unless asked to. The actual cause of the keyboard appearing
+    // unconditionally on launch was SDLEventWindow::Attach() calling
+    // SDL_StartTextInput() unconditionally -- fixed there (PoseidonMTL's
+    // EngineMTL embeds that header-only class too).
+    SDL_SetHint(SDL_HINT_ENABLE_SCREEN_KEYBOARD, "0");
+
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
     {
         LOG_ERROR(Graphics, "EngineMTLBootstrap: SDL_InitSubSystem(VIDEO) failed: {}", SDL_GetError());
@@ -753,6 +761,49 @@ std::string EngineMTLBootstrap::GetRendererName() const
     if (_impl->device == nullptr)
         return {};
     return _impl->device->name()->utf8String();
+}
+
+bool EngineMTLBootstrap::InitDebugOverlayRenderer()
+{
+    return Poseidon::Dev::DebugOverlayMetal::Init(_impl->device);
+}
+
+void EngineMTLBootstrap::BeginDebugOverlayFrame()
+{
+    if (_impl->currentDrawable == nullptr)
+        return;
+
+    MTL::RenderPassDescriptor* passDesc = MTL::RenderPassDescriptor::alloc()->init();
+    MTL::RenderPassColorAttachmentDescriptor* colorAttachment = passDesc->colorAttachments()->object(0);
+    colorAttachment->setTexture(_impl->currentDrawable->texture());
+    colorAttachment->setLoadAction(MTL::LoadActionLoad);
+    colorAttachment->setStoreAction(MTL::StoreActionStore);
+
+    if (_impl->depthTexture != nullptr)
+    {
+        MTL::RenderPassDepthAttachmentDescriptor* depthAttachment = passDesc->depthAttachment();
+        depthAttachment->setTexture(_impl->depthTexture);
+        depthAttachment->setLoadAction(MTL::LoadActionLoad);
+        depthAttachment->setStoreAction(MTL::StoreActionStore);
+
+        MTL::RenderPassStencilAttachmentDescriptor* stencilAttachment = passDesc->stencilAttachment();
+        stencilAttachment->setTexture(_impl->depthTexture);
+        stencilAttachment->setLoadAction(MTL::LoadActionLoad);
+        stencilAttachment->setStoreAction(MTL::StoreActionStore);
+    }
+
+    Poseidon::Dev::DebugOverlayMetal::NewFrame(passDesc);
+    passDesc->release();
+}
+
+void EngineMTLBootstrap::RenderDebugOverlay()
+{
+    Poseidon::Dev::DebugOverlayMetal::Render(_impl->currentCommandBuffer, _impl->currentEncoder);
+}
+
+void EngineMTLBootstrap::ShutdownDebugOverlayRenderer()
+{
+    Poseidon::Dev::DebugOverlayMetal::Shutdown();
 }
 
 bool EngineMTLBootstrap::IsPipelineReady() const
@@ -1696,6 +1747,8 @@ void EngineMTLBootstrap::ClearTexturePool()
 
 void EngineMTLBootstrap::Shutdown()
 {
+    ShutdownDebugOverlayRenderer();
+
     for (MTL::Texture*& tex : _impl->textures)
     {
         if (tex != nullptr)

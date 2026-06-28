@@ -1464,7 +1464,10 @@ void GameApplication::RegisterAudioBackends()
 void GameApplication::RegisterGraphicsBackends()
 {
     RegisterDummyGraphicsBackend();
+#ifndef POSEIDON_TARGET_IOS
+    // iOS has no desktop OpenGL -- PoseidonGL33 isn't built for this platform.
     RegisterGL33GraphicsBackend();
+#endif
 #ifdef __APPLE__
     RegisterMetalGraphicsBackend();
 #endif

@@ -44,6 +44,13 @@ if(WIN32)
         GameBase Poseidon PoseidonGL33 PoseidonOpenAL
         winmm.lib version.lib ws2_32.lib legacy_stdio_definitions.lib
     )
+elseif(POSEIDON_TARGET_IOS)
+    # iOS has no desktop OpenGL (no PoseidonGL33 target built for this
+    # platform) -- Metal is the only renderer.
+    target_link_libraries(PoseidonGameDemo PRIVATE
+        GameBase PoseidonMTL Poseidon PoseidonOpenAL
+        pthread dl
+    )
 elseif(APPLE)
     # Apple's linker has no GNU --start-group/--end-group equivalent (and
     # doesn't need one — it resolves the same circular static-lib
