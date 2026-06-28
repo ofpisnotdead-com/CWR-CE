@@ -785,6 +785,9 @@ void EngineGL33::FlushVSConstants()
     // glBindBufferBase is sticky — done once at UBO creation in
     // InitVertexShaders.  Per-flush we only update buffer contents.
     glBindBuffer(GL_UNIFORM_BUFFER, s_vsUBO);
+#ifdef __APPLE__
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(s_vsShadow), nullptr, GL_STREAM_DRAW);
+#endif
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(s_vsShadow), s_vsShadow);
 }
 
@@ -804,6 +807,9 @@ void EngineGL33::FlushPSConstants()
     if (s_psEverUploaded && s_psUploadedUBO == s_psUBO && memcmp(s_psUploaded, s_psShadow, sizeof(s_psShadow)) == 0)
         return;
     glBindBuffer(GL_UNIFORM_BUFFER, s_psUBO);
+#ifdef __APPLE__
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(s_psShadow), nullptr, GL_STREAM_DRAW);
+#endif
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(s_psShadow), s_psShadow);
     memcpy(s_psUploaded, s_psShadow, sizeof(s_psShadow));
     s_psEverUploaded = true;
@@ -1089,6 +1095,9 @@ void EngineGL33::UploadWorldInstances(const float* matrices, int count)
     if (count > 256)
         count = 256;
     glBindBuffer(GL_UNIFORM_BUFFER, s_worldUBO);
+#ifdef __APPLE__
+    glBufferData(GL_UNIFORM_BUFFER, 256 * 64, nullptr, GL_STREAM_DRAW);
+#endif
     glBufferSubData(GL_UNIFORM_BUFFER, 0, count * 64, matrices);
 }
 
@@ -1100,6 +1109,9 @@ void EngineGL33::UploadVSWorldMatrix(const float worldMatrix[16])
     if (s_worldUBO)
     {
         glBindBuffer(GL_UNIFORM_BUFFER, s_worldUBO);
+#ifdef __APPLE__
+        glBufferData(GL_UNIFORM_BUFFER, 256 * 64, nullptr, GL_STREAM_DRAW);
+#endif
         glBufferSubData(GL_UNIFORM_BUFFER, 0, 64, worldMatrix);
         return;
     }
