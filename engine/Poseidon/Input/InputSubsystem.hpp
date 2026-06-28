@@ -217,6 +217,7 @@ class InputSubsystem
     void SetSyntheticStickButton(int i, bool value);
     void SetSyntheticStickPov(int i, bool value);
     void SetSyntheticLeftStick(float x, float y);
+    bool HasSyntheticStickInput() const;
     bool ConsumeSyntheticStickButton(int i);
     bool ConsumeSyntheticStickPov(int i);
     bool GetSyntheticLeftStick(float& x, float& y) const;

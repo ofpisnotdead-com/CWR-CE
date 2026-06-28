@@ -35,7 +35,7 @@ class TestFlatMenuPage : public FlatMenuPage
 
     void Mount(OptionsShell& shell) override
     {
-        shell.DebugSetNotebookMountedIdcs({1401, 1402, 1405, 1406, 1403, 1404});
+        shell.DebugSetNotebookMountedIdcs({1401, 1402, 1405, 1406, 1407, 1403, 1404});
     }
     void Unmount(OptionsShell& shell) override { shell.DebugClearNotebookMountedIdcs(); }
 
@@ -47,7 +47,7 @@ class TestFlatMenuPage : public FlatMenuPage
     }
 
   private:
-    static constexpr int kCycle[] = {1401, 1402, 1405, 1406, 1403, 1404};
+    static constexpr int kCycle[] = {1401, 1402, 1405, 1406, 1407, 1403, 1404};
     static constexpr int kCycleSize = sizeof(kCycle) / sizeof(kCycle[0]);
 };
 } // namespace

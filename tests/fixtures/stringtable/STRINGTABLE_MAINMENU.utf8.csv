@@ -35,6 +35,7 @@ STR_DISP_OPT_CTL_CAT_PILOT,Pilot
 STR_DISP_OPT_CTL_CAT_GUNNER,Gunner
 STR_DISP_OPT_CTL_CAT_COMMON,Common
 STR_DISP_OPT_CTL_MOUSE,Mouse
+STR_DISP_OPT_CTL_TOUCH,Touch Controls
 STR_DISP_OPT_MOUSE_REVERSE_Y,Y-axis inversion
 STR_DISP_OPT_MOUSE_SWAP_BUTTONS,Mouse buttons swap
 STR_DISP_OPT_MOUSE_SENSITIVITY_X,Mouse sensitivity X
@@ -43,3 +44,7 @@ STR_DISP_OPT_MOUSE_REVERSE_Y_DESC,Invert vertical mouse motion - pushing the mou
 STR_DISP_OPT_MOUSE_SWAP_BUTTONS_DESC,Swap left and right mouse buttons.
 STR_DISP_OPT_MOUSE_SENSITIVITY_X_DESC,Horizontal mouse sensitivity. Range 0.5x to 2.0x.
 STR_DISP_OPT_MOUSE_SENSITIVITY_Y_DESC,Vertical mouse sensitivity. Range 0.5x to 2.0x.
+STR_DISP_OPT_TOUCH_AIM_SENSITIVITY,Aim sensitivity
+STR_DISP_OPT_TOUCH_AIM_SENSITIVITY_DESC,Right-side touch look and aim sensitivity. Range 0.25x to 3.0x.
+STR_DISP_OPT_TOUCH_CURSOR_SENSITIVITY,Cursor movement sensitivity
+STR_DISP_OPT_TOUCH_CURSOR_SENSITIVITY_DESC,Touch cursor movement sensitivity outside gameplay. Range 0.25x to 3.0x.

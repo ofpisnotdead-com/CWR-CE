@@ -6,6 +6,7 @@
 #include <Poseidon/UI/Options/KbmPage.hpp>
 #include <Poseidon/UI/Options/MousePage.hpp>
 #include <Poseidon/UI/Options/OptionsShell.hpp>
+#include <Poseidon/UI/Options/TouchPage.hpp>
 
 #include <Poseidon/Input/InputSubsystem.hpp>
 
@@ -42,6 +43,10 @@ bool ControlsPage::OnNav(OptionsShell& shell, int idc)
 
         case 1406: // Gamepad Tuning
             shell.PushPage(std::make_unique<GamepadTuningPage>());
+            return true;
+
+        case 1407: // Touch controls
+            shell.PushPage(std::make_unique<TouchPage>());
             return true;
 
         case 1403: // Reset all to defaults — confirm first
