@@ -65,6 +65,7 @@ elseif(POSEIDON_TARGET_IOS)
         PoseidonMTL
         Poseidon
         PoseidonOpenAL
+        OpenAL::OpenAL
         pthread
         dl
     )
@@ -106,6 +107,11 @@ set_target_properties(PoseidonGame PROPERTIES
 )
 
 if(POSEIDON_TARGET_IOS)
+    set(POSEIDON_IOS_ASSET_CATALOG "${CMAKE_CURRENT_SOURCE_DIR}/Assets.xcassets")
+    set_source_files_properties("${POSEIDON_IOS_ASSET_CATALOG}" PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources"
+    )
+
     # iOS executables are always app bundles -- give it a real bundle ID
     # and name so it's installable (CMake leaves these blank by default).
     # Custom Info.plist (vs. CMake's built-in default template) so we can
@@ -118,6 +124,11 @@ if(POSEIDON_TARGET_IOS)
         MACOSX_BUNDLE_BUNDLE_NAME "PoseidonGame"
         MACOSX_BUNDLE_BUNDLE_VERSION "1.0"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
+        XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
+        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.mcardle.cwr.poseidongame"
+    )
+    target_sources(PoseidonGame PRIVATE
+        "${POSEIDON_IOS_ASSET_CATALOG}"
     )
 endif()
 

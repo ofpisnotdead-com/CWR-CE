@@ -8,6 +8,7 @@ set(POSEIDON_OPENAL_SOURCES
 
 set(POSEIDON_OPENAL_HEADERS
     EFXPresets.hpp
+    IosAudioSession.hpp
     OpenALRuntime.hpp
     SoundSystemOAL.hpp
     WaveOAL.hpp
@@ -21,10 +22,14 @@ add_library(PoseidonOpenAL STATIC
     ${POSEIDON_OPENAL_HEADERS}
 )
 
+if(POSEIDON_TARGET_IOS)
+    target_sources(PoseidonOpenAL PRIVATE IosAudioSession.cpp)
+endif()
+
 find_package(OpenAL CONFIG REQUIRED)
 set_target_properties(OpenAL::OpenAL PROPERTIES IMPORTED_GLOBAL TRUE)
 
-target_link_libraries(PoseidonOpenAL PUBLIC Poseidon)
+target_link_libraries(PoseidonOpenAL PUBLIC Poseidon OpenAL::OpenAL)
 
 if(WIN32)
     target_link_libraries(PoseidonOpenAL PUBLIC Avrt)
@@ -33,10 +38,6 @@ endif()
 target_include_directories(PoseidonOpenAL PUBLIC
     ${CMAKE_SOURCE_DIR}/engine
 )
-target_include_directories(PoseidonOpenAL PRIVATE
-    $<TARGET_PROPERTY:OpenAL::OpenAL,INTERFACE_INCLUDE_DIRECTORIES>
-)
-
 target_compile_definitions(PoseidonOpenAL PRIVATE
     $<$<CONFIG:Debug>:_DEBUG>
 )

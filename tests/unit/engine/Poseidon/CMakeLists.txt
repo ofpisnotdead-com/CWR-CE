@@ -320,6 +320,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     UI/Settings/test_contextControlsConfig.cpp
     UI/Settings/test_gamepadConfig.cpp
     UI/Settings/test_mouseConfig.cpp
+    UI/Settings/test_touchConfig.cpp
 
     # Platform config tests (batch-13)
     Platform/test_platform_config.cpp
@@ -349,6 +350,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     Input/test_gamepad_state.cpp
     Input/test_mouse_state.cpp
     Input/test_keyboard_state.cpp
+    Input/test_touch_input.cpp
     Input/test_ui_key_repeat_sdl.cpp
     Input/test_rumble_manager.cpp
 
@@ -465,6 +467,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     UI/test_optionsUI.cpp
     UI/test_press_button_page.cpp
     UI/test_press_key_page.cpp
+    UI/test_touch_page.cpp
     UI/test_ui_zbias_staircase.cpp
     UI/test_gameModule.cpp
     UI/test_viewer_cursor_overlay.cpp

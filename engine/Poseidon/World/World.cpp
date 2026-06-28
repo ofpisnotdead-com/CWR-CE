@@ -8,6 +8,7 @@
 #include <Poseidon/World/Scene/Scene.hpp>
 #include <Poseidon/Graphics/Core/Engine.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
+#include <Poseidon/Input/TouchInput.hpp>
 #include <Poseidon/Input/CheatCode.hpp>
 #include <Poseidon/Graphics/Rendering/Lighting/Lights.hpp>
 #include <Poseidon/Graphics/Rendering/Frame/WorldFrameObserver.hpp>
@@ -1634,6 +1635,8 @@ void World::Simulate(float deltaT, bool& enableDraw)
         {
             _warningMessage->OnDraw(nullptr, 1);
         }
+
+        TouchInput_DrawOverlay(_engine);
 
         // Polymorphic cursor overlay — drawn last so the cursor
         // sits on top of all UI passes.  ViewerCursorOverlay paints

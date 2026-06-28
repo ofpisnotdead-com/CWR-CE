@@ -6,6 +6,7 @@
 #include <Poseidon/Input/KeyInput.hpp>
 #include <Poseidon/Input/UserAction.hpp>
 #include <SDL3/SDL_scancode.h>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 using namespace Poseidon;
@@ -523,6 +524,37 @@ TEST_CASE("InputSubsystem synthetic gamepad edges consume once", "[input][integr
     REQUIRE(sub.ConsumeSyntheticStickPov(4));
     REQUIRE_FALSE(sub.ConsumeSyntheticStickButton(0));
     REQUIRE_FALSE(sub.ConsumeSyntheticStickPov(4));
+}
+
+TEST_CASE("InputSubsystem synthetic left stick drives vehicle forward and back actions", "[input][integration]")
+{
+    auto& sub = InputSubsystem::Instance();
+    sub.LoadDefaultProfiles();
+    sub.SetSyntheticLeftStick(0.0f, 0.0f);
+    GInput.gameFocusLost = 0;
+
+    sub.SetSyntheticLeftStick(0.0f, -0.8f);
+    CHECK(sub.GetAction(InputContext::CarDriver, UAMoveForward) == Catch::Approx(0.8f));
+    CHECK(sub.GetAction(InputContext::CarDriver, UAMoveBack) == Catch::Approx(0.0f));
+
+    sub.SetSyntheticLeftStick(0.0f, 0.65f);
+    CHECK(sub.GetAction(InputContext::CarDriver, UAMoveForward) == Catch::Approx(0.0f));
+    CHECK(sub.GetAction(InputContext::CarDriver, UAMoveBack) == Catch::Approx(0.65f));
+
+    sub.SetSyntheticLeftStick(0.0f, 0.0f);
+}
+
+TEST_CASE("InputSubsystem synthetic left stick does not double count infantry left-Y bindings", "[input][integration]")
+{
+    auto& sub = InputSubsystem::Instance();
+    sub.LoadDefaultProfiles();
+    sub.SetSyntheticLeftStick(0.0f, -0.8f);
+    GInput.gameFocusLost = 0;
+
+    CHECK(sub.GetAction(InputContext::Infantry, UAMoveForward) == Catch::Approx(0.8f));
+    CHECK(sub.GetAction(InputContext::Infantry, UAMoveBack) == Catch::Approx(0.0f));
+
+    sub.SetSyntheticLeftStick(0.0f, 0.0f);
 }
 
 TEST_CASE("InputSubsystem SaveKeys does not crash", "[input][integration]")

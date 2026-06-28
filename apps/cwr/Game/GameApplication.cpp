@@ -857,6 +857,13 @@ int GameApplication::RunAfterArgumentParsing()
 
     RunMainLoop();
 
+#ifdef POSEIDON_TARGET_IOS
+    // SDL/UIKit can still unwind outer Objective-C autorelease state after our
+    // engine shutdown has completed. On device this has produced a post-quit
+    // EXC_BAD_ACCESS, so terminate once the game has finished its own cleanup.
+    _exit(m_exitCode);
+#endif
+
     return m_exitCode;
 }
 

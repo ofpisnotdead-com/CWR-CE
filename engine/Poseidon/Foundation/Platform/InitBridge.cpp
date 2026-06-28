@@ -105,6 +105,9 @@ IAudioSystem* CreateAudioSystem(void* hwnd, bool noSound, bool isDedicatedServer
     bool useDummy = noSound || isDedicatedServer;
     const std::string requestedBackend = ENGINE_CONFIG.requestedAudioBackend;
     const bool explicitSelection = !requestedBackend.empty() && _stricmp(requestedBackend.c_str(), "auto") != 0;
+    LOG_INFO(Audio, "Audio backend request: requested='{}' noSound={} dedicated={} available={}",
+             requestedBackend.empty() ? "auto" : requestedBackend.c_str(), noSound ? "yes" : "no",
+             isDedicatedServer ? "yes" : "no", AudioFactory::DescribeAvailableCodes());
     AudioCreateResult created = AudioFactory::Create(requestedBackend, useDummy);
 
     if (!explicitSelection)
@@ -118,12 +121,12 @@ IAudioSystem* CreateAudioSystem(void* hwnd, bool noSound, bool isDedicatedServer
 
         if (useDummy)
         {
-            LOG_DEBUG(Core, "Audio backend: {} (auto-selected: nosound={}, dedicated={})", created.backend.displayName,
-                      noSound, isDedicatedServer);
+            LOG_INFO(Audio, "Audio backend: {} (auto-selected: nosound={}, dedicated={})", created.backend.displayName,
+                     noSound, isDedicatedServer);
         }
         else
         {
-            LOG_DEBUG(Core, "Audio backend: {} (default)", created.backend.displayName);
+            LOG_INFO(Audio, "Audio backend: {} (default)", created.backend.displayName);
         }
         return created.system;
     }
@@ -150,7 +153,7 @@ IAudioSystem* CreateAudioSystem(void* hwnd, bool noSound, bool isDedicatedServer
         exit(1);
     }
 
-    LOG_DEBUG(Core, "Audio backend: {} (command-line)", created.backend.displayName);
+    LOG_INFO(Audio, "Audio backend: {} (command-line)", created.backend.displayName);
     return created.system;
 }
 

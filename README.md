@@ -140,6 +140,37 @@ open build/ios-arm64-device/CWR.xcodeproj
 The device preset uses automatic Xcode signing; override
 `CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM` locally if needed.
 
+### iOS touch controls status
+
+Touch controls are implemented in-engine through SDL3 finger events, not UIKit.
+The touch module lives in `engine/Poseidon/Input/TouchInput.*`, is enabled by
+default only for iOS builds, and feeds the existing input/controller UI paths.
+
+Current behavior:
+
+- Left virtual stick drives movement in gameplay and cursor movement in menus,
+  options, pause screens, and other non-gameplay views.
+- Vehicle forward/back is bridged from the left stick so touch up/down behaves
+  like keyboard throttle/brake in driver contexts.
+- Right-side drag controls aim/look in gameplay.
+- Right-side tap, when not on another touch button, performs a fire/primary
+  click action.
+- Touch buttons currently cover Fire, Action, Reload, Optics/Zoom, Map, and
+  Pause/Escape.
+- `Options > Controls > Touch Controls` exposes aim sensitivity and cursor
+  movement sensitivity; values are saved to `touch.cfg`.
+
+Known touch-control issues:
+
+- Main Menu and Pause Menu still draw only the escape icon plus part of reload
+  until entering a submenu or returning from gameplay. The touch hit zones are
+  active and near the screen edge, but the overlay visuals are incomplete there.
+- Overlay polish, full vehicle/aircraft parity, and advanced editor gestures are
+  still work in progress.
+
+For device debugging, the iOS app currently injects `--no-splash --show-fps` and
+writes launch/stdout/stderr logs into the app preferences directory.
+
 ## Layout
 
 - [Apps](apps/README.md) - executable targets

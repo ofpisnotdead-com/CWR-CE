@@ -32,6 +32,7 @@ using namespace Poseidon::Dev;
 extern void ProcessMouse(DWORD timeDelta);
 extern void ProcessKeyboard(DWORD sysTime, DWORD timeDelta);
 extern void ProcessJoystick();
+extern void ProcessTouch(int viewportWidth, int viewportHeight);
 extern bool IsMouseAcquired();
 extern void SDLInput_DispatchUIKeys();
 
@@ -233,6 +234,7 @@ bool AppIdle()
     {
         // Dispatch UI key events buffered by SDL input processing
         SDLInput_DispatchUIKeys();
+        ProcessTouch(GEngine ? GEngine->Width() : 0, GEngine ? GEngine->Height() : 0);
         if (ENGINE_CONFIG.useWindow && !IsMouseAcquired() || !enableDraw)
         {
             RenderFrame(deltaT, enableDraw);

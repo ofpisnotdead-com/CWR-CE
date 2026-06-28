@@ -1,4 +1,5 @@
 #include <Poseidon/Core/Global.hpp>
+#include <Poseidon/Input/TouchInput.hpp>
 #include <Poseidon/Foundation/Types/Memtype.h>
 
 namespace Poseidon
@@ -25,6 +26,11 @@ void ProcessKeyboard(DWORD sysTime, DWORD timeDelta)
 void ProcessJoystick()
 {
     ProcessJoystick_SDL();
+}
+
+void ProcessTouch(int viewportWidth, int viewportHeight)
+{
+    Poseidon::TouchInput_ProcessFrame(viewportWidth, viewportHeight);
 }
 
 void SetSkipKeys(bool skip)

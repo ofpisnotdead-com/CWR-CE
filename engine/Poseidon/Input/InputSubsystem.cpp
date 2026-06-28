@@ -1,5 +1,6 @@
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Input/KeyInput.hpp>
+#include <Poseidon/Input/TouchInput.hpp>
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <Poseidon/Core/resincl.hpp>
@@ -7,6 +8,7 @@
 #include <Poseidon/UI/Settings/ContextControlsConfig.hpp>
 #include <Poseidon/UI/Settings/GamepadConfig.hpp>
 #include <Poseidon/UI/Settings/MouseConfig.hpp>
+#include <Poseidon/UI/Settings/TouchConfig.hpp>
 #include <SDL3/SDL_scancode.h>
 #include <Poseidon/UI/Locale/StringtableExt.hpp>
 #include <math.h>
@@ -32,6 +34,10 @@ std::string MouseCfgPath()
 std::string GamepadCfgPath()
 {
     return GamePaths::Instance().UserDir() + "gamepad.cfg";
+}
+std::string TouchCfgPath()
+{
+    return GamePaths::Instance().UserDir() + "touch.cfg";
 }
 std::string ContextControlsCfgPath()
 {
@@ -471,6 +477,16 @@ static bool QueryProfileActionToDo(Input& in,
     return found;
 }
 
+static bool ActionHasGamepadAxisBinding(const InputProfile& profile, UserAction action, int axis)
+{
+    for (const InputBinding& binding : profile.GetBindingEntries(action))
+    {
+        if (binding.code.device() == InputDevice::GamepadAxis && binding.code.code() == axis)
+            return true;
+    }
+    return false;
+}
+
 InputSubsystem& InputSubsystem::Instance()
 {
     static InputSubsystem instance;
@@ -602,7 +618,26 @@ float InputSubsystem::GetAction(InputContext ctx, UserAction action, bool checkF
     const int idx = static_cast<int>(ctx);
     if (idx < 0 || idx >= kNumContexts)
         return 0.0f;
-    return QueryProfileAction(GInput, profiles_[idx], action, checkFocus);
+
+    const InputProfile& profile = profiles_[idx];
+    float value = QueryProfileAction(GInput, profile, action, checkFocus);
+
+    // Touch's virtual left stick should behave like keyboard forward/back
+    // even in vehicle contexts whose physical gamepad defaults use triggers.
+    // If the active profile already binds left-stick Y for this action
+    // (infantry, custom bindings), QueryProfileAction has already included it.
+    if (checkFocus && GInput.gameFocusLost > 0)
+        return value;
+    if ((action == UAMoveForward || action == UAMoveBack) && syntheticLeftStickY_ != 0.0f &&
+        !ActionHasGamepadAxisBinding(profile, action, 1))
+    {
+        if (action == UAMoveForward)
+            value += std::max(0.0f, -syntheticLeftStickY_);
+        else
+            value += std::max(0.0f, syntheticLeftStickY_);
+    }
+
+    return value;
 }
 
 bool InputSubsystem::GetActionToDo(UserAction action, bool reset, bool checkFocus)
@@ -1070,6 +1105,18 @@ void InputSubsystem::LoadKeys()
     GInput.gamepad.deadzoneStick = gamepad.deadzoneStick;
     GInput.gamepad.deadzoneTrigger = gamepad.deadzoneTrigger;
     GInput.gamepad.lookSensitivity = gamepad.lookSensitivity;
+
+    // Touch scalars — touch.cfg. Runtime state lives in TouchInput.
+    TouchConfig touch;
+    const std::string touchPath = TouchCfgPath();
+    if (!touch.Load(touchPath))
+    {
+        touch.LoadDefaults();
+        touch.Save(touchPath);
+    }
+    touch.Normalize();
+    TouchInput_SetAimSensitivity(touch.aimSensitivity);
+    TouchInput_SetCursorSensitivity(touch.cursorSensitivity);
 }
 void InputSubsystem::SaveKeys()
 {
@@ -1090,6 +1137,11 @@ void InputSubsystem::SaveKeys()
     mouse.sensitivityX = GInput.mouse.sensitivityX;
     mouse.sensitivityY = GInput.mouse.sensitivityY;
     mouse.Save(MouseCfgPath());
+
+    TouchConfig touch;
+    touch.aimSensitivity = TouchInput_GetAimSensitivity();
+    touch.cursorSensitivity = TouchInput_GetCursorSensitivity();
+    touch.Save(TouchCfgPath());
 }
 
 UserAction InputSubsystem::FindBindingConflict(int packedCode, UserAction excludeAction, int excludeSlot,
@@ -1341,6 +1393,22 @@ void InputSubsystem::SetSyntheticLeftStick(float x, float y)
             GInput.gamepad.jAxisBigLastActive[i] = Glob.uiTime;
         }
     }
+}
+bool InputSubsystem::HasSyntheticStickInput() const
+{
+    if (syntheticLeftStickX_ != 0.0f || syntheticLeftStickY_ != 0.0f)
+        return true;
+    for (bool value : syntheticStickButtons_)
+    {
+        if (value)
+            return true;
+    }
+    for (bool value : syntheticStickPov_)
+    {
+        if (value)
+            return true;
+    }
+    return false;
 }
 bool InputSubsystem::ConsumeSyntheticStickButton(int i)
 {

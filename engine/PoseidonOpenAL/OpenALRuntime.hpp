@@ -213,6 +213,15 @@ inline bool TryLoadModule()
 inline bool ResolveFunctions()
 {
     Api resolved;
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+#define RESOLVE_REQUIRED_OPENAL_FUNCTION(name) resolved.name = &::name;
+    OPENAL_CORE_FUNCTIONS(RESOLVE_REQUIRED_OPENAL_FUNCTION)
+#undef RESOLVE_REQUIRED_OPENAL_FUNCTION
+
+#define RESOLVE_OPTIONAL_OPENAL_FUNCTION(name) resolved.name = reinterpret_cast<decltype(resolved.name)>(LookupSymbol(#name));
+    OPENAL_EFX_FUNCTIONS(RESOLVE_OPTIONAL_OPENAL_FUNCTION)
+#undef RESOLVE_OPTIONAL_OPENAL_FUNCTION
+#else
 #define RESOLVE_REQUIRED_OPENAL_FUNCTION(name)                                                                         \
     resolved.name = reinterpret_cast<decltype(resolved.name)>(LookupSymbol(#name));                                    \
     if (resolved.name == nullptr)                                                                                       \
@@ -227,6 +236,7 @@ inline bool ResolveFunctions()
     resolved.name = reinterpret_cast<decltype(resolved.name)>(LookupSymbol(#name));
     OPENAL_EFX_FUNCTIONS(RESOLVE_OPTIONAL_OPENAL_FUNCTION)
 #undef RESOLVE_OPTIONAL_OPENAL_FUNCTION
+#endif
 
     GetApiStorage() = resolved;
     return true;
