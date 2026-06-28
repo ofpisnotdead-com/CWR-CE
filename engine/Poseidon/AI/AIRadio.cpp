@@ -9,6 +9,7 @@
 #include <Poseidon/World/Terrain/Landscape.hpp>
 #include <Random/randomGen.hpp>
 #include <Poseidon/Core/Global.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <Poseidon/UI/Locale/StringtableExt.hpp>
 
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
@@ -1423,16 +1424,8 @@ void RadioChannel::Say(RString waveName, AIUnit* sender, RString senderName, RSt
         }
         GChatList.Add(_chatChannel, sender, buffer, false, false);
 
-        RString dir;
-        if (player.GetLength() > 0)
-        {
-            dir = RString("tmp\\players\\") + player + RString("\\sound\\");
-        }
-        else
-        {
-            dir = GetUserDirectory() + RString("sound\\");
-        }
-        pars.name = dir + RString(waveName + 1);
+        pars.name = Poseidon::BuildNetworkCustomRadioSoundPath(player, RString(waveName + 1),
+                                                               GetUserDirectory() + RString("sound\\"));
         pars.freq = 1;
         pars.freqRnd = 1;
         pars.vol = 1;

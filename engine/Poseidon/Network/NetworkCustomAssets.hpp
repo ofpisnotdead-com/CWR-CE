@@ -217,20 +217,30 @@ inline RString BuildNetworkServerPlayerAssetUploadPath(const RString& serverTmpD
 
 inline RString BuildNetworkPlayerSoundRelativePath(const RString& playerName, const RString& soundName)
 {
-    if (!IsSafeNetworkAssetPathComponent(playerName) || !IsSafeNetworkAssetPathComponent(soundName))
+    if (!IsNetworkPlayerStorageKey(playerName) || !IsSafeNetworkAssetPathComponent(soundName))
     {
         return RString();
     }
     return RString("players/") + playerName + RString("/sound/") + soundName;
 }
 
+inline RString BuildNetworkPlayerSoundRelativePath(int playerId, const RString& soundName)
+{
+    return BuildNetworkPlayerSoundRelativePath(BuildNetworkPlayerStorageKey(playerId), soundName);
+}
+
 inline RString BuildNetworkPlayerSoundRelativeDir(const RString& playerName)
 {
-    if (!IsSafeNetworkAssetPathComponent(playerName))
+    if (!IsNetworkPlayerStorageKey(playerName))
     {
         return RString();
     }
     return RString("players/") + playerName + RString("/sound/");
+}
+
+inline RString BuildNetworkPlayerSoundRelativeDir(int playerId)
+{
+    return BuildNetworkPlayerSoundRelativeDir(BuildNetworkPlayerStorageKey(playerId));
 }
 
 inline RString BuildNetworkPlayerSoundTmpPath(const RString& playerName, const RString& soundName)
@@ -239,10 +249,45 @@ inline RString BuildNetworkPlayerSoundTmpPath(const RString& playerName, const R
     return relative.GetLength() > 0 ? RString("tmp/") + relative : RString();
 }
 
+inline RString BuildNetworkPlayerSoundTmpPath(int playerId, const RString& soundName)
+{
+    return BuildNetworkPlayerSoundTmpPath(BuildNetworkPlayerStorageKey(playerId), soundName);
+}
+
 inline RString BuildNetworkPlayerSoundTmpDir(const RString& playerName)
 {
     const RString relative = BuildNetworkPlayerSoundRelativeDir(playerName);
     return relative.GetLength() > 0 ? RString("tmp/") + relative : RString();
+}
+
+inline RString BuildNetworkPlayerSoundTmpDir(int playerId)
+{
+    return BuildNetworkPlayerSoundTmpDir(BuildNetworkPlayerStorageKey(playerId));
+}
+
+inline RString BuildNetworkServerPlayerSoundUploadDir(const RString& serverTmpDir, int playerId)
+{
+    return BuildNetworkServerUploadPath(serverTmpDir, BuildNetworkPlayerSoundRelativeDir(playerId));
+}
+
+inline RString BuildNetworkServerPlayerSoundUploadPath(const RString& serverTmpDir, int playerId,
+                                                       const RString& soundName)
+{
+    return BuildNetworkServerUploadPath(serverTmpDir, BuildNetworkPlayerSoundRelativePath(playerId, soundName));
+}
+
+inline RString BuildNetworkCustomRadioSoundPath(const RString& remotePlayerName, const RString& soundName,
+                                                const RString& localSoundDir)
+{
+    if (remotePlayerName.GetLength() > 0)
+    {
+        return BuildNetworkPlayerSoundTmpPath(remotePlayerName, soundName);
+    }
+    if (!IsSafeNetworkAssetPathComponent(soundName))
+    {
+        return RString();
+    }
+    return localSoundDir + soundName;
 }
 
 inline RString BuildNetworkTransferredAssetProbeTmpPath(const RString& kind, const RString& owner, const RString& name)
@@ -250,6 +295,10 @@ inline RString BuildNetworkTransferredAssetProbeTmpPath(const RString& kind, con
     if (stricmp(kind, "player") == 0 || stricmp(kind, "playerFace") == 0)
     {
         return BuildNetworkPlayerAssetTmpPath(owner, name);
+    }
+    if (stricmp(kind, "playerSound") == 0 || stricmp(kind, "sound") == 0)
+    {
+        return BuildNetworkPlayerSoundTmpPath(owner, name);
     }
     return RString();
 }

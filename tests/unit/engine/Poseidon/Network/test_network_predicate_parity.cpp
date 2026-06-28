@@ -245,9 +245,10 @@ TEST_CASE("Transferred custom asset paths are confined to expected temp namespac
 
     REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/face.jpg")));
     REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/face.paa")));
-    REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/sound/radio.ogg")));
+    REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/sound/radio.ogg")));
 
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/face.jpg")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/sound/radio.ogg")));
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/face.gif")));
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/../face.jpg")));
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Al/ice/face.jpg")));
@@ -291,6 +292,84 @@ TEST_CASE("Server player upload paths require safe player names and exact temp p
                                                                 tmp, 42));
     REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("server-tmp/players/4/2/face.jpg"),
                                                                 tmp, 42));
+}
+
+TEST_CASE("Player custom sound paths reject unsafe path components", "[network][assets][sound]")
+{
+    const RString localSoundDir = RString("users") + RString(PATH_SEP_STR) + RString("Alice") +
+                                  RString(PATH_SEP_STR) + RString("sound") + RString(PATH_SEP_STR);
+
+    REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpDir(42) == RString("tmp/players/42/sound/"));
+    REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpPath(42, RString("radio.ogg")) ==
+            RString("tmp/players/42/sound/radio.ogg"));
+    REQUIRE(Poseidon::BuildNetworkCustomRadioSoundPath(RString("42"), RString("radio.ogg"), localSoundDir) ==
+            RString("tmp/players/42/sound/radio.ogg"));
+    REQUIRE(Poseidon::BuildNetworkCustomRadioSoundPath(RString("Alice"), RString("radio.ogg"), localSoundDir)
+                .GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkCustomRadioSoundPath(RString(), RString("radio.ogg"), localSoundDir) ==
+            localSoundDir + RString("radio.ogg"));
+
+    REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpPath(RString("Al/ice"), RString("radio.ogg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpPath(42, RString("../radio.ogg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpPath(42, RString("nested/radio.ogg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpPath(42, RString("C:radio.ogg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkCustomRadioSoundPath(RString("42"), RString("../radio.ogg"), localSoundDir)
+                .GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkCustomRadioSoundPath(RString(), RString("../radio.ogg"), localSoundDir)
+                .GetLength() == 0);
+}
+
+TEST_CASE("Transferred custom sound paths are confined to player temp sound directories", "[network][assets][sound]")
+{
+    REQUIRE(Poseidon::IsNetworkTransferredAssetSizeAllowed(128 * 1024, 128 * 1024));
+    REQUIRE_FALSE(Poseidon::IsNetworkTransferredAssetSizeAllowed(128 * 1024 + 1, 128 * 1024));
+    REQUIRE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/players/42/sound/radio.ogg"), 128 * 1024,
+                                                          128 * 1024));
+    REQUIRE_FALSE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/players/42/sound/radio.ogg"),
+                                                                128 * 1024 + 1, 128 * 1024));
+
+    REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/sound/radio.ogg")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/sound/nested/radio.ogg")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/sound/../radio.ogg")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Al/ice/sound/radio.ogg")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("../outside.bin")));
+}
+
+TEST_CASE("Transferred custom sound probe maps semantic asset names to temp paths", "[network][assets][sound]")
+{
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("playerSound"), RString("42"),
+                                                              RString("radio.ogg")) ==
+            RString("tmp/players/42/sound/radio.ogg"));
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("sound"), RString("42"),
+                                                              RString("radio.ogg")) ==
+            RString("tmp/players/42/sound/radio.ogg"));
+
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("playerSound"), RString("42"),
+                                                              RString("nested/radio.ogg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("playerSound"), RString("../Alice"),
+                                                              RString("radio.ogg")).GetLength() == 0);
+}
+
+TEST_CASE("Server player upload paths accept custom sounds only under the player's safe prefix",
+          "[network][upload][sound]")
+{
+    const RString tmp = RString("server-tmp");
+    const RString playerDir = RString("server-tmp/players/42/");
+    const RString soundDir = playerDir + RString("sound/");
+
+    REQUIRE(Poseidon::BuildNetworkServerPlayerUploadDir(tmp, 42) == playerDir);
+    REQUIRE(Poseidon::BuildNetworkServerPlayerSoundUploadDir(tmp, 42) == soundDir);
+    REQUIRE(Poseidon::BuildNetworkServerPlayerSoundUploadPath(tmp, 42, RString("radio.ogg")) ==
+            soundDir + RString("radio.ogg"));
+    REQUIRE(Poseidon::IsSafeNetworkServerPlayerUploadPath(soundDir + RString("radio.ogg"), tmp, 42));
+
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(
+        soundDir + RString("nested/radio.ogg"), tmp, 42));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(
+        RString("server-tmp/players/43/sound/radio.ogg"),
+        tmp, 42));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(
+        soundDir + RString("../radio.ogg"), tmp, 42));
 }
 
 // Transcription of the original relay guard pair:

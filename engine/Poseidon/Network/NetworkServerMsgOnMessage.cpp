@@ -90,18 +90,13 @@ extern int MaxCustomFileSize;
 
 static bool CheckValidUpload(RString path, int player)
 {
-    RString prefixShouldBe = Poseidon::BuildNetworkServerPlayerUploadDir(GetServerTmpDir(), player);
-    if (strnicmp(path, prefixShouldBe, prefixShouldBe.GetLength()))
-    {
-        return false;
-    }
     return Poseidon::IsSafeNetworkServerPlayerUploadPath(path, GetServerTmpDir(), player);
 }
 
 static RString GetRelUploadPath(RString path, int player)
 {
     RString prefixShouldBe = Poseidon::BuildNetworkServerPlayerUploadDir(GetServerTmpDir(), player);
-    if (strnicmp(path, prefixShouldBe, prefixShouldBe.GetLength()))
+    if (prefixShouldBe.GetLength() == 0 || strnicmp(path, prefixShouldBe, prefixShouldBe.GetLength()))
     {
         return path;
     }

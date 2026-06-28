@@ -9,6 +9,7 @@ using namespace Poseidon;
 #include <Poseidon/Network/NetworkClientCommon.hpp>
 #include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <Poseidon/Network/NetworkScriptValueCodec.hpp>
+#include <Poseidon/Network/NetworkSoundReplication.hpp>
 #include <Poseidon/Network/WireBounds.hpp>
 #include <Poseidon/Core/Global.hpp>
 // #include "strIncl.hpp"
@@ -510,30 +511,38 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 if (sounds.Size() > 0)
                 {
                     RString srcDir = Poseidon::GetUserDirectory() + RString("sound/");
-                    RString dstDir = RString("tmp/players/") + identity.name + RString("/sound/");
-                    CreatePath(dstDir);
-                    RString serverDir = GetServerTmpDir() + RString("/players/") + identity.name + RString("/sound/");
-                    if (!transfer)
+                    RString dstDir = Poseidon::BuildNetworkPlayerSoundTmpDir(identity.dpnid);
+                    RString serverDir = Poseidon::BuildNetworkServerPlayerSoundUploadDir(GetServerTmpDir(),
+                                                                                          identity.dpnid);
+                    if (dstDir.GetLength() > 0 && serverDir.GetLength() > 0)
                     {
-                        CreatePath(serverDir);
-                    }
-                    for (int i = 0; i < sounds.Size(); i++)
-                    {
-                        RString src = srcDir + sounds[i];
-                        RString dst = dstDir + sounds[i];
-                        // check file size
-                        // do not copy file if it is too large
-                        if (FileSize(src) < MaxCustomSoundSize)
+                        CreatePath(dstDir);
+                        if (!transfer)
                         {
-                            ::CopyFile(src, dst, FALSE);
-                            RString server = serverDir + sounds[i];
-                            if (transfer)
+                            CreatePath(serverDir);
+                        }
+                        for (int i = 0; i < sounds.Size(); i++)
+                        {
+                            RString dst = Poseidon::BuildNetworkPlayerSoundTmpPath(identity.dpnid, sounds[i]);
+                            RString relative = Poseidon::BuildNetworkPlayerSoundRelativePath(identity.dpnid, sounds[i]);
+                            if (dst.GetLength() == 0 || relative.GetLength() == 0)
                             {
-                                TransferFileToServer(server, src);
+                                continue;
                             }
-                            else
+                            RString src = srcDir + sounds[i];
+                            if (FileSize(src) < MaxCustomSoundSize)
                             {
-                                ::CopyFile(src, server, FALSE);
+                                ::CopyFile(src, dst, FALSE);
+                                RString server = Poseidon::BuildNetworkServerPlayerSoundUploadPath(
+                                    GetServerTmpDir(), identity.dpnid, sounds[i]);
+                                if (transfer)
+                                {
+                                    TransferFileToServer(server, src);
+                                }
+                                else
+                                {
+                                    ::CopyFile(src, server, FALSE);
+                                }
                             }
                         }
                     }
@@ -1463,28 +1472,12 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
                 if (info.creator == sound.creator && info.id == sound.soundId)
                 {
-                    switch (sound.state)
+                    const bool applied = Poseidon::ApplyReplicatedNetworkSoundState(
+                        info.wave, static_cast<SoundStateType>(sound.state),
+                        [](IWave* wave) { GSoundScene->DeleteSound(wave); });
+                    if (!applied)
                     {
-                        case SSRestart:
-                            info.wave->Restart();
-                            break;
-                        case SSStop:
-                            GSoundScene->DeleteSound(info.wave);
-                            // remove wave - it may never be started again
-                            // info.wave is link and should be nullptr now
-                            NET_ERROR(!info.wave);
-                            break;
-                        case SSRepeat:
-                            info.wave->Repeat(1000);
-                            break;
-                        case SSLastLoop:
-                            info.wave->LastLoop();
-                            // remove wave - it may never be started again
-                            info.wave = nullptr;
-                            break;
-                        default:
-                            Fail("Sound state");
-                            break;
+                        Fail("Sound state");
                     }
                 }
                 i++;
@@ -1748,7 +1741,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     RString player;
                     if (chat.wave[0] == '#' && chat.sender)
                     {
-                        player = chat.sender->GetPerson()->GetInfo()._name;
+                        player = Poseidon::BuildNetworkPlayerStorageKey(chat.sender->GetPerson()->GetRemotePlayer());
                     }
                     channel->Say(chat.wave, chat.sender, chat.senderName, player, 2.0);
                 }

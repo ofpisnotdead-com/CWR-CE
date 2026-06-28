@@ -225,7 +225,7 @@ class NetworkComponent : public INetworkComponent
     // Transfer player's face from server to client
     void TransferFace(int to, int player);
     // Transfer player's custom radio messages from server to client
-    void TransferCustomRadio(int to, RString player);
+    void TransferCustomRadio(int to, int player);
 
 #if _ENABLE_CHEATS
     // Write into statistics info about sent message

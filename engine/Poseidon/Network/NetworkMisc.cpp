@@ -1003,14 +1003,18 @@ void NetworkComponent::TransferFace(int to, int player)
     }
 }
 
-void NetworkComponent::TransferCustomRadio(int to, RString player)
+void NetworkComponent::TransferCustomRadio(int to, int player)
 {
     // user only for transfer from server to clients
     NetworkClient* client = _parent->GetClient();
     bool notBotClient = !client || client->GetPlayer() != to;
 
-    RString srcDir = GetServerTmpDir() + RString("/players/") + player + RString("/sound/");
-    RString dstDir = RString("tmp/players/") + player + RString("/sound/");
+    RString srcDir = Poseidon::BuildNetworkServerPlayerSoundUploadDir(GetServerTmpDir(), player);
+    RString dstDir = Poseidon::BuildNetworkPlayerSoundTmpDir(player);
+    if (srcDir.GetLength() == 0 || dstDir.GetLength() == 0)
+    {
+        return;
+    }
 
     std::error_code ec;
     for (const auto& entry : std::filesystem::directory_iterator(std::string(srcDir), ec))
@@ -1018,8 +1022,12 @@ void NetworkComponent::TransferCustomRadio(int to, RString player)
         if (!entry.is_regular_file())
             continue;
         RString filename = entry.path().filename().string().c_str();
-        RString src = srcDir + filename;
-        RString dst = dstDir + filename;
+        RString src = Poseidon::BuildNetworkServerPlayerSoundUploadPath(GetServerTmpDir(), player, filename);
+        RString dst = Poseidon::BuildNetworkPlayerSoundTmpPath(player, filename);
+        if (src.GetLength() == 0 || dst.GetLength() == 0)
+        {
+            continue;
+        }
         if (notBotClient)
         {
             TransferFile(to, dst, src);

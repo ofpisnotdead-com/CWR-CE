@@ -12,6 +12,7 @@
 #include <Poseidon/UI/Locale/StringtableExt.hpp>
 
 #include <Poseidon/Network/NetworkConfig.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <limits.h>
 #include <stdio.h>
 #include <Poseidon/Foundation/Common/FltOpts.hpp>
@@ -635,7 +636,7 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
                 {
                     TransferFace(identity.dpnid, player.dpnid);
                 }
-                TransferCustomRadio(identity.dpnid, player.name);
+                TransferCustomRadio(identity.dpnid, player.dpnid);
             }
             // send new face and sound to all players
             //						if (!client || client->GetPlayer() != player.dpnid)
@@ -644,7 +645,7 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
                 {
                     TransferFace(player.dpnid, identity.dpnid);
                 }
-                TransferCustomRadio(player.dpnid, identity.name);
+                TransferCustomRadio(player.dpnid, identity.dpnid);
             }
             // send all identities to new player
             NetworkPlayerInfo* pInfo = GetPlayerInfo(player.dpnid);
@@ -792,18 +793,13 @@ void NetworkServer::SetPlayerState(int dpid, NetworkGameState state)
 
 static bool CheckValidUpload(RString path, int player)
 {
-    RString prefixShouldBe = Poseidon::BuildNetworkServerPlayerUploadDir(GetServerTmpDir(), player);
-    if (strnicmp(path, prefixShouldBe, prefixShouldBe.GetLength()))
-    {
-        return false;
-    }
     return Poseidon::IsSafeNetworkServerPlayerUploadPath(path, GetServerTmpDir(), player);
 }
 
 static RString GetRelUploadPath(RString path, int player)
 {
     RString prefixShouldBe = Poseidon::BuildNetworkServerPlayerUploadDir(GetServerTmpDir(), player);
-    if (strnicmp(path, prefixShouldBe, prefixShouldBe.GetLength()))
+    if (prefixShouldBe.GetLength() == 0 || strnicmp(path, prefixShouldBe, prefixShouldBe.GetLength()))
     {
         return path;
     }

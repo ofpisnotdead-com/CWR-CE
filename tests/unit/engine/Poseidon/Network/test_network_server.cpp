@@ -2,10 +2,14 @@
 #include <catch2/catch_approx.hpp>
 
 #include <Poseidon/AI/AI.hpp>
+#include <Poseidon/Audio/Dummy/WaveDummy.hpp>
 #include <Poseidon/Network/NetworkImpl.hpp>
 #include <Poseidon/Network/NetworkMissionTransfer.hpp>
 #include <Poseidon/Network/NetworkServerCommon.hpp>
+#include <Poseidon/Network/NetworkSoundReplication.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
+#include <filesystem>
+#include <fstream>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -15,6 +19,91 @@
 #include <Poseidon/Foundation/Containers/Array.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 #include <Poseidon/Foundation/Types/Pointers.hpp>
+
+namespace
+{
+class TestNetworkComponent : public NetworkComponent
+{
+  public:
+    TestNetworkComponent() : NetworkComponent(nullptr) {}
+
+    using NetworkComponent::ReceiveFileSegment;
+
+    int PendingReceivedBytes(const RString& path) const
+    {
+        for (int i = 0; i < _files.Size(); ++i)
+        {
+            if (_files[i].fileName == path)
+            {
+                return _files[i].received;
+            }
+        }
+        return -1;
+    }
+
+    bool DXSendMsg(int, NetworkMessageRaw&, DWORD&, NetMsgFlags) override { return false; }
+    void OnSimulate() override {}
+    void OnMessage(int, NetworkMessage*, NetworkMessageType) override {}
+    unsigned CleanUpMemory() override { return 0; }
+    const char* GetDebugName() const override { return "test"; }
+    NetworkMessageFormatBase* GetFormat(int) override { return nullptr; }
+    NetworkObject* GetObject(NetworkId&) override { return nullptr; }
+
+  protected:
+    void EnqueueMsg(int, NetworkMessage*, NetworkMessageType) override {}
+    void EnqueueMsgNonGuaranteed(int, NetworkMessage*, NetworkMessageType) override {}
+};
+
+class TestWave : public Poseidon::WaveDummy
+{
+  public:
+    TestWave() : Poseidon::WaveDummy(RString("test")) {}
+
+    void Repeat(int repeat = 1) override
+    {
+        repeatCount = repeat;
+        repeated = true;
+    }
+
+    void LastLoop() override
+    {
+        lastLooped = true;
+        Poseidon::WaveDummy::LastLoop();
+    }
+
+    void Stop() override
+    {
+        stopped = true;
+        Poseidon::WaveDummy::Stop();
+    }
+
+    bool repeated = false;
+    bool lastLooped = false;
+    bool stopped = false;
+    int repeatCount = 0;
+};
+
+TransferFileMessage MakeTransferSegment(const RString& path, int totalSize, int segment, int totalSegments, int offset,
+                                        const char* bytes)
+{
+    TransferFileMessage msg;
+    msg.path = path;
+    msg.totSize = totalSize;
+    msg.totSegments = totalSegments;
+    msg.curSegment = segment;
+    msg.offset = offset;
+    const int size = static_cast<int>(strlen(bytes));
+    msg.data.Resize(size);
+    memcpy(msg.data.Data(), bytes, size);
+    return msg;
+}
+
+std::string ReadBinaryFile(const std::filesystem::path& path)
+{
+    std::ifstream input(path, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+}
+} // namespace
 
 TEST_CASE("networkImpl.hpp compiles", "[network][networkServer]")
 {
@@ -99,6 +188,59 @@ TEST_CASE("direct voice route refresh notifies joining listener about active spe
         activeSpeaker, changedPlayer, createState - 1, directChannel, createState, directChannel));
     REQUIRE_FALSE(Poseidon::ShouldNotifyJoinedPlayerAboutActiveDirectSpeaker(activeSpeaker, changedPlayer, createState,
                                                                              groupChannel, createState, directChannel));
+}
+
+TEST_CASE("replicated sound state clears stopped and last-looped waves", "[network][sound]")
+{
+    Link<IWave> repeating = new TestWave();
+    REQUIRE(Poseidon::ApplyReplicatedNetworkSoundState(repeating, SSRepeat, [](IWave*) { FAIL("unexpected delete"); }));
+    REQUIRE(static_cast<TestWave*>(repeating.GetRef())->repeated);
+    REQUIRE(static_cast<TestWave*>(repeating.GetRef())->repeatCount == 1000);
+
+    Link<IWave> lastLoop = new TestWave();
+    TestWave* lastLoopWave = static_cast<TestWave*>(lastLoop.GetRef());
+    REQUIRE(Poseidon::ApplyReplicatedNetworkSoundState(lastLoop, SSLastLoop, [](IWave*) { FAIL("unexpected delete"); }));
+    REQUIRE(lastLoopWave->lastLooped);
+    REQUIRE(lastLoop == nullptr);
+
+    Link<IWave> stopped = new TestWave();
+    bool deleted = false;
+    REQUIRE(Poseidon::ApplyReplicatedNetworkSoundState(stopped,
+                                                       SSStop,
+                                                       [&deleted](IWave* wave)
+                                                       {
+                                                           deleted = true;
+                                                           wave->Stop();
+                                                       }));
+    REQUIRE(deleted);
+    REQUIRE(stopped == nullptr);
+}
+
+TEST_CASE("received file transfer segments tolerate duplicates and out-of-order completion", "[network][file-transfer]")
+{
+    const std::filesystem::path output = std::filesystem::current_path() / "tmp" / "network-receive-segment.bin";
+    std::error_code ec;
+    std::filesystem::remove(output, ec);
+
+    TestNetworkComponent component;
+    const RString outputPath(output.string().c_str());
+
+    TransferFileMessage tail = MakeTransferSegment(outputPath, 6, 1, 2, 3, "DEF");
+    REQUIRE(component.ReceiveFileSegment(tail) == 0);
+    REQUIRE(component.PendingReceivedBytes(outputPath) == 3);
+    REQUIRE_FALSE(std::filesystem::exists(output));
+
+    TransferFileMessage duplicateTail = MakeTransferSegment(outputPath, 6, 1, 2, 3, "DEF");
+    REQUIRE(component.ReceiveFileSegment(duplicateTail) == 0);
+    REQUIRE(component.PendingReceivedBytes(outputPath) == 3);
+    REQUIRE_FALSE(std::filesystem::exists(output));
+
+    TransferFileMessage head = MakeTransferSegment(outputPath, 6, 0, 2, 0, "ABC");
+    REQUIRE(component.ReceiveFileSegment(head) == 1);
+    REQUIRE(component.PendingReceivedBytes(outputPath) == -1);
+    REQUIRE(ReadBinaryFile(output) == "ABCDEF");
+
+    std::filesystem::remove(output, ec);
 }
 
 TEST_CASE("NetworkPlayerInfo jip flag defaults to false", "[network][networkServer][jip]")
