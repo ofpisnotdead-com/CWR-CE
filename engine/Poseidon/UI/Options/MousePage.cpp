@@ -25,15 +25,29 @@ const char* MousePage::CloseDescription()
     return LocalizeString("STR_DISP_MAIN_OPT_CLOSE_DESC");
 }
 
+int MousePage::FloatRangeToPercent(float value, float lo, float hi)
+{
+    if (hi <= lo)
+        return 0;
+    const float pct = (value - lo) / (hi - lo) * 100.0f;
+    return std::clamp(static_cast<int>(pct + 0.5f), 0, 100);
+}
+
+float MousePage::PercentToFloatRange(int percent, float lo, float hi)
+{
+    if (hi <= lo)
+        return lo;
+    return lo + (std::clamp(percent, 0, 100) / 100.0f) * (hi - lo);
+}
+
 int MousePage::SensitivityToPercent(float value)
 {
-    float pct = (value - 0.5f) / 1.5f * 100.0f;
-    return std::clamp((int)(pct + 0.5f), 0, 100);
+    return FloatRangeToPercent(value, 0.5f, 2.0f);
 }
 
 float MousePage::PercentToSensitivity(int percent)
 {
-    return 0.5f + (std::clamp(percent, 0, 100) / 100.0f) * 1.5f;
+    return PercentToFloatRange(percent, 0.5f, 2.0f);
 }
 
 int MousePage::DpiToIndex(bool normalize, int mouseDpi)
@@ -108,6 +122,16 @@ const char* MousePage::MouseProvider::RowLabel(int row) const
             return LocalizeString("STR_DISP_OPT_MOUSE_SENSITIVITY_Y");
         case kRowMouseDpi:
             return LocalizeStringWithFallback("STR_DISP_OPT_MOUSE_DPI", "Mouse DPI");
+        case kRowExtendedRange:
+            return LocalizeStringWithFallback("STR_DISP_OPT_MOUSE_EXTENDED_RANGE", "Advanced sensitivity range");
+        case kRowSmoothing:
+            return LocalizeStringWithFallback("STR_DISP_OPT_MOUSE_SMOOTHING", "Mouse smoothing");
+        case kRowAcceleration:
+            return LocalizeStringWithFallback("STR_DISP_OPT_MOUSE_ACCELERATION", "Mouse acceleration");
+        case kRowAccelExponent:
+            return LocalizeStringWithFallback("STR_DISP_OPT_MOUSE_ACCEL_STRENGTH", "Acceleration strength");
+        case kRowMenuCursorScale:
+            return LocalizeStringWithFallback("STR_DISP_OPT_MOUSE_MENU_CURSOR_SPEED", "Menu cursor speed");
         default:
             return "";
     }
@@ -129,6 +153,21 @@ const char* MousePage::MouseProvider::RowDescription(int row) const
             return LocalizeStringWithFallback(
                 "STR_DISP_OPT_MOUSE_DPI_DESC",
                 "Set this to your mouse's DPI (or close). Fine-tune with sensitivity for a smoother feel.");
+        case kRowExtendedRange:
+            return LocalizeStringWithFallback("STR_DISP_OPT_MOUSE_EXTENDED_RANGE_DESC",
+                                              "Allow sensitivity sliders to use 0.05x to 3.0x.");
+        case kRowSmoothing:
+            return LocalizeStringWithFallback("STR_DISP_OPT_MOUSE_SMOOTHING_DESC",
+                                              "Smooth uneven mouse input. Higher values add latency.");
+        case kRowAcceleration:
+            return LocalizeStringWithFallback("STR_DISP_OPT_MOUSE_ACCELERATION_DESC",
+                                              "Increase large mouse movements while keeping fine aim slower.");
+        case kRowAccelExponent:
+            return LocalizeStringWithFallback("STR_DISP_OPT_MOUSE_ACCEL_STRENGTH_DESC",
+                                              "Acceleration curve strength. Range 1.0x to 2.0x.");
+        case kRowMenuCursorScale:
+            return LocalizeStringWithFallback("STR_DISP_OPT_MOUSE_MENU_CURSOR_SPEED_DESC",
+                                              "Menu cursor speed separate from aiming. Range 0.1x to 4.0x.");
         default:
             return "";
     }
@@ -149,6 +188,16 @@ OptionsScrollList::RowDef MousePage::MouseProvider::RowFor(int row) const
             return {532, nullptr, -1};
         case kRowMouseDpi:
             return {542, kMouseDpiLabels, kMouseDpiPresetCount};
+        case kRowExtendedRange:
+            return {552, m_toggleOptions.data(), 2};
+        case kRowSmoothing:
+            return {562, nullptr, -1};
+        case kRowAcceleration:
+            return {572, m_toggleOptions.data(), 2};
+        case kRowAccelExponent:
+            return {582, nullptr, -1};
+        case kRowMenuCursorScale:
+            return {592, nullptr, -1};
         default:
             return {-1, nullptr, 0};
     }
@@ -172,14 +221,30 @@ int MousePage::MouseProvider::RowValue(int row) const
         case kRowButtonsReversed:
             return sub.IsMouseButtonsReversed() ? 1 : 0;
         case kRowSensitivityX:
-            return MousePage::SensitivityToPercent(sub.GetMouseSensitivityX());
+        {
+            const auto& t = sub.GetMouseTuning();
+            return MousePage::FloatRangeToPercent(sub.GetMouseSensitivityX(), t.SensMin(), t.SensMax());
+        }
         case kRowSensitivityY:
-            return MousePage::SensitivityToPercent(sub.GetMouseSensitivityY());
+        {
+            const auto& t = sub.GetMouseTuning();
+            return MousePage::FloatRangeToPercent(sub.GetMouseSensitivityY(), t.SensMin(), t.SensMax());
+        }
         case kRowMouseDpi:
         {
             const auto& t = sub.GetMouseTuning();
             return MousePage::DpiToIndex(t.dpiNormalize, t.mouseDpi);
         }
+        case kRowExtendedRange:
+            return sub.GetMouseTuning().extendedRange ? 1 : 0;
+        case kRowSmoothing:
+            return MousePage::FloatRangeToPercent(sub.GetMouseTuning().smoothing, 0.0f, 0.95f);
+        case kRowAcceleration:
+            return sub.GetMouseTuning().acceleration ? 1 : 0;
+        case kRowAccelExponent:
+            return MousePage::FloatRangeToPercent(sub.GetMouseTuning().accelExponent, 1.0f, 2.0f);
+        case kRowMenuCursorScale:
+            return MousePage::FloatRangeToPercent(sub.GetMouseTuning().menuCursorScale, 0.1f, 4.0f);
         default:
             return 0;
     }
@@ -201,11 +266,17 @@ void MousePage::MouseProvider::SetRowValue(int row, int value)
             sub.SetMouseButtonsReversed(value != 0);
             return;
         case kRowSensitivityX:
-            sub.SetMouseSensitivityX(MousePage::PercentToSensitivity(value));
+        {
+            const auto& t = sub.GetMouseTuning();
+            sub.SetMouseSensitivityX(MousePage::PercentToFloatRange(value, t.SensMin(), t.SensMax()));
             return;
+        }
         case kRowSensitivityY:
-            sub.SetMouseSensitivityY(MousePage::PercentToSensitivity(value));
+        {
+            const auto& t = sub.GetMouseTuning();
+            sub.SetMouseSensitivityY(MousePage::PercentToFloatRange(value, t.SensMin(), t.SensMax()));
             return;
+        }
         case kRowMouseDpi:
         {
             auto& t = sub.GetMouseTuning();
@@ -220,6 +291,30 @@ void MousePage::MouseProvider::SetRowValue(int row, int value)
             }
             return;
         }
+        case kRowExtendedRange:
+        {
+            auto& t = sub.GetMouseTuning();
+            if (value < 0 || value >= 2)
+                return;
+            t.extendedRange = value != 0;
+            sub.SetMouseSensitivityX(std::clamp(sub.GetMouseSensitivityX(), t.SensMin(), t.SensMax()));
+            sub.SetMouseSensitivityY(std::clamp(sub.GetMouseSensitivityY(), t.SensMin(), t.SensMax()));
+            return;
+        }
+        case kRowSmoothing:
+            sub.GetMouseTuning().smoothing = MousePage::PercentToFloatRange(value, 0.0f, 0.95f);
+            return;
+        case kRowAcceleration:
+            if (value < 0 || value >= 2)
+                return;
+            sub.GetMouseTuning().acceleration = value != 0;
+            return;
+        case kRowAccelExponent:
+            sub.GetMouseTuning().accelExponent = MousePage::PercentToFloatRange(value, 1.0f, 2.0f);
+            return;
+        case kRowMenuCursorScale:
+            sub.GetMouseTuning().menuCursorScale = MousePage::PercentToFloatRange(value, 0.1f, 4.0f);
+            return;
     }
 }
 

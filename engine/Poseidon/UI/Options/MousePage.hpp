@@ -1,8 +1,9 @@
 #pragma once
 
-// Mouse settings page — Y-axis inversion, button swap, sensitivity X / Y, Mouse DPI.
+// Mouse settings page — Y-axis inversion, button swap, sensitivity X / Y,
+// DPI, and advanced feel tuning.
 //
-// 5 rows + auto-appended Close.  All apply live (matching the
+// 10 rows + auto-appended Close.  All apply live (matching the
 // way the RscDisplayConfigure handled them).  Cancel via Close
 // snapshots the values on Mount and restores them — same pattern as
 // DisplayConfigure's `_old*` members, lifted into the page.
@@ -16,7 +17,6 @@
 #include <array>
 #include <string>
 
-
 namespace Poseidon
 {
 class MousePage : public ScrollListPage
@@ -26,6 +26,8 @@ class MousePage : public ScrollListPage
 
     static int SensitivityToPercent(float value);
     static float PercentToSensitivity(int percent);
+    static int FloatRangeToPercent(float value, float lo, float hi);
+    static float PercentToFloatRange(int percent, float lo, float hi);
 
     // Mouse DPI stepper mapping (pure, unit-tested).  Index 0 = "Off"; 1..N map to
     // kMouseDpiPresets.  DpiToIndex returns the nearest preset for display without
@@ -49,12 +51,17 @@ class MousePage : public ScrollListPage
       public:
         enum : int
         {
-            kRowReverseY        = 0,
+            kRowReverseY = 0,
             kRowButtonsReversed = 1,
-            kRowSensitivityX    = 2,
-            kRowSensitivityY    = 3,
-            kRowMouseDpi        = 4,
-            kRowCount           = 5,
+            kRowSensitivityX = 2,
+            kRowSensitivityY = 3,
+            kRowMouseDpi = 4,
+            kRowExtendedRange = 5,
+            kRowSmoothing = 6,
+            kRowAcceleration = 7,
+            kRowAccelExponent = 8,
+            kRowMenuCursorScale = 9,
+            kRowCount = 10,
         };
 
         int RowCount() const override { return kRowCount; }
@@ -78,12 +85,12 @@ class MousePage : public ScrollListPage
     // page is unmounting without an explicit save action — same posture
     // as DisplayPage's pending/applied bookkeeping, simpler shape since
     // every Mouse setting applies live with no Apply button).
-    bool  m_savedReverseY        = false;
-    bool  m_savedButtonsReversed = false;
-    float m_savedSensitivityX    = 1.0f;
-    float m_savedSensitivityY    = 1.0f;
-    bool  m_savedDpiNormalize    = false;
-    int   m_savedMouseDpi        = 1600;
+    bool m_savedReverseY = false;
+    bool m_savedButtonsReversed = false;
+    float m_savedSensitivityX = 1.0f;
+    float m_savedSensitivityY = 1.0f;
+    bool m_savedDpiNormalize = false;
+    int m_savedMouseDpi = 1600;
 };
 
 } // namespace Poseidon

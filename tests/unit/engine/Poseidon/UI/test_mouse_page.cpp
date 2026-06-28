@@ -8,6 +8,7 @@
 #include <Poseidon/UI/Options/MousePage.hpp>
 #include <Poseidon/UI/Options/OptionsScrollList.hpp>
 #include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <filesystem>
@@ -28,6 +29,11 @@ class MouseStateSnapshot
         sy = sub.GetMouseSensitivityY();
         norm = sub.GetMouseTuning().dpiNormalize;
         dpi = sub.GetMouseTuning().mouseDpi;
+        smoothing = sub.GetMouseTuning().smoothing;
+        acceleration = sub.GetMouseTuning().acceleration;
+        accelExponent = sub.GetMouseTuning().accelExponent;
+        menuCursorScale = sub.GetMouseTuning().menuCursorScale;
+        extendedRange = sub.GetMouseTuning().extendedRange;
     }
     ~MouseStateSnapshot()
     {
@@ -38,6 +44,11 @@ class MouseStateSnapshot
         sub.SetMouseSensitivityY(sy);
         sub.GetMouseTuning().dpiNormalize = norm;
         sub.GetMouseTuning().mouseDpi = dpi;
+        sub.GetMouseTuning().smoothing = smoothing;
+        sub.GetMouseTuning().acceleration = acceleration;
+        sub.GetMouseTuning().accelExponent = accelExponent;
+        sub.GetMouseTuning().menuCursorScale = menuCursorScale;
+        sub.GetMouseTuning().extendedRange = extendedRange;
     }
 
   private:
@@ -47,6 +58,11 @@ class MouseStateSnapshot
     float sy = 1.0f;
     bool norm = false;
     int dpi = 1600;
+    float smoothing = 0.0f;
+    bool acceleration = false;
+    float accelExponent = 1.0f;
+    float menuCursorScale = 1.0f;
+    bool extendedRange = false;
 };
 
 // MousePage's provider is a private member type — re-create the same
@@ -78,12 +94,12 @@ void LoadMainMenuStringtable()
 }
 } // namespace
 
-TEST_CASE("MousePage: provider exposes 5 rows + close", "[UI][MousePage]")
+TEST_CASE("MousePage: provider exposes mouse rows + close", "[UI][MousePage]")
 {
     TestableMousePage page;
     auto& p = page.Provider();
-    // 5 mouse rows (incl. Mouse DPI) + the auto-appended Close row.
-    CHECK(p.RowCount() == 6);
+    // 10 mouse rows (basic + advanced) + the auto-appended Close row.
+    CHECK(p.RowCount() == 11);
 }
 
 TEST_CASE("MousePage: row labels match the resource bundle expectations", "[UI][MousePage]")
@@ -98,7 +114,12 @@ TEST_CASE("MousePage: row labels match the resource bundle expectations", "[UI][
     CHECK(std::string(p.RowLabel(2)) == "Mouse sensitivity X");
     CHECK(std::string(p.RowLabel(3)) == "Mouse sensitivity Y");
     CHECK(std::string(p.RowLabel(4)) == "Mouse DPI");
-    // Row 5 is the Close action — label comes from the localized
+    CHECK(std::string(p.RowLabel(5)) == "Advanced sensitivity range");
+    CHECK(std::string(p.RowLabel(6)) == "Mouse smoothing");
+    CHECK(std::string(p.RowLabel(7)) == "Mouse acceleration");
+    CHECK(std::string(p.RowLabel(8)) == "Acceleration strength");
+    CHECK(std::string(p.RowLabel(9)) == "Menu cursor speed");
+    // Row 10 is the Close action — label comes from the localized
     // STR_DISP_CLOSE which the unit-test environment doesn't populate;
     // structural check (it exists as an action row) covered separately.
 }
@@ -113,6 +134,11 @@ TEST_CASE("MousePage: row descriptions are non-empty for every settable row", "[
     CHECK(std::string(p.RowDescription(1)) == "Swap left and right mouse buttons.");
     CHECK(std::string(p.RowDescription(2)) == "Horizontal mouse sensitivity. Range 0.5x to 2.0x.");
     CHECK(std::string(p.RowDescription(3)) == "Vertical mouse sensitivity. Range 0.5x to 2.0x.");
+    CHECK(std::string(p.RowDescription(5)) == "Allow sensitivity sliders to use 0.05x to 3.0x.");
+    CHECK(std::string(p.RowDescription(6)) == "Smooth uneven mouse input. Higher values add latency.");
+    CHECK(std::string(p.RowDescription(7)) == "Increase large mouse movements while keeping fine aim slower.");
+    CHECK(std::string(p.RowDescription(8)) == "Acceleration curve strength. Range 1.0x to 2.0x.");
+    CHECK(std::string(p.RowDescription(9)) == "Menu cursor speed separate from aiming. Range 0.1x to 4.0x.");
 }
 
 TEST_CASE("MousePage: kind is Stepper for toggles, Slider for sensitivities, Action for close", "[UI][MousePage]")
@@ -125,7 +151,12 @@ TEST_CASE("MousePage: kind is Stepper for toggles, Slider for sensitivities, Act
     CHECK(p.RowKind(2) == OptionsScrollList::KindSlider);  // Sensitivity X
     CHECK(p.RowKind(3) == OptionsScrollList::KindSlider);  // Sensitivity Y
     CHECK(p.RowKind(4) == OptionsScrollList::KindStepper); // Mouse DPI (preset select)
-    CHECK(p.RowKind(5) == OptionsScrollList::KindAction);  // Close
+    CHECK(p.RowKind(5) == OptionsScrollList::KindStepper); // Advanced sensitivity range
+    CHECK(p.RowKind(6) == OptionsScrollList::KindSlider);  // Mouse smoothing
+    CHECK(p.RowKind(7) == OptionsScrollList::KindStepper); // Mouse acceleration
+    CHECK(p.RowKind(8) == OptionsScrollList::KindSlider);  // Acceleration strength
+    CHECK(p.RowKind(9) == OptionsScrollList::KindSlider);  // Menu cursor speed
+    CHECK(p.RowKind(10) == OptionsScrollList::KindAction); // Close
 }
 
 TEST_CASE("MousePage: toggle rows round-trip through the InputSubsystem", "[UI][MousePage]")
@@ -173,6 +204,39 @@ TEST_CASE("MousePage: sensitivity slider maps 0..100 to 0.5..2.0 linearly", "[UI
     p.SetRowValue(3, -10);
     CHECK(sub.GetMouseSensitivityY() == 0.5f);
     p.SetRowValue(3, 200);
+    CHECK(sub.GetMouseSensitivityY() == 2.0f);
+}
+
+TEST_CASE("MousePage: advanced sensitivity range widens the sensitivity slider", "[UI][MousePage]")
+{
+    MouseStateSnapshot snap;
+    TestableMousePage page;
+    auto& p = page.Provider();
+    auto& sub = InputSubsystem::Instance();
+
+    sub.GetMouseTuning().extendedRange = false;
+    CHECK(p.RowValue(5) == 0);
+
+    p.SetRowValue(5, 1);
+    CHECK(sub.GetMouseTuning().extendedRange == true);
+    CHECK(p.RowValue(5) == 1);
+
+    p.SetRowValue(2, 0);
+    CHECK(sub.GetMouseSensitivityX() == Catch::Approx(0.05f));
+    p.SetRowValue(2, 100);
+    CHECK(sub.GetMouseSensitivityX() == Catch::Approx(3.0f));
+    p.SetRowValue(2, 50);
+    CHECK(sub.GetMouseSensitivityX() == Catch::Approx(1.525f));
+
+    sub.SetMouseSensitivityY(0.05f);
+    CHECK(p.RowValue(3) == 0);
+    sub.SetMouseSensitivityY(3.0f);
+    CHECK(p.RowValue(3) == 100);
+
+    sub.SetMouseSensitivityX(3.0f);
+    p.SetRowValue(5, 0);
+    CHECK(sub.GetMouseTuning().extendedRange == false);
+    CHECK(sub.GetMouseSensitivityX() == 2.0f);
     CHECK(sub.GetMouseSensitivityY() == 2.0f);
 }
 
@@ -236,6 +300,47 @@ TEST_CASE("MousePage: Mouse DPI row round-trips through the tuning", "[UI][Mouse
     p.SetRowValue(4, 9);
     CHECK(sub.GetMouseTuning().mouseDpi == 16000);
     CHECK(p.RowValue(4) == 9);
+}
+
+TEST_CASE("MousePage: advanced tuning rows round-trip through MouseTuning", "[UI][MousePage]")
+{
+    MouseStateSnapshot snap;
+    TestableMousePage page;
+    auto& p = page.Provider();
+    auto& sub = InputSubsystem::Instance();
+
+    p.SetRowValue(6, 0);
+    CHECK(sub.GetMouseTuning().smoothing == Catch::Approx(0.0f));
+    CHECK(p.RowValue(6) == 0);
+    p.SetRowValue(6, 50);
+    CHECK(sub.GetMouseTuning().smoothing == Catch::Approx(0.475f));
+    CHECK(p.RowValue(6) == 50);
+    p.SetRowValue(6, 100);
+    CHECK(sub.GetMouseTuning().smoothing == Catch::Approx(0.95f));
+    CHECK(p.RowValue(6) == 100);
+
+    p.SetRowValue(7, 1);
+    CHECK(sub.GetMouseTuning().acceleration == true);
+    CHECK(p.RowValue(7) == 1);
+    p.SetRowValue(7, 0);
+    CHECK(sub.GetMouseTuning().acceleration == false);
+    CHECK(p.RowValue(7) == 0);
+
+    p.SetRowValue(8, 0);
+    CHECK(sub.GetMouseTuning().accelExponent == Catch::Approx(1.0f));
+    p.SetRowValue(8, 50);
+    CHECK(sub.GetMouseTuning().accelExponent == Catch::Approx(1.5f));
+    CHECK(p.RowValue(8) == 50);
+    p.SetRowValue(8, 100);
+    CHECK(sub.GetMouseTuning().accelExponent == Catch::Approx(2.0f));
+
+    p.SetRowValue(9, 0);
+    CHECK(sub.GetMouseTuning().menuCursorScale == Catch::Approx(0.1f));
+    p.SetRowValue(9, 50);
+    CHECK(sub.GetMouseTuning().menuCursorScale == Catch::Approx(2.05f));
+    CHECK(p.RowValue(9) == 50);
+    p.SetRowValue(9, 100);
+    CHECK(sub.GetMouseTuning().menuCursorScale == Catch::Approx(4.0f));
 }
 
 TEST_CASE("MousePage: a hand-edited non-preset DPI is preserved on read", "[UI][MousePage]")
