@@ -1,0 +1,32 @@
+mission = "tests/integration/missions/jip_basic.Demo"
+
+tags = ["headful", "network"]
+
+[[instances]]
+extra_args = ["--no-strict"]
+name = "server"
+type = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "client1"]
+name = "client1"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:1"
+copy_files = [
+  { source = "client1/UserInfo.cfg", target = "Users/client1/UserInfo.cfg" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "client2"]
+name = "client2"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:2"
+copy_files = [
+  { source = "client2/UserInfo.cfg", target = "Users/client2/UserInfo.cfg" },
+]

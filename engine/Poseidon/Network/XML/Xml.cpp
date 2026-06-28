@@ -108,6 +108,10 @@ void QIHTTPStream::open(const char* url, const char* proxyServer)
     }
 
     char proxyOverride[256] = "<local>";
+    if (proxyServer && !proxyServer[0])
+    {
+        proxyServer = nullptr;
+    }
     if (!proxyServer)
     {
         // retrieve proxy from registry
@@ -138,7 +142,8 @@ void QIHTTPStream::open(const char* url, const char* proxyServer)
         _fail = true;
         return;
     }
-    _hSession = internetOpen(AGENT_NAME, INTERNET_OPEN_TYPE_PROXY, proxyServer, proxyOverride, 0);
+    const DWORD accessType = proxyServer ? INTERNET_OPEN_TYPE_PROXY : INTERNET_OPEN_TYPE_PRECONFIG;
+    _hSession = internetOpen(AGENT_NAME, accessType, proxyServer, proxyServer ? proxyOverride : nullptr, 0);
     if (!_hSession)
     {
         _fail = true;
@@ -718,7 +723,7 @@ class BufferedWrite
     }
 };
 
-bool DownloadFile(const char* url, const char* filename, const char* proxyServer)
+bool DownloadFile(const char* url, const char* filename, const char* proxyServer, size_t maxSize)
 {
     QIHTTPStream in;
     in.open(url, proxyServer);
@@ -734,14 +739,21 @@ bool DownloadFile(const char* url, const char* filename, const char* proxyServer
     }
     BufferedWrite buf(out);
     bool ok = true;
+    size_t downloaded = 0;
     int c = in.get();
     while (!in.eof() && !in.fail())
     {
+        if (maxSize > 0 && downloaded >= maxSize)
+        {
+            ok = false;
+            break;
+        }
         if (buf.Put(c) < 0)
         {
             ok = false;
             break;
         }
+        ++downloaded;
         c = in.get();
     }
     buf.Flush();
@@ -760,7 +772,7 @@ bool DownloadFile(const char* url, const char* filename, const char* proxyServer
 
 #else
 
-bool DownloadFile(const char* url, const char* filename, const char* proxyServer)
+bool DownloadFile(const char* url, const char* filename, const char* proxyServer, size_t maxSize)
 {
     QIHTTPStream in;
     in.open(url, proxyServer);
@@ -777,6 +789,12 @@ bool DownloadFile(const char* url, const char* filename, const char* proxyServer
         ::close(file);
         return false;
     }
+    if (maxSize > 0 && size > maxSize)
+    {
+        ::close(file);
+        ::unlink(filename);
+        return false;
+    }
     int sizeWritten = ::write(file, data, size);
     ::close(file);
     return (sizeWritten == size);
@@ -788,7 +806,7 @@ bool DownloadFile(const char* url, const char* filename, const char* proxyServer
 
 #ifdef _WIN32
 
-char* DownloadFile(const char* url, size_t& size, const char* proxyServer)
+char* DownloadFile(const char* url, size_t& size, const char* proxyServer, size_t maxSize)
 {
     size = 0;
     QIHTTPStream in;
@@ -808,6 +826,11 @@ char* DownloadFile(const char* url, size_t& size, const char* proxyServer)
     int c = in.get();
     while (!in.eof() && !in.fail())
     {
+        if (maxSize > 0 && static_cast<size_t>(usedSize) >= maxSize)
+        {
+            GlobalFree(mem);
+            return nullptr;
+        }
         if (usedSize >= allocated)
         {
             char* newMem = (char*)GlobalAlloc(GMEM_FIXED, allocated * 2);
@@ -835,7 +858,7 @@ char* DownloadFile(const char* url, size_t& size, const char* proxyServer)
 
 #else
 
-char* DownloadFile(const char* url, size_t& size, const char* proxyServer)
+char* DownloadFile(const char* url, size_t& size, const char* proxyServer, size_t maxSize)
 {
     QIHTTPStream in;
     in.open(url, proxyServer);
@@ -845,6 +868,8 @@ char* DownloadFile(const char* url, size_t& size, const char* proxyServer)
     unsigned s;
     const unsigned char* data = in.getData(s);
     if (!data)
+        return nullptr;
+    if (maxSize > 0 && s > maxSize)
         return nullptr;
     size = s;
     char* copy = (char*)malloc(size);

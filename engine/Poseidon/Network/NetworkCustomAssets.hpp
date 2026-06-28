@@ -11,6 +11,13 @@
 namespace Poseidon
 {
 
+constexpr size_t NetworkSquadFileMaxSize = 1024 * 1024;
+
+inline bool IsNetworkSquadFileSizeAllowed(size_t size)
+{
+    return size <= NetworkSquadFileMaxSize;
+}
+
 inline bool IsNetworkTransferredAssetSizeAllowed(size_t size, size_t maxSize)
 {
     return size <= maxSize;
@@ -36,6 +43,97 @@ inline bool IsSafeNetworkAssetPathComponent(const char* value)
         }
     }
     return true;
+}
+
+inline bool IsNetworkHttpUrl(const char* value)
+{
+    return value && (strncmp(value, "http://", 7) == 0 || strncmp(value, "https://", 8) == 0);
+}
+
+inline RString NetworkSquadPictureStorageName(const RString& picture)
+{
+    const char* value = picture;
+    if (!value || value[0] == '\0')
+    {
+        return RString();
+    }
+    if (!IsNetworkHttpUrl(value))
+    {
+        return picture;
+    }
+
+    const char* slash = strrchr(value, '/');
+    const char* backslash = strrchr(value, '\\');
+    if (backslash && (!slash || backslash > slash))
+    {
+        slash = backslash;
+    }
+    return slash ? RString(slash + 1) : picture;
+}
+
+inline RString BuildNetworkSquadPictureRelativePath(const RString& squadNick, const RString& picture)
+{
+    const RString storageName = NetworkSquadPictureStorageName(picture);
+    if (!IsSafeNetworkAssetPathComponent(squadNick) || !IsSafeNetworkAssetPathComponent(storageName))
+    {
+        return RString();
+    }
+    return RString("squads/") + squadNick + RString("/") + storageName;
+}
+
+inline RString BuildNetworkSquadPictureTmpPath(const RString& squadNick, const RString& picture)
+{
+    const RString relative = BuildNetworkSquadPictureRelativePath(squadNick, picture);
+    return relative.GetLength() > 0 ? RString("tmp/") + relative : RString();
+}
+
+inline RString BuildNetworkSquadPictureDownloadUrl(const RString& squadXmlUrl, const RString& picture)
+{
+    const char* pictureUrl = picture;
+    if (IsNetworkHttpUrl(pictureUrl))
+    {
+        if (strstr(pictureUrl, "/../") || strstr(pictureUrl, "/./") || strstr(pictureUrl, "\\..\\") ||
+            strstr(pictureUrl, "\\.\\"))
+        {
+            return RString();
+        }
+        const RString storageName = NetworkSquadPictureStorageName(picture);
+        return IsSafeNetworkAssetPathComponent(storageName) ? picture : RString();
+    }
+
+    if (!IsSafeNetworkAssetPathComponent(picture))
+    {
+        return RString();
+    }
+
+    const char* url = squadXmlUrl;
+    if (!url || url[0] == '\0')
+    {
+        return picture;
+    }
+
+    const char* slash = strrchr(url, '/');
+    const char* backslash = strrchr(url, '\\');
+    if (backslash && (!slash || backslash > slash))
+    {
+        slash = backslash;
+    }
+    if (!slash)
+    {
+        return picture;
+    }
+    return RString(url, slash + 1 - url) + picture;
+}
+
+template <class FileExistsFn>
+RString FindNetworkSquadPictureTmpPath(const RString& squadNick, const RString& picture, FileExistsFn&& fileExists)
+{
+    const RString path = BuildNetworkSquadPictureTmpPath(squadNick, picture);
+    if (path.GetLength() == 0 || !fileExists(path))
+    {
+        return RString();
+    }
+    return path;
 }
 
 inline bool IsNetworkPlayerFaceAssetName(const RString& assetName)
@@ -204,6 +302,12 @@ inline RString BuildNetworkServerUploadPath(const RString& serverTmpDir, const R
                                       RString();
 }
 
+inline RString BuildNetworkServerSquadPictureUploadPath(const RString& serverTmpDir, const RString& squadNick,
+                                                        const RString& picture)
+{
+    return BuildNetworkServerUploadPath(serverTmpDir, BuildNetworkSquadPictureRelativePath(squadNick, picture));
+}
+
 inline RString BuildNetworkServerPlayerUploadDir(const RString& serverTmpDir, int playerId)
 {
     return BuildNetworkServerUploadPath(serverTmpDir, BuildNetworkPlayerAssetRelativeDir(playerId));
@@ -300,6 +404,10 @@ inline RString BuildNetworkTransferredAssetProbeTmpPath(const RString& kind, con
     {
         return BuildNetworkPlayerSoundTmpPath(owner, name);
     }
+    if (stricmp(kind, "squad") == 0 || stricmp(kind, "squadPicture") == 0)
+    {
+        return BuildNetworkSquadPictureTmpPath(owner, name);
+    }
     return RString();
 }
 
@@ -328,6 +436,19 @@ inline bool IsSafeNetworkTransferredAssetPath(const RString& path)
             return BuildNetworkPlayerSoundTmpPath(player, RString(relative.Data() + 6)) == path;
         }
         return BuildNetworkPlayerAssetTmpPath(player, relative) == path;
+    }
+
+    const char squadPrefix[] = "tmp/squads/";
+    const int squadPrefixLen = static_cast<int>(sizeof(squadPrefix) - 1);
+    if (strncmp(data, squadPrefix, squadPrefixLen) == 0)
+    {
+        const char* nick = data + squadPrefixLen;
+        const char* slash = strchr(nick, '/');
+        if (!slash)
+        {
+            return false;
+        }
+        return BuildNetworkSquadPictureTmpPath(RString(nick, slash - nick), RString(slash + 1)) == path;
     }
 
     return false;

@@ -288,6 +288,7 @@ struct DownloadToFileContext
     bool result;                        // out: true when donwload was successful
     Poseidon::Foundation::Event* event; // in: event that should be signalled when download terminated
     const char* proxy;                  // in: address of proxy server
+    size_t maxSize;                     // in: optional maximum downloaded bytes, 0 means unlimited
 };
 
 // context structure for DownloadToMem function
@@ -299,6 +300,7 @@ struct DownloadToMemContext
     size_t* size;                       // in: pointer to variable that will receive size of downloaded file
     Poseidon::Foundation::Event* event; // in: event that should be signalled when download terminated
     const char* proxy;                  // in: address of proxy server
+    size_t maxSize;                     // in: optional maximum downloaded bytes, 0 means unlimited
 };
 
 // Single vote in votings

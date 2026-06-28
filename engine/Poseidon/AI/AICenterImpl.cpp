@@ -26,6 +26,7 @@
 #include <Poseidon/Game/Commands/GameStateExt.hpp>
 
 #include <Poseidon/Network/Network.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <Poseidon/Game/Chat.hpp>
 
 #include <Poseidon/Foundation/Enums/EnumNames.hpp>
@@ -1863,9 +1864,10 @@ void AICenter::BeginArcade(ArcadeTemplate& t, AutoArray<VehicleInitCmd, MemAlloc
                                     info._squadTitle = identity->squad->title;
                                     if (identity->squad->picture.GetLength() > 0)
                                     {
-                                        RString picture = RString("tmp\\squads\\") + identity->squad->nick +
-                                                          RString("\\") + identity->squad->picture;
-                                        if (QIFStream::FileExists(picture))
+                                        RString picture = Poseidon::FindNetworkSquadPictureTmpPath(
+                                            identity->squad->nick, identity->squad->picture,
+                                            [](const RString& path) { return QIFStream::FileExists(path); });
+                                        if (picture.GetLength() > 0)
                                         {
                                             info._squadPicture = GlobLoadTexture(picture);
                                         }

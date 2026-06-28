@@ -12,7 +12,7 @@ use crate::client::{GameInstance, HarnessClient};
 use crate::protocol::Command;
 use crate::scenarios::ScenarioResult;
 use anyhow::{Context, Result};
-use std::path::Path;
+use std::path::{Component, Path};
 use std::time::{Duration, Instant};
 
 /// Parsed multi-instance test configuration from `test.toml`.
@@ -72,6 +72,10 @@ pub struct InstanceConfig {
     #[serde(default)]
     pub extra_args: Vec<String>,
 
+    /// Files to copy from the test directory into the instance user directory before launch.
+    #[serde(default)]
+    pub copy_files: Vec<InstanceCopyFileConfig>,
+
     /// Per-instance timeout override (seconds)
     #[serde(default)]
     pub timeout: Option<u64>,
@@ -91,6 +95,12 @@ pub struct InstanceConfig {
     /// Start this role automatically when the scenario begins.
     #[serde(default = "default_true")]
     pub autostart: bool,
+}
+
+#[derive(Clone, serde::Deserialize)]
+pub struct InstanceCopyFileConfig {
+    pub source: String,
+    pub target: String,
 }
 
 fn default_client() -> String {
@@ -149,6 +159,24 @@ pub fn is_multi_test(p: &Path) -> bool {
 /// Extract test name from a `*.test/` directory path.
 pub fn multi_test_name(s: &str) -> String {
     s.strip_suffix(".test").unwrap_or(s).to_string()
+}
+
+fn checked_relative_file_path(value: &str) -> Result<&Path> {
+    let path = Path::new(value);
+    if path.is_absolute()
+        || path.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        })
+    {
+        anyhow::bail!(
+            "path '{}' must be a relative file path without parent traversal",
+            value
+        );
+    }
+    Ok(path)
 }
 
 /// Return the number of instances a multi-test directory needs.
@@ -558,6 +586,23 @@ pub async fn run_multi_test(
         let user_dir = inst_output.join("user");
         std::fs::create_dir_all(&user_dir)
             .with_context(|| format!("failed to create {}", user_dir.display()))?;
+        for copy in &inst.copy_files {
+            let source_rel = checked_relative_file_path(&copy.source)?;
+            let target_rel = checked_relative_file_path(&copy.target)?;
+            let source = test_dir.join(source_rel);
+            let target = user_dir.join(target_rel);
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("failed to create {}", parent.display()))?;
+            }
+            std::fs::copy(&source, &target).with_context(|| {
+                format!(
+                    "failed to copy {} to {}",
+                    source.display(),
+                    target.display()
+                )
+            })?;
+        }
         let user_dir_str = user_dir.to_string_lossy().to_string();
         let output_str = inst_output.to_string_lossy().to_string();
         let machine_id = format!("trident:{name}:{}", inst.name);

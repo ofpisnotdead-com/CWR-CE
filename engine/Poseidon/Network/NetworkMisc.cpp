@@ -249,7 +249,7 @@ CheckSquadObject::~CheckSquadObject()
 static DWORD WINAPI DownloadToMemThread(void* context)
 {
     DownloadToMemContext* c = (DownloadToMemContext*)context;
-    c->result = DownloadFile(c->url, *c->size, c->proxy);
+    c->result = DownloadFile(c->url, *c->size, c->proxy, c->maxSize);
     c->event->Set();
     return 0;
 }
@@ -258,7 +258,7 @@ static DWORD WINAPI DownloadToMemThread(void* context)
 static DWORD WINAPI DownloadToFileThread(void* context)
 {
     DownloadToFileContext* c = (DownloadToFileContext*)context;
-    DownloadFile(c->url, c->file, c->proxy);
+    c->result = DownloadFile(c->url, c->file, c->proxy, c->maxSize);
     c->event->Set();
     return 0;
 }
@@ -273,7 +273,7 @@ static DWORD WINAPI DownloadToFileThread(void* context)
 static void DownloadToFileOverlapped(DownloadToFileContext* context)
 {
     DWORD threadId;
-    HANDLE handle = CreateThread(nullptr, 64 * 1024, DownloadToFileThread, context, 0, &threadId);
+    HANDLE handle = CreateThread(nullptr, 0, DownloadToFileThread, context, 0, &threadId);
     if (!handle)
     {
         // create thread failed - fallback to direct processing
@@ -290,7 +290,7 @@ static void DownloadToFileOverlapped(DownloadToFileContext* context)
 static void DownloadToMemOverlapped(DownloadToMemContext* context)
 {
     DWORD threadId;
-    HANDLE handle = CreateThread(nullptr, 64 * 1024, DownloadToMemThread, context, 0, &threadId);
+    HANDLE handle = CreateThread(nullptr, 0, DownloadToMemThread, context, 0, &threadId);
     if (!handle)
     {
         // create thread failed - fallback to direct processing
@@ -345,6 +345,7 @@ void CheckSquadObject::StartDownloadingXMLSource()
     _squadContext.size = &_squadXMLSize;
     _squadContext.event = &_stateDone;
     _squadContext.proxy = _proxy.GetLength() > 0 ? (const char*)_proxy : nullptr;
+    _squadContext.maxSize = Poseidon::NetworkSquadFileMaxSize;
     _squadContext.result.Free();
     DownloadToMemOverlapped(&_squadContext);
 }
@@ -370,6 +371,7 @@ void CheckSquadObject::StartDownloadingLogo()
         _logoContext.url = _logoUrl;
         _logoContext.event = &_stateDone;
         _logoContext.proxy = _proxy.GetLength() > 0 ? (const char*)_proxy : nullptr;
+        _logoContext.maxSize = Poseidon::NetworkSquadFileMaxSize;
         DownloadToFileOverlapped(&_logoContext);
         // download result ignored?
     }
@@ -441,30 +443,23 @@ bool CheckSquadObject::DoProcessXML()
 
     if (_newSquad && _squad->picture.GetLength() > 0)
     {
-        // download picture
-        RString src = GetServerTmpDir() + RString("/squads/") + _squad->nick + RString("/") + _squad->picture;
-        CreatePath(src);
-        char url[256];
-        snprintf(url, sizeof(url), "%s", (const char*)_squad->id);
-        char* ptr = strrchr(url, '/');
-        // FIX allow also \ in url
-        if (!ptr)
+        const RString relative = Poseidon::BuildNetworkSquadPictureRelativePath(_squad->nick, _squad->picture);
+        if (relative.GetLength() == 0)
         {
-            ptr = strrchr(url, '\\');
+            _squad->picture = RString();
+            return true;
         }
-        if (ptr)
-        {
-            ptr++;
-            *ptr = 0;
-        }
-        else
-        {
-            ptr = url;
-        }
-        strcpy(ptr, _squad->picture);
 
-        _logoUrl = url;
-        _logoFile = src;
+        _logoUrl = Poseidon::BuildNetworkSquadPictureDownloadUrl(_squad->id, _squad->picture);
+        if (_logoUrl.GetLength() == 0)
+        {
+            _squad->picture = RString();
+            return true;
+        }
+
+        _logoFile = Poseidon::BuildNetworkServerSquadPictureUploadPath(GetServerTmpDir(), _squad->nick,
+                                                                        _squad->picture);
+        CreatePath(_logoFile);
     }
     else
     {

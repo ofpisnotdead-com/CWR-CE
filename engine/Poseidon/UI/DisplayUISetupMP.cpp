@@ -6,6 +6,7 @@
 #include <Poseidon/Core/resincl.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Network/Network.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <Poseidon/Game/Chat.hpp>
 #include <Poseidon/UI/DisplayUI.hpp>
 #include <Poseidon/UI/DisplayUICommon.hpp>
@@ -1562,12 +1563,9 @@ void DisplayMPPlayers::UpdatePlayerInfo()
     RString picture;
     if (squad && squad->picture.GetLength() > 0)
     {
-        picture = RString("tmp\\squads\\") + squad->nick + RString("\\") + squad->picture;
-        if (!QIFStream::FileExists(picture))
-        {
-            picture = "";
-        }
-        else
+        picture = Poseidon::FindNetworkSquadPictureTmpPath(
+            squad->nick, squad->picture, [](const RString& path) { return QIFStream::FileExists(path); });
+        if (picture.GetLength() > 0)
         {
             picture = RString("\\") + picture;
         }

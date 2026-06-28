@@ -568,10 +568,10 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
         RString src, dst;
         if (squad->picture.GetLength() > 0)
         {
-            src = GetServerTmpDir() + RString("/squads/") + squad->nick + RString("/") + squad->picture;
+            src = Poseidon::BuildNetworkServerSquadPictureUploadPath(GetServerTmpDir(), squad->nick, squad->picture);
             if (QIFStream::FileExists(src))
             {
-                dst = RString("tmp/squads/") + squad->nick + RString("/") + squad->picture;
+                dst = Poseidon::BuildNetworkSquadPictureTmpPath(squad->nick, squad->picture);
             }
             else
             {
@@ -612,10 +612,11 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
         SquadIdentity* squad = _squads[i];
         if (squad->picture.GetLength() > 0)
         {
-            RString src = GetServerTmpDir() + RString("/squads/") + squad->nick + RString("/") + squad->picture;
+            RString src = Poseidon::BuildNetworkServerSquadPictureUploadPath(GetServerTmpDir(), squad->nick,
+                                                                              squad->picture);
             if (QIFStream::FileExists(src))
             {
-                RString dst = RString("tmp/squads/") + squad->nick + RString("/") + squad->picture;
+                RString dst = Poseidon::BuildNetworkSquadPictureTmpPath(squad->nick, squad->picture);
                 TransferFile(identity.dpnid, dst, src);
             }
         }

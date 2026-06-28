@@ -246,13 +246,13 @@ TEST_CASE("Transferred custom asset paths are confined to expected temp namespac
     REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/face.jpg")));
     REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/face.paa")));
     REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/sound/radio.ogg")));
+    REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/squads/SQTAG/logo.paa")));
 
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/face.jpg")));
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/sound/radio.ogg")));
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/face.gif")));
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/../face.jpg")));
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Al/ice/face.jpg")));
-    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/squads/SQTAG/logo.paa")));
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/mpmissions/__CUR_MP.pbo")));
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("../outside.bin")));
 }
@@ -370,6 +370,60 @@ TEST_CASE("Server player upload paths accept custom sounds only under the player
         tmp, 42));
     REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(
         soundDir + RString("../radio.ogg"), tmp, 42));
+}
+
+TEST_CASE("Squad logo paths reject unsafe XML path components", "[network][squad][assets]")
+{
+    REQUIRE(Poseidon::NetworkSquadFileMaxSize == 1024 * 1024);
+    REQUIRE(Poseidon::IsNetworkSquadFileSizeAllowed(Poseidon::NetworkSquadFileMaxSize));
+    REQUIRE_FALSE(Poseidon::IsNetworkSquadFileSizeAllowed(Poseidon::NetworkSquadFileMaxSize + 1));
+
+    REQUIRE(Poseidon::BuildNetworkSquadPictureRelativePath(RString("CWR"), RString("synthetic_grid.paa")) ==
+            RString("squads/CWR/synthetic_grid.paa"));
+    REQUIRE(Poseidon::BuildNetworkSquadPictureTmpPath(RString("CWR"), RString("synthetic_grid.paa")) ==
+            RString("tmp/squads/CWR/synthetic_grid.paa"));
+    REQUIRE(Poseidon::BuildNetworkServerSquadPictureUploadPath(RString("server-tmp"), RString("CWR"),
+                                                               RString("synthetic_grid.paa")) ==
+            RString("server-tmp/squads/CWR/synthetic_grid.paa"));
+    REQUIRE(Poseidon::NetworkSquadPictureStorageName(
+                RString("https://gist.githubusercontent.com/simi/b4dbb7fea11cb4c7e7b1c090e5e065bc/raw/"
+                        "synthetic_grid.paa")) == RString("synthetic_grid.paa"));
+    REQUIRE(Poseidon::BuildNetworkSquadPictureTmpPath(
+                RString("CWR"),
+                RString("https://gist.githubusercontent.com/simi/b4dbb7fea11cb4c7e7b1c090e5e065bc/raw/"
+                        "synthetic_grid.paa")) == RString("tmp/squads/CWR/synthetic_grid.paa"));
+
+    REQUIRE(Poseidon::BuildNetworkSquadPictureTmpPath(RString("CW/R"), RString("synthetic_grid.paa")).GetLength() ==
+            0);
+    REQUIRE(Poseidon::BuildNetworkSquadPictureTmpPath(RString("CWR"), RString("../synthetic_grid.paa")).GetLength() ==
+            0);
+    REQUIRE(Poseidon::BuildNetworkSquadPictureDownloadUrl(
+                RString("https://gist.githubusercontent.com/simi/b4dbb7fea11cb4c7e7b1c090e5e065bc/raw/squad.xml"),
+                RString("synthetic_grid.paa")) ==
+            RString("https://gist.githubusercontent.com/simi/b4dbb7fea11cb4c7e7b1c090e5e065bc/raw/"
+                    "synthetic_grid.paa"));
+    REQUIRE(Poseidon::BuildNetworkSquadPictureDownloadUrl(
+                RString("https://gist.githubusercontent.com/simi/b4dbb7fea11cb4c7e7b1c090e5e065bc/raw/squad.xml"),
+                RString("../synthetic_grid.paa")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkSquadPictureDownloadUrl(
+                RString("https://example.invalid/squad.xml"),
+                RString("https://cdn.example.invalid/assets/synthetic_grid.paa")) ==
+            RString("https://cdn.example.invalid/assets/synthetic_grid.paa"));
+    REQUIRE(Poseidon::BuildNetworkSquadPictureDownloadUrl(
+                RString("https://example.invalid/squad.xml"),
+                RString("https://cdn.example.invalid/assets/../synthetic_grid.paa")).GetLength() == 0);
+}
+
+TEST_CASE("Transferred squad asset probe maps semantic names to temp paths", "[network][squad][assets]")
+{
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("squad"), RString("CWR"),
+                                                              RString("synthetic_grid.paa")) ==
+            RString("tmp/squads/CWR/synthetic_grid.paa"));
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("squadPicture"), RString("CWR"),
+                                                              RString("synthetic_grid.paa")) ==
+            RString("tmp/squads/CWR/synthetic_grid.paa"));
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("squad"), RString("CW/R"),
+                                                              RString("synthetic_grid.paa")).GetLength() == 0);
 }
 
 // Transcription of the original relay guard pair:

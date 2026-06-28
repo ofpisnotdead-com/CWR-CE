@@ -50,8 +50,8 @@ class SAXParser
     virtual void OnCharacters(RString chars) { (void)chars; }
 };
 
-bool DownloadFile(const char* url, const char* filename, const char* proxyServer);
+bool DownloadFile(const char* url, const char* filename, const char* proxyServer, size_t maxSize = 0);
 
-char* DownloadFile(const char* url, size_t& size, const char* proxyServer);
+char* DownloadFile(const char* url, size_t& size, const char* proxyServer, size_t maxSize = 0);
 
 #endif

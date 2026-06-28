@@ -9,6 +9,7 @@
 #include <Poseidon/Graphics/Rendering/Shape/Shape.hpp> // Shapes (triLoadedShapeCount)
 #include <Poseidon/World/Scene/Scene.hpp>
 #include <Poseidon/Network/Network.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <Poseidon/Network/NetworkImpl.hpp>
 #include <Poseidon/Core/PlayerMuteIgnore.hpp>
 #include <Poseidon/Game/Chat.hpp>
@@ -20,6 +21,7 @@
 #include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
 #include <Poseidon/UI/Settings/GameSettingsConfig.hpp>
 #include <Poseidon/Foundation/Platform/AppConfig.hpp>
+#include <Poseidon/IO/Streams/QStream.hpp>
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
 #include <Poseidon/Graphics/Cursor/ICursorOverlay.hpp>
 #include <Poseidon/UI/Map/UIMap.hpp>
@@ -1937,6 +1939,36 @@ GameValue TriRadioWaveOffset(const GameState* /*state*/, GameValuePar arg)
     return GameValue(GSoundScene->Find2DWaveOffsetSeconds(needle));
 }
 
+GameValue TriAssertNetworkAssetExists(const GameState* /*state*/, GameValuePar arg)
+{
+    if (arg.GetType() != GameArray)
+        return GameValue("FAIL:expected_array");
+    const GameArrayType& a = arg;
+    if (a.Size() < 3)
+        return GameValue("FAIL:need_kind_owner_file");
+    if (a[0].GetType() != GameString)
+        return GameValue("FAIL:kind_must_be_string");
+    if (a[1].GetType() != GameString)
+        return GameValue("FAIL:owner_must_be_string");
+    if (a[2].GetType() != GameString)
+        return GameValue("FAIL:file_must_be_string");
+
+    const GameStringType kindArg = static_cast<GameStringType>(a[0]);
+    const GameStringType ownerArg = static_cast<GameStringType>(a[1]);
+    const GameStringType fileArg = static_cast<GameStringType>(a[2]);
+    const RString path = Poseidon::BuildNetworkTransferredAssetProbeTmpPath(
+        RString((const char*)kindArg), RString((const char*)ownerArg), RString((const char*)fileArg));
+    if (path.GetLength() == 0)
+        return GameValue("FAIL:invalid_asset_path");
+
+    if (QIFStream::FileExists(path))
+        return GameValue("OK");
+
+    char buf[512];
+    snprintf(buf, sizeof(buf), "FAIL:missing:%s", (const char*)path);
+    return GameValue(buf);
+}
+
 // Issue #9 — save / load + vehicle lock state diagnostics
 
 /// triSaveGame "label" — write a binary save to the test tmp directory
@@ -2365,6 +2397,8 @@ INIT_MODULE(GameStateExtTest, 3)
     GGameState.NewFunction(GameFunction(GameString, "triMuteVoN", TriMuteVoN, GameScalar));
     GGameState.NewFunction(GameFunction(GameString, "triIgnoreChat", TriIgnoreChat, GameScalar));
     GGameState.NewFunction(GameFunction(GameString, "triSendVonTestTone", TriSendVonTestTone, GameArray));
+    GGameState.NewFunction(
+        GameFunction(GameString, "triAssertNetworkAssetExists", TriAssertNetworkAssetExists, GameArray));
     GGameState.NewFunction(GameFunction(GameString, "triMpAssignSelf", TriMpAssignSelf, GameScalar));
     GGameState.NewFunction(GameFunction(GameString, "triMpAssignSelfSlot", TriMpAssignSelfSlot, GameString));
     GGameState.NewFunction(GameFunction(GameString, "triMpClientReady", TriMpClientReady, GameScalar));
