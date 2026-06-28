@@ -185,7 +185,7 @@ PolicyResult ResolvePolicy(const PolicyInput& input)
             result.effectiveRatio = clampRatio;
     }
 
-    result.settings = BuildSettingsForRatio(result.effectiveRatio);
+    result.settings = BuildSettingsForRatio(result.viewportRatio);
     if (result.viewportRatio > result.effectiveRatio)
     {
         ApplyCenteredUiBand(result.settings, result.effectiveRatio, input.viewportWidth, input.viewportHeight);
