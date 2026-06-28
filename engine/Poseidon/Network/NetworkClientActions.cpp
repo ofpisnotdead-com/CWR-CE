@@ -5,6 +5,7 @@
 #include <Poseidon/Core/ModSystem.hpp>
 #include <Poseidon/Core/Config/Config.hpp>
 #include <Poseidon/Network/NetworkClientCommon.hpp>
+#include <Poseidon/Network/NetworkFileTransfer.hpp>
 #include <Poseidon/Network/NetworkScriptValueCodec.hpp>
 #include <Poseidon/Core/Global.hpp>
 // #include "strIncl.hpp"
@@ -2131,25 +2132,12 @@ int NetworkClient::SendVoiceTestTone(int frames, int amplitude)
 
 void NetworkClient::TransferFileToServer(RString dest, RString source)
 {
-    const int maxSegmentSize = 512 - 50; // Sockets segment size
-
     QIFStreamB f;
     f.AutoOpen(source);
 
-    TransferFileToServerMessage msg;
-    msg.path = dest;
-    msg.totSize = f.GetBuffer()->GetSize();
-    msg.totSegments = (msg.totSize + maxSegmentSize - 1) / maxSegmentSize;
-    msg.offset = 0;
-    for (int i = 0; i < msg.totSegments; i++)
-    {
-        msg.curSegment = i;
-        int size = std::min(maxSegmentSize, msg.totSize - msg.offset);
-        msg.data.Resize(size);
-        memcpy(msg.data.Data(), f.GetBuffer()->GetData() + msg.offset, size);
-        SendMsg(&msg, NMFGuaranteed);
-        msg.offset += size;
-    }
+    Poseidon::SendNetworkFileTransferSegments<TransferFileToServerMessage>(
+        dest, f.GetBuffer()->GetData(), f.GetBuffer()->GetSize(),
+        [this](TransferFileToServerMessage& msg) { SendMsg(&msg, NMFGuaranteed); });
 }
 
 void NetworkClient::GetTransferStats(int& curBytes, int& totBytes)

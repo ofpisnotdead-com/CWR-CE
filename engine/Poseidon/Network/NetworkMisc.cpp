@@ -9,6 +9,8 @@ using namespace Poseidon;
 #include <Poseidon/Core/Version.hpp>
 #include <Poseidon/Network/NetworkImpl.hpp>
 #include <Poseidon/Network/NetworkConfig.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
+#include <Poseidon/Network/NetworkFileTransfer.hpp>
 #include <Poseidon/Network/NetworkServerAuth.hpp>
 #include <Poseidon/Network/WireBounds.hpp>
 #include <Poseidon/Core/Global.hpp>
@@ -916,16 +918,21 @@ int NetworkComponent::ReceiveFileSegment(TransferFileMessage& msg)
         return -1;
     }
 
-    // receive segment
-    file.fileSegments[msg.curSegment] = true;
-    memcpy(file.fileData.Data() + msg.offset, msg.data.Data(), msg.data.Size());
-    file.received += msg.data.Size();
+    int remainingSegments = 0;
     for (int i = 0; i < file.fileSegments.Size(); i++)
     {
         if (!file.fileSegments[i])
         {
-            return 0;
+            ++remainingSegments;
         }
+    }
+
+    const bool complete = Poseidon::ApplyReceivedNetworkFileTransferSegment(
+        file.fileSegments[msg.curSegment], msg.data.Size(), file.received, remainingSegments);
+    memcpy(file.fileData.Data() + msg.offset, msg.data.Data(), msg.data.Size());
+    if (!complete)
+    {
+        return 0;
     }
     //  whole file received
     CreatePath(file.fileName);
@@ -942,37 +949,29 @@ int NetworkComponent::ReceiveFileSegment(TransferFileMessage& msg)
 
 void NetworkComponent::TransferFile(int to, RString dest, RString source)
 {
-    const int maxSegmentSize = 512 - 50; // Sockets segment size
-
     QIFStreamB f;
     f.AutoOpen(source);
 
-    TransferFileMessage msg;
-    msg.path = dest;
-    msg.totSize = f.GetBuffer()->GetSize();
-    msg.totSegments = (msg.totSize + maxSegmentSize - 1) / maxSegmentSize;
-    msg.offset = 0;
-    for (int i = 0; i < msg.totSegments; i++)
-    {
-        msg.curSegment = i;
-        int size = std::min(maxSegmentSize, msg.totSize - msg.offset);
-        msg.data.Resize(size);
-        memcpy(msg.data.Data(), f.GetBuffer()->GetData() + msg.offset, size);
-        SendMsg(to, &msg, NMFGuaranteed);
-    }
+    Poseidon::SendNetworkFileTransferSegments<TransferFileMessage>(
+        dest, f.GetBuffer()->GetData(), f.GetBuffer()->GetSize(),
+        [this, to](TransferFileMessage& msg) { SendMsg(to, &msg, NMFGuaranteed); });
 }
 
-void NetworkComponent::TransferFace(int to, RString player)
+void NetworkComponent::TransferFace(int to, int player)
 {
     // user only for transfer from server to clients
     NetworkClient* client = _parent->GetClient();
     bool notBotClient = !client || client->GetPlayer() != to;
 
-    RString srcDir = GetServerTmpDir() + RString("/players/") + player + RString("/");
-    RString dstDir = RString("tmp/players/") + player + RString("/");
+    RString srcDir = Poseidon::BuildNetworkServerPlayerUploadDir(GetServerTmpDir(), player);
+    RString dstDir = Poseidon::BuildNetworkPlayerAssetTmpDir(player);
+    if (srcDir.GetLength() == 0 || dstDir.GetLength() == 0)
+    {
+        return;
+    }
 
-    RString src = srcDir + RString("face.paa");
-    RString dst = dstDir + RString("face.paa");
+    RString src = Poseidon::BuildNetworkServerPlayerAssetUploadPath(GetServerTmpDir(), player, RString("face.paa"));
+    RString dst = Poseidon::BuildNetworkPlayerAssetTmpPath(player, RString("face.paa"));
     if (QIFStream::FileExists(src))
     {
         if (notBotClient)
@@ -987,8 +986,8 @@ void NetworkComponent::TransferFace(int to, RString player)
     }
     else
     {
-        src = srcDir + RString("face.jpg");
-        dst = dstDir + RString("face.jpg");
+        src = Poseidon::BuildNetworkServerPlayerAssetUploadPath(GetServerTmpDir(), player, RString("face.jpg"));
+        dst = Poseidon::BuildNetworkPlayerAssetTmpPath(player, RString("face.jpg"));
         if (QIFStream::FileExists(src))
         {
             if (notBotClient)

@@ -13,6 +13,7 @@ using namespace Poseidon;
 #include <Poseidon/UI/Locale/StringtableExt.hpp>
 
 #include <Poseidon/Network/NetworkConfig.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <Poseidon/Network/NetworkMissionTransfer.hpp>
 #include <Poseidon/Network/NetworkServerAuth.hpp>
 #include <Poseidon/Network/NetworkServerDispatch.hpp>
@@ -87,20 +88,19 @@ void RunMissionScript(char const*, class ::GameValue);
 #define LOG_PLAYERS 1
 extern int MaxCustomFileSize;
 
-static bool CheckValidUpload(RString path, RString name)
+static bool CheckValidUpload(RString path, int player)
 {
-    RString prefixShouldBe = GetServerTmpDir() + RString("/players/") + name + RString("/");
+    RString prefixShouldBe = Poseidon::BuildNetworkServerPlayerUploadDir(GetServerTmpDir(), player);
     if (strnicmp(path, prefixShouldBe, prefixShouldBe.GetLength()))
     {
         return false;
     }
-    // A prefix match alone does not confine the path; reject any parent-directory escape.
-    return !Poseidon::PathHasParentEscape(path);
+    return Poseidon::IsSafeNetworkServerPlayerUploadPath(path, GetServerTmpDir(), player);
 }
 
-static RString GetRelUploadPath(RString path, RString name)
+static RString GetRelUploadPath(RString path, int player)
 {
-    RString prefixShouldBe = GetServerTmpDir() + RString("/players/") + name + RString("/");
+    RString prefixShouldBe = Poseidon::BuildNetworkServerPlayerUploadDir(GetServerTmpDir(), player);
     if (strnicmp(path, prefixShouldBe, prefixShouldBe.GetLength()))
     {
         return path;
@@ -844,13 +844,13 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 // check name of player (from file name)
                 ServerMessage(Format("Player %s kicked off - too big custom file '%s' (%d B > %d B)", (const char*)name,
-                                     (const char*)GetRelUploadPath(transfer.path, name), transfer.totSize,
+                                     (const char*)GetRelUploadPath(transfer.path, from), transfer.totSize,
                                      MaxCustomFileSize));
                 KickOff(from, KORKick);
                 break;
             }
 
-            if (!CheckValidUpload(transfer.path, name))
+            if (!CheckValidUpload(transfer.path, from))
             {
                 ServerMessage(Format("Player %s kicked off - invalid custom file '%s'", (const char*)name,
                                      (const char*)transfer.path));

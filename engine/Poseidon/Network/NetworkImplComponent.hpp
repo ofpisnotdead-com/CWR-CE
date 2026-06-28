@@ -223,7 +223,7 @@ class NetworkComponent : public INetworkComponent
     // Split file into segments and send segments using standard messages.
     void TransferFile(int to, RString dest, RString source);
     // Transfer player's face from server to client
-    void TransferFace(int to, RString player);
+    void TransferFace(int to, int player);
     // Transfer player's custom radio messages from server to client
     void TransferCustomRadio(int to, RString player);
 

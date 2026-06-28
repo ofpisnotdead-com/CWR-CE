@@ -6,6 +6,7 @@
 #include <Random/randomGen.hpp>
 #include <Poseidon/IO/ParamFileExt.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <Poseidon/Audio/IAudioSystem.hpp>
 #include <Poseidon/Audio/VoiceLangPath.hpp>
 #include <Poseidon/World/Entities/Vehicles/Vehicle.hpp>
@@ -623,33 +624,51 @@ void Head::SetFace(const HeadType& type, bool women, LODShape* lShape, RString n
 
     if (stricmp(name, "custom") == 0)
     {
-        RString dir;
         if (player.GetLength() > 0)
         {
-            dir = RString("tmp\\players\\") + player + RString("\\");
-        }
-        else
-        {
-            dir = Poseidon::GetUserDirectory();
-        }
-        RString name = dir + RString("face.paa");
-        if (QIFStream::FileExists(name))
-        {
-            Ref<Texture> text = GlobLoadTexture(name);
-            if (text)
+            RString face = Poseidon::BuildNetworkPlayerAssetTmpPath(player, RString("face.paa"));
+            if (face.GetLength() > 0 && QIFStream::FileExists(face))
             {
-                _texture = text;
+                Ref<Texture> text = GlobLoadTexture(face);
+                if (text)
+                {
+                    _texture = text;
+                }
+            }
+            else
+            {
+                face = Poseidon::BuildNetworkPlayerAssetTmpPath(player, RString("face.jpg"));
+                if (face.GetLength() > 0 && QIFStream::FileExists(face))
+                {
+                    Ref<Texture> text = GlobLoadTexture(face);
+                    if (text)
+                    {
+                        _texture = text;
+                    }
+                }
             }
         }
         else
         {
-            name = dir + RString("face.jpg");
-            if (QIFStream::FileExists(name))
+            RString face = Poseidon::GetUserDirectory() + RString("face.paa");
+            if (QIFStream::FileExists(face))
             {
-                Ref<Texture> text = GlobLoadTexture(name);
+                Ref<Texture> text = GlobLoadTexture(face);
                 if (text)
                 {
                     _texture = text;
+                }
+            }
+            else
+            {
+                face = Poseidon::GetUserDirectory() + RString("face.jpg");
+                if (QIFStream::FileExists(face))
+                {
+                    Ref<Texture> text = GlobLoadTexture(face);
+                    if (text)
+                    {
+                        _texture = text;
+                    }
                 }
             }
         }

@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_message.hpp>
 
+#include <Poseidon/Foundation/platform.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <Poseidon/Network/NetworkServerAuth.hpp>
 
 // Behaviour-preservation tests for the server-side network predicates that were
@@ -206,6 +208,89 @@ TEST_CASE("Refactor: player-role predicates equal the original OnMessagePlayerRo
             }
         }
     }
+}
+
+TEST_CASE("Upload path parent escapes are rejected", "[network][upload]")
+{
+    REQUIRE_FALSE(Poseidon::PathHasParentEscape("tmp/players/Alice/face.jpg"));
+    REQUIRE(Poseidon::PathHasParentEscape("tmp/players/Alice/../Bob/face.jpg"));
+    REQUIRE_FALSE(Poseidon::PathHasParentEscape(nullptr));
+}
+
+TEST_CASE("Player custom asset paths reject unsafe path components", "[network][assets]")
+{
+    REQUIRE(Poseidon::BuildNetworkPlayerStorageKey(42) == RString("42"));
+    REQUIRE(Poseidon::BuildNetworkPlayerStorageKey(-1).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpDir(42) == RString("tmp/players/42/"));
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpPath(42, RString("face.jpg")) == RString("tmp/players/42/face.jpg"));
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpPath(42, RString("face.paa")) == RString("tmp/players/42/face.paa"));
+
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpPath(42, RString("face.gif")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpPath(RString("Alice"), RString("face.jpg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpPath(RString("Al/ice"), RString("face.jpg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpPath(42, RString("../face.jpg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpPath(42, RString("nested/face.jpg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpPath(42, RString("C:face.jpg")).GetLength() == 0);
+}
+
+TEST_CASE("Transferred custom asset paths are confined to expected temp namespaces", "[network][assets]")
+{
+    REQUIRE(Poseidon::IsNetworkTransferredAssetSizeAllowed(128 * 1024, 128 * 1024));
+    REQUIRE_FALSE(Poseidon::IsNetworkTransferredAssetSizeAllowed(128 * 1024 + 1, 128 * 1024));
+    REQUIRE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/players/42/face.jpg"), 128 * 1024,
+                                                          128 * 1024));
+    REQUIRE_FALSE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/players/42/face.jpg"),
+                                                                128 * 1024 + 1, 128 * 1024));
+    REQUIRE_FALSE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("../outside.bin"), 1, 128 * 1024));
+
+    REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/face.jpg")));
+    REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/face.paa")));
+    REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/sound/radio.ogg")));
+
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/face.jpg")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/face.gif")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/../face.jpg")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Al/ice/face.jpg")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/squads/SQTAG/logo.paa")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/mpmissions/__CUR_MP.pbo")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("../outside.bin")));
+}
+
+TEST_CASE("Transferred custom asset probe maps semantic asset names to temp paths", "[network][assets]")
+{
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("player"), RString("42"),
+                                                              RString("face.jpg")) ==
+            RString("tmp/players/42/face.jpg"));
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("playerFace"), RString("42"),
+                                                              RString("face.paa")) ==
+            RString("tmp/players/42/face.paa"));
+
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("unknown"), RString("Alice"),
+                                                              RString("face.jpg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("player"), RString("../Alice"),
+                                                              RString("face.jpg")).GetLength() == 0);
+}
+
+TEST_CASE("Server player upload paths require safe player names and exact temp prefix", "[network][upload]")
+{
+    const RString tmp = RString("server-tmp");
+    const RString playerDir = RString("server-tmp/players/42/");
+
+    REQUIRE(Poseidon::BuildNetworkServerPlayerUploadDir(tmp, 42) == playerDir);
+    REQUIRE(Poseidon::BuildNetworkServerPlayerUploadDir(RString("server-tmp\\session"), 42) ==
+            RString("server-tmp/session/players/42/"));
+    REQUIRE(Poseidon::BuildNetworkServerPlayerAssetUploadPath(tmp, 42, RString("face.jpg")) ==
+            playerDir + RString("face.jpg"));
+    REQUIRE(Poseidon::IsSafeNetworkServerPlayerUploadPath(playerDir + RString("face.jpg"), tmp, 42));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("server-tmp/players/Alice/face.jpg"),
+                                                                tmp, 42));
+
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("server-tmp/players/43/face.jpg"),
+                                                                tmp, 42));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(playerDir + RString("../face.jpg"),
+                                                                tmp, 42));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("server-tmp/players/4/2/face.jpg"),
+                                                                tmp, 42));
 }
 
 // Transcription of the original relay guard pair:

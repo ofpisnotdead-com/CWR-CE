@@ -7,6 +7,7 @@ using namespace Poseidon;
 #include <Poseidon/Core/ModSystem.hpp>
 #include <Poseidon/Core/Config/Config.hpp>
 #include <Poseidon/Network/NetworkClientCommon.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <Poseidon/Network/NetworkScriptValueCodec.hpp>
 #include <Poseidon/Network/WireBounds.hpp>
 #include <Poseidon/Core/Global.hpp>
@@ -454,36 +455,22 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             if (stricmp(identity.face, "custom") == 0)
             {
                 RString srcDir = GetUserDirectory();
-                RString dstDir = RString("tmp/players/") + identity.name + RString("/");
-                CreatePath(dstDir);
-                RString serverDir = GetServerTmpDir() + RString("/players/") + identity.name + RString("/");
-                if (!transfer)
+                RString dstDir = Poseidon::BuildNetworkPlayerAssetTmpDir(identity.dpnid);
+                RString serverDir = Poseidon::BuildNetworkServerPlayerUploadDir(GetServerTmpDir(), identity.dpnid);
+                if (dstDir.GetLength() > 0 && serverDir.GetLength() > 0)
                 {
-                    CreatePath(serverDir);
-                }
-                RString src = srcDir + RString("face.paa");
-                if (QIFStream::FileExists(src) && FileSize(src) <= MaxCustomFaceSize)
-                {
-                    RString dst = dstDir + RString("face.paa");
-                    ::CopyFile(src, dst, FALSE);
-                    RString server = serverDir + RString("face.paa");
-                    if (transfer)
+                    CreatePath(dstDir);
+                    if (!transfer)
                     {
-                        TransferFileToServer(server, src);
+                        CreatePath(serverDir);
                     }
-                    else
-                    {
-                        ::CopyFile(src, server, FALSE);
-                    }
-                }
-                else
-                {
-                    src = srcDir + RString("face.jpg");
+                    RString src = srcDir + RString("face.paa");
                     if (QIFStream::FileExists(src) && FileSize(src) <= MaxCustomFaceSize)
                     {
-                        RString dst = dstDir + RString("face.jpg");
+                        RString dst = Poseidon::BuildNetworkPlayerAssetTmpPath(identity.dpnid, RString("face.paa"));
                         ::CopyFile(src, dst, FALSE);
-                        RString server = serverDir + RString("face.jpg");
+                        RString server = Poseidon::BuildNetworkServerPlayerAssetUploadPath(
+                            GetServerTmpDir(), identity.dpnid, RString("face.paa"));
                         if (transfer)
                         {
                             TransferFileToServer(server, src);
@@ -491,6 +478,26 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                         else
                         {
                             ::CopyFile(src, server, FALSE);
+                        }
+                    }
+                    else
+                    {
+                        src = srcDir + RString("face.jpg");
+                        if (QIFStream::FileExists(src) && FileSize(src) <= MaxCustomFaceSize)
+                        {
+                            RString dst = Poseidon::BuildNetworkPlayerAssetTmpPath(identity.dpnid,
+                                                                                   RString("face.jpg"));
+                            ::CopyFile(src, dst, FALSE);
+                            RString server = Poseidon::BuildNetworkServerPlayerAssetUploadPath(
+                                GetServerTmpDir(), identity.dpnid, RString("face.jpg"));
+                            if (transfer)
+                            {
+                                TransferFileToServer(server, src);
+                            }
+                            else
+                            {
+                                ::CopyFile(src, server, FALSE);
+                            }
                         }
                     }
                 }
@@ -683,6 +690,20 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             TransferFileMessage transfer;
             transfer.TransferMsg(ctx);
+            if (!Poseidon::ShouldAcceptNetworkTransferredAsset(transfer.path, static_cast<size_t>(transfer.totSize),
+                                                               static_cast<size_t>(MaxCustomFileSize)))
+            {
+                if (!Poseidon::IsSafeNetworkTransferredAssetPath(transfer.path))
+                {
+                    LOG_WARN(Network, "[NMTTransferFile] rejected unsafe path '{}'", (const char*)transfer.path);
+                }
+                else
+                {
+                    LOG_WARN(Network, "[NMTTransferFile] rejected oversized custom asset '{}' ({} B > {} B)",
+                             (const char*)transfer.path, transfer.totSize, MaxCustomFileSize);
+                }
+                break;
+            }
             ReceiveFileSegment(transfer);
         }
         break;

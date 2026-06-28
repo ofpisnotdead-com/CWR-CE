@@ -6,6 +6,7 @@
 #include <Poseidon/Foundation/Logging/Logging.hpp>
 #include <Poseidon/Core/Config/Config.hpp>
 #include <Poseidon/Network/NetworkImpl.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <Poseidon/Core/Global.hpp>
 // #include "strIncl.hpp"
 #include <Poseidon/UI/Locale/StringtableExt.hpp>
@@ -632,7 +633,7 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
             {
                 if (stricmp(player.face, "custom") == 0)
                 {
-                    TransferFace(identity.dpnid, player.name);
+                    TransferFace(identity.dpnid, player.dpnid);
                 }
                 TransferCustomRadio(identity.dpnid, player.name);
             }
@@ -641,7 +642,7 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
             {
                 if (hasCustomFace)
                 {
-                    TransferFace(player.dpnid, identity.name);
+                    TransferFace(player.dpnid, identity.dpnid);
                 }
                 TransferCustomRadio(player.dpnid, identity.name);
             }
@@ -789,15 +790,19 @@ void NetworkServer::SetPlayerState(int dpid, NetworkGameState state)
     }
 }
 
-static bool CheckValidUpload(RString path, RString name)
+static bool CheckValidUpload(RString path, int player)
 {
-    RString prefixShouldBe = GetServerTmpDir() + RString("/players/") + name + RString("/");
-    return !strnicmp(path, prefixShouldBe, prefixShouldBe.GetLength());
+    RString prefixShouldBe = Poseidon::BuildNetworkServerPlayerUploadDir(GetServerTmpDir(), player);
+    if (strnicmp(path, prefixShouldBe, prefixShouldBe.GetLength()))
+    {
+        return false;
+    }
+    return Poseidon::IsSafeNetworkServerPlayerUploadPath(path, GetServerTmpDir(), player);
 }
 
-static RString GetRelUploadPath(RString path, RString name)
+static RString GetRelUploadPath(RString path, int player)
 {
-    RString prefixShouldBe = GetServerTmpDir() + RString("/players/") + name + RString("/");
+    RString prefixShouldBe = Poseidon::BuildNetworkServerPlayerUploadDir(GetServerTmpDir(), player);
     if (strnicmp(path, prefixShouldBe, prefixShouldBe.GetLength()))
     {
         return path;
