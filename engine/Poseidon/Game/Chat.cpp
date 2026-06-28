@@ -3,6 +3,7 @@
 #include <Poseidon/Game/Chat.hpp>
 #include <Poseidon/UI/Controls/UIControls.hpp>
 #include <Poseidon/World/World.hpp>
+#include <Poseidon/World/WorldChatInput.hpp>
 #include <Poseidon/Network/Network.hpp>
 #include <Poseidon/Core/resincl.hpp>
 #include <Poseidon/AI/AI.hpp>
@@ -857,7 +858,7 @@ bool DisplayChatLine::OnKeyUp(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
     }
     else if (nChar == SDLK_DOWN)
     {
-        if (!IsPlayerDead())
+        if (Poseidon::ShouldSwitchMultiplayerChannelFromChatInput() && !IsPlayerDead())
         {
             PrevChatChannel();
             if (GWorld->ChatChannel())
@@ -874,7 +875,7 @@ bool DisplayChatLine::OnKeyUp(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
     }
     else if (nChar == SDLK_UP)
     {
-        if (!IsPlayerDead())
+        if (Poseidon::ShouldSwitchMultiplayerChannelFromChatInput() && !IsPlayerDead())
         {
             NextChatChannel();
             if (GWorld->ChatChannel())
@@ -986,9 +987,13 @@ void DisplayVoiceChat::ResetHUD()
         // send actual state
         RefArray<NetworkObject> units;
         WhatUnits(units, (ChatChannel)channel);
-        if (channel == CCGlobal || units.Size() > 0)
+        if (Poseidon::ShouldUseExplicitMultiplayerVoiceTargets(channel, units.Size(), CCGlobal, CCDirect))
         {
             GetNetworkManager().SetVoiceChannel(channel, units);
+        }
+        else
+        {
+            GetNetworkManager().SetVoiceChannel(channel);
         }
     }
 

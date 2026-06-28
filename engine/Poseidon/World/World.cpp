@@ -4,6 +4,7 @@
 #include <Poseidon/Core/Config/EngineConfig.hpp>
 #include <Poseidon/Core/Config/UserConfig.hpp>
 #include <Poseidon/World/World.hpp>
+#include <Poseidon/World/WorldChatInput.hpp>
 #include <Poseidon/World/WorldInputContext.hpp>
 #include <Poseidon/World/Scene/Scene.hpp>
 #include <Poseidon/Graphics/Core/Engine.hpp>
@@ -334,7 +335,8 @@ void World::Simulate(float deltaT, bool& enableDraw)
     }
 
     // multiplayer chat control
-    if (GetNetworkManager().GetGameState() >= NGSCreate)
+    if (GetNetworkManager().GetGameState() >= NGSCreate &&
+        Poseidon::ShouldHandleMultiplayerChatShortcut(_chat != nullptr))
     {
         if (IsPlayerDead())
         {

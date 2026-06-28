@@ -7,6 +7,7 @@
 #include <SDL3/SDL_scancode.h>
 #include <SDL3/SDL_keycode.h>
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
+#include <Poseidon/World/WorldChatInput.hpp>
 #include <Poseidon/Network/Network.hpp>
 #include <Poseidon/Game/Chat.hpp>
 #include <Poseidon/Audio/DynSound.hpp>
@@ -945,7 +946,8 @@ void DisplayMission::OnSimulate(EntityAI* vehicle)
             return;
         }
 
-        if (InputSubsystem::Instance().GetActionToDo(UANetworkPlayers))
+        if (Poseidon::ShouldHandleMultiplayerChatShortcut(GWorld->GetChat() != nullptr) &&
+            InputSubsystem::Instance().GetActionToDo(UANetworkPlayers))
         {
             CreateChild(new DisplayMPPlayers(this));
         }

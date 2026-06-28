@@ -10,6 +10,7 @@
 #include <Poseidon/Game/Chat.hpp>
 #include <Poseidon/UI/DisplayUI.hpp>
 #include <Poseidon/UI/DisplayUICommon.hpp>
+#include <Poseidon/World/WorldChatInput.hpp>
 #include <Poseidon/Foundation/Strings/Mbcs.hpp>
 #include <Poseidon/Foundation/Strings/StrFormat.hpp>
 #include <Poseidon/Foundation/Strings/Bstring.hpp>
@@ -1264,7 +1265,8 @@ void DisplayClientGetReady::OnSimulate(EntityAI* vehicle)
 
 void DisplayMPPlayers::OnSimulate(EntityAI* vehicle)
 {
-    if (InputSubsystem::Instance().GetActionToDo(UANetworkPlayers, true, false))
+    if (Poseidon::ShouldHandleMultiplayerChatShortcut(GWorld->GetChat() != nullptr) &&
+        InputSubsystem::Instance().GetActionToDo(UANetworkPlayers, true, false))
     {
         OnButtonClicked(IDC_CANCEL);
     }
