@@ -6,6 +6,7 @@
 #include <Poseidon/Core/Config/Config.hpp>
 #include <Poseidon/Network/NetworkClientCommon.hpp>
 #include <Poseidon/Network/NetworkFileTransfer.hpp>
+#include <Poseidon/Network/NetworkPlayerRoleAssignment.hpp>
 #include <Poseidon/Network/NetworkScriptValueCodec.hpp>
 #include <Poseidon/Core/Global.hpp>
 // #include "strIncl.hpp"
@@ -1509,13 +1510,7 @@ void NetworkClient::AssignPlayer(int role, int player)
         return;
     }
 
-    PlayerRole info = _playerRoles[role];
-    info.player = player;
-    info.roleLocked = false;
-
-    // Update local copy so GetMyPlayerRole() returns non-null immediately.
-    // The server will confirm/reject via NMTPlayerRole broadcast.
-    _playerRoles[role].player = player;
+    PlayerRole info = Poseidon::BuildNetworkPlayerRoleAssignmentRequest(_playerRoles[role], player);
 
     // create message
     NetworkMessageType type = info.GetNMType(NMCCreate);

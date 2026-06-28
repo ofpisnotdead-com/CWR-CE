@@ -3,6 +3,7 @@
 
 #include <Poseidon/Foundation/platform.hpp>
 #include <Poseidon/Network/NetworkCustomAssets.hpp>
+#include <Poseidon/Network/NetworkPlayerRoleAssignment.hpp>
 #include <Poseidon/Network/NetworkServerAuth.hpp>
 
 // Behaviour-preservation tests for the server-side network predicates that were
@@ -424,6 +425,33 @@ TEST_CASE("Transferred squad asset probe maps semantic names to temp paths", "[n
             RString("tmp/squads/CWR/synthetic_grid.paa"));
     REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("squad"), RString("CW/R"),
                                                               RString("synthetic_grid.paa")).GetLength() == 0);
+}
+
+TEST_CASE("Player-role assignment request does not mutate the local role table", "[network][role]")
+{
+    struct Role
+    {
+        int player;
+        bool roleLocked;
+    };
+
+    AutoArray<Role> roles;
+    roles.Resize(3);
+    roles[0] = {101, true};
+    roles[1] = {-1, false};
+    roles[2] = {202, true};
+
+    const Role request = Poseidon::BuildNetworkPlayerRoleAssignmentRequest(roles[1], 101);
+
+    REQUIRE(request.player == 101);
+    REQUIRE_FALSE(request.roleLocked);
+
+    REQUIRE(roles[0].player == 101);
+    REQUIRE(roles[0].roleLocked);
+    REQUIRE(roles[1].player == -1);
+    REQUIRE_FALSE(roles[1].roleLocked);
+    REQUIRE(roles[2].player == 202);
+    REQUIRE(roles[2].roleLocked);
 }
 
 // Transcription of the original relay guard pair:
