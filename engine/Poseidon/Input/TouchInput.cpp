@@ -472,9 +472,12 @@ void TouchInput_ProcessFrame(int viewportWidth, int viewportHeight)
         }
         else if (finger.role == FingerRole::Look)
         {
-            const float sensitivity = IsGameplayScene() ? sAimSensitivity : sCursorSensitivity;
-            sLookDx += (finger.x - finger.lastX) * kBaseLookScaleX * sensitivity;
-            sLookDy += (finger.y - finger.lastY) * kBaseLookScaleY * sensitivity;
+            const bool gameplay = IsGameplayScene();
+            const float sensitivity = gameplay ? sAimSensitivity : sCursorSensitivity;
+            const float scaleX = gameplay ? kBaseLookScaleX : (float)std::max(1, sViewportW);
+            const float scaleY = gameplay ? kBaseLookScaleY : (float)std::max(1, sViewportH);
+            sLookDx += (finger.x - finger.lastX) * scaleX * sensitivity;
+            sLookDy += (finger.y - finger.lastY) * scaleY * sensitivity;
             sLookX = finger.x;
             sLookY = finger.y;
             lookActive = true;

@@ -58,7 +58,7 @@ TEST_CASE("TouchInput: left lower finger owns movement stick", "[input][touch]")
     CHECK(state.moveY == Catch::Approx(0.0f));
 }
 
-TEST_CASE("TouchInput: right-side drag owns look and does not steal button touches", "[input][touch]")
+TEST_CASE("TouchInput: right-side drag owns cursor/look and does not steal button touches", "[input][touch]")
 {
     TouchFixture fixture;
 
@@ -71,8 +71,8 @@ TEST_CASE("TouchInput: right-side drag owns look and does not steal button touch
     REQUIRE(state.lookActive);
     CHECK_FALSE(state.moveActive);
     CHECK(state.buttons[(int)TouchButton::Fire]);
-    CHECK(state.lookDx == Catch::Approx(21.6f).margin(0.1f));
-    CHECK(state.lookDy == Catch::Approx(-15.6f).margin(0.1f));
+    CHECK(state.lookDx == Catch::Approx(57.6f).margin(0.1f));
+    CHECK(state.lookDy == Catch::Approx(-32.4f).margin(0.1f));
 }
 
 TEST_CASE("TouchInput: simultaneous move look and button state coexist", "[input][touch]")
