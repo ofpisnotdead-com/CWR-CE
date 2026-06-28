@@ -1,6 +1,6 @@
 mission = "tests/integration/missions/jip_basic.Demo"
 
-tags = ["headful"]
+tags = ["headful", "ci-host-blocked"]
 
 [[instances]]
 extra_args = ["--no-strict"]
