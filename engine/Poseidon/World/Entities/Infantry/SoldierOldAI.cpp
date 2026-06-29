@@ -2343,39 +2343,20 @@ DEFINE_GET_INDICES(UpdateMan)
 namespace Poseidon
 {
 
-class IndicesUpdatePositionMan : public IndicesUpdatePositionVehicle
-{
-    typedef IndicesUpdatePositionVehicle base;
+#define UPDATE_POSITION_MAN_MSG(XX) \
+	XX(float, gunXRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted gun rotation"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MINOR) \
+	XX(float, gunYRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted gun rotation"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MINOR) \
+	XX(float, headXRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted head rotation"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MINOR) \
+	XX(float, headYRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted head rotation"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MINOR) \
+	XX(RString, move, NDTString, NCTStringMove, DEFVALUE(RString, "Stand"), DOC_MSG("Current animation"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
 
-  public:
-    int manUpdPos;
-    int move;
-
-    IndicesUpdatePositionMan();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdatePositionMan; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdatePositionMan::IndicesUpdatePositionMan()
-{
-    manUpdPos = -1;
-    move = -1;
-}
-
-void IndicesUpdatePositionMan::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(manUpdPos)
-    SCAN(move)
-}
+DECLARE_NET_INDICES_EX_ERR(UpdatePositionMan, UpdatePositionVehicle, UPDATE_POSITION_MAN_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdatePositionMan, UpdatePositionVehicle, UPDATE_POSITION_MAN_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdatePositionMan()
-{
-    using namespace Poseidon;
-    return new IndicesUpdatePositionMan();
-}
+
+DEFINE_GET_INDICES(UpdatePositionMan)
+
 namespace Poseidon
 {
 
@@ -2389,10 +2370,7 @@ NetworkMessageFormat& Man::CreateFormat(NetworkMessageClass cls, NetworkMessageF
             break;
         case NMCUpdatePosition:
             base::CreateFormat(cls, format);
-            format.Add("manUpdPos", NDTRawData, NCTNone, DEFVALUERAWDATA, DOC_MSG("Encoded position"), ET_UPD_MAN_POS,
-                       1);
-            format.Add("move", NDTString, NCTStringMove, DEFVALUE(RString, "Stand"), DOC_MSG("Current animation"),
-                       ET_NOT_EQUAL, ERR_COEF_MODE);
+            UPDATE_POSITION_MAN_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);
@@ -2442,33 +2420,10 @@ TMError Man::TransferMsg(NetworkMessageContext& ctx)
                     const IndicesUpdatePositionMan* indices =
                         static_cast<const IndicesUpdatePositionMan*>(ctx.GetIndices());
 
-                if (ctx.IsSending())
-                {
-                    NetworkUpdManPos pos;
-                    pos.gunXRotWantedC = EncodeRot8b(_gunXRotWanted);
-                    pos.gunYRotWantedC = EncodeRot8b(_gunYRotWanted);
-                    pos.headXRotWantedC = EncodeRot8b(_headXRotWanted);
-                    pos.headYRotWantedC = EncodeRot8b(_headYRotWanted);
-                    TMCHECK(ctx.IdxSendRaw(indices->manUpdPos, &pos, sizeof(pos)));
-                }
-                else
-                {
-                    void* data;
-                    int size;
-                    TMCHECK(ctx.IdxGetRaw(indices->manUpdPos, data, size));
-                    if (size == sizeof(NetworkUpdManPos))
-                    {
-                        const NetworkUpdManPos& pos = *(NetworkUpdManPos*)data;
-                        _gunXRotWanted = DecodeRot8b(pos.gunXRotWantedC);
-                        _gunYRotWanted = DecodeRot8b(pos.gunYRotWantedC);
-                        _headXRotWanted = DecodeRot8b(pos.headXRotWantedC);
-                        _headYRotWanted = DecodeRot8b(pos.headYRotWantedC);
-                    }
-                    else
-                    {
-                        Fail("Bad size of NetworkUpdManPos field");
-                    }
-                }
+                ITRANSF(gunXRotWanted)
+                ITRANSF(gunYRotWanted)
+                ITRANSF(headXRotWanted)
+                ITRANSF(headYRotWanted)
 
                 if (ctx.IsSending())
                 {
@@ -2535,17 +2490,10 @@ float Man::CalculateError(NetworkMessageContext& ctx)
             RString name = id < 0 ? "" : Type()->GetMoveName(id);
             ICALCERRE_NEQSTR(move, name, ERR_COEF_STRUCTURE)
 
-            {
-                AutoArray<char> temp;
-                if (ctx.IdxTransfer(indices->manUpdPos, temp) == TMOK && temp.Size() == sizeof(NetworkUpdManPos))
-                {
-                    NetworkUpdManPos& d = *(NetworkUpdManPos*)temp.Data();
-                    error += fabs(DecodeRot8b(d.headXRotWantedC) - _headXRotWanted) * ERR_COEF_VALUE_MINOR;
-                    error += fabs(DecodeRot8b(d.headYRotWantedC) - _headYRotWanted) * ERR_COEF_VALUE_MINOR;
-                    error += fabs(DecodeRot8b(d.gunXRotWantedC) - _gunXRotWanted) * ERR_COEF_VALUE_MINOR;
-                    error += fabs(DecodeRot8b(d.gunYRotWantedC) - _gunYRotWanted) * ERR_COEF_VALUE_MINOR;
-                }
-            }
+            ICALCERRE_ABSDIF(float,headXRotWanted, _headXRotWanted,ERR_COEF_VALUE_MINOR);
+            ICALCERRE_ABSDIF(float,headYRotWanted, _headYRotWanted,ERR_COEF_VALUE_MINOR);
+            ICALCERRE_ABSDIF(float,gunXRotWanted, _gunXRotWanted,ERR_COEF_VALUE_MINOR);
+            ICALCERRE_ABSDIF(float,gunYRotWanted, _gunYRotWanted,ERR_COEF_VALUE_MINOR);
         }
         break;
         default:
