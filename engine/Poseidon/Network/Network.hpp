@@ -1021,23 +1021,16 @@ RString NetObjToNetId(NetworkObject *obj);
 // return object by id
 NetworkObject* NetIdToNetObj(const char* netId);
 
-// network message indices for Magazine and MagazineNetworkInfo classes
-class IndicesMagazine : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int type;
-	int ammo;
-	int burstLeft;
-	int reload;
-	int reloadMagazine;
-	int creator;
-	int id;
+#define MAGAZINE_MSG(XX) \
+	XX(RString, type, NDTString, NCTDefault, DEFVALUE(RString, ""), DOC_MSG("Magazine type"), IdxTransfer) \
+	XX(int, ammo, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Ammo count"), IdxTransfer) \
+	XX(int, burstLeft, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("How many shots are there in the burst (auto fired)"), IdxTransfer) \
+	XX(float, reload, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Time rest to reload shot"), IdxTransfer) \
+	XX(float, reloadMagazine, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Time rest to reload magazine"), IdxTransfer) \
+	XX(int, creator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Network ID of magazine"), IdxTransfer) \
+	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Network ID of magazine"), IdxTransfer)
 
-	IndicesMagazine();
-	NetworkMessageIndices *Clone() const override {return new IndicesMagazine;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES(Magazine, MAGAZINE_MSG)
 
 // helper class for simple transfer of Magazine over network
 struct MagazineNetworkInfo : public NetworkSimpleObject
