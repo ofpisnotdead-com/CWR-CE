@@ -119,36 +119,12 @@ DEFINE_GET_INDICES(AskForAmmo)
 DEFINE_NET_MESSAGE(FireWeapon, FIRE_WEAPON_MSG)
 DEFINE_GET_INDICES(FireWeapon)
 
-IndicesUpdateWeapons::IndicesUpdateWeapons()
-{
-    vehicle = -1;
-    IndicesUpdateEntityAIWeapons* GetIndicesUpdateEntityAIWeapons();
-    weapons = GetIndicesUpdateEntityAIWeapons();
-}
-
-IndicesUpdateWeapons::~IndicesUpdateWeapons()
-{
-    void DeleteIndicesUpdateEntityAIWeapons(IndicesUpdateEntityAIWeapons * weapons);
-    DeleteIndicesUpdateEntityAIWeapons(weapons);
-}
-
-void IndicesUpdateWeapons::Scan(NetworkMessageFormatBase* format)
-{
-    SCAN(vehicle)
-    void ScanIndicesUpdateEntityAIWeapons(IndicesUpdateEntityAIWeapons * weapons, NetworkMessageFormatBase * format);
-    ScanIndicesUpdateEntityAIWeapons(weapons, format);
-}
-
-// Create network message indices for UpdateWeaponsMessage class
-NetworkMessageIndices* GetIndicesUpdateWeapons()
-{
-    return new IndicesUpdateWeapons();
-}
+DEFINE_NET_INDICES(UpdateWeapons, UPDATE_WEAPONS_MSG)
+DEFINE_GET_INDICES(UpdateWeapons)
 
 NetworkMessageFormat& UpdateWeaponsMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle to update"));
-    EntityAI::CreateFormatWeapons(format);
+    UPDATE_WEAPONS_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -159,7 +135,10 @@ TMError UpdateWeaponsMessage::TransferMsg(NetworkMessageContext& ctx)
 
     TMCHECK(ctx.IdxTransferRef(indices->vehicle, vehicle))
     if (vehicle)
-        TMCHECK(vehicle->TransferMsgWeapons(ctx, indices->weapons))
+    {
+        UpdateEntityAIWeaponsMessage weapons(vehicle);
+        TMCHECK(ctx.IdxTransferObject(indices->weapons, weapons))
+    }
     return TMOK;
 }
 

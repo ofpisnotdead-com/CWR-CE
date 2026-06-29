@@ -139,20 +139,8 @@ DECLARE_NET_INDICES(PlayerUpdate, PLAYER_UPDATE_MSG)
 
 DECLARE_NET_MESSAGE(Squad, SQUAD_MSG)
 
-namespace Poseidon { class IndicesUpdateEntityAIWeapons; }
-using Poseidon::IndicesUpdateEntityAIWeapons;
+#define UPDATE_WEAPONS_MSG(XX) \
+	XX(OLink<EntityAI>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle to update"), IdxTransferRef) \
+	XX(UpdateEntityAIWeaponsMessage, weapons, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateEntityAIWeapons), DOC_MSG("Weapons and magazines"), IdxTransferContent)
 
-// network message indices for UpdateWeaponsMessage class
-class IndicesUpdateWeapons : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	// indices of fields in message format
-	IndicesUpdateEntityAIWeapons *weapons;
-
-	IndicesUpdateWeapons();
-	~IndicesUpdateWeapons() override;
-	NetworkMessageIndices *Clone() const override {return new IndicesUpdateWeapons;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES(UpdateWeapons, UPDATE_WEAPONS_MSG)

@@ -1494,6 +1494,47 @@ LSError EntityAI::Serialize(ParamArchive& ar)
     */
 }
 
+DEFINE_NETWORK_OBJECT_SIMPLE(UpdateEntityAIWeaponsMessage, UpdateEntityAIWeapons)
+
+DEFINE_NET_INDICES_ERR(UpdateEntityAIWeapons, UPDATE_ENTITY_AI_WEAPONS_MSG)
+
+} // namespace Poseidon
+
+DEFINE_GET_INDICES(UpdateEntityAIWeapons)
+
+namespace Poseidon
+{
+
+NetworkMessageFormat& UpdateEntityAIWeaponsMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat &format)
+{
+    UPDATE_ENTITY_AI_WEAPONS_MSG(MSG_FORMAT_ERR)
+    return format;
+}
+
+TMError UpdateEntityAIWeaponsMessage::TransferMsg(NetworkMessageContext &ctx)
+{
+    PoseidonAssert(_vehicle);
+    return _vehicle->TransferMsgWeapons(ctx);
+}
+
+DEFINE_NET_INDICES_EX_ERR(UpdateDammageVehicleAI, UpdateDammageObject, UPDATE_DAMMAGE_VEHICLE_AI_MSG)
+
+} // namespace Poseidon
+
+DEFINE_GET_INDICES(UpdateDammageVehicleAI)
+
+namespace Poseidon
+{
+
+DEFINE_NET_INDICES_EX_ERR(UpdateVehicleAI, UpdateVehicle, UPDATE_VEHICLE_AI_MSG)
+
+} // namespace Poseidon
+
+DEFINE_GET_INDICES(UpdateVehicleAI)
+
+namespace Poseidon
+{
+
 NetworkMessageType EntityAI::GetNMType(NetworkMessageClass cls) const
 {
     switch (cls)
@@ -1507,96 +1548,6 @@ NetworkMessageType EntityAI::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesUpdateEntityAIWeapons
-{
-  public:
-    int initialUpdate;
-    int currentWeapon;
-    int weapons;
-    int magazines;
-    int magazineSlots;
-
-    IndicesUpdateEntityAIWeapons();
-    void Scan(NetworkMessageFormatBase* format);
-};
-
-IndicesUpdateEntityAIWeapons::IndicesUpdateEntityAIWeapons()
-{
-    initialUpdate = -1;
-    currentWeapon = -1;
-    weapons = -1;
-    magazines = -1;
-    magazineSlots = -1;
-}
-
-void IndicesUpdateEntityAIWeapons::Scan(NetworkMessageFormatBase* format)
-{
-    SCAN(initialUpdate) SCAN(currentWeapon) SCAN(weapons) SCAN(magazines) SCAN(magazineSlots)
-}
-
-} // namespace Poseidon
-IndicesUpdateEntityAIWeapons* GetIndicesUpdateEntityAIWeapons()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateEntityAIWeapons();
-}
-void DeleteIndicesUpdateEntityAIWeapons(IndicesUpdateEntityAIWeapons* weapons)
-{
-    using namespace Poseidon;
-    delete weapons;
-}
-namespace Poseidon
-{
-
-} // namespace Poseidon
-void ScanIndicesUpdateEntityAIWeapons(IndicesUpdateEntityAIWeapons* weapons, NetworkMessageFormatBase* format)
-{
-    using namespace Poseidon;
-    weapons->Scan(format);
-}
-namespace Poseidon
-{
-
-IndicesUpdateVehicleAI::IndicesUpdateVehicleAI()
-{
-    pilotLight = -1;
-    fireTarget = -1;
-    weapons = GetIndicesUpdateEntityAIWeapons();
-}
-
-IndicesUpdateVehicleAI::~IndicesUpdateVehicleAI()
-{
-    DeleteIndicesUpdateEntityAIWeapons(weapons);
-}
-
-void IndicesUpdateVehicleAI::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(fireTarget)
-    SCAN(pilotLight)
-    weapons->Scan(format);
-}
-
-} // namespace Poseidon
-
-NetworkMessageIndices* GetIndicesUpdateVehicleAI()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateVehicleAI();
-}
-namespace Poseidon
-{
-
-DEFINE_NET_INDICES_EX_ERR(UpdateDammageVehicleAI, UpdateDammageObject, UPDATE_DAMMAGE_VEHICLE_AI_MSG)
-
-} // namespace Poseidon
-
-DEFINE_GET_INDICES(UpdateDammageVehicleAI)
-
-namespace Poseidon
-{
-
 NetworkMessageFormat& EntityAI::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
     switch (cls)
@@ -1607,30 +1558,13 @@ NetworkMessageFormat& EntityAI::CreateFormat(NetworkMessageClass cls, NetworkMes
             break;
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-            format.Add("pilotLight", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Lights are on / off"),
-                       ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR);
-            format.Add("fireTarget", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Selected fire target"), ET_NOT_EQUAL,
-                       ERR_COEF_MODE);
-            CreateFormatWeapons(format);
+            UPDATE_VEHICLE_AI_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);
             break;
     }
     return format;
-}
-
-void EntityAI::CreateFormatWeapons(NetworkMessageFormat& format)
-{
-    format.Add("initialUpdate", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Initial update"));
-    format.Add("currentWeapon", NDTInteger, NCTSmallSigned, DEFVALUE(int, 0),
-               DOC_MSG("Index of currently selected weapon"), ET_NOT_EQUAL, ERR_COEF_MODE);
-    format.Add("weapons", NDTStringArray, NCTDefault, DEFVALUESTRINGARRAY, DOC_MSG("List of weapons"), ET_NOT_EQUAL,
-               ERR_COEF_MODE);
-    format.Add("magazines", NDTObjectArray, NCTNone, DEFVALUE_MSG(NMTMagazine), DOC_MSG("List of magazines"),
-               ET_MAGAZINES, 1);
-    format.Add("magazineSlots", NDTIntArray, NCTSmallSigned, DEFVALUEINTARRAY,
-               DOC_MSG("List of currently charged weapons/magazines/modes"), ET_NOT_EQUAL, ERR_COEF_MODE);
 }
 
 TMError EntityAI::TransferMsg(NetworkMessageContext& ctx)
@@ -1694,7 +1628,8 @@ TMError EntityAI::TransferMsg(NetworkMessageContext& ctx)
                         }
                     }
                 }
-                TMCHECK(TransferMsgWeapons(ctx, indices->weapons))
+                UpdateEntityAIWeaponsMessage weapons(this);
+                TMCHECK(ctx.IdxTransferObject(indices->weapons, weapons))
             }
             break;
         default:
@@ -1703,8 +1638,11 @@ TMError EntityAI::TransferMsg(NetworkMessageContext& ctx)
     return TMOK;
 }
 
-TMError EntityAI::TransferMsgWeapons(NetworkMessageContext& ctx, IndicesUpdateEntityAIWeapons* indices)
+TMError EntityAI::TransferMsgWeapons(NetworkMessageContext& ctx)
 {
+    AI_ERROR(dynamic_cast<const IndicesUpdateEntityAIWeapons*>(ctx.GetIndices()))
+    const IndicesUpdateEntityAIWeapons* indices = static_cast<const IndicesUpdateEntityAIWeapons*>(ctx.GetIndices());
+
     ITRANSF(currentWeapon)
     // FIX
     bool initialUpdate;
@@ -1911,102 +1849,22 @@ float EntityAI::CalculateError(NetworkMessageContext& ctx)
                 }
                 ICALCERRE_NEQREF(Object, fireTarget, target, ERR_COEF_MODE)
 
-                int currentWeapon;
-                if (ctx.IdxTransfer(indices->weapons->currentWeapon, currentWeapon) == TMOK)
+                int index = indices->weapons;
+                if (index >= 0)
                 {
-                    if (currentWeapon != _currentWeapon)
-                    {
-                        error += ERR_COEF_MODE;
-                    }
-                }
-                // weapons
-                AutoArray<RString> weapons;
-                if (ctx.IdxTransfer(indices->weapons->weapons, weapons) == TMOK)
-                {
-                    bool changed = weapons.Size() != _weapons.Size();
-                    if (!changed)
-                    {
-                        for (int i = 0; i < _weapons.Size(); i++)
-                        {
-                            if (weapons[i] != _weapons[i]->GetName())
-                            {
-                                changed = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (changed)
-                    {
-                        error += ERR_COEF_MODE;
-                    }
-                }
-                // magazines
-                AUTO_STATIC_ARRAY(MagazineNetworkInfo, magazines, 32);
-                if (ctx.IdxTransferArraySimple(indices->weapons->magazines, magazines) == TMOK)
-                {
-                    bool changed = magazines.Size() != _magazines.Size();
-                    int ammoDiff = 0;
-                    if (!changed)
-                    {
-                        for (int i = 0; i < _magazines.Size(); i++)
-                        {
-                            if (magazines[i]._creator != _magazines[i]->_creator ||
-                                magazines[i]._id != _magazines[i]->_id)
-                            {
-                                changed = true;
-                                break;
-                            }
-                            else
-                            {
-                                ammoDiff += abs(magazines[i]._ammo - _magazines[i]->_ammo);
-                            }
-                        }
-                    }
-                    if (changed)
-                    {
-                        error += ERR_COEF_MODE;
-                    }
-                    else
-                    {
-                        error += ammoDiff * ERR_COEF_VALUE_MINOR;
-                    }
-                }
+                    NetworkMessageFormatBase *format = const_cast<NetworkMessageFormatBase *>(ctx.GetFormat());
+                    NetworkMessageFormatItem &item = format->GetItem(index);
+                    CHECK_ASSIGN(typeVal,item.defValue,const RefNetworkDataTyped<int>);
+                    int type = typeVal.GetVal();
+                    NetworkMessageFormatBase *subformat = ctx.GetComponent()->GetFormat((NetworkMessageType)type);
 
-                // magazine slots
-                AutoArray<int> slots;
-                if (ctx.IdxTransfer(indices->weapons->magazineSlots, slots) == TMOK)
-                {
-                    bool changed = slots.Size() != _magazineSlots.Size();
-                    if (!changed)
+                    if (subformat)
                     {
-                        for (int i = 0; i < _magazineSlots.Size(); i++)
-                        {
-                            if (slots[i] >= _magazines.Size())
-                            {
-                                changed = true;
-                                break;
-                            }
-                            else if (slots[i] >= 0)
-                            {
-                                if (_magazineSlots[i]._magazine != _magazines[slots[i]])
-                                {
-                                    changed = true;
-                                    break;
-                                }
-                            }
-                            else
-                            {
-                                if (_magazineSlots[i]._magazine != nullptr)
-                                {
-                                    changed = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (changed)
-                    {
-                        error += ERR_COEF_MODE;
+                        const RefNetworkData &val = ctx.GetMessage()->values[index];
+                        CHECK_ASSIGN(msgVal,val,const RefNetworkDataTyped<NetworkMessage>);
+                        NetworkMessage &submsg = msgVal.GetVal();
+                        NetworkMessageContext subctx(&submsg, subformat, ctx);
+                        error += CalculateErrorWeapons(subctx);
                     }
                 }
             }
@@ -2015,6 +1873,114 @@ float EntityAI::CalculateError(NetworkMessageContext& ctx)
         default:
             error += base::CalculateError(ctx);
             break;
+    }
+    return error;
+}
+
+float EntityAI::CalculateErrorWeapons(NetworkMessageContext &ctx)
+{
+    AI_ERROR(dynamic_cast<const IndicesUpdateEntityAIWeapons*>(ctx.GetIndices()))
+    const IndicesUpdateEntityAIWeapons* indices = static_cast<const IndicesUpdateEntityAIWeapons*>(ctx.GetIndices());
+
+    float error = 0.0f;
+
+    int currentWeapon;
+    if (ctx.IdxTransfer(indices->currentWeapon, currentWeapon) == TMOK)
+    {
+        if (currentWeapon != _currentWeapon)
+        {
+            error += ERR_COEF_MODE;
+        }
+    }
+    // weapons
+    AutoArray<RString> weapons;
+    if (ctx.IdxTransfer(indices->weapons, weapons) == TMOK)
+    {
+        bool changed = weapons.Size() != _weapons.Size();
+        if (!changed)
+        {
+            for (int i = 0; i < _weapons.Size(); i++)
+            {
+                if (weapons[i] != _weapons[i]->GetName())
+                {
+                    changed = true;
+                    break;
+                }
+            }
+        }
+        if (changed)
+        {
+            error += ERR_COEF_MODE;
+        }
+    }
+    // magazines
+    AUTO_STATIC_ARRAY(MagazineNetworkInfo, magazines, 32);
+    if (ctx.IdxTransferArraySimple(indices->magazines, magazines) == TMOK)
+    {
+        bool changed = magazines.Size() != _magazines.Size();
+        int ammoDiff = 0;
+        if (!changed)
+        {
+            for (int i = 0; i < _magazines.Size(); i++)
+            {
+                if (magazines[i]._creator != _magazines[i]->_creator ||
+                    magazines[i]._id != _magazines[i]->_id)
+                {
+                    changed = true;
+                    break;
+                }
+                else
+                {
+                    ammoDiff += abs(magazines[i]._ammo - _magazines[i]->_ammo);
+                }
+            }
+        }
+        if (changed)
+        {
+            error += ERR_COEF_MODE;
+        }
+        else
+        {
+            error += ammoDiff * ERR_COEF_VALUE_MINOR;
+        }
+    }
+
+    // magazine slots
+    AutoArray<int> slots;
+    if (ctx.IdxTransfer(indices->magazineSlots, slots) == TMOK)
+    {
+        bool changed = slots.Size() != _magazineSlots.Size();
+        if (!changed)
+        {
+            for (int i = 0; i < _magazineSlots.Size(); i++)
+            {
+                if (slots[i] >= _magazines.Size())
+                {
+                    changed = true;
+                    break;
+                }
+                else if (slots[i] >= 0)
+                {
+                    if (_magazineSlots[i]._magazine != _magazines[slots[i]])
+                    {
+                        changed = true;
+                        break;
+                    }
+                }
+                else
+                {
+                    if (_magazineSlots[i]._magazine != nullptr)
+                    {
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (changed)
+        {
+            error += ERR_COEF_MODE;
+        }
     }
     return error;
 }
