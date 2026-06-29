@@ -559,34 +559,16 @@ TMError NetworkMessageQueue::TransferMsg(NetworkMessageContext& ctx)
 
 // variant (registered) messages
 
-// network message indices for ChangeGameState class
-class IndicesGameState : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int gameState;
+#define GAME_STATE_MSG(XX) \
+	XX(int, gameState, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Current multiplayer game state"), IdxTransfer)
 
-    IndicesGameState();
-    NetworkMessageIndices* Clone() const override { return new IndicesGameState; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesGameState::IndicesGameState()
-{
-    gameState = -1;
-}
-
-void IndicesGameState::Scan(NetworkMessageFormatBase* format){SCAN(gameState)}
-
-// Create network message indices for ChangeGameState class
-NetworkMessageIndices* GetIndicesGameState()
-{
-    return new IndicesGameState();
-}
+DECLARE_NET_INDICES(GameState, GAME_STATE_MSG)
+DEFINE_NET_INDICES(GameState, GAME_STATE_MSG)
+DEFINE_GET_INDICES(GameState)
 
 NetworkMessageFormat& ChangeGameState::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("gameState", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Current multiplayer game state"));
+    GAME_STATE_MSG(MSG_FORMAT)
     return format;
 }
 
