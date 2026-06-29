@@ -20,8 +20,6 @@ enum TitleType
 	TitleText
 };
 
-class IndicesEffects;
-
 struct ArcadeEffects : public SerializeClass
 {
 	RString condition;
@@ -50,12 +48,12 @@ struct ArcadeEffects : public SerializeClass
 	LSError Serialize(ParamArchive &ar) override;
 	LSError WorldSerialize(ParamArchive &ar);
 
-	static void CreateFormat
+	static NetworkMessageFormat &CreateFormat
 	(
 		NetworkMessageClass cls,
 		NetworkMessageFormat &format
 	);
-	TMError TransferMsg(NetworkMessageContext &ctx, IndicesEffects *indices);
+	TMError TransferMsg(NetworkMessageContext &ctx);
 };
 
 enum ArcadeWaypointType
