@@ -602,119 +602,8 @@ TMError ChangeGameState::TransferMsg(NetworkMessageContext& ctx)
 DEFINE_NET_MESSAGE(Logout, LOGOUT_MSG)
 DEFINE_GET_INDICES(Logout)
 
-// network message indices for MissionHeader class
-class IndicesMissionHeader : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int island;
-    int name;
-    int description;
-    int fileName;
-    int fileDir;
-    int fileSizeL;
-    int fileSizeH;
-    int fileCRC;
-    int respawn;
-    int respawnDelay;
-    int cadetMode;
-    int disabledAI;
-    int aiKills;
-    int updateOnly;
-    int joinInProgress;
-    int difficulty[DTN];
-    int addOns;
-    int estimatedEndTime;
-
-    int titleParam1;
-    int valuesParam1;
-    int textsParam1;
-    int defValueParam1;
-    int titleParam2;
-    int valuesParam2;
-    int textsParam2;
-    int defValueParam2;
-
-    IndicesMissionHeader();
-    NetworkMessageIndices* Clone() const override { return new IndicesMissionHeader; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesMissionHeader::IndicesMissionHeader()
-{
-    island = -1;
-    name = -1;
-    description = -1;
-    fileName = -1;
-    fileDir = -1;
-    fileSizeL = -1;
-    fileSizeH = -1;
-    fileCRC = -1;
-    respawn = -1;
-    respawnDelay = -1;
-    cadetMode = -1;
-    disabledAI = -1;
-    aiKills = -1;
-    updateOnly = -1;
-    joinInProgress = -1;
-    for (int i = 0; i < DTN; i++)
-    {
-        difficulty[i] = -1;
-    }
-    addOns = -1;
-    estimatedEndTime = -1;
-
-    titleParam1 = -1;
-    valuesParam1 = -1;
-    textsParam1 = -1;
-    defValueParam1 = -1;
-    titleParam2 = -1;
-    valuesParam2 = -1;
-    textsParam2 = -1;
-    defValueParam2 = -1;
-}
-
-void IndicesMissionHeader::Scan(NetworkMessageFormatBase* format)
-{
-    SCAN(island)
-    SCAN(name)
-    SCAN(description)
-    SCAN(fileName)
-    SCAN(fileDir)
-    SCAN(fileSizeL)
-    SCAN(fileSizeH)
-    SCAN(fileCRC)
-    SCAN(respawn)
-    SCAN(respawnDelay)
-    SCAN(cadetMode)
-    SCAN(disabledAI)
-    SCAN(aiKills)
-    SCAN(updateOnly)
-    SCAN(joinInProgress)
-    for (int i = 0; i < DTN; i++)
-    {
-        RString name = RString("diff") + RString(Config::diffDesc[i].name);
-        difficulty[i] = format->FindIndex(name);
-    }
-    SCAN(addOns)
-
-    SCAN(estimatedEndTime)
-
-    SCAN(titleParam1)
-    SCAN(valuesParam1)
-    SCAN(textsParam1)
-    SCAN(defValueParam1)
-    SCAN(titleParam2)
-    SCAN(valuesParam2)
-    SCAN(textsParam2)
-    SCAN(defValueParam2)
-}
-
-// Create network message indices for MissionHeader class
-NetworkMessageIndices* GetIndicesMissionHeader()
-{
-    return new IndicesMissionHeader();
-}
+DEFINE_NET_INDICES(MissionHeader, MISSION_HEADER_MSG)
+DEFINE_GET_INDICES(MissionHeader)
 
 MissionHeader::MissionHeader()
 {
@@ -740,56 +629,11 @@ MissionHeader::MissionHeader()
 
 NetworkMessageFormat& MissionHeader::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("island", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Island (map), where mission is placed"));
-    format.Add("name", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Name of mission"));
-    format.Add("description", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Description of mission"));
-
-    format.Add("fileName", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Name of mission file"));
-    format.Add("fileDir", NDTString, NCTNone, DEFVALUE(RString, ""),
-               DOC_MSG("Directory, where mission file is placed"));
-    format.Add("fileSizeL", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Size of mission file (low DWORD)"));
-    format.Add("fileSizeH", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Size of mission file (high DWORD)"));
-    format.Add("fileCRC", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("CRC of mission file"));
-
-    format.Add("respawn", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, RespawnSeaGull), DOC_MSG("Respawn type"));
-    format.Add("respawnDelay", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Respawn delay (in seconds)"));
-
-    format.Add("cadetMode", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Cadet / Veteran mode"));
-    format.Add("disabledAI", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("AI is disabled"));
-    format.Add("aiKills", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Write AI kills into statistics"));
-
-    format.Add("updateOnly", NDTBool, NCTNone, DEFVALUE(bool, false),
-               DOC_MSG("This message is only update of (recently sent) mission info"));
-
-    format.Add("joinInProgress", NDTBool, NCTNone, DEFVALUE(bool, false),
-               DOC_MSG("Allow players to join after mission has started"));
-
-    for (int i = 0; i < DTN; i++)
-    {
-        RString name = RString("diff") + RString(Config::diffDesc[i].name);
-        format.Add(name, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Difficulty settings"));
-    }
-
-    format.Add("addOns", NDTStringArray, NCTNone, DEFVALUESTRINGARRAY, DOC_MSG("List of used addons"));
-
-    format.Add("estimatedEndTime", NDTTime, NCTNone, DEFVALUE(Time, TIME_MIN),
-               DOC_MSG("Time of estimated end of mission"));
-
-    format.Add("titleParam1", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Mission parameter - title"));
-    format.Add("valuesParam1", NDTFloatArray, NCTNone, DEFVALUEFLOATARRAY,
-               DOC_MSG("Mission parameter - list of values"));
-    format.Add("textsParam1", NDTStringArray, NCTNone, DEFVALUESTRINGARRAY,
-               DOC_MSG("Mission parameter - list of value names"));
-    format.Add("defValueParam1", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Mission parameter - default value"));
-    format.Add("titleParam2", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Mission parameter - title"));
-    format.Add("valuesParam2", NDTFloatArray, NCTNone, DEFVALUEFLOATARRAY,
-               DOC_MSG("Mission parameter - list of values"));
-    format.Add("textsParam2", NDTStringArray, NCTNone, DEFVALUESTRINGARRAY,
-               DOC_MSG("Mission parameter - list of value names"));
-    format.Add("defValueParam2", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Mission parameter - default value"));
-
+    MISSION_HEADER_MSG(MSG_FORMAT)
     return format;
 }
+
+#define DIFF_TRANSFER(name,XX) TMCHECK(ctx.IdxTransfer(indices->diff##name, difficulty[DT##name]))
 
 TMError MissionHeader::TransferMsg(NetworkMessageContext& ctx)
 {
@@ -814,10 +658,8 @@ TMError MissionHeader::TransferMsg(NetworkMessageContext& ctx)
     TMCHECK(ctx.IdxTransfer(indices->aiKills, aiKills))
     TMCHECK(ctx.IdxTransfer(indices->updateOnly, updateOnly))
     TMCHECK(ctx.IdxTransfer(indices->joinInProgress, joinInProgress))
-    for (int i = 0; i < DTN; i++)
-    {
-        TMCHECK(ctx.IdxTransfer(indices->difficulty[i], difficulty[i]))
-    }
+
+    DIFFICULTY_TYPE_ENUM(DIFF_TRANSFER,ignored)
 
     TMCHECK(ctx.IdxTransfer(indices->addOns, addOns))
 
