@@ -645,30 +645,6 @@ float RefNetworkDataTyped<AutoArray<char>>::CalculateError(NetworkMessageErrorTy
 
     switch (type)
     {
-        case ET_UPD_ENTITY_POS:
-        {
-            // check data size
-            if (value.Size() != sizeof(NetworkUpdEntityPos))
-            {
-                return 0;
-            }
-            if (withValue.Size() != sizeof(NetworkUpdEntityPos))
-            {
-                return 0;
-            }
-            const NetworkUpdEntityPos& d1 = *(NetworkUpdEntityPos*)value.Data();
-            const NetworkUpdEntityPos& d2 = *(NetworkUpdEntityPos*)withValue.Data();
-            float err;
-            err = d1.position.Distance(d2.position);
-
-            err += d1.orientation.DirectionUp().Distance(d2.orientation.DirectionUp());
-            err += d1.orientation.Direction().Distance(d2.orientation.Direction());
-
-            err += dt * d1.speed.Distance(d2.speed);
-            err += dt * d1.angMomentum.Distance(d2.angMomentum);
-
-            return err;
-        }
         case ET_UPD_MAN_POS:
         {
             if (value.Size() != sizeof(NetworkUpdManPos))
