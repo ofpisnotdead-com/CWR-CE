@@ -645,25 +645,6 @@ float RefNetworkDataTyped<AutoArray<char>>::CalculateError(NetworkMessageErrorTy
 
     switch (type)
     {
-        case ET_UPD_MAN_POS:
-        {
-            if (value.Size() != sizeof(NetworkUpdManPos))
-            {
-                return 0;
-            }
-            if (withValue.Size() != sizeof(NetworkUpdManPos))
-            {
-                return 0;
-            }
-            const NetworkUpdManPos& d1 = *(NetworkUpdManPos*)value.Data();
-            const NetworkUpdManPos& d2 = *(NetworkUpdManPos*)withValue.Data();
-            float err;
-            err = fabs(CompareRot8b(d1.gunXRotWantedC, d2.gunXRotWantedC)) * ERR_COEF_VALUE_MINOR;
-            err += fabs(CompareRot8b(d1.gunYRotWantedC, d2.gunYRotWantedC)) * ERR_COEF_VALUE_MINOR;
-            err += fabs(CompareRot8b(d1.headXRotWantedC, d2.headXRotWantedC)) * ERR_COEF_VALUE_MINOR;
-            err += fabs(CompareRot8b(d1.headYRotWantedC, d2.headYRotWantedC)) * ERR_COEF_VALUE_MINOR;
-            return err;
-        }
         default:
             Fail("Unexpected error type");
             return 0;

@@ -285,8 +285,6 @@ DEFINE_ENUM_BEG(NetworkMessageErrorType)
 	// number of items in second array, not contained in first array
 	ET_NOT_CONTAIN_COUNT,
 	// specialized entity position packed
-	ET_UPD_MAN_POS,
-	// specialized magazines difference
 	ET_MAGAZINES,
 	// difference of derivations (role of time is incorporated)
 	ET_DER_DIF,
@@ -453,16 +451,6 @@ struct EncodedMatrix3
 	// decode columns of 3x3 matrix
 	Vector3 DirectionUp() const;
 	Vector3 Direction() const;
-};
-
-// Man update position submessage (behave as single format item)
-struct NetworkUpdManPos
-{
-	// 8b encoded, assumed in range -PI,+PI
-	char gunXRotWantedC;
-	char gunYRotWantedC;
-	char headXRotWantedC;
-	char headYRotWantedC;
 };
 
 // encode angle in range -PI to +PI to 8b represetation
