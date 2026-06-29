@@ -154,42 +154,19 @@ DEFINE_GET_INDICES(AddMagazineCargo)
 DEFINE_NET_MESSAGE(RemoveMagazineCargo, REMOVE_MAGAZINE_CARGO_MSG)
 DEFINE_GET_INDICES(RemoveMagazineCargo)
 
-NetworkMessageType VehicleInitCmd::GetNMType(NetworkMessageClass cls) const
-{
-    return NMTVehicleInit;
-}
+DEFINE_NETWORK_OBJECT_SIMPLE(VehicleInitCmd, VehicleInit)
 
-// network message indices for VehicleInitCmd class
-class IndicesVehicleInit : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int vehicle;
-    int init;
+#define VEHICLE_INIT_MSG(XX) \
+	XX(OLink<EntityAI>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which is initialized"), IdxTransferRef) \
+	XX(RString, init, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Initialization statement"), IdxTransfer)
 
-    IndicesVehicleInit();
-    NetworkMessageIndices* Clone() const override { return new IndicesVehicleInit; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesVehicleInit::IndicesVehicleInit()
-{
-    vehicle = -1;
-    init = -1;
-}
-
-void IndicesVehicleInit::Scan(NetworkMessageFormatBase* format){SCAN(vehicle) SCAN(init)}
-
-// Create network message indices for VehicleInitCmd class
-NetworkMessageIndices* GetIndicesVehicleInit()
-{
-    return new IndicesVehicleInit();
-}
+DECLARE_NET_INDICES(VehicleInit, VEHICLE_INIT_MSG)
+DEFINE_NET_INDICES(VehicleInit, VEHICLE_INIT_MSG)
+DEFINE_GET_INDICES(VehicleInit)
 
 NetworkMessageFormat& VehicleInitCmd::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which is initialized"));
-    format.Add("init", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Initialization statement"));
+    VEHICLE_INIT_MSG(MSG_FORMAT)
     return format;
 }
 
