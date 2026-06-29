@@ -212,15 +212,24 @@ class EngineMTL : public Engine
     // per-vertex so DrawTriangles2D can share one shader for UI and legacy 3D.
     float _currentTriDetailMode = 0.0f;
 
-    // Hardware T&L mesh path state. `_tlFrame`/`_tlObject` are rebuilt on
-    // every PrepareMeshTL call (v1 simplicity -- GL33 caches its equivalent
-    // across a pass's whole run of draws; not worth the extra state machine
-    // here yet). `_tlCurrentTexture` is set by PrepareTriangleTL, the
-    // per-section hook Shape::Draw calls (via ShapeSection::PrepareTL) right
-    // before each DrawSectionTL -- kept separate from `_currentTriTexture`
-    // so the two draw paths never cross-talk if both are active in one frame.
+    // Hardware T&L mesh path state. `_tlCurrentTexture` is set by
+    // PrepareTriangleTL, the per-section hook Shape::Draw calls (via
+    // ShapeSection::PrepareTL) right before each DrawSectionTL -- kept
+    // separate from `_currentTriTexture` so the two draw paths never
+    // cross-talk if both are active in one frame.
     FrameConstantsMTL _tlFrame = {};
     ObjectConstantsMTL _tlObject = {};
+    // True once _tlFrame's view/sun-direction/fog fields have been built
+    // this frame; PrepareMeshTL skips rebuilding them on later calls until
+    // the next InitDraw(), mirroring GL33's _frameState/BeginPass cache.
+    // _tlFrame.projection and the sun-enabled component of sunDirAndEnabled
+    // are deliberately excluded and stay rebuilt on every call: projection
+    // bakes in _bias (CanZBias() is false, same as GL33/D3D11), which
+    // SetBias() changes per-section to control z-fighting (ShapeDraw.cpp,
+    // Shadow.cpp) and which TransportCore.cpp's cockpit/optics code
+    // temporarily narrows via the camera's clip range mid-frame; the
+    // sun-enabled flag varies per-object via the DisableSun material bit.
+    bool _tlFrameValid = false;
     int _tlCurrentTexture = 0;
     int _tlSecondaryTexture = 0;
     // Set alongside _tlObject by PrepareTriangleTL from

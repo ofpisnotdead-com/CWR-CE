@@ -204,6 +204,10 @@ void EngineMTL::InitDraw(bool clear, PackedColor color)
     _bootstrap.BeginDebugOverlayFrame();
     Dev::DebugOverlay::NewFrame();
 
+    // Force PrepareMeshTL to rebuild its cached view/sun/fog constants at
+    // least once this frame (camera/sun/fog can change between frames).
+    _tlFrameValid = false;
+
     Engine::InitDraw(clear, color);
     _frameOpen = true;
 }
@@ -769,9 +773,10 @@ void EngineMTL::PrepareTriangleTL(const MipInfo& mip, const render::LegacySpec& 
 }
 
 // Ported from GL33's PrepareMeshTL/PrepareMeshTLImpl (EngineGL33_Mesh.cpp).
-// v1 simplification: rebuilds the per-frame constants (camera/sun/fog) on
-// every call instead of caching them across a pass's whole run of draws --
-// correctness over performance for this milestone.
+// Caches the per-frame constants (view/sun-direction/fog) across a frame's
+// whole run of draws, like GL33's _frameState/BeginPass -- see _tlFrameValid's
+// comment for why projection and the sun-enabled flag are excluded from the
+// cache and still rebuilt below on every call.
 void EngineMTL::PrepareMeshTL(const LightList& /*lights*/, const Matrix4& modelToWorld,
                               const render::LegacySpec& spec)
 {
@@ -791,40 +796,45 @@ void EngineMTL::PrepareMeshTL(const LightList& /*lights*/, const Matrix4& modelT
     if (camera == nullptr || sun == nullptr)
         return;
 
-    // Per-frame: view (rotation only -- camera-relative rendering zeroes the
-    // translation) and projection.
-    GfxMatrix view;
-    ConvertMatrix(view, camera->InverseScaled());
-    view._41 = view._42 = view._43 = 0;
-    std::memcpy(_tlFrame.view.m, &view, sizeof(view));
+    if (!_tlFrameValid)
+    {
+        // Per-frame: view (rotation only -- camera-relative rendering zeroes
+        // the translation).
+        GfxMatrix view;
+        ConvertMatrix(view, camera->InverseScaled());
+        view._41 = view._42 = view._43 = 0;
+        std::memcpy(_tlFrame.view.m, &view, sizeof(view));
+
+        const Vector3 sunDir = sun->Direction();
+        _tlFrame.sunDirAndEnabled[0] = static_cast<float>(sunDir.X());
+        _tlFrame.sunDirAndEnabled[1] = static_cast<float>(sunDir.Y());
+        _tlFrame.sunDirAndEnabled[2] = static_cast<float>(sunDir.Z());
+
+        const float fogStart = GScene->GetFogMinRange();
+        const float fogEnd = GScene->GetFogMaxRange();
+        _tlFrame.fogParams[0] = fogStart;
+        _tlFrame.fogParams[1] = (fogEnd > fogStart) ? 1.0f / (fogEnd - fogStart) : 0.0f;
+        _tlFrame.fogParams[2] = 1.0f;
+        _tlFrame.fogParams[3] = 0.0f;
+        _tlFrame.fogColor[0] = _fogColor.R();
+        _tlFrame.fogColor[1] = _fogColor.G();
+        _tlFrame.fogColor[2] = _fogColor.B();
+        _tlFrame.fogColor[3] = 1.0f;
+        // GL33 uploads zero to this shader slot for ordinary mesh draws; keep
+        // Metal's constant-buffer layout identical without feeding the absolute
+        // camera position into camera-relative lighting math.
+        _tlFrame.gl33CamPosZero[0] = 0.0f;
+        _tlFrame.gl33CamPosZero[1] = 0.0f;
+        _tlFrame.gl33CamPosZero[2] = 0.0f;
+        _tlFrame.gl33CamPosZero[3] = 0.0f;
+
+        _tlFrameValid = true;
+    }
 
     GfxMatrix projection;
     ConvertProjectionMatrix(projection, camera->ProjectionNormal(), CanZBias() ? 0 : _bias);
     std::memcpy(_tlFrame.projection.m, &projection, sizeof(projection));
-
-    const Vector3 sunDir = sun->Direction();
-    _tlFrame.sunDirAndEnabled[0] = static_cast<float>(sunDir.X());
-    _tlFrame.sunDirAndEnabled[1] = static_cast<float>(sunDir.Y());
-    _tlFrame.sunDirAndEnabled[2] = static_cast<float>(sunDir.Z());
     _tlFrame.sunDirAndEnabled[3] = _sunEnabled ? 1.0f : 0.0f;
-
-    const float fogStart = GScene->GetFogMinRange();
-    const float fogEnd = GScene->GetFogMaxRange();
-    _tlFrame.fogParams[0] = fogStart;
-    _tlFrame.fogParams[1] = (fogEnd > fogStart) ? 1.0f / (fogEnd - fogStart) : 0.0f;
-    _tlFrame.fogParams[2] = 1.0f;
-    _tlFrame.fogParams[3] = 0.0f;
-    _tlFrame.fogColor[0] = _fogColor.R();
-    _tlFrame.fogColor[1] = _fogColor.G();
-    _tlFrame.fogColor[2] = _fogColor.B();
-    _tlFrame.fogColor[3] = 1.0f;
-    // GL33 uploads zero to this shader slot for ordinary mesh draws; keep
-    // Metal's constant-buffer layout identical without feeding the absolute
-    // camera position into camera-relative lighting math.
-    _tlFrame.gl33CamPosZero[0] = 0.0f;
-    _tlFrame.gl33CamPosZero[1] = 0.0f;
-    _tlFrame.gl33CamPosZero[2] = 0.0f;
-    _tlFrame.gl33CamPosZero[3] = 0.0f;
 
     // Per-object: camera-relative world matrix (translation has the camera
     // position subtracted), same as GL33's PrepareMeshTLImpl.
