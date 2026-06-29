@@ -146,10 +146,6 @@ Touch controls are implemented in-engine through SDL3 finger events, not UIKit.
 The touch module lives in `engine/Poseidon/Input/TouchInput.*`, is enabled by
 default only for iOS builds, and feeds the existing input/controller UI paths.
 
-> Touch / iOS screenshot placeholder:
->
-> Add current device screenshot here once captured.
-
 Current behavior:
 
 - Left virtual stick drives movement in gameplay and cursor movement in menus,
