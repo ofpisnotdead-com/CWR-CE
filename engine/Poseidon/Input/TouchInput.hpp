@@ -23,10 +23,17 @@ struct TouchInputDebugState
     bool enabled = false;
     bool moveActive = false;
     bool lookActive = false;
+    bool mapPrimaryActive = false;
+    bool mapGestureActive = false;
+    bool actionScrollActive = false;
     float moveX = 0.0f;
     float moveY = 0.0f;
     float lookDx = 0.0f;
     float lookDy = 0.0f;
+    float mapPanX = 0.0f;
+    float mapPanY = 0.0f;
+    float mapZoom = 0.0f;
+    int actionScrollSteps = 0;
     bool buttons[(int)TouchButton::Count] = {};
 };
 
@@ -41,5 +48,8 @@ void TouchInput_SetCursorSensitivity(float sensitivity);
 float TouchInput_GetCursorSensitivity();
 void TouchInput_Reset();
 TouchInputDebugState TouchInput_GetDebugState();
+
+void TouchInput_TestSetGameplaySceneOverride(bool enabled, bool isGameplayScene);
+void TouchInput_TestSetMapSceneOverride(bool enabled, bool isMapScene);
 
 } // namespace Poseidon

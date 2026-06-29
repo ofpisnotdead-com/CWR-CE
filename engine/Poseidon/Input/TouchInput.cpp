@@ -19,6 +19,7 @@ extern void SDLInput_BufferControllerUiAction(Poseidon::ControllerUiAction actio
 extern void SDLInput_BufferKeyEvent(SDL_Scancode sc, bool down, DWORD timestamp);
 extern void SDLInput_BufferMouseButton(int btn, bool down);
 extern void SDLInput_BufferMouseMotion(float dx, float dy);
+extern void SDLInput_BufferMouseWheel(float dy);
 
 namespace Poseidon
 {
@@ -39,6 +40,11 @@ constexpr float kCursorStickScaleY = 22.0f;
 constexpr float kMinSensitivity = 0.25f;
 constexpr float kMaxSensitivity = 3.0f;
 constexpr float kTapMaxTravel = 0.018f;
+constexpr float kMapPanMouseScaleX = 200.0f / 1.5f;
+constexpr float kMapPanMouseScaleY = 150.0f / 1.5f;
+constexpr float kMapPinchZoomScale = 5.0f;
+constexpr float kActionScrollStepY = 0.035f;
+constexpr float kActionScrollWheelTicks = 1.0f;
 
 #ifdef POSEIDON_TARGET_IOS
 constexpr bool kDefaultEnabled = true;
@@ -99,10 +105,27 @@ float sMoveThumbX = 0.18f;
 float sMoveThumbY = 0.74f;
 float sLookX = 0.0f;
 float sLookY = 0.0f;
+bool sMapGestureActive = false;
+bool sMapPrimaryActive = false;
+SDL_FingerID sMapPrimaryFingerId = 0;
+float sMapPanX = 0.0f;
+float sMapPanY = 0.0f;
+float sMapZoom = 0.0f;
+bool sActionScrollActive = false;
+SDL_FingerID sActionScrollFingerId = 0;
+float sActionScrollAccumY = 0.0f;
+int sActionScrollSteps = 0;
+bool sActionTapPending = false;
+SDL_FingerID sActionTapFingerId = 0;
 int sViewportW = 1920;
 int sViewportH = 1080;
 float sAimSensitivity = 1.0f;
 float sCursorSensitivity = 1.0f;
+
+bool sMapSceneOverrideEnabled = false;
+bool sMapSceneOverride = false;
+bool sGameplaySceneOverrideEnabled = false;
+bool sGameplaySceneOverride = false;
 
 float Clamp01(float v)
 {
@@ -147,7 +170,19 @@ float NormY(float pixelY, int height)
 
 bool IsGameplayScene()
 {
+    if (sGameplaySceneOverrideEnabled)
+        return sGameplaySceneOverride;
     return GWorld && GWorld->GetControllerUiScene().kind == ControllerSceneKind::Gameplay;
+}
+
+bool IsMapScene()
+{
+    if (sMapSceneOverrideEnabled)
+        return sMapSceneOverride;
+    if (!GWorld)
+        return false;
+    const ControllerSceneKind kind = GWorld->GetControllerUiScene().kind;
+    return kind == ControllerSceneKind::Map || kind == ControllerSceneKind::EditorMap;
 }
 
 float ClampSensitivity(float v)
@@ -233,12 +268,48 @@ bool RoleActive(FingerRole role)
     return false;
 }
 
+bool IsTouchButtonFinger(const Finger& finger)
+{
+    return finger.role == FingerRole::Button || finger.button != TouchButton::Count;
+}
+
+int CollectMapGestureFingers(const Finger** first, const Finger** second)
+{
+    int count = 0;
+    for (const Finger& finger : sFingers)
+    {
+        if (!finger.active || IsTouchButtonFinger(finger))
+            continue;
+        if (count == 0 && first)
+            *first = &finger;
+        else if (count == 1 && second)
+            *second = &finger;
+        ++count;
+    }
+    return count;
+}
+
+void BufferCursorToTouch(float x, float y)
+{
+    const float targetX = x * 2.0f - 1.0f;
+    const float targetY = y * 2.0f - 1.0f;
+    const float cursorDx = targetX - GInput.cursor.cursorX;
+    const float cursorDy = targetY - GInput.cursor.cursorY;
+    if (std::fabs(cursorDx) > 0.0001f || std::fabs(cursorDy) > 0.0001f)
+        SDLInput_BufferMouseMotion(cursorDx * kMapPanMouseScaleX, cursorDy * kMapPanMouseScaleY);
+}
+
 void ClassifyFinger(Finger& finger)
 {
     finger.button = HitButton(finger.x, finger.y);
     if (finger.button != TouchButton::Count)
     {
         finger.role = FingerRole::Button;
+        return;
+    }
+    if (IsMapScene())
+    {
+        finger.role = FingerRole::None;
         return;
     }
     if (!RoleActive(FingerRole::Move) && finger.x <= kMoveRegionX && finger.y >= kLowerRegionY)
@@ -256,6 +327,133 @@ void ClassifyFinger(Finger& finger)
     finger.role = FingerRole::None;
 }
 
+void EndMapGesture()
+{
+    if (sMapGestureActive)
+        SDLInput_BufferMouseButton(1, false);
+    sMapGestureActive = false;
+    sMapPanX = 0.0f;
+    sMapPanY = 0.0f;
+    sMapZoom = 0.0f;
+}
+
+void EndMapPrimary()
+{
+    if (sMapPrimaryActive)
+        SDLInput_BufferMouseButton(0, false);
+    sMapPrimaryActive = false;
+    sMapPrimaryFingerId = 0;
+}
+
+void ProcessMapPrimary(const Finger& finger)
+{
+    if (sMapGestureActive)
+        EndMapGesture();
+
+    BufferCursorToTouch(finger.x, finger.y);
+    if (!sMapPrimaryActive || sMapPrimaryFingerId != finger.id)
+    {
+        if (sMapPrimaryActive)
+            SDLInput_BufferMouseButton(0, false);
+        sMapPrimaryFingerId = finger.id;
+        sMapPrimaryActive = true;
+        SDLInput_BufferMouseButton(0, true);
+    }
+    GInput.mouse.cursorLastActive = Glob.uiTime;
+}
+
+void ProcessMapGesture()
+{
+    const Finger* a = nullptr;
+    const Finger* b = nullptr;
+    const int count = IsMapScene() ? CollectMapGestureFingers(&a, &b) : 0;
+    if (count < 2 || !a || !b)
+    {
+        EndMapGesture();
+        if (count == 1 && a)
+            ProcessMapPrimary(*a);
+        else
+            EndMapPrimary();
+        return;
+    }
+
+    EndMapPrimary();
+
+    const float cx = (a->x + b->x) * 0.5f;
+    const float cy = (a->y + b->y) * 0.5f;
+    const float lastCx = (a->lastX + b->lastX) * 0.5f;
+    const float lastCy = (a->lastY + b->lastY) * 0.5f;
+    const float dist = std::max(Length(a->x - b->x, a->y - b->y), 0.0001f);
+    const float lastDist = std::max(Length(a->lastX - b->lastX, a->lastY - b->lastY), 0.0001f);
+
+    if (!sMapGestureActive)
+        SDLInput_BufferMouseButton(1, true);
+    sMapGestureActive = true;
+
+    sMapPanX = (cx - lastCx) * 2.0f;
+    sMapPanY = (cy - lastCy) * 2.0f;
+    sMapZoom = -std::log(dist / lastDist) * kMapPinchZoomScale;
+
+    if (std::fabs(sMapPanX) > 0.0001f || std::fabs(sMapPanY) > 0.0001f)
+    {
+        SDLInput_BufferMouseMotion(sMapPanX * kMapPanMouseScaleX, sMapPanY * kMapPanMouseScaleY);
+        GInput.mouse.cursorLastActive = Glob.uiTime;
+    }
+    if (std::fabs(sMapZoom) > 0.001f)
+    {
+        SDLInput_BufferMouseWheel(sMapZoom);
+        GInput.mouse.cursorLastActive = Glob.uiTime;
+    }
+}
+
+void ResetActionScroll()
+{
+    sActionScrollActive = false;
+    sActionScrollFingerId = 0;
+    sActionScrollAccumY = 0.0f;
+    sActionScrollSteps = 0;
+}
+
+void ResetActionTap()
+{
+    sActionTapPending = false;
+    sActionTapFingerId = 0;
+}
+
+void EmitActionTap()
+{
+    InputSubsystem::Instance().SetSyntheticStickButton(0, true);
+    SDLInput_BufferKeyEvent(SDL_SCANCODE_RETURN, true, Foundation::GlobalTickCount());
+    SDLInput_BufferKeyEvent(SDL_SCANCODE_RETURN, false, Foundation::GlobalTickCount());
+    SDLInput_BufferControllerUiAction(ControllerUiAction::Confirm, true);
+}
+
+void ProcessActionButtonDrag(const Finger& finger, float dy)
+{
+    if (!IsGameplayScene())
+        return;
+    if (finger.role != FingerRole::Button || finger.button != TouchButton::Action)
+        return;
+
+    if (!sActionScrollActive || sActionScrollFingerId != finger.id)
+    {
+        sActionScrollActive = true;
+        sActionScrollFingerId = finger.id;
+        sActionScrollAccumY = 0.0f;
+    }
+
+    sActionScrollAccumY += dy;
+    while (std::fabs(sActionScrollAccumY) >= kActionScrollStepY)
+    {
+        const float direction = sActionScrollAccumY < 0.0f ? 1.0f : -1.0f;
+        SDLInput_BufferMouseWheel(direction * kActionScrollWheelTicks);
+        sActionScrollSteps += direction > 0.0f ? 1 : -1;
+        ResetActionTap();
+        sActionScrollAccumY -= direction < 0.0f ? kActionScrollStepY : -kActionScrollStepY;
+        GInput.mouse.cursorLastActive = Glob.uiTime;
+    }
+}
+
 void EmitButtonEdge(TouchButton button, bool down)
 {
     if (button == TouchButton::Count)
@@ -267,9 +465,6 @@ void EmitButtonEdge(TouchButton button, bool down)
             SDLInput_BufferMouseButton(0, down);
             break;
         case TouchButton::Action:
-            InputSubsystem::Instance().SetSyntheticStickButton(0, down);
-            if (down)
-                SDLInput_BufferControllerUiAction(ControllerUiAction::Confirm, true);
             break;
         case TouchButton::Reload:
             SDLInput_BufferKeyEvent(SDL_SCANCODE_R, down, Foundation::GlobalTickCount());
@@ -290,6 +485,31 @@ void EmitButtonEdge(TouchButton button, bool down)
         default:
             break;
     }
+}
+
+void EmitFingerButtonEdge(const Finger& finger, bool down)
+{
+    if (finger.role != FingerRole::Button || finger.button == TouchButton::Count)
+        return;
+    if (finger.button == TouchButton::Action)
+    {
+        if (down)
+        {
+            sActionTapPending = true;
+            sActionTapFingerId = finger.id;
+        }
+        else
+        {
+            if (sActionTapPending && sActionTapFingerId == finger.id && sActionScrollSteps == 0 &&
+                finger.maxTravel <= kTapMaxTravel)
+                EmitActionTap();
+            ResetActionTap();
+        }
+        sPrevButtonDown[(int)finger.button] = down;
+        return;
+    }
+    EmitButtonEdge(finger.button, down);
+    sPrevButtonDown[(int)finger.button] = down;
 }
 
 void EmitButtonHeld(TouchButton button)
@@ -415,6 +635,10 @@ void TouchInput_HandleFingerEvent(const SDL_TouchFingerEvent& event)
 
     if (release)
     {
+        if (finger->role == FingerRole::Button && finger->button == TouchButton::Action &&
+            sActionScrollFingerId == finger->id)
+            ResetActionScroll();
+        EmitFingerButtonEdge(*finger, false);
         if (finger->role == FingerRole::Look && finger->maxTravel <= kTapMaxTravel && IsGameplayScene())
             EmitPrimaryClick();
         *finger = {};
@@ -426,6 +650,8 @@ void TouchInput_HandleFingerEvent(const SDL_TouchFingerEvent& event)
     finger->x = x;
     finger->y = y;
     finger->maxTravel = std::max(finger->maxTravel, Length(finger->x - finger->startX, finger->y - finger->startY));
+    if (event.type == SDL_EVENT_FINGER_MOTION)
+        ProcessActionButtonDrag(*finger, finger->y - finger->lastY);
     if (event.type == SDL_EVENT_FINGER_DOWN)
     {
         finger->startX = x;
@@ -434,6 +660,7 @@ void TouchInput_HandleFingerEvent(const SDL_TouchFingerEvent& event)
         finger->lastY = y;
         finger->maxTravel = 0.0f;
         ClassifyFinger(*finger);
+        EmitFingerButtonEdge(*finger, true);
     }
 }
 
@@ -445,10 +672,20 @@ void TouchInput_ProcessFrame(int viewportWidth, int viewportHeight)
     sMoveY = 0.0f;
     sLookDx = 0.0f;
     sLookDy = 0.0f;
+    sMapPanX = 0.0f;
+    sMapPanY = 0.0f;
+    sMapZoom = 0.0f;
     std::fill(std::begin(sButtonDown), std::end(sButtonDown), false);
 
     if (!sEnabled)
+    {
+        ResetActionScroll();
+        EndMapPrimary();
+        EndMapGesture();
         return;
+    }
+
+    ProcessMapGesture();
 
     bool moveActive = false;
     bool lookActive = false;
@@ -514,11 +751,6 @@ void TouchInput_ProcessFrame(int viewportWidth, int viewportHeight)
 
     for (int i = 0; i < (int)TouchButton::Count; i++)
     {
-        if (sButtonDown[i] != sPrevButtonDown[i])
-        {
-            EmitButtonEdge((TouchButton)i, sButtonDown[i]);
-            sPrevButtonDown[i] = sButtonDown[i];
-        }
         if (sButtonDown[i])
             EmitButtonHeld((TouchButton)i);
     }
@@ -588,10 +820,16 @@ float TouchInput_GetCursorSensitivity()
 
 void TouchInput_Reset()
 {
+    for (const Finger& finger : sFingers)
+        EmitFingerButtonEdge(finger, false);
+    ResetActionTap();
+    ResetActionScroll();
+    EndMapPrimary();
+    EndMapGesture();
     sFingers = {};
     std::fill(std::begin(sButtonDown), std::end(sButtonDown), false);
     std::fill(std::begin(sPrevButtonDown), std::end(sPrevButtonDown), false);
-    sMoveX = sMoveY = sLookDx = sLookDy = 0.0f;
+    sMoveX = sMoveY = sLookDx = sLookDy = sMapPanX = sMapPanY = sMapZoom = 0.0f;
     InputSubsystem::Instance().SetSyntheticLeftStick(0.0f, 0.0f);
 }
 
@@ -601,13 +839,32 @@ TouchInputDebugState TouchInput_GetDebugState()
     state.enabled = sEnabled;
     state.moveActive = RoleActive(FingerRole::Move);
     state.lookActive = RoleActive(FingerRole::Look);
+    state.mapPrimaryActive = sMapPrimaryActive;
+    state.mapGestureActive = sMapGestureActive;
+    state.actionScrollActive = sActionScrollActive;
     state.moveX = sMoveX;
     state.moveY = sMoveY;
     state.lookDx = sLookDx;
     state.lookDy = sLookDy;
+    state.mapPanX = sMapPanX;
+    state.mapPanY = sMapPanY;
+    state.mapZoom = sMapZoom;
+    state.actionScrollSteps = sActionScrollSteps;
     for (int i = 0; i < (int)TouchButton::Count; i++)
         state.buttons[i] = sButtonDown[i];
     return state;
+}
+
+void TouchInput_TestSetMapSceneOverride(bool enabled, bool isMapScene)
+{
+    sMapSceneOverrideEnabled = enabled;
+    sMapSceneOverride = isMapScene;
+}
+
+void TouchInput_TestSetGameplaySceneOverride(bool enabled, bool isGameplayScene)
+{
+    sGameplaySceneOverrideEnabled = enabled;
+    sGameplaySceneOverride = isGameplayScene;
 }
 
 } // namespace Poseidon

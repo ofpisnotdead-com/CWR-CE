@@ -146,6 +146,10 @@ Touch controls are implemented in-engine through SDL3 finger events, not UIKit.
 The touch module lives in `engine/Poseidon/Input/TouchInput.*`, is enabled by
 default only for iOS builds, and feeds the existing input/controller UI paths.
 
+> Touch / iOS screenshot placeholder:
+>
+> Add current device screenshot here once captured.
+
 Current behavior:
 
 - Left virtual stick drives movement in gameplay and cursor movement in menus,
@@ -157,14 +161,24 @@ Current behavior:
   click action.
 - Touch buttons currently cover Fire, Action, Reload, Optics/Zoom, Map, and
   Pause/Escape.
+- Map controls support one-finger primary interaction for taps, selection, and
+  drag boxes; two-finger drag pans the map; pinch zooms the map.
+- The Action button commits on clean tap release only. Holding the Action button
+  never commits by itself; dragging up/down while held scrolls the action menu,
+  and release after scrolling or dragging does not execute the highlighted
+  action.
 - `Options > Controls > Touch Controls` exposes aim sensitivity and cursor
-  movement sensitivity; values are saved to `touch.cfg`.
+  movement sensitivity; values are saved to `touch.cfg`. Cursor sensitivity uses
+  a curved slider so low speeds have more usable adjustment range.
 
 Known touch-control issues:
 
 - Main Menu and Pause Menu still draw only the escape icon plus part of reload
   until entering a submenu or returning from gameplay. The touch hit zones are
   active and near the screen edge, but the overlay visuals are incomplete there.
+- Action-menu flick velocity is not tuned yet; current scrolling is based on
+  hold-and-drag distance.
+- Command bar unit selection and command-menu options are not tappable yet.
 - Overlay polish, full vehicle/aircraft parity, and advanced editor gestures are
   still work in progress.
 

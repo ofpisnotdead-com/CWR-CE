@@ -4,6 +4,7 @@
 #include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
 #include <Poseidon/UI/Options/OptionsScrollList.hpp>
 #include <Poseidon/UI/Options/TouchPage.hpp>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <filesystem>
@@ -74,7 +75,7 @@ TEST_CASE("TouchPage: row labels and descriptions match stringtable", "[UI][Touc
     CHECK(std::string(p.RowDescription(1)) == "Touch cursor movement sensitivity outside gameplay. Range 0.25x to 3.0x.");
 }
 
-TEST_CASE("TouchPage: sensitivity sliders map 0..100 to 0.25..3.0 linearly", "[UI][TouchPage]")
+TEST_CASE("TouchPage: aim sensitivity slider maps 0..100 to 0.25..3.0 linearly", "[UI][TouchPage]")
 {
     TouchStateSnapshot snap;
     TestableTouchPage page;
@@ -86,11 +87,20 @@ TEST_CASE("TouchPage: sensitivity sliders map 0..100 to 0.25..3.0 linearly", "[U
     CHECK(TouchInput_GetAimSensitivity() == 3.0f);
     p.SetRowValue(0, 50);
     CHECK(TouchInput_GetAimSensitivity() == 1.625f);
+}
+
+TEST_CASE("TouchPage: cursor sensitivity slider gives more travel to low speeds", "[UI][TouchPage]")
+{
+    TouchStateSnapshot snap;
+    TestableTouchPage page;
+    auto& p = page.Provider();
 
     p.SetRowValue(1, -10);
     CHECK(TouchInput_GetCursorSensitivity() == 0.25f);
     p.SetRowValue(1, 200);
     CHECK(TouchInput_GetCursorSensitivity() == 3.0f);
+    p.SetRowValue(1, 60);
+    CHECK(TouchInput_GetCursorSensitivity() == Catch::Approx(0.525f).margin(0.001f));
 }
 
 TEST_CASE("TouchPage: sensitivity readback inverts cleanly", "[UI][TouchPage]")
@@ -103,8 +113,8 @@ TEST_CASE("TouchPage: sensitivity readback inverts cleanly", "[UI][TouchPage]")
     CHECK(p.RowValue(0) == 0);
     TouchInput_SetAimSensitivity(3.0f);
     CHECK(p.RowValue(0) == 100);
-    TouchInput_SetCursorSensitivity(1.625f);
-    CHECK(p.RowValue(1) == 50);
+    TouchInput_SetCursorSensitivity(0.525f);
+    CHECK(p.RowValue(1) == 60);
 }
 
 TEST_CASE("TouchPage: sensitivity helpers clamp the supported range", "[UI][TouchPage]")
@@ -120,4 +130,16 @@ TEST_CASE("TouchPage: sensitivity helpers clamp the supported range", "[UI][Touc
     CHECK(TouchPage::PercentToSensitivity(50) == 1.625f);
     CHECK(TouchPage::PercentToSensitivity(100) == 3.0f);
     CHECK(TouchPage::PercentToSensitivity(120) == 3.0f);
+
+    CHECK(TouchPage::CursorSensitivityToPercent(0.1f) == 0);
+    CHECK(TouchPage::CursorSensitivityToPercent(0.25f) == 0);
+    CHECK(TouchPage::CursorSensitivityToPercent(0.525f) == 60);
+    CHECK(TouchPage::CursorSensitivityToPercent(3.0f) == 100);
+    CHECK(TouchPage::CursorSensitivityToPercent(4.0f) == 100);
+
+    CHECK(TouchPage::PercentToCursorSensitivity(-10) == 0.25f);
+    CHECK(TouchPage::PercentToCursorSensitivity(0) == 0.25f);
+    CHECK(TouchPage::PercentToCursorSensitivity(60) == Catch::Approx(0.525f).margin(0.001f));
+    CHECK(TouchPage::PercentToCursorSensitivity(100) == 3.0f);
+    CHECK(TouchPage::PercentToCursorSensitivity(120) == 3.0f);
 }

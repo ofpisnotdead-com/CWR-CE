@@ -13,6 +13,8 @@ class TouchPage : public ScrollListPage
 
     static int SensitivityToPercent(float value);
     static float PercentToSensitivity(int percent);
+    static int CursorSensitivityToPercent(float value);
+    static float PercentToCursorSensitivity(int percent);
 
     void OnReshown(OptionsShell& shell) override;
     void Unmount(OptionsShell& shell) override;
