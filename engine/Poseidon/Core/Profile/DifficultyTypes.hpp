@@ -7,20 +7,26 @@
 
 namespace Poseidon
 {
+
+#define DIFFICULTY_TYPE_ENUM(YY,XX) \
+	YY(Armor,XX) \
+	YY(FriendlyTag,XX) \
+	YY(EnemyTag,XX) \
+	YY(HUD,XX) \
+	YY(AutoSpot,XX) \
+	YY(Map,XX) \
+	YY(WeaponCursor,XX) \
+	YY(AutoGuideAT,XX) \
+	YY(ClockIndicator,XX) \
+	YY(3rdPersonView,XX) \
+	YY(Tracers,XX) \
+	YY(UltraAI,XX)
+
+#define DIFF_ENUM(name, XX) DT##name,
+
 enum DifficultyType
 {
-    DTArmor,
-    DTFriendlyTag,
-    DTEnemyTag,
-    DTHUD,
-    DTAutoSpot,
-    DTMap,
-    DTWeaponCursor,
-    DTAutoGuideAT,
-    DTClockIndicator,
-    DT3rdPersonView,
-    DTTracers,
-    DTUltraAI,
+    DIFFICULTY_TYPE_ENUM(DIFF_ENUM,ignored)
     DTN // terminator / count
 };
 
