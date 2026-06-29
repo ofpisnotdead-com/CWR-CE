@@ -181,134 +181,51 @@ NetworkMessageType Detector::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesCreateDetector : public IndicesCreateVehicle
+#define CREATE_DETECTOR_MSG(XX) \
+	XX(float, a, NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger radius"), IdxTransfer) \
+	XX(float, b, NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger radius"), IdxTransfer) \
+	XX(float, sinAngle, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Rotation"), IdxTransfer) \
+	XX(float, cosAngle, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Rotation"), IdxTransfer) \
+	XX(bool, rectangular, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Rectangular / elliptic trigger"), IdxTransfer) \
+	XX(int, activationBy, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ASANone), DOC_MSG("Who is activating trigger"), IdxTransfer) \
+	XX(int, activationType, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ASATPresent), DOC_MSG("How trigger is activated"), IdxTransfer) \
+	XX(bool, repeating, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Can be activated repeatedly"), IdxTransfer) \
+	XX(float, timeoutMin, NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger timeout"), IdxTransfer) \
+	XX(float, timeoutMid, NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger timeout"), IdxTransfer) \
+	XX(float, timeoutMax, NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger timeout"), IdxTransfer) \
+	XX(bool, interruptable, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Timeout is interruptable"), IdxTransfer) \
+	XX(int, action, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ASTNone), DOC_MSG("Action performed when trigger is activated"), IdxTransfer) \
+	XX(int, assignedStatic, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Attached static object"), IdxTransfer) \
+	XX(int, assignedVehicle, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Attached vehicle"), IdxTransfer) \
+	XX(RString, text, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Trigger description"), IdxTransfer) \
+	XX(RString, expCond, NDTString, NCTNone, DEFVALUE(RString, "this"), DOC_MSG("Condition for activation of trigger"), IdxTransfer) \
+	XX(RString, expActiv, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Statement, processed when trigger is activated"), IdxTransfer) \
+	XX(RString, expDesactiv, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Statement, processed when trigger is deactivated"), IdxTransfer) \
+	XX(AutoArray<int>, synchronizations, NDTIntArray, NCTSmallUnsigned, DEFVALUEINTARRAY, DOC_MSG("List of synchronizations"), IdxTransfer) \
+	XX(ArcadeEffects, effects, NDTObject, NCTNone, DEFVALUE_MSG(NMTEffects), DOC_MSG("Camera and title effects"), IdxTransferObject)
+
+DECLARE_NET_INDICES_EX(CreateDetector, CreateVehicle, CREATE_DETECTOR_MSG)
+DEFINE_NET_INDICES_EX(CreateDetector, CreateVehicle, CREATE_DETECTOR_MSG)
+
+} // namespace Poseidon
+
+DEFINE_GET_INDICES(CreateDetector)
+
+namespace Poseidon
 {
-    typedef IndicesCreateVehicle base;
 
-  public:
-    int a;
-    int b;
-    int sinAngle;
-    int cosAngle;
-    int rectangular;
-    int activationBy;
-    int activationType;
-    int repeating;
-    int timeoutMin;
-    int timeoutMid;
-    int timeoutMax;
-    int interruptable;
-    int action;
-    int assignedStatic;
-    int assignedVehicle;
-    int text;
-    int expCond;
-    int expActiv;
-    int expDesactiv;
-    int synchronizations;
-    IndicesEffects* effects;
+#define UPDATE_DETECTOR_MSG(XX) \
+	XX(OLink<AIGroup>, assignedGroup, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Attached group"), IdxTransferRef)
 
-    IndicesCreateDetector();
-    ~IndicesCreateDetector() override;
-    NetworkMessageIndices* Clone() const override { return new IndicesCreateDetector; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
+DECLARE_NET_INDICES_EX(UpdateDetector, UpdateVehicle, UPDATE_DETECTOR_MSG)
+DEFINE_NET_INDICES_EX(UpdateDetector, UpdateVehicle, UPDATE_DETECTOR_MSG)
 
-IndicesCreateDetector::IndicesCreateDetector()
+} // namespace Poseidon
+
+DEFINE_GET_INDICES(UpdateDetector)
+
+namespace Poseidon
 {
-    a = -1;
-    b = -1;
-    sinAngle = -1;
-    cosAngle = -1;
-    rectangular = -1;
-    activationBy = -1;
-    activationType = -1;
-    repeating = -1;
-    timeoutMin = -1;
-    timeoutMid = -1;
-    timeoutMax = -1;
-    interruptable = -1;
-    action = -1;
-    assignedStatic = -1;
-    assignedVehicle = -1;
-    text = -1;
-    expCond = -1;
-    expActiv = -1;
-    expDesactiv = -1;
-    synchronizations = -1;
-
-    IndicesEffects* GetIndicesEffects();
-    effects = GetIndicesEffects();
-}
-
-IndicesCreateDetector::~IndicesCreateDetector()
-{
-    void DeleteIndicesEffects(IndicesEffects * effects);
-    DeleteIndicesEffects(effects);
-}
-
-void IndicesCreateDetector::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(a)
-    SCAN(b)
-    SCAN(sinAngle)
-    SCAN(cosAngle)
-    SCAN(rectangular)
-    SCAN(activationBy)
-    SCAN(activationType)
-    SCAN(repeating)
-    SCAN(timeoutMin)
-    SCAN(timeoutMid)
-    SCAN(timeoutMax)
-    SCAN(interruptable)
-    SCAN(action)
-    SCAN(assignedStatic)
-    SCAN(assignedVehicle)
-    SCAN(text)
-    SCAN(expCond)
-    SCAN(expActiv)
-    SCAN(expDesactiv)
-    SCAN(synchronizations)
-
-    void ScanIndicesEffects(IndicesEffects * effects, NetworkMessageFormatBase * format);
-    ScanIndicesEffects(effects, format);
-}
-
-NetworkMessageIndices* GetIndicesCreateDetector()
-{
-    return new IndicesCreateDetector();
-}
-
-class IndicesUpdateDetector : public IndicesUpdateVehicle
-{
-    typedef IndicesUpdateVehicle base;
-
-  public:
-    int assignedGroup;
-
-    IndicesUpdateDetector();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateDetector; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateDetector::IndicesUpdateDetector()
-{
-    assignedGroup = -1;
-}
-
-void IndicesUpdateDetector::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(assignedGroup)
-}
-
-NetworkMessageIndices* GetIndicesUpdateDetector()
-{
-    return new IndicesUpdateDetector();
-}
 
 NetworkMessageFormat& Detector::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
@@ -316,44 +233,11 @@ NetworkMessageFormat& Detector::CreateFormat(NetworkMessageClass cls, NetworkMes
     {
         case NMCCreate:
             base::CreateFormat(cls, format);
-
-            format.Add("a", NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger radius"));
-            format.Add("b", NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger radius"));
-            format.Add("sinAngle", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Rotation"));
-            format.Add("cosAngle", NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Rotation"));
-
-            format.Add("rectangular", NDTBool, NCTNone, DEFVALUE(bool, false),
-                       DOC_MSG("Rectangular / elliptic trigger"));
-            format.Add("activationBy", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ASANone),
-                       DOC_MSG("Who is activating trigger"));
-            format.Add("activationType", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ASATPresent),
-                       DOC_MSG("How trigger is activated"));
-            format.Add("repeating", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Can be activated repeatedly"));
-            format.Add("timeoutMin", NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger timeout"));
-            format.Add("timeoutMid", NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger timeout"));
-            format.Add("timeoutMax", NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger timeout"));
-            format.Add("interruptable", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Timeout is interruptable"));
-            format.Add("action", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ASTNone),
-                       DOC_MSG("Action performed when trigger is activated"));
-            format.Add("assignedStatic", NDTInteger, NCTSmallSigned, DEFVALUE(int, -1),
-                       DOC_MSG("Attached static object"));
-            format.Add("assignedVehicle", NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Attached vehicle"));
-            format.Add("text", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Trigger description"));
-            format.Add("expCond", NDTString, NCTNone, DEFVALUE(RString, "this"),
-                       DOC_MSG("Condition for activation of trigger"));
-            format.Add("expActiv", NDTString, NCTNone, DEFVALUE(RString, ""),
-                       DOC_MSG("Statement, processed when trigger is activated"));
-            format.Add("expDesactiv", NDTString, NCTNone, DEFVALUE(RString, ""),
-                       DOC_MSG("Statement, processed when trigger is deactivated"));
-            format.Add("synchronizations", NDTIntArray, NCTSmallUnsigned, DEFVALUEINTARRAY,
-                       DOC_MSG("List of synchronizations"));
-            ArcadeEffects::CreateFormat(cls, format);
+            CREATE_DETECTOR_MSG(MSG_FORMAT)
             break;
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-
-            format.Add("assignedGroup", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Attached group"));
-
+            UPDATE_DETECTOR_MSG(MSG_FORMAT)
             break;
         default:
             base::CreateFormat(cls, format);
@@ -422,7 +306,7 @@ TMError Detector::TransferMsg(NetworkMessageContext& ctx)
                 ITRANSF(expActiv)
                 ITRANSF(expDesactiv)
                 ITRANSF(synchronizations)
-                TMCHECK(_effects.TransferMsg(ctx, indices->effects))
+                TMCHECK(ctx.IdxTransferObject(indices->effects, _effects))
                 if (!ctx.IsSending())
                 {
                     _e = sqrt(Square(_a) - Square(_b));

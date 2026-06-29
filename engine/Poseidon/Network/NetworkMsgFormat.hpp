@@ -168,7 +168,8 @@ DEFINE_ENUM_END(TMError)
 	XX(FORMAT_SIMPLE, Dummy, IncomingMissile, "Transfer message about fired missile to other clients.", Broadcast) \
 	XX(FORMAT_SIMPLE, Dummy, PublicExec, "Transfers command to exec.", Broadcast) \
 	XX(FORMAT_SIMPLE, Dummy, RemoteExec, "Targeted remote code execution with JIP support.", Broadcast) \
-	XX(FORMAT_CREATE, ArcadeMarkerInfo, Marker, "<embedded/> Marker in map.", Chat)
+	XX(FORMAT_CREATE, ArcadeMarkerInfo, Marker, "<embedded/> Marker in map.", Chat) \
+	XX(FORMAT_CREATE, ArcadeEffects, Effects, "<embedded/> Camera and title effects.", Create)
 
 #define NMT_DEFINE_ENUM(macro, class, name, description, group) NMT##name,
 
