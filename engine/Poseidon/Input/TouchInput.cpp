@@ -142,6 +142,30 @@ float Length(float x, float y)
     return std::sqrt(x * x + y * y);
 }
 
+float TouchToUiX(float x)
+{
+    if (!GEngine)
+        return x;
+    AspectSettings as;
+    GEngine->GetAspectSettings(as);
+    const float width = as.uiBottomRightX - as.uiTopLeftX;
+    if (width <= 0.0001f)
+        return x;
+    return Clamp01((x - as.uiTopLeftX) / width);
+}
+
+float TouchToUiY(float y)
+{
+    if (!GEngine)
+        return y;
+    AspectSettings as;
+    GEngine->GetAspectSettings(as);
+    const float height = as.uiBottomRightY - as.uiTopLeftY;
+    if (height <= 0.0001f)
+        return y;
+    return Clamp01((y - as.uiTopLeftY) / height);
+}
+
 PixelLayout BuildPixelLayout(int width, int height)
 {
     if (width <= 0)
@@ -291,8 +315,8 @@ int CollectMapGestureFingers(const Finger** first, const Finger** second)
 
 void BufferCursorToTouch(float x, float y)
 {
-    const float targetX = x * 2.0f - 1.0f;
-    const float targetY = y * 2.0f - 1.0f;
+    const float targetX = TouchToUiX(x) * 2.0f - 1.0f;
+    const float targetY = TouchToUiY(y) * 2.0f - 1.0f;
     const float cursorDx = targetX - GInput.cursor.cursorX;
     const float cursorDy = targetY - GInput.cursor.cursorY;
     if (std::fabs(cursorDx) > 0.0001f || std::fabs(cursorDy) > 0.0001f)
@@ -379,12 +403,20 @@ void ProcessMapGesture()
 
     EndMapPrimary();
 
-    const float cx = (a->x + b->x) * 0.5f;
-    const float cy = (a->y + b->y) * 0.5f;
-    const float lastCx = (a->lastX + b->lastX) * 0.5f;
-    const float lastCy = (a->lastY + b->lastY) * 0.5f;
-    const float dist = std::max(Length(a->x - b->x, a->y - b->y), 0.0001f);
-    const float lastDist = std::max(Length(a->lastX - b->lastX, a->lastY - b->lastY), 0.0001f);
+    const float ax = TouchToUiX(a->x);
+    const float ay = TouchToUiY(a->y);
+    const float bx = TouchToUiX(b->x);
+    const float by = TouchToUiY(b->y);
+    const float lastAx = TouchToUiX(a->lastX);
+    const float lastAy = TouchToUiY(a->lastY);
+    const float lastBx = TouchToUiX(b->lastX);
+    const float lastBy = TouchToUiY(b->lastY);
+    const float cx = (ax + bx) * 0.5f;
+    const float cy = (ay + by) * 0.5f;
+    const float lastCx = (lastAx + lastBx) * 0.5f;
+    const float lastCy = (lastAy + lastBy) * 0.5f;
+    const float dist = std::max(Length(ax - bx, ay - by), 0.0001f);
+    const float lastDist = std::max(Length(lastAx - lastBx, lastAy - lastBy), 0.0001f);
 
     if (!sMapGestureActive)
         SDLInput_BufferMouseButton(1, true);
