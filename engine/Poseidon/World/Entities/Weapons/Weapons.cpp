@@ -823,35 +823,12 @@ LSError Magazine::Serialize(ParamArchive& ar)
     return LSOK;
 }
 
-IndicesMagazine::IndicesMagazine()
-{
-    type = -1;
-    ammo = -1;
-    burstLeft = -1;
-    reload = -1;
-    reloadMagazine = -1;
-    creator = -1;
-    id = -1;
-}
-
-void IndicesMagazine::Scan(NetworkMessageFormatBase* format){SCAN(type) SCAN(ammo) SCAN(burstLeft) SCAN(reload)
-                                                                 SCAN(reloadMagazine) SCAN(creator) SCAN(id)}
-
-NetworkMessageIndices* GetIndicesMagazine()
-{
-    return new IndicesMagazine();
-}
+DEFINE_NET_INDICES(Magazine, MAGAZINE_MSG)
+DEFINE_GET_INDICES(Magazine)
 
 NetworkMessageFormat& Magazine::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("type", NDTString, NCTDefault, DEFVALUE(RString, ""), DOC_MSG("Magazine type"));
-    format.Add("ammo", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Ammo count"));
-    format.Add("burstLeft", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0),
-               DOC_MSG("How many shots are there in the burst (auto fired)"));
-    format.Add("reload", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Time rest to reload shot"));
-    format.Add("reloadMagazine", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Time rest to reload magazine"));
-    format.Add("creator", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Network ID of magazine"));
-    format.Add("id", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Network ID of magazine"));
+    MAGAZINE_MSG(MSG_FORMAT)
     return format;
 }
 

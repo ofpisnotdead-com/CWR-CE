@@ -837,14 +837,7 @@ float RefNetworkDataTyped<NetworkMessage>::CalculateError(NetworkMessageErrorTyp
 
 NetworkMessageFormat& MagazineNetworkInfo::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("type", NDTString, NCTDefault, DEFVALUE(RString, ""), DOC_MSG("Magazine type"));
-    format.Add("ammo", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Ammo count"));
-    format.Add("burstLeft", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0),
-               DOC_MSG("How many shots are there in the burst (auto fired)"));
-    format.Add("reload", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Time rest to reload shot"));
-    format.Add("reloadMagazine", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Time rest to reload magazine"));
-    format.Add("creator", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Network ID of magazine"));
-    format.Add("id", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Network ID of magazine"));
+    MAGAZINE_MSG(MSG_FORMAT)
     return format;
 }
 
