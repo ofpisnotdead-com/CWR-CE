@@ -172,24 +172,23 @@ struct UserActionDescription
 
 class LightReflectorOnVehicle;
 
-class IndicesUpdateEntityAIWeapons;
+#define UPDATE_ENTITY_AI_WEAPONS_MSG(XX) \
+	XX(bool, initialUpdate, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Initial update"), IdxTransfer, ET_NONE, 0) \
+	XX(int, currentWeapon, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Index of currently selected weapon"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(AutoArray<RString>, weapons, NDTStringArray, NCTDefault, DEFVALUESTRINGARRAY, DOC_MSG("List of weapons"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(RefArray<Magazine>, magazines, NDTObjectArray, NCTNone, DEFVALUE_MSG(NMTMagazine), DOC_MSG("List of magazines"), IdxTransferObjArray, ET_MAGAZINES, 1) \
+	XX(AutoArray<int>, magazineSlots, NDTIntArray, NCTSmallSigned, DEFVALUEINTARRAY, DOC_MSG("List of currently charged weapons/magazines/modes"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
+
+DECLARE_NET_INDICES_ERR(UpdateEntityAIWeapons, UPDATE_ENTITY_AI_WEAPONS_MSG)
 
 //! general EntityAI state indices
 
-class IndicesUpdateVehicleAI : public IndicesUpdateVehicle
-{
-	typedef IndicesUpdateVehicle base;
+#define UPDATE_VEHICLE_AI_MSG(XX) \
+	XX(bool, pilotLight, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Lights are on / off"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
+	XX(OLink<EntityAI>, fireTarget, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Selected fire target"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(UpdateEntityAIWeaponsMessage, weapons, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateEntityAIWeapons), DOC_MSG("Weapons and magazines"), IdxTransferObject, ET_ABS_DIF, 1)
 
-public:
-	int fireTarget;
-	int pilotLight;
-	IndicesUpdateEntityAIWeapons *weapons;
-
-	IndicesUpdateVehicleAI();
-	~IndicesUpdateVehicleAI() override;
-	NetworkMessageIndices *Clone() const override {return new IndicesUpdateVehicleAI;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES_EX_ERR(UpdateVehicleAI, UpdateVehicle, UPDATE_VEHICLE_AI_MSG)
 
 //! dammage EntityAI state indices
 
@@ -198,6 +197,20 @@ public:
 	XX(AutoArray<float>, hit, NDTFloatArray, NCTFloat0To1, DEFVALUEFLOATARRAY, DOC_MSG("Damage of parts of entity"), IdxTransfer, ET_ABS_DIF, ERR_COEF_STRUCTURE)
 
 DECLARE_NET_INDICES_EX_ERR(UpdateDammageVehicleAI, UpdateDammageObject, UPDATE_DAMMAGE_VEHICLE_AI_MSG)
+
+struct UpdateEntityAIWeaponsMessage
+{
+	EntityAI *_vehicle;
+	UpdateEntityAIWeaponsMessage(EntityAI *vehicle) {_vehicle = vehicle;}
+
+	NetworkMessageType GetNMType(NetworkMessageClass cls) const;
+	static NetworkMessageFormat &CreateFormat
+	(
+		NetworkMessageClass cls,
+		NetworkMessageFormat &format
+	);
+	TMError TransferMsg(NetworkMessageContext &ctx);
+};
 
 class EntityAI: public Entity
 {
@@ -1290,10 +1303,10 @@ public:
 		NetworkMessageClass cls,
 		NetworkMessageFormat &format
 	);
-	static void CreateFormatWeapons(NetworkMessageFormat &format);
 	TMError TransferMsg(NetworkMessageContext &ctx) override;
-	TMError TransferMsgWeapons(NetworkMessageContext &ctx, IndicesUpdateEntityAIWeapons *indices);
+	TMError TransferMsgWeapons(NetworkMessageContext &ctx);
 	float CalculateError(NetworkMessageContext &ctx) override;
+	float CalculateErrorWeapons(NetworkMessageContext &ctx);
 
 	void ResetStatus() override;
 

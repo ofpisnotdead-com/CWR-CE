@@ -206,26 +206,14 @@ NetworkMessageType Detector::GetNMType(NetworkMessageClass cls) const
 
 DECLARE_NET_INDICES_EX(CreateDetector, CreateVehicle, CREATE_DETECTOR_MSG)
 DEFINE_NET_INDICES_EX(CreateDetector, CreateVehicle, CREATE_DETECTOR_MSG)
-
-} // namespace Poseidon
-
 DEFINE_GET_INDICES(CreateDetector)
-
-namespace Poseidon
-{
 
 #define UPDATE_DETECTOR_MSG(XX) \
 	XX(OLink<AIGroup>, assignedGroup, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Attached group"), IdxTransferRef)
 
 DECLARE_NET_INDICES_EX(UpdateDetector, UpdateVehicle, UPDATE_DETECTOR_MSG)
 DEFINE_NET_INDICES_EX(UpdateDetector, UpdateVehicle, UPDATE_DETECTOR_MSG)
-
-} // namespace Poseidon
-
 DEFINE_GET_INDICES(UpdateDetector)
-
-namespace Poseidon
-{
 
 NetworkMessageFormat& Detector::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
