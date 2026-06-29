@@ -346,41 +346,23 @@ LSError Path::Serialize(ParamArchive& ar)
     return LSOK;
 }
 
-class IndicesPathPoint : public NetworkMessageIndices
-{
-  public:
-    int pos;
-    int cost;
+#define PATH_POINT_MSG(XX) \
+	XX(Vector3, pos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Path node position"), IdxTransfer) \
+	XX(float, cost, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Path node cost"), IdxTransfer)
 
-    IndicesPathPoint();
-    NetworkMessageIndices* Clone() const override { return new IndicesPathPoint; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesPathPoint::IndicesPathPoint()
-{
-    pos = -1;
-    cost = -1;
-}
-
-void IndicesPathPoint::Scan(NetworkMessageFormatBase* format)
-{
-    SCAN(pos) SCAN(cost)
-}
+DECLARE_NET_INDICES(PathPoint, PATH_POINT_MSG)
+DEFINE_NET_INDICES(PathPoint, PATH_POINT_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesPathPoint()
-{
-    using namespace Poseidon;
-    return new IndicesPathPoint();
-}
+
+DEFINE_GET_INDICES(PathPoint)
+
 namespace Poseidon
 {
 
 NetworkMessageFormat& OperInfoResult::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("pos", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Path node position"));
-    format.Add("cost", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Path node cost"));
+    PATH_POINT_MSG(MSG_FORMAT)
     return format;
 }
 
