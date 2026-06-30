@@ -93,6 +93,8 @@ TEST_CASE("master service list URL carries explicit app compatibility", "[networ
 
 TEST_CASE("master service requests carry structured user-agent", "[network][master][version]")
 {
+    REQUIRE(BuildMasterServerServiceUserAgent(nullptr) == "CWR-CE/301");
+
     MasterServerServiceHttpRequest request;
     REQUIRE(BuildMasterServerServiceGetRequest("https://master.example/v1/servers", request));
 

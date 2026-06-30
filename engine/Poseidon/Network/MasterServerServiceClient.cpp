@@ -222,8 +222,10 @@ bool SendMasterServerServiceRequest(const char* url, const char* proxyServer, co
         return false;
     }
 
+    const std::string defaultUserAgent = BuildMasterServerServiceUserAgent(nullptr);
     curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, userAgent != nullptr && userAgent[0] != 0 ? userAgent : "BI Agent/1.99");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT,
+                     userAgent != nullptr && userAgent[0] != 0 ? userAgent : defaultUserAgent.c_str());
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
@@ -441,14 +443,15 @@ std::string BuildMasterServerServiceServerId(const std::string& address, int hos
 std::string BuildMasterServerServiceUserAgent(const char* role)
 {
     std::string agent = std::string(APP_NAME_SHORT) + "/" + std::to_string(APP_VERSION_NUM);
+    if (role == nullptr || role[0] == 0)
+    {
+        return agent;
+    }
     const RString tag = GetVersionTag();
     agent += " (tag=";
     agent += (const char*)tag;
-    if (role != nullptr && role[0] != 0)
-    {
-        agent += "; role=";
-        agent += role;
-    }
+    agent += "; role=";
+    agent += role;
     agent += ")";
     return agent;
 }
