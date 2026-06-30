@@ -22,6 +22,11 @@ In short: the code is free software, the name is not, and the game data comes se
 
 ## Quick Start
 
+### Step-by-step Guides
+
+There are installation/build guides for [Linux](docs/build/linux.md) and
+[Windows](docs/build/windows.md).
+
 ### Development Builds
 
 The quickest way to get the game or server executables is to download the CI builds: <https://ofpisnotdead-com.github.io/CWR-CE-builds/>
@@ -33,8 +38,14 @@ The quickest way to get the game or server executables is to download the CI bui
 - [Ninja](https://ninja-build.org/)
 - [vcpkg](https://vcpkg.io/)
 
-On Windows, run `winget install Kitware.CMake LLVM.LLVM Ninja-build.Ninja`
-and follow the instructions for [setting up
+On Windows, run the following commands:
+
+```
+winget install Ccache.Ccache Kitware.CMake LLVM.LLVM Ninja-build.Ninja PolarGoose.ClangFormat
+winget install Microsoft.VisualStudio.BuildTools --custom '"--add Microsoft.VisualStudio.Workload.VCTools;includeRecommended"'
+```
+
+Then follow the instructions for [setting up
 vcpkg](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-powershell)
 to get the required software.
 
@@ -61,6 +72,7 @@ Copy game binaries from `dist/` into [Steam Demo folder](https://store.steampowe
 - [Master server tools](mserver/README.md) - Rust service and CLI crates
 - [Tests](tests/README.md) - test source trees; CI currently compiles them only
 - `cmake/` - presets, toolchains, vcpkg triplets, and overlay ports
+- `docs/` - auxiliary documentation
 - `docker/` - container support for service and runtime environments
 - `packages/` - ignored local game data staging area
 - `resources/` - application icon resources
