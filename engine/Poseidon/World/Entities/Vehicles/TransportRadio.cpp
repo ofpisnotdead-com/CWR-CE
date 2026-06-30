@@ -126,7 +126,7 @@ AIUnit* RadioMessageWithTarget::GetSender() const
 }
 
 #define MESSAGE_WITH_TARGET_MSG(XX) \
-	XX(LinkTarget, target, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Target"), IdxTransferRef)
+    XX(LinkTarget, target, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Target"), IdxTransferRef)
 
 DECLARE_NET_INDICES_EX(MessageWithTarget, VMessage, MESSAGE_WITH_TARGET_MSG)
 DEFINE_NET_INDICES_EX(MessageWithTarget, VMessage, MESSAGE_WITH_TARGET_MSG)
@@ -371,7 +371,7 @@ LSError RadioMessageVMove::Serialize(ParamArchive& ar)
 DEFINE_NETWORK_OBJECT_SIMPLE(RadioMessageVMove, MsgVMove)
 
 #define MSG_V_MOVE_MSG(XX) \
-	XX(Vector3, destination, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Destination position"), IdxTransfer)
+    XX(Vector3, destination, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Destination position"), IdxTransfer)
 
 DECLARE_NET_INDICES_EX(MsgVMove, VMessage, MSG_V_MOVE_MSG)
 DEFINE_NET_INDICES_EX(MsgVMove, VMessage, MSG_V_MOVE_MSG)
@@ -652,7 +652,7 @@ TMError RadioMessageVSimpleCommand::TransferMsg(NetworkMessageContext& ctx)
 
     V_MESSAGE_MSG(MSG_TRANSFER)
     ITRANSF_ENUM(cmd)
-    //MSG_V_SIMPLE_COMMAND_MSG(MSG_TRANSFER) //FIXME
+    // MSG_V_SIMPLE_COMMAND_MSG(MSG_TRANSFER) //FIXME
     return TMOK;
 }
 
@@ -811,7 +811,7 @@ LSError RadioMessageVLoad::Serialize(ParamArchive& ar)
 DEFINE_NETWORK_OBJECT_SIMPLE(RadioMessageVLoad, MsgVLoad)
 
 #define MSG_V_LOAD_MSG(XX) \
-	XX(int, weapon, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Weapon index"), IdxTransfer)
+    XX(int, weapon, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Weapon index"), IdxTransfer)
 
 DECLARE_NET_INDICES_EX(MsgVLoad, VMessage, MSG_V_LOAD_MSG)
 DEFINE_NET_INDICES_EX(MsgVLoad, VMessage, MSG_V_LOAD_MSG)
@@ -913,7 +913,7 @@ LSError RadioMessageVAzimut::Serialize(ParamArchive& ar)
 DEFINE_NETWORK_OBJECT_SIMPLE(RadioMessageVAzimut, MsgVAzimut)
 
 #define MSG_V_AZIMUT_MSG(XX) \
-	XX(float, azimut, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Orientation azimuth"), IdxTransfer)
+    XX(float, azimut, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Orientation azimuth"), IdxTransfer)
 
 DECLARE_NET_INDICES_EX(MsgVAzimut, VMessage, MSG_V_AZIMUT_MSG)
 DEFINE_NET_INDICES_EX(MsgVAzimut, VMessage, MSG_V_AZIMUT_MSG)
@@ -1047,7 +1047,7 @@ AIUnit* RadioMessageVStopTurning::GetSender() const
 DEFINE_NETWORK_OBJECT_SIMPLE(RadioMessageVStopTurning, MsgVStopTurning)
 
 #define MSG_V_STOP_TURNING_MSG(XX) \
-	XX(float, azimut, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Final azimuth"), IdxTransfer)
+    XX(float, azimut, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Final azimuth"), IdxTransfer)
 
 DECLARE_NET_INDICES_EX(MsgVStopTurning, VMessage, MSG_V_STOP_TURNING_MSG)
 DEFINE_NET_INDICES_EX(MsgVStopTurning, VMessage, MSG_V_STOP_TURNING_MSG)

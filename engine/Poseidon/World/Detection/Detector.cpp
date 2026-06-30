@@ -181,35 +181,45 @@ NetworkMessageType Detector::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define CREATE_DETECTOR_MSG(XX) \
-	XX(float, a, NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger radius"), IdxTransfer) \
-	XX(float, b, NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger radius"), IdxTransfer) \
-	XX(float, sinAngle, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Rotation"), IdxTransfer) \
-	XX(float, cosAngle, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Rotation"), IdxTransfer) \
-	XX(bool, rectangular, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Rectangular / elliptic trigger"), IdxTransfer) \
-	XX(int, activationBy, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ASANone), DOC_MSG("Who is activating trigger"), IdxTransfer) \
-	XX(int, activationType, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ASATPresent), DOC_MSG("How trigger is activated"), IdxTransfer) \
-	XX(bool, repeating, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Can be activated repeatedly"), IdxTransfer) \
-	XX(float, timeoutMin, NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger timeout"), IdxTransfer) \
-	XX(float, timeoutMid, NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger timeout"), IdxTransfer) \
-	XX(float, timeoutMax, NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger timeout"), IdxTransfer) \
-	XX(bool, interruptable, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Timeout is interruptable"), IdxTransfer) \
-	XX(int, action, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ASTNone), DOC_MSG("Action performed when trigger is activated"), IdxTransfer) \
-	XX(int, assignedStatic, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Attached static object"), IdxTransfer) \
-	XX(int, assignedVehicle, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Attached vehicle"), IdxTransfer) \
-	XX(RString, text, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Trigger description"), IdxTransfer) \
-	XX(RString, expCond, NDTString, NCTNone, DEFVALUE(RString, "this"), DOC_MSG("Condition for activation of trigger"), IdxTransfer) \
-	XX(RString, expActiv, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Statement, processed when trigger is activated"), IdxTransfer) \
-	XX(RString, expDesactiv, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Statement, processed when trigger is deactivated"), IdxTransfer) \
-	XX(AutoArray<int>, synchronizations, NDTIntArray, NCTSmallUnsigned, DEFVALUEINTARRAY, DOC_MSG("List of synchronizations"), IdxTransfer) \
-	XX(ArcadeEffects, effects, NDTObject, NCTNone, DEFVALUE_MSG(NMTEffects), DOC_MSG("Camera and title effects"), IdxTransferObject)
+#define CREATE_DETECTOR_MSG(XX)                                                                                        \
+    XX(float, a, NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger radius"), IdxTransfer)                       \
+    XX(float, b, NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger radius"), IdxTransfer)                       \
+    XX(float, sinAngle, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Rotation"), IdxTransfer)                       \
+    XX(float, cosAngle, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Rotation"), IdxTransfer)                       \
+    XX(bool, rectangular, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Rectangular / elliptic trigger"),          \
+       IdxTransfer)                                                                                                    \
+    XX(int, activationBy, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ASANone), DOC_MSG("Who is activating trigger"),  \
+       IdxTransfer)                                                                                                    \
+    XX(int, activationType, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ASATPresent),                                  \
+       DOC_MSG("How trigger is activated"), IdxTransfer)                                                               \
+    XX(bool, repeating, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Can be activated repeatedly"), IdxTransfer)  \
+    XX(float, timeoutMin, NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger timeout"), IdxTransfer)             \
+    XX(float, timeoutMid, NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger timeout"), IdxTransfer)             \
+    XX(float, timeoutMax, NDTFloat, NCTNone, DEFVALUE(float, 50), DOC_MSG("Trigger timeout"), IdxTransfer)             \
+    XX(bool, interruptable, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Timeout is interruptable"), IdxTransfer) \
+    XX(int, action, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ASTNone),                                              \
+       DOC_MSG("Action performed when trigger is activated"), IdxTransfer)                                             \
+    XX(int, assignedStatic, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Attached static object"),          \
+       IdxTransfer)                                                                                                    \
+    XX(int, assignedVehicle, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Attached vehicle"), IdxTransfer)  \
+    XX(RString, text, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Trigger description"), IdxTransfer)          \
+    XX(RString, expCond, NDTString, NCTNone, DEFVALUE(RString, "this"),                                                \
+       DOC_MSG("Condition for activation of trigger"), IdxTransfer)                                                    \
+    XX(RString, expActiv, NDTString, NCTNone, DEFVALUE(RString, ""),                                                   \
+       DOC_MSG("Statement, processed when trigger is activated"), IdxTransfer)                                         \
+    XX(RString, expDesactiv, NDTString, NCTNone, DEFVALUE(RString, ""),                                                \
+       DOC_MSG("Statement, processed when trigger is deactivated"), IdxTransfer)                                       \
+    XX(AutoArray<int>, synchronizations, NDTIntArray, NCTSmallUnsigned, DEFVALUEINTARRAY,                              \
+       DOC_MSG("List of synchronizations"), IdxTransfer)                                                               \
+    XX(ArcadeEffects, effects, NDTObject, NCTNone, DEFVALUE_MSG(NMTEffects), DOC_MSG("Camera and title effects"),      \
+       IdxTransferObject)
 
 DECLARE_NET_INDICES_EX(CreateDetector, CreateVehicle, CREATE_DETECTOR_MSG)
 DEFINE_NET_INDICES_EX(CreateDetector, CreateVehicle, CREATE_DETECTOR_MSG)
 DEFINE_GET_INDICES(CreateDetector)
 
 #define UPDATE_DETECTOR_MSG(XX) \
-	XX(OLink<AIGroup>, assignedGroup, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Attached group"), IdxTransferRef)
+    XX(OLink<AIGroup>, assignedGroup, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Attached group"), IdxTransferRef)
 
 DECLARE_NET_INDICES_EX(UpdateDetector, UpdateVehicle, UPDATE_DETECTOR_MSG)
 DEFINE_NET_INDICES_EX(UpdateDetector, UpdateVehicle, UPDATE_DETECTOR_MSG)
@@ -1751,10 +1761,13 @@ NetworkMessageType FlagCarrier::GetNMType(NetworkMessageClass cls) const
 namespace Poseidon
 {
 
-#define UPDATE_FLAG_MSG(XX) \
-	XX(OLink<Person>, flagOwner, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Flag owner"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_MODE) \
-	XX(RString, flagTexture, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Flag texture"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
-	XX(int, flagSide, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, TSideUnknown), DOC_MSG("Flag side"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
+#define UPDATE_FLAG_MSG(XX)                                                                                          \
+    XX(OLink<Person>, flagOwner, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Flag owner"), IdxTransferRef, ET_NOT_EQUAL, \
+       ERR_COEF_MODE)                                                                                                \
+    XX(RString, flagTexture, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Flag texture"), IdxTransfer,        \
+       ET_NOT_EQUAL, ERR_COEF_MODE)                                                                                  \
+    XX(int, flagSide, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, TSideUnknown), DOC_MSG("Flag side"), IdxTransfer,  \
+       ET_NOT_EQUAL, ERR_COEF_MODE)
 
 DECLARE_NET_INDICES_EX_ERR(UpdateFlag, UpdateVehicleSupply, UPDATE_FLAG_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdateFlag, UpdateVehicleSupply, UPDATE_FLAG_MSG)

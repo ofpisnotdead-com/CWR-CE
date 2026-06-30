@@ -107,8 +107,9 @@ NetworkMessageType Fireplace::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define UPDATE_FIREPLACE_MSG(XX) \
-	XX(bool, burning, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Fire is burning"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
+#define UPDATE_FIREPLACE_MSG(XX)                                                                                      \
+    XX(bool, burning, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Fire is burning"), IdxTransfer, ET_NOT_EQUAL, \
+       ERR_COEF_MODE)
 
 DECLARE_NET_INDICES_EX_ERR(UpdateFireplace, UpdateVehicleAI, UPDATE_FIREPLACE_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdateFireplace, UpdateVehicleAI, UPDATE_FIREPLACE_MSG)

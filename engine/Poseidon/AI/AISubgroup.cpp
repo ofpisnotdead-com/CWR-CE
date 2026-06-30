@@ -584,7 +584,7 @@ NetworkMessageType AISubgroup::GetNMType(NetworkMessageClass cls) const
 }
 
 #define CREATE_AI_SUBGROUP_MSG(XX) \
-	XX(OLink<AIGroup>, group, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Superior group"), IdxTransferRef)
+    XX(OLink<AIGroup>, group, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Superior group"), IdxTransferRef)
 
 DECLARE_NET_INDICES_EX(CreateAISubgroup, NetworkObject, CREATE_AI_SUBGROUP_MSG)
 DEFINE_NET_INDICES_EX(CreateAISubgroup, NetworkObject, CREATE_AI_SUBGROUP_MSG)

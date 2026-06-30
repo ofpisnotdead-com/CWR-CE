@@ -306,10 +306,11 @@ NetworkMessageType AIGroup::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define CREATE_AI_GROUP_MSG(XX) \
-	XX(OLink<AICenter>, center, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Superior center"), IdxTransferRef) \
-	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unique identifier in center"), IdxTransfer) \
-	XX(AutoArray<WaypointInfo>, waypoints, NDTObjectArray, NCTNone, DEFVALUE_MSG(NMTWaypoint), DOC_MSG("List of waypoints"), IdxTransferArray)
+#define CREATE_AI_GROUP_MSG(XX)                                                                                      \
+    XX(OLink<AICenter>, center, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Superior center"), IdxTransferRef)           \
+    XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unique identifier in center"), IdxTransfer) \
+    XX(AutoArray<WaypointInfo>, waypoints, NDTObjectArray, NCTNone, DEFVALUE_MSG(NMTWaypoint),                       \
+       DOC_MSG("List of waypoints"), IdxTransferArray)
 
 DECLARE_NET_INDICES_EX(CreateAIGroup, NetworkObject, CREATE_AI_GROUP_MSG)
 DEFINE_NET_INDICES_EX(CreateAIGroup, NetworkObject, CREATE_AI_GROUP_MSG)

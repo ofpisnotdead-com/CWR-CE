@@ -608,12 +608,17 @@ DEFINE_GET_INDICES(UpdateTank)
 namespace Poseidon
 {
 
-#define UPDATE_POSITION_TANK_MSG(XX) \
-	XX(Turret, mainTurret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Main turret object"), IdxTransferObject, ET_ABS_DIF, 1) \
-	XX(Turret, comTurret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Commander turret object"), IdxTransferObject, ET_ABS_DIF, 1) \
-	XX(float, rpmWanted, NDTFloat, NCTFloat0To2, DEFVALUE(float, 0), DOC_MSG("Wanted value of RPM"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, thrustLWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted left thrust"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, thrustRWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted right thrust"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
+#define UPDATE_POSITION_TANK_MSG(XX)                                                                                   \
+    XX(Turret, mainTurret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Main turret object"),           \
+       IdxTransferObject, ET_ABS_DIF, 1)                                                                               \
+    XX(Turret, comTurret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Commander turret object"),       \
+       IdxTransferObject, ET_ABS_DIF, 1)                                                                               \
+    XX(float, rpmWanted, NDTFloat, NCTFloat0To2, DEFVALUE(float, 0), DOC_MSG("Wanted value of RPM"), IdxTransfer,      \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                               \
+    XX(float, thrustLWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted left thrust"), IdxTransfer, \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                               \
+    XX(float, thrustRWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted right thrust"),             \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
 DECLARE_NET_INDICES_EX_ERR(UpdatePositionTank, UpdatePositionVehicle, UPDATE_POSITION_TANK_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdatePositionTank, UpdatePositionVehicle, UPDATE_POSITION_TANK_MSG)

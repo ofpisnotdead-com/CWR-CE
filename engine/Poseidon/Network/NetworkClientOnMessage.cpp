@@ -694,8 +694,8 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             // Rewrite transfer path to use client's own cache dir
             // (server embeds its absolute CacheDir which differs per-instance)
             transfer._path = RString(GamePaths::Instance().CacheDir().c_str()) +
-                            RString(GameDirs::MPMissionsCachePath().c_str()) + _missionHeader.fileName +
-                            RString(".pbo");
+                             RString(GameDirs::MPMissionsCachePath().c_str()) + _missionHeader.fileName +
+                             RString(".pbo");
 
             const std::string prefix = GameDirs::MPCurrentPrefix();
             RemoveBank(prefix.c_str());

@@ -346,9 +346,9 @@ LSError Path::Serialize(ParamArchive& ar)
     return LSOK;
 }
 
-#define PATH_POINT_MSG(XX) \
-	XX(Vector3, pos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Path node position"), IdxTransfer) \
-	XX(float, cost, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Path node cost"), IdxTransfer)
+#define PATH_POINT_MSG(XX)                                                                                     \
+    XX(Vector3, pos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Path node position"), IdxTransfer) \
+    XX(float, cost, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Path node cost"), IdxTransfer)
 
 DECLARE_NET_INDICES(PathPoint, PATH_POINT_MSG)
 DEFINE_NET_INDICES(PathPoint, PATH_POINT_MSG)

@@ -1835,14 +1835,21 @@ NetworkMessageType ShipWithAI::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define UPDATE_SHIP_MSG(XX) \
-	XX(bool, pilotBrake, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("State of brake, wanted by player"), IdxTransfer, ET_NONE, 0) \
-	XX(bool, targetOutOfAim, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Target is out of aim"), IdxTransfer, ET_NONE, 0) \
-	XX(float, thrustLWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust of left engine"), IdxTransfer, ET_NONE, 0) \
-	XX(float, thrustRWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust of right engine"), IdxTransfer, ET_NONE, 0) \
-	XX(Vector3, stopPosition, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Anchor position"), IdxTransfer, ET_NONE, 0) \
-	XX(int, stopState, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, SSNone), DOC_MSG("Anchor state"), IdxTransfer, ET_NONE, 0) \
-	XX(float, sink, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Ship is sinked"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
+#define UPDATE_SHIP_MSG(XX)                                                                                          \
+    XX(bool, pilotBrake, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("State of brake, wanted by player"),       \
+       IdxTransfer, ET_NONE, 0)                                                                                      \
+    XX(bool, targetOutOfAim, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Target is out of aim"), IdxTransfer,  \
+       ET_NONE, 0)                                                                                                   \
+    XX(float, thrustLWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust of left engine"),  \
+       IdxTransfer, ET_NONE, 0)                                                                                      \
+    XX(float, thrustRWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust of right engine"), \
+       IdxTransfer, ET_NONE, 0)                                                                                      \
+    XX(Vector3, stopPosition, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Anchor position"), IdxTransfer, \
+       ET_NONE, 0)                                                                                                   \
+    XX(int, stopState, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, SSNone), DOC_MSG("Anchor state"), IdxTransfer,    \
+       ET_NONE, 0)                                                                                                   \
+    XX(float, sink, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Ship is sinked"), IdxTransfer, ET_ABS_DIF,       \
+       ERR_COEF_VALUE_MAJOR)
 
 DECLARE_NET_INDICES_EX_ERR(UpdateShip, UpdateTransport, UPDATE_SHIP_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdateShip, UpdateTransport, UPDATE_SHIP_MSG)
@@ -1854,8 +1861,9 @@ DEFINE_GET_INDICES(UpdateShip)
 namespace Poseidon
 {
 
-#define UPDATE_POSITION_SHIP_MSG(XX) \
-	XX(Turret, turret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Turret object"), IdxTransferObject, ET_ABS_DIF, 1)
+#define UPDATE_POSITION_SHIP_MSG(XX)                                                                                   \
+    XX(Turret, turret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Turret object"), IdxTransferObject, \
+       ET_ABS_DIF, 1)
 
 DECLARE_NET_INDICES_EX_ERR(UpdatePositionShip, UpdatePositionVehicle, UPDATE_POSITION_SHIP_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdatePositionShip, UpdatePositionVehicle, UPDATE_POSITION_SHIP_MSG)

@@ -1870,7 +1870,7 @@ NetworkMessageType HelicopterAuto::GetNMType(NetworkMessageClass cls) const
 }
 
 #define CREATE_HELICOPTER_MSG(XX) \
-	XX(float, rotorSpeed, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Initial rotor speed"), IdxTransfer)
+    XX(float, rotorSpeed, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Initial rotor speed"), IdxTransfer)
 
 DECLARE_NET_INDICES_EX(CreateHelicopter, CreateVehicle, CREATE_HELICOPTER_MSG)
 DEFINE_NET_INDICES_EX(CreateHelicopter, CreateVehicle, CREATE_HELICOPTER_MSG)
@@ -1882,16 +1882,25 @@ DEFINE_GET_INDICES(CreateHelicopter)
 namespace Poseidon
 {
 
-#define UPDATE_HELICOPTER_MSG(XX) \
-	XX(float, rotorSpeedWanted, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Wanted rotor speed"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(int, state, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Autopilot state"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
-	XX(float, pilotHeight, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Height, wanted by pilot"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(Vector3, pilotSpeed, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Speed, wanted by pilot"), IdxTransfer, ET_ABS_DIF, 1) \
-	XX(int, stopMode, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Landing type"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
-	XX(Vector3, stopPosition, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Landing position"), IdxTransfer, ET_ABS_DIF, 0.1) \
-	XX(bool, pilotSpeedHelper, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("pilotSpeed is valid"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
-	XX(bool, pilotHeightHelper, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("pilotHeight is valid"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
-	XX(bool, pilotDirHelper, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("pilotHeading is valid"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR)
+#define UPDATE_HELICOPTER_MSG(XX)                                                                                     \
+    XX(float, rotorSpeedWanted, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Wanted rotor speed"),            \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                 \
+    XX(int, state, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Autopilot state"), IdxTransfer,           \
+       ET_NOT_EQUAL, ERR_COEF_MODE)                                                                                   \
+    XX(float, pilotHeight, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Height, wanted by pilot"), IdxTransfer,    \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                              \
+    XX(Vector3, pilotSpeed, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Speed, wanted by pilot"),          \
+       IdxTransfer, ET_ABS_DIF, 1)                                                                                    \
+    XX(int, stopMode, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Landing type"), IdxTransfer,           \
+       ET_NOT_EQUAL, ERR_COEF_MODE)                                                                                   \
+    XX(Vector3, stopPosition, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Landing position"), IdxTransfer, \
+       ET_ABS_DIF, 0.1)                                                                                               \
+    XX(bool, pilotSpeedHelper, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("pilotSpeed is valid"), IdxTransfer,  \
+       ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR)                                                                            \
+    XX(bool, pilotHeightHelper, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("pilotHeight is valid"), IdxTransfer, \
+       ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR)                                                                            \
+    XX(bool, pilotDirHelper, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("pilotHeading is valid"), IdxTransfer,   \
+       ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR)
 
 DECLARE_NET_INDICES_EX_ERR(UpdateHelicopter, UpdateTransport, UPDATE_HELICOPTER_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdateHelicopter, UpdateTransport, UPDATE_HELICOPTER_MSG)
@@ -1903,17 +1912,27 @@ DEFINE_GET_INDICES(UpdateHelicopter)
 namespace Poseidon
 {
 
-#define UPDATE_POSITION_HELICOPTER_MSG(XX) \
-	XX(Turret, turret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Turret object"), IdxTransferObject, ET_ABS_DIF, 1) \
-	XX(float, backRotorWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted back rotor control"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, mainRotorWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted main rotor control"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, cyclicForwardWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted forward cyclic position"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, cyclicAsideWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted aside cyclic position"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, rotorDiveWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted rotor dive"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, bankWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted bank position"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, diveWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted dive"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, pilotHeading, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Heading, wanted by pilot"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, pilotDive, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Dive, wanted by pilot"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
+#define UPDATE_POSITION_HELICOPTER_MSG(XX)                                                                             \
+    XX(Turret, turret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Turret object"), IdxTransferObject, \
+       ET_ABS_DIF, 1)                                                                                                  \
+    XX(float, backRotorWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted back rotor control"),     \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                  \
+    XX(float, mainRotorWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted main rotor control"),     \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                  \
+    XX(float, cyclicForwardWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0),                                       \
+       DOC_MSG("Wanted forward cyclic position"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                       \
+    XX(float, cyclicAsideWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0),                                         \
+       DOC_MSG("Wanted aside cyclic position"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                         \
+    XX(float, rotorDiveWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted rotor dive"),             \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                  \
+    XX(float, bankWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted bank position"), IdxTransfer,  \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                               \
+    XX(float, diveWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted dive"), IdxTransfer,           \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                               \
+    XX(float, pilotHeading, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Heading, wanted by pilot"),          \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                  \
+    XX(float, pilotDive, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Dive, wanted by pilot"), IdxTransfer,  \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
 DECLARE_NET_INDICES_EX_ERR(UpdatePositionHelicopter, UpdatePositionVehicle, UPDATE_POSITION_HELICOPTER_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdatePositionHelicopter, UpdatePositionVehicle, UPDATE_POSITION_HELICOPTER_MSG)

@@ -998,8 +998,9 @@ NetworkMessageType ParachuteAuto::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define UPDATE_PARACHUTE_MSG(XX) \
-	XX(float, backRotorWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Obsolete"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
+#define UPDATE_PARACHUTE_MSG(XX)                                                                               \
+    XX(float, backRotorWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Obsolete"), IdxTransfer, \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
 DECLARE_NET_INDICES_EX_ERR(UpdateParachute, UpdateTransport, UPDATE_PARACHUTE_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdateParachute, UpdateTransport, UPDATE_PARACHUTE_MSG)

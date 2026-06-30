@@ -2573,9 +2573,11 @@ NetworkMessageType Car::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define UPDATE_CAR_MSG(XX) \
-	XX(RString, plateNumber, NDTString, NCTNone, DEFVALUE(RString, "Debug markerDebug markerXX"), DOC_MSG("Plate number"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
-	XX(float, scudState, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Scud launcher state"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
+#define UPDATE_CAR_MSG(XX)                                                                                   \
+    XX(RString, plateNumber, NDTString, NCTNone, DEFVALUE(RString, "Debug markerDebug markerXX"),            \
+       DOC_MSG("Plate number"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR)                             \
+    XX(float, scudState, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Scud launcher state"), IdxTransfer, \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
 DECLARE_NET_INDICES_EX_ERR(UpdateCar, UpdateTankOrCar, UPDATE_CAR_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdateCar, UpdateTankOrCar, UPDATE_CAR_MSG)
@@ -2587,11 +2589,15 @@ DEFINE_GET_INDICES(UpdateCar)
 namespace Poseidon
 {
 
-#define UPDATE_POSITION_CAR_MSG(XX) \
-	XX(Turret, turret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Turret object (for example for cars with MG)"), IdxTransferObject, ET_ABS_DIF, 1) \
-	XX(float, rpmWanted, NDTFloat, NCTFloat0To2, DEFVALUE(float, 0), DOC_MSG("Wanted value of RPM"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, thrustWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, turnWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted turning angle"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
+#define UPDATE_POSITION_CAR_MSG(XX)                                                                                   \
+    XX(Turret, turret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret),                                             \
+       DOC_MSG("Turret object (for example for cars with MG)"), IdxTransferObject, ET_ABS_DIF, 1)                     \
+    XX(float, rpmWanted, NDTFloat, NCTFloat0To2, DEFVALUE(float, 0), DOC_MSG("Wanted value of RPM"), IdxTransfer,     \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                              \
+    XX(float, thrustWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust"), IdxTransfer,      \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                              \
+    XX(float, turnWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted turning angle"), IdxTransfer, \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
 DECLARE_NET_INDICES_EX_ERR(UpdatePositionCar, UpdatePositionVehicle, UPDATE_POSITION_CAR_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdatePositionCar, UpdatePositionVehicle, UPDATE_POSITION_CAR_MSG)

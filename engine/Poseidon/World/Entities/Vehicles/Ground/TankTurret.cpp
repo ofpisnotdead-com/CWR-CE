@@ -600,10 +600,13 @@ void Turret::TurretBroken(const TurretType& type)
     _gunStabilized = false;
 }
 
-#define UPDATE_TURRET_MSG(XX) \
-	XX(bool, gunStabilized, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Gun is stabilized"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
-	XX(float, yRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted rotation in y axis"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, xRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted rotation in x axis"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
+#define UPDATE_TURRET_MSG(XX)                                                                                  \
+    XX(bool, gunStabilized, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Gun is stabilized"), IdxTransfer, \
+       ET_NOT_EQUAL, ERR_COEF_MODE)                                                                            \
+    XX(float, yRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted rotation in y axis"),   \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                          \
+    XX(float, xRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted rotation in x axis"),   \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
 DECLARE_NET_INDICES_ERR(UpdateTurret, UPDATE_TURRET_MSG)
 DEFINE_NET_INDICES_ERR(UpdateTurret, UPDATE_TURRET_MSG)

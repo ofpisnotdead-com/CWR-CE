@@ -115,17 +115,17 @@ NetworkMessageType Shot::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define CREATE_SHOT_MSG(XX) \
-	XX(OLink<EntityAI>, parent, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Owner of shot"), IdxTransferRef) \
-	XX(float, timeToLive, NDTFloat, NCTNone, DEFVALUE(float, 10), DOC_MSG("Time to live (in seconds)"), IdxTransfer) \
-	XX(Vector3, createPos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Initial position"), IdxTransfer) \
-	XX(Vector3, createSpeed, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Initial speed"), IdxTransfer) \
-	XX(Matrix3, createOrient, NDTMatrix, NCTMatrixOrientation, DEFVALUE(Matrix3, M3Identity), DOC_MSG("Initial orientation"), IdxTransfer)
+#define CREATE_SHOT_MSG(XX)                                                                                          \
+    XX(OLink<EntityAI>, parent, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Owner of shot"), IdxTransferRef)             \
+    XX(float, timeToLive, NDTFloat, NCTNone, DEFVALUE(float, 10), DOC_MSG("Time to live (in seconds)"), IdxTransfer) \
+    XX(Vector3, createPos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Initial position"), IdxTransfer)   \
+    XX(Vector3, createSpeed, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Initial speed"), IdxTransfer)    \
+    XX(Matrix3, createOrient, NDTMatrix, NCTMatrixOrientation, DEFVALUE(Matrix3, M3Identity),                        \
+       DOC_MSG("Initial orientation"), IdxTransfer)
 
 DECLARE_NET_INDICES_EX(CreateShot, CreateVehicle, CREATE_SHOT_MSG)
 DEFINE_NET_INDICES_EX(CreateShot, CreateVehicle, CREATE_SHOT_MSG)
 DEFINE_GET_INDICES(CreateShot)
-
 
 #define UPDATE_SHOT_MSG(XX)
 
@@ -463,8 +463,9 @@ NetworkMessageType Mine::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define UPDATE_MINE_MSG(XX) \
-	XX(bool, active, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Mine is active (can explode)"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
+#define UPDATE_MINE_MSG(XX)                                                                                        \
+    XX(bool, active, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Mine is active (can explode)"), IdxTransfer, \
+       ET_NOT_EQUAL, ERR_COEF_MODE)
 
 DECLARE_NET_INDICES_EX_ERR(UpdateMine, UpdateShot, UPDATE_MINE_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdateMine, UpdateShot, UPDATE_MINE_MSG)
