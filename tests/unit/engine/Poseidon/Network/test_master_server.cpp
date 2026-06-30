@@ -21,6 +21,7 @@ using namespace Poseidon;
 TEST_CASE("master registration JSON serializes the version tag under 'vertag'", "[network][master][version]")
 {
     MasterServerServiceRegistration registration;
+    registration.app = "CWR-CE";
     registration.address = "10.0.0.5";
     registration.hostPort = 2302;
     registration.serverId = BuildMasterServerServiceServerId(registration.address, registration.hostPort);
@@ -35,19 +36,21 @@ TEST_CASE("master registration JSON serializes the version tag under 'vertag'", 
     // The wire key is "vertag" with the registered value — the same key the Rust master
     // ingests and the C++ join validator's tag is compared against.
     REQUIRE(json.find("\"vertag\":\"rc1\"") != std::string::npos);
+    REQUIRE(json.find("\"app\":\"CWR-CE\"") != std::string::npos);
 }
 
 TEST_CASE("master server-list parse roundtrips the version tag", "[network][master][version]")
 {
     // A served list row, as the master returns it (the "vertag" key alongside actver/reqver).
     const char* listJson = "[{\"address\":\"10.0.0.5\",\"hostport\":2302,\"hostname\":\"Tagged Server\","
-                           "\"gametype\":\"coop\",\"actver\":196,\"reqver\":196,\"vertag\":\"rc1\","
+                           "\"gametype\":\"coop\",\"app\":\"CWR-CE\",\"actver\":196,\"reqver\":196,\"vertag\":\"rc1\","
                            "\"state\":14,\"numplayers\":1,\"maxplayers\":8,\"password\":false,"
                            "\"mod\":\"cwr\",\"equalModRequired\":false,\"impl\":\"papa-bear\"}]";
 
     std::vector<MasterServerServiceSession> sessions;
     REQUIRE(ParseMasterServerServiceListResponse(listJson, sessions));
     REQUIRE(sessions.size() == 1);
+    REQUIRE(sessions[0].app == "CWR-CE");
     REQUIRE(sessions[0].versionTag == "rc1");
 
     // The browser projects the session into a MasterServerSessionInfo (the struct the
@@ -75,5 +78,25 @@ TEST_CASE("master registration builder carries platform", "[network][master]")
                                                               registration));
 
     REQUIRE(registration.platform == "linux");
+    REQUIRE(registration.app == "CWR-CE");
     REQUIRE(BuildMasterServerServiceRegistrationJson(registration).find("\"platform\":\"linux\"") != std::string::npos);
+}
+
+TEST_CASE("master service list URL carries explicit app compatibility", "[network][master][version]")
+{
+    const std::string url = BuildMasterServerServiceListUrl("https://master.example", MasterServerBrowserFilter{});
+
+    REQUIRE(url.find("app=CWR-CE") != std::string::npos);
+    REQUIRE(url.find("actver=301") != std::string::npos);
+    REQUIRE(url.find("vertag=") != std::string::npos);
+}
+
+TEST_CASE("master service requests carry structured user-agent", "[network][master][version]")
+{
+    MasterServerServiceHttpRequest request;
+    REQUIRE(BuildMasterServerServiceGetRequest("https://master.example/v1/servers", request));
+
+    REQUIRE(request.userAgent.find("CWR-CE/301") == 0);
+    REQUIRE(request.userAgent.find("tag=") != std::string::npos);
+    REQUIRE(request.userAgent.find("role=client") != std::string::npos);
 }

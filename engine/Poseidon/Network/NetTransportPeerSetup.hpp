@@ -25,7 +25,13 @@ T* GetNetTransportRawPointer(const RefD<T>& value)
 inline void SetupNetTransportPeerPortMask(BitMask& mask, int networkPort, bool server, bool hasPidFile)
 {
     mask.empty();
-    int port = networkPort + (server ? 0 : 2);
+    if (!server)
+    {
+        mask.on(0);
+        return;
+    }
+
+    int port = networkPort;
     if (server && hasPidFile)
     {
         mask.on(port);

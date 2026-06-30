@@ -1,12 +1,16 @@
 #include <Poseidon/Network/MasterServerServiceClient.hpp>
 
+#include <Poseidon/Core/Version.hpp>
 #include <Poseidon/Network/MasterServerProtocol.hpp>
+#include <Poseidon/Network/NetworkConfig.hpp>
 #include <Poseidon/Network/XML/Xml.hpp>
+#include <Poseidon/Foundation/Platform/VersionNo.h>
 #include <cjson/cJSON.h>
 
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <curl/system.h>
 #include <Poseidon/Foundation/Framework/Log.hpp>
 
@@ -200,7 +204,7 @@ size_t AppendResponseBody(char* data, size_t size, size_t count, void* userdata)
 // works on every build.
 bool SendMasterServerServiceRequest(const char* url, const char* proxyServer, const char* method,
                                     const char* contentType, const std::string& body, const char* authToken,
-                                    std::string& responseBody, long& statusCode)
+                                    const char* userAgent, std::string& responseBody, long& statusCode)
 {
     responseBody.clear();
     statusCode = 0;
@@ -219,7 +223,8 @@ bool SendMasterServerServiceRequest(const char* url, const char* proxyServer, co
     }
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "BI Agent/1.99");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT,
+                     userAgent != nullptr && userAgent[0] != 0 ? userAgent : "BI Agent/1.99");
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
@@ -227,6 +232,12 @@ bool SendMasterServerServiceRequest(const char* url, const char* proxyServer, co
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AppendResponseBody);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBody);
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
+
+    RString bindAddress = GetNetworkBindAddress();
+    if (bindAddress.GetLength() > 0 && strcmp((const char*)bindAddress, "0.0.0.0") != 0)
+    {
+        curl_easy_setopt(curl, CURLOPT_INTERFACE, (const char*)bindAddress);
+    }
 
     if (proxyServer != nullptr && proxyServer[0] != 0)
     {
@@ -333,7 +344,8 @@ bool StreamMasterServerServiceDownload(const char* url, const char* proxyServer,
     DownloadProgressState progressState{instance, progress, cancelCheck};
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "BI Agent/1.99");
+    const std::string userAgent = BuildMasterServerServiceUserAgent("client");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, userAgent.c_str());
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
@@ -389,6 +401,7 @@ bool BuildMasterServerServiceRegistrationFromServerUrl(const char* serverUrl, co
     }
 
     registration.serverId = BuildMasterServerServiceServerId(registration.address, registration.hostPort);
+    registration.app = APP_NAME_SHORT;
     ApplyMasterServerServiceRegistrationFields(registration, sessionName, gameState, includeMission, missionName,
                                                actualVersion, requiredVersion, versionTag, password, numPlayers,
                                                maxPlayers, modList, equalModRequired, platform);
@@ -426,12 +439,31 @@ std::string BuildMasterServerServiceServerId(const std::string& address, int hos
     return address + ":" + std::to_string(hostPort);
 }
 
+std::string BuildMasterServerServiceUserAgent(const char* role)
+{
+    std::string agent = std::string(APP_NAME_SHORT) + "/" + std::to_string(APP_VERSION_NUM);
+    const RString tag = GetVersionTag();
+    agent += " (tag=";
+    agent += (const char*)tag;
+    if (role != nullptr && role[0] != 0)
+    {
+        agent += "; role=";
+        agent += role;
+    }
+    agent += ")";
+    return agent;
+}
+
 void ApplyMasterServerServiceRegistrationFields(MasterServerServiceRegistration& registration, const char* sessionName,
                                                 int gameState, bool includeMission, const char* missionName,
                                                 int actualVersion, int requiredVersion, const char* versionTag,
                                                 bool password, int numPlayers, int maxPlayers, const char* modList,
                                                 bool equalModRequired, const char* platform)
 {
+    if (registration.app.empty())
+    {
+        registration.app = APP_NAME_SHORT;
+    }
     registration.hostName = sessionName != nullptr ? sessionName : "";
     registration.mission = includeMission && missionName != nullptr ? missionName : "";
     registration.actualVersion = actualVersion;
@@ -488,6 +520,10 @@ std::string BuildMasterServerServiceListUrl(const char* masterServerHost, const 
     }
 
     bool hasQuery = false;
+    AppendMasterServerServiceQueryParameter(url, hasQuery, "app", UrlEncodeMasterServerServiceValue(APP_NAME_SHORT));
+    AppendMasterServerServiceQueryParameter(url, hasQuery, "actver", APP_VERSION_NUM);
+    AppendMasterServerServiceQueryParameterEvenWhenEmpty(
+        url, hasQuery, "vertag", UrlEncodeMasterServerServiceValue((const char*)GetVersionTag()));
     VisitMasterServerBrowserFilterTerms(
         filter,
         [&](const MasterServerBrowserFilterTerm& term)
@@ -603,6 +639,8 @@ std::string BuildMasterServerServiceRegistrationJson(const MasterServerServiceRe
         return {};
     }
 
+    const char* app = registration.app.empty() ? APP_NAME_SHORT : registration.app.c_str();
+    cJSON_AddStringToObject(root, "app", app);
     cJSON_AddStringToObject(root, "serverId", registration.serverId.c_str());
     cJSON_AddStringToObject(root, "address", registration.address.c_str());
     cJSON_AddNumberToObject(root, MasterServerFieldHostPort, registration.hostPort);
@@ -665,6 +703,7 @@ bool TryParseMasterServerServiceSession(const cJSON* object, MasterServerService
                                      GetMasterServerServiceJsonInt(object, MasterServerFieldTimeLeft, 15),
                                      GetMasterServerServiceJsonString(object, MasterServerFieldMod).c_str(),
                                      GetMasterServerServiceJsonBool(object, MasterServerFieldEqualModRequired, false));
+    session.app = GetMasterServerServiceJsonString(object, "app");
     session.stateElapsedSeconds = GetMasterServerServiceJsonInt(object, MasterServerFieldStateElapsed, 0);
     return true;
 }

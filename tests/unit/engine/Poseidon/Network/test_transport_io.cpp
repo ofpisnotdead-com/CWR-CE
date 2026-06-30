@@ -4,13 +4,36 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <unordered_map>
 #include <vector>
+#include <Poseidon/Foundation/Containers/Bitmask.hpp>
 #include <Poseidon/Network/NetTransportClientVoiceInit.hpp>
-#include <Poseidon/Network/RateLimit.hpp>
 #include <Poseidon/Network/NetTransportServerVoiceRouting.hpp>
+#include <Poseidon/Network/RateLimit.hpp>
+#include <Poseidon/Network/NetworkConfig.hpp>
+#include <Poseidon/Network/NetTransportPeerSetup.hpp>
 #include <Poseidon/Network/WireBounds.hpp>
 
 using namespace Poseidon;
+
+TEST_CASE("client peer uses an ephemeral UDP port", "[network][transport]")
+{
+    BitMask mask;
+    SetupNetTransportPeerPortMask(mask, 1985, /*server*/ false, /*hasPidFile*/ false);
+
+    REQUIRE(mask.getFirst() == 0);
+    REQUIRE(mask.getNext(0) == BitMask::END);
+}
+
+TEST_CASE("network bind address defaults to all interfaces", "[network][transport]")
+{
+    REQUIRE(strcmp((const char*)GetNetworkBindAddress(), "0.0.0.0") == 0);
+
+    SetNetworkBindAddress("127.0.0.1");
+    REQUIRE(strcmp((const char*)GetNetworkBindAddress(), "127.0.0.1") == 0);
+
+    SetNetworkBindAddress("0.0.0.0");
+}
 
 // Transport-layer bounds regressions for the dispatch redesign. The transport
 // handlers can't be unit-instantiated without the live UDP stack, so the

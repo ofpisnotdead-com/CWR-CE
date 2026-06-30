@@ -6,9 +6,11 @@ const int DefaultNetworkPort = 1985;
 const char* DefaultMasterServer = "https://papa-bear.cz";
 static int NetworkPort = DefaultNetworkPort;
 static int NetworkConnectPort = 0;
+static RString NetworkBindAddress = "0.0.0.0";
 static RString NetworkAdvertiseAddress;
 static RString NetworkPassword;
 static RString NetworkMasterServer = DefaultMasterServer;
+static bool NetworkPublicServer = false;
 RString ClientIP;
 
 int GetNetworkPort()
@@ -29,6 +31,16 @@ int GetNetworkConnectPort()
 void SetNetworkConnectPort(int port)
 {
     NetworkConnectPort = port;
+}
+
+RString GetNetworkBindAddress()
+{
+    return NetworkBindAddress;
+}
+
+void SetNetworkBindAddress(const RString& address)
+{
+    NetworkBindAddress = address;
 }
 
 RString GetNetworkAdvertiseAddress()
@@ -59,6 +71,16 @@ RString GetNetworkMasterServer()
 void SetNetworkMasterServer(const RString& host)
 {
     NetworkMasterServer = host;
+}
+
+bool GetNetworkPublicServer()
+{
+    return NetworkPublicServer;
+}
+
+void SetNetworkPublicServer(bool value)
+{
+    NetworkPublicServer = value;
 }
 
 static RString NetworkProxy;

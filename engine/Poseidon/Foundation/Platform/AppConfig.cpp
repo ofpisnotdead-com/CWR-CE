@@ -368,6 +368,9 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
         showOption(multiplayerGroup->add_option("--master-server", masterServerStr,
                                                 "Master server / server directory host override"),
                    serverRole ? CliHelpVisibility::Basic : CliHelpVisibility::Full);
+        showOption(multiplayerGroup->add_flag("--public,!--no-public", _publicServer,
+                                              "Publish this dedicated server to the master server"),
+                   serverRole ? CliHelpVisibility::Basic : CliHelpVisibility::Full, serverRole);
         multiplayerGroup->add_flag("--private,--lan", _privateServer,
                                    "Disable master-server publishing/listing for LAN/private servers");
 
@@ -380,9 +383,14 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
                        ->check(CLI::Range(0, 65535)),
                    CliHelpVisibility::Full, !serverRole);
 
+        std::string bindAddressStr;
+        showOption(multiplayerGroup->add_option("--bind-address", bindAddressStr,
+                                                "Local IPv4 address to bind UDP sockets to (default: 0.0.0.0)"),
+                   serverRole ? CliHelpVisibility::Basic : CliHelpVisibility::Full);
+
         std::string advertiseAddressStr;
         showOption(multiplayerGroup->add_option("--advertise-address", advertiseAddressStr,
-                                                "Public address advertised to the master server"),
+                                                "Public address advertised to the master server when source-IP detection is unavailable"),
                    serverRole ? CliHelpVisibility::Basic : CliHelpVisibility::Full, serverRole);
 
         std::string passwordStr;
@@ -788,9 +796,17 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
             {
                 _connectIP = RString(connectIPStr.c_str());
             }
+            if (!bindAddressStr.empty())
+            {
+                _bindAddress = RString(bindAddressStr.c_str());
+            }
             if (!masterServerStr.empty())
             {
                 _masterServer = RString(masterServerStr.c_str());
+            }
+            if (_privateServer)
+            {
+                _publicServer = false;
             }
             if (!advertiseAddressStr.empty())
             {
@@ -995,6 +1011,7 @@ void AppConfig::ApplyToLegacyGlobals()
 
     // Network settings
     SetNetworkPort(_networkPort);
+    SetNetworkBindAddress(_bindAddress);
     if (_connectPort > 0)
     {
         SetNetworkConnectPort(_connectPort);
@@ -1011,6 +1028,7 @@ void AppConfig::ApplyToLegacyGlobals()
     {
         SetNetworkMasterServer(_masterServer);
     }
+    SetNetworkPublicServer(_publicServer);
     if (_password.GetLength() > 0)
     {
         SetNetworkPassword(_password);

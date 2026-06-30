@@ -120,6 +120,12 @@ static void destroyPool()
 static void setupPortBitMask(BitMask& mask, bool server)
 {
     mask.empty();
+    if (!server && IsDedicatedServer())
+    {
+        mask.on(0);
+        return;
+    }
+
     int port = GetNetworkPort() + (server ? 0 : 2);
     int i;
     if (server && ::Poseidon::GetPidFileName().GetLength())

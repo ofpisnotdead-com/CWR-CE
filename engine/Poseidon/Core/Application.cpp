@@ -12,7 +12,7 @@
 #endif
 
 // Application name — default for all apps, can be overridden per-app before engine init
-const char* AppName = "ARMA:CWA-RE";
+const char* AppName = "ARMA:CWA-RE-CE";
 
 namespace Poseidon
 {

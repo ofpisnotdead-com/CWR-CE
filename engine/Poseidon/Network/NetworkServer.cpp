@@ -627,12 +627,12 @@ bool NetworkServer::FillMasterServerServiceRegistration(MasterServerServiceRegis
     return true;
 }
 
-// Publishing is gated on a configured master-server host
-// (set via --master-server / network.master_server).
+// Publishing is opt-in for dedicated servers. The master-server URL may still be
+// configured for client browsing; it is not enough to publish a server.
 void NetworkServer::StartMasterServerReporting()
 {
     RString masterServerHost = GetNetworkMasterServer();
-    if (masterServerHost.GetLength() <= 0)
+    if (!IsDedicatedServer() || !GetNetworkPublicServer() || masterServerHost.GetLength() <= 0)
     {
         return;
     }
@@ -645,7 +645,7 @@ void NetworkServer::StartMasterServerReporting()
 
 void NetworkServer::StopMasterServerReporting()
 {
-    if (GetNetworkMasterServer().GetLength() <= 0)
+    if (!IsDedicatedServer() || !GetNetworkPublicServer() || GetNetworkMasterServer().GetLength() <= 0)
     {
         return;
     }
@@ -654,7 +654,7 @@ void NetworkServer::StopMasterServerReporting()
 
 void NetworkServer::UpdateMasterServerReporting()
 {
-    if (GetNetworkMasterServer().GetLength() <= 0)
+    if (!IsDedicatedServer() || !GetNetworkPublicServer() || GetNetworkMasterServer().GetLength() <= 0)
     {
         return;
     }
