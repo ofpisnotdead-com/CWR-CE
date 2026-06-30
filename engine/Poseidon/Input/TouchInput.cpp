@@ -49,9 +49,11 @@ constexpr float kMapPanMouseScaleY = 150.0f / 1.5f;
 constexpr float kMapPinchZoomScale = 5.0f;
 constexpr float kActionScrollStepY = 0.035f;
 constexpr float kActionScrollWheelTicks = 1.0f;
-constexpr float kEquipmentRadialStartDeg = 170.0f;
-constexpr float kEquipmentRadialEndDeg = 270.0f;
-constexpr float kEquipmentRadialDistance = 2.08f;
+constexpr float kEquipmentRadialCenterDeg = 220.0f;
+constexpr float kEquipmentRadialMinSpanDeg = 58.0f;
+constexpr float kEquipmentRadialSpanStepDeg = 23.0f;
+constexpr float kEquipmentRadialMinDistance = 1.65f;
+constexpr float kEquipmentRadialDistanceStep = 0.36f;
 
 #ifdef POSEIDON_TARGET_IOS
 constexpr bool kDefaultEnabled = true;
@@ -353,12 +355,14 @@ int BuildEquipmentZones(EquipmentZone* zones, int maxZones, int width, int heigh
         return 0;
 
     const ButtonZone anchor = GetEquipmentAnchor(width, height);
-    const float step = count > 1 ? (kEquipmentRadialEndDeg - kEquipmentRadialStartDeg) / (float)(count - 1) : 0.0f;
-    const float distance = anchor.r * kEquipmentRadialDistance;
+    const float span = count > 1 ? kEquipmentRadialMinSpanDeg + kEquipmentRadialSpanStepDeg * (float)(count - 2) : 0.0f;
+    const float start = kEquipmentRadialCenterDeg - span * 0.5f;
+    const float step = count > 1 ? span / (float)(count - 1) : 0.0f;
+    const float distance = anchor.r * (kEquipmentRadialMinDistance + kEquipmentRadialDistanceStep * (float)(count - 1));
     const int outCount = std::min(count, maxZones);
     for (int i = 0; i < outCount; i++)
     {
-        const float deg = count > 1 ? kEquipmentRadialStartDeg + step * (float)i : 220.0f;
+        const float deg = count > 1 ? start + step * (float)i : kEquipmentRadialCenterDeg;
         const float rad = deg * (3.14159265359f / 180.0f);
         zones[i].item = items[i];
         zones[i].x = Clamp01(anchor.x + std::cos(rad) * distance * (float)height / (float)std::max(1, width));
@@ -1131,6 +1135,7 @@ void TouchInput_DrawOverlay(Engine* engine)
             DrawEquipmentItemIcon(engine, white, zones[i].item, zones[i].x, zones[i].y, zones[i].r * 0.82f,
                                   hover ? PackedColor(Color(0.05f, 0.08f, 0.10f, 0.78f)) : active);
         }
+        return;
     }
     for (const ButtonZone& zone : BuildButtonZones(w, h))
     {
