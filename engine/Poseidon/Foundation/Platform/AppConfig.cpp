@@ -389,8 +389,9 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
                    serverRole ? CliHelpVisibility::Basic : CliHelpVisibility::Full);
 
         std::string advertiseAddressStr;
-        showOption(multiplayerGroup->add_option("--advertise-address", advertiseAddressStr,
-                                                "Public address advertised to the master server when source-IP detection is unavailable"),
+        showOption(multiplayerGroup->add_option(
+                       "--advertise-address", advertiseAddressStr,
+                       "Public address advertised to the master server when source-IP detection is unavailable"),
                    serverRole ? CliHelpVisibility::Basic : CliHelpVisibility::Full, serverRole);
 
         std::string passwordStr;

@@ -367,18 +367,22 @@ endif()
 # Python lint targets (ruff via uv, optional)
 find_program(UV_EXE NAMES uv)
 set(BLENDER_ADDON_DIR ${CMAKE_SOURCE_DIR}/apps/tools/BlenderAddon)
+set(BLENDER_PYTHON_LINT_PATHS ${BLENDER_ADDON_DIR}/io_import_p3d)
+if(EXISTS ${CMAKE_SOURCE_DIR}/tests/BlenderAddon)
+    list(APPEND BLENDER_PYTHON_LINT_PATHS ${CMAKE_SOURCE_DIR}/tests/BlenderAddon)
+endif()
 
 if(UV_EXE AND EXISTS ${BLENDER_ADDON_DIR}/pyproject.toml)
     add_custom_target(PythonLint
-        COMMAND ${UV_EXE} run ruff check ${BLENDER_ADDON_DIR}/io_import_p3d ${CMAKE_SOURCE_DIR}/tests/BlenderAddon
-        COMMAND ${UV_EXE} run ruff format --check ${BLENDER_ADDON_DIR}/io_import_p3d ${CMAKE_SOURCE_DIR}/tests/BlenderAddon
+        COMMAND ${UV_EXE} run ruff check ${BLENDER_PYTHON_LINT_PATHS}
+        COMMAND ${UV_EXE} run ruff format --check ${BLENDER_PYTHON_LINT_PATHS}
         WORKING_DIRECTORY ${BLENDER_ADDON_DIR}
         COMMENT "Checking Python formatting and lint (ruff)"
         VERBATIM
     )
     add_custom_target(PythonLintFix
-        COMMAND ${UV_EXE} run ruff format ${BLENDER_ADDON_DIR}/io_import_p3d ${CMAKE_SOURCE_DIR}/tests/BlenderAddon
-        COMMAND ${UV_EXE} run ruff check --fix ${BLENDER_ADDON_DIR}/io_import_p3d ${CMAKE_SOURCE_DIR}/tests/BlenderAddon
+        COMMAND ${UV_EXE} run ruff format ${BLENDER_PYTHON_LINT_PATHS}
+        COMMAND ${UV_EXE} run ruff check --fix ${BLENDER_PYTHON_LINT_PATHS}
         WORKING_DIRECTORY ${BLENDER_ADDON_DIR}
         COMMENT "Formatting Python sources with ruff"
         VERBATIM

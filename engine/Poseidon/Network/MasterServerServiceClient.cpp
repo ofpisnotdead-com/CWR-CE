@@ -223,8 +223,7 @@ bool SendMasterServerServiceRequest(const char* url, const char* proxyServer, co
     }
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT,
-                     userAgent != nullptr && userAgent[0] != 0 ? userAgent : "BI Agent/1.99");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, userAgent != nullptr && userAgent[0] != 0 ? userAgent : "BI Agent/1.99");
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
