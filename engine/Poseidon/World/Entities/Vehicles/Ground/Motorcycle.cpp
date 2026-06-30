@@ -2490,10 +2490,13 @@ NetworkMessageType Motorcycle::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define UPDATE_MOTORCYCLE_MSG(XX) \
-	XX(RString, plateNumber, NDTString, NCTNone, DEFVALUE(RString, "XXXXXXXX"), DOC_MSG("Plate number"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
-	XX(float, thrustWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, turnWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted turning angle"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
+#define UPDATE_MOTORCYCLE_MSG(XX)                                                                                     \
+    XX(RString, plateNumber, NDTString, NCTNone, DEFVALUE(RString, "XXXXXXXX"), DOC_MSG("Plate number"), IdxTransfer, \
+       ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR)                                                                            \
+    XX(float, thrustWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust"), IdxTransfer,      \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                              \
+    XX(float, turnWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted turning angle"), IdxTransfer, \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
 DECLARE_NET_INDICES_EX_ERR(UpdateMotorcycle, UpdateTankOrCar, UPDATE_MOTORCYCLE_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdateMotorcycle, UpdateTankOrCar, UPDATE_MOTORCYCLE_MSG)
@@ -2505,8 +2508,9 @@ DEFINE_GET_INDICES(UpdateMotorcycle)
 namespace Poseidon
 {
 
-#define UPDATE_POSITION_MOTORCYCLE_MSG(XX) \
-	XX(Turret, turret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Turret object"), IdxTransferObject, ET_ABS_DIF, 1)
+#define UPDATE_POSITION_MOTORCYCLE_MSG(XX)                                                                             \
+    XX(Turret, turret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Turret object"), IdxTransferObject, \
+       ET_ABS_DIF, 1)
 
 DECLARE_NET_INDICES_EX_ERR(UpdatePositionMotorcycle, UpdatePositionVehicle, UPDATE_POSITION_MOTORCYCLE_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdatePositionMotorcycle, UpdatePositionVehicle, UPDATE_POSITION_MOTORCYCLE_MSG)

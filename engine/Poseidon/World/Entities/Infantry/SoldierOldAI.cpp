@@ -2322,16 +2322,24 @@ NetworkMessageType Man::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define UPDATE_MAN_MSG(XX) \
-	XX(float, hideBodyWanted, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Wanted state of body (1 .. fully hidden)"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MINOR) \
-	XX(float, tired, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("How man is tired"), IdxTransfer, ET_NONE, 0) \
-	XX(float, walkSpeedWanted, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted speed"), IdxTransfer, ET_NONE, 0) \
-	XX(int, unitPos, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, UPAuto), DOC_MSG("Up / down state"), IdxTransfer, ET_NONE, 0) \
-	XX(OLink<EntityAI>, flagCarrier, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Carried flag"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_MODE) \
-	XX(bool, nvg, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Night vision is active"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
-	XX(OLink<Building>, ladderBuilding, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Ladder ID"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_MODE) \
-	XX(int, ladderIndex, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Ladder ID"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
-	XX(float, ladderPosition, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Position on ladder"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
+#define UPDATE_MAN_MSG(XX)                                                                                             \
+    XX(float, hideBodyWanted, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0),                                              \
+       DOC_MSG("Wanted state of body (1 .. fully hidden)"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MINOR)             \
+    XX(float, tired, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("How man is tired"), IdxTransfer, ET_NONE, 0) \
+    XX(float, walkSpeedWanted, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted speed"), IdxTransfer, ET_NONE,   \
+       0)                                                                                                              \
+    XX(int, unitPos, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, UPAuto), DOC_MSG("Up / down state"), IdxTransfer,     \
+       ET_NONE, 0)                                                                                                     \
+    XX(OLink<EntityAI>, flagCarrier, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Carried flag"), IdxTransferRef,           \
+       ET_NOT_EQUAL, ERR_COEF_MODE)                                                                                    \
+    XX(bool, nvg, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Night vision is active"), IdxTransfer,             \
+       ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR)                                                                             \
+    XX(OLink<Building>, ladderBuilding, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Ladder ID"), IdxTransferRef,           \
+       ET_NOT_EQUAL, ERR_COEF_MODE)                                                                                    \
+    XX(int, ladderIndex, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Ladder ID"), IdxTransfer,             \
+       ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR)                                                                             \
+    XX(float, ladderPosition, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Position on ladder"), IdxTransfer,  \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
 DECLARE_NET_INDICES_EX_ERR(UpdateMan, UpdateVehicleBrain, UPDATE_MAN_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdateMan, UpdateVehicleBrain, UPDATE_MAN_MSG)
@@ -2343,12 +2351,17 @@ DEFINE_GET_INDICES(UpdateMan)
 namespace Poseidon
 {
 
-#define UPDATE_POSITION_MAN_MSG(XX) \
-	XX(float, gunXRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted gun rotation"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MINOR) \
-	XX(float, gunYRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted gun rotation"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MINOR) \
-	XX(float, headXRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted head rotation"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MINOR) \
-	XX(float, headYRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted head rotation"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MINOR) \
-	XX(RString, move, NDTString, NCTStringMove, DEFVALUE(RString, "Stand"), DOC_MSG("Current animation"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
+#define UPDATE_POSITION_MAN_MSG(XX)                                                                                    \
+    XX(float, gunXRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted gun rotation"), IdxTransfer, \
+       ET_ABS_DIF, ERR_COEF_VALUE_MINOR)                                                                               \
+    XX(float, gunYRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted gun rotation"), IdxTransfer, \
+       ET_ABS_DIF, ERR_COEF_VALUE_MINOR)                                                                               \
+    XX(float, headXRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted head rotation"),            \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MINOR)                                                                  \
+    XX(float, headYRotWanted, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Wanted head rotation"),            \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MINOR)                                                                  \
+    XX(RString, move, NDTString, NCTStringMove, DEFVALUE(RString, "Stand"), DOC_MSG("Current animation"), IdxTransfer, \
+       ET_NOT_EQUAL, ERR_COEF_MODE)
 
 DECLARE_NET_INDICES_EX_ERR(UpdatePositionMan, UpdatePositionVehicle, UPDATE_POSITION_MAN_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdatePositionMan, UpdatePositionVehicle, UPDATE_POSITION_MAN_MSG)
@@ -2490,10 +2503,10 @@ float Man::CalculateError(NetworkMessageContext& ctx)
             RString name = id < 0 ? "" : Type()->GetMoveName(id);
             ICALCERRE_NEQSTR(move, name, ERR_COEF_STRUCTURE)
 
-            ICALCERRE_ABSDIF(float,headXRotWanted, _headXRotWanted,ERR_COEF_VALUE_MINOR);
-            ICALCERRE_ABSDIF(float,headYRotWanted, _headYRotWanted,ERR_COEF_VALUE_MINOR);
-            ICALCERRE_ABSDIF(float,gunXRotWanted, _gunXRotWanted,ERR_COEF_VALUE_MINOR);
-            ICALCERRE_ABSDIF(float,gunYRotWanted, _gunYRotWanted,ERR_COEF_VALUE_MINOR);
+            ICALCERRE_ABSDIF(float, headXRotWanted, _headXRotWanted, ERR_COEF_VALUE_MINOR);
+            ICALCERRE_ABSDIF(float, headYRotWanted, _headYRotWanted, ERR_COEF_VALUE_MINOR);
+            ICALCERRE_ABSDIF(float, gunXRotWanted, _gunXRotWanted, ERR_COEF_VALUE_MINOR);
+            ICALCERRE_ABSDIF(float, gunYRotWanted, _gunYRotWanted, ERR_COEF_VALUE_MINOR);
         }
         break;
         default:

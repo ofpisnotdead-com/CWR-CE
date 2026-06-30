@@ -2021,10 +2021,13 @@ NetworkMessageType AirplaneAuto::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define UPDATE_AIRPLANE_MSG(XX) \
-	XX(int, pilotFlaps, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Position of flaps, wanted by pilot"), IdxTransfer, ET_ABS_DIF, ERR_COEF_MODE) \
-	XX(bool, gearDammage, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Gear is damaged"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
-	XX(bool, pilotGear, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Position of gear, wanted by pilot"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
+#define UPDATE_AIRPLANE_MSG(XX)                                                                                        \
+    XX(int, pilotFlaps, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Position of flaps, wanted by pilot"), \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_MODE)                                                                         \
+    XX(bool, gearDammage, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Gear is damaged"), IdxTransfer,            \
+       ET_NOT_EQUAL, ERR_COEF_MODE)                                                                                    \
+    XX(bool, pilotGear, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Position of gear, wanted by pilot"),         \
+       IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
 
 DECLARE_NET_INDICES_EX_ERR(UpdateAirplane, UpdateTransport, UPDATE_AIRPLANE_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdateAirplane, UpdateTransport, UPDATE_AIRPLANE_MSG)
@@ -2036,12 +2039,17 @@ DEFINE_GET_INDICES(UpdateAirplane)
 namespace Poseidon
 {
 
-#define UPDATE_POSITION_AIRPLANE_MSG(XX) \
-	XX(float, thrustWanted, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Wanted engine thrust"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, elevatorWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted elevator position"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, rudderWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted rudder position"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, aileronWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted aileron position"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, pilotBrake, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("State of brake, wanted by pilot"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
+#define UPDATE_POSITION_AIRPLANE_MSG(XX)                                                                              \
+    XX(float, thrustWanted, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Wanted engine thrust"), IdxTransfer, \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                              \
+    XX(float, elevatorWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted elevator position"),      \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                 \
+    XX(float, rudderWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted rudder position"),          \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                 \
+    XX(float, aileronWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted aileron position"),        \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                 \
+    XX(float, pilotBrake, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("State of brake, wanted by pilot"),     \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
 DECLARE_NET_INDICES_EX_ERR(UpdatePositionAirplane, UpdatePositionVehicle, UPDATE_POSITION_AIRPLANE_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdatePositionAirplane, UpdatePositionVehicle, UPDATE_POSITION_AIRPLANE_MSG)

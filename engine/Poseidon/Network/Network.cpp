@@ -450,8 +450,9 @@ NetworkMessageType ClientInfoObject::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define UPDATE_CLIENT_INFO_MSG(XX) \
-	XX(Vector3, cameraPosition, NDTVector, NCTNone, DEFVALUE(Vector3, InvalidCamPos), DOC_MSG("Position of camera on client"), IdxTransfer)
+#define UPDATE_CLIENT_INFO_MSG(XX)                                                    \
+    XX(Vector3, cameraPosition, NDTVector, NCTNone, DEFVALUE(Vector3, InvalidCamPos), \
+       DOC_MSG("Position of camera on client"), IdxTransfer)
 
 DECLARE_NET_INDICES_EX(UpdateClientInfo, NetworkObject, UPDATE_CLIENT_INFO_MSG)
 DEFINE_NET_INDICES_EX(UpdateClientInfo, NetworkObject, UPDATE_CLIENT_INFO_MSG)
@@ -559,8 +560,9 @@ TMError NetworkMessageQueue::TransferMsg(NetworkMessageContext& ctx)
 
 // variant (registered) messages
 
-#define GAME_STATE_MSG(XX) \
-	XX(int, gameState, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Current multiplayer game state"), IdxTransfer)
+#define GAME_STATE_MSG(XX)                                                                                        \
+    XX(int, gameState, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Current multiplayer game state"), \
+       IdxTransfer)
 
 DECLARE_NET_INDICES(GameState, GAME_STATE_MSG)
 DEFINE_NET_INDICES(GameState, GAME_STATE_MSG)
@@ -615,7 +617,7 @@ NetworkMessageFormat& MissionHeader::CreateFormat(NetworkMessageClass cls, Netwo
     return format;
 }
 
-#define DIFF_TRANSFER(name,XX) TMCHECK(ctx.IdxTransfer(indices->diff##name, difficulty[DT##name]))
+#define DIFF_TRANSFER(name, XX) TMCHECK(ctx.IdxTransfer(indices->diff##name, difficulty[DT##name]))
 
 TMError MissionHeader::TransferMsg(NetworkMessageContext& ctx)
 {
@@ -641,7 +643,7 @@ TMError MissionHeader::TransferMsg(NetworkMessageContext& ctx)
     TMCHECK(ctx.IdxTransfer(indices->updateOnly, updateOnly))
     TMCHECK(ctx.IdxTransfer(indices->joinInProgress, joinInProgress))
 
-    DIFFICULTY_TYPE_ENUM(DIFF_TRANSFER,ignored)
+    DIFFICULTY_TYPE_ENUM(DIFF_TRANSFER, ignored)
 
     TMCHECK(ctx.IdxTransfer(indices->addOns, addOns))
 

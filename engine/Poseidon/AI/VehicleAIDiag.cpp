@@ -1505,13 +1505,13 @@ DEFINE_GET_INDICES(UpdateEntityAIWeapons)
 namespace Poseidon
 {
 
-NetworkMessageFormat& UpdateEntityAIWeaponsMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat &format)
+NetworkMessageFormat& UpdateEntityAIWeaponsMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
     UPDATE_ENTITY_AI_WEAPONS_MSG(MSG_FORMAT_ERR)
     return format;
 }
 
-TMError UpdateEntityAIWeaponsMessage::TransferMsg(NetworkMessageContext &ctx)
+TMError UpdateEntityAIWeaponsMessage::TransferMsg(NetworkMessageContext& ctx)
 {
     PoseidonAssert(_vehicle);
     return _vehicle->TransferMsgWeapons(ctx);
@@ -1852,17 +1852,17 @@ float EntityAI::CalculateError(NetworkMessageContext& ctx)
                 int index = indices->weapons;
                 if (index >= 0)
                 {
-                    NetworkMessageFormatBase *format = const_cast<NetworkMessageFormatBase *>(ctx.GetFormat());
-                    NetworkMessageFormatItem &item = format->GetItem(index);
-                    CHECK_ASSIGN(typeVal,item.defValue,const RefNetworkDataTyped<int>);
+                    NetworkMessageFormatBase* format = const_cast<NetworkMessageFormatBase*>(ctx.GetFormat());
+                    NetworkMessageFormatItem& item = format->GetItem(index);
+                    CHECK_ASSIGN(typeVal, item.defValue, const RefNetworkDataTyped<int>);
                     int type = typeVal.GetVal();
-                    NetworkMessageFormatBase *subformat = ctx.GetComponent()->GetFormat((NetworkMessageType)type);
+                    NetworkMessageFormatBase* subformat = ctx.GetComponent()->GetFormat((NetworkMessageType)type);
 
                     if (subformat)
                     {
-                        const RefNetworkData &val = ctx.GetMessage()->values[index];
-                        CHECK_ASSIGN(msgVal,val,const RefNetworkDataTyped<NetworkMessage>);
-                        NetworkMessage &submsg = msgVal.GetVal();
+                        const RefNetworkData& val = ctx.GetMessage()->values[index];
+                        CHECK_ASSIGN(msgVal, val, const RefNetworkDataTyped<NetworkMessage>);
+                        NetworkMessage& submsg = msgVal.GetVal();
                         NetworkMessageContext subctx(&submsg, subformat, ctx);
                         error += CalculateErrorWeapons(subctx);
                     }
@@ -1877,7 +1877,7 @@ float EntityAI::CalculateError(NetworkMessageContext& ctx)
     return error;
 }
 
-float EntityAI::CalculateErrorWeapons(NetworkMessageContext &ctx)
+float EntityAI::CalculateErrorWeapons(NetworkMessageContext& ctx)
 {
     AI_ERROR(dynamic_cast<const IndicesUpdateEntityAIWeapons*>(ctx.GetIndices()))
     const IndicesUpdateEntityAIWeapons* indices = static_cast<const IndicesUpdateEntityAIWeapons*>(ctx.GetIndices());
@@ -1923,8 +1923,7 @@ float EntityAI::CalculateErrorWeapons(NetworkMessageContext &ctx)
         {
             for (int i = 0; i < _magazines.Size(); i++)
             {
-                if (magazines[i]._creator != _magazines[i]->_creator ||
-                    magazines[i]._id != _magazines[i]->_id)
+                if (magazines[i]._creator != _magazines[i]->_creator || magazines[i]._id != _magazines[i]->_id)
                 {
                     changed = true;
                     break;

@@ -857,11 +857,15 @@ NetworkMessageType SeaGullAuto::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define UPDATE_SEAGULL_MSG(XX) \
-	XX(Vector3, pilotSpeed, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Wanted speed"), IdxTransfer, ET_ABS_DIF, 1) \
-	XX(float, pilotHeading, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted heading"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, pilotHeight, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted height"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(int, state, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Autopilot state"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
+#define UPDATE_SEAGULL_MSG(XX)                                                                                         \
+    XX(Vector3, pilotSpeed, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Wanted speed"), IdxTransfer,        \
+       ET_ABS_DIF, 1)                                                                                                  \
+    XX(float, pilotHeading, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted heading"), IdxTransfer, ET_ABS_DIF, \
+       ERR_COEF_VALUE_MAJOR)                                                                                           \
+    XX(float, pilotHeight, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted height"), IdxTransfer, ET_ABS_DIF,   \
+       ERR_COEF_VALUE_MAJOR)                                                                                           \
+    XX(int, state, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Autopilot state"), IdxTransfer,            \
+       ET_NOT_EQUAL, ERR_COEF_MODE)
 
 DECLARE_NET_INDICES_EX_ERR(UpdateSeagull, UpdateVehicle, UPDATE_SEAGULL_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdateSeagull, UpdateVehicle, UPDATE_SEAGULL_MSG)
@@ -873,13 +877,19 @@ DEFINE_GET_INDICES(UpdateSeagull)
 namespace Poseidon
 {
 
-#define UPDATE_POSITION_SEAGULL_MSG(XX) \
-	XX(float, rpmWanted, NDTFloat, NCTFloat0To2, DEFVALUE(float, 0), DOC_MSG("Wanted RPM"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, mainRotorWanted, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted main rotor state"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, cyclicForwardWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted forward cyclic"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, cyclicAsideWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted aside cyclic"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, wingDiveWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted wing dive"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(float, thrustWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
+#define UPDATE_POSITION_SEAGULL_MSG(XX)                                                                                \
+    XX(float, rpmWanted, NDTFloat, NCTFloat0To2, DEFVALUE(float, 0), DOC_MSG("Wanted RPM"), IdxTransfer, ET_ABS_DIF,   \
+       ERR_COEF_VALUE_MAJOR)                                                                                           \
+    XX(float, mainRotorWanted, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted main rotor state"), IdxTransfer, \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                               \
+    XX(float, cyclicForwardWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted forward cyclic"),     \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                  \
+    XX(float, cyclicAsideWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted aside cyclic"),         \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                  \
+    XX(float, wingDiveWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted wing dive"), IdxTransfer,  \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                               \
+    XX(float, thrustWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust"), IdxTransfer,       \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
 DECLARE_NET_INDICES_EX_ERR(UpdatePositionSeagull, UpdatePositionVehicle, UPDATE_POSITION_SEAGULL_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdatePositionSeagull, UpdatePositionVehicle, UPDATE_POSITION_SEAGULL_MSG)

@@ -774,25 +774,41 @@ DEFINE_GET_INDICES(CreateAIUnit)
 namespace Poseidon
 {
 
-#define UPDATE_AI_UNIT_MSG(XX) \
-	XX(OLink<Person>, person, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Attached body"), IdxTransferRef, ET_NONE, 0) \
-	XX(float, experience, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Amount of experience"), IdxTransfer, ET_ABS_DIF, 0.01 * ERR_COEF_VALUE_MINOR) \
-	XX(float, ability, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0.2), DOC_MSG("Ability of (AI) unit"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR) \
-	XX(int, semaphore, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, SemaphoreYellow), DOC_MSG("Combat mode"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
-	XX(int, combatModeMajor, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, CMAware), DOC_MSG("Behaviour"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
-	XX(Time, dangerUntil, NDTTime, NCTNone, DEFVALUE(Time, Time(0)), DOC_MSG("In danger mode until..."), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
-	XX(bool, captive, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Captive unit"), IdxTransfer, ET_NONE, 0) \
-	XX(OLink<Object>, house, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("House, where destination is"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
-	XX(int, housePos, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Destination position in house"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
-	XX(Vector3, wantedPosition, NDTVector, NCTNone, DEFVALUE(Vector3, VUndefined), DOC_MSG("Destination position"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MINOR) \
-	XX(int, planningMode, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, DoNotPlan), DOC_MSG("How to plan path"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MINOR) \
-	XX(float, formationAngle, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0), DOC_MSG("Relative orientation in formation"), IdxTransfer, ET_NONE, 0) \
-	XX(Vector3, formationPos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Relative position in formation"), IdxTransfer, ET_NONE, 0) \
-	XX(int, state, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, Wait), DOC_MSG("Unit (FSM) state"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
-	XX(int, mode, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, Normal), DOC_MSG("Precision of path planning"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
-	XX(int, lifeState, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, LSAlive), DOC_MSG("Life state of unit (Alive, Death, Asleep etc.)"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
-	XX(bool, getInAllowed, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Can get in vehicles"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
-	XX(bool, getInOrdered, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Must get in vehicles"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
+#define UPDATE_AI_UNIT_MSG(XX)                                                                                         \
+    XX(OLink<Person>, person, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Attached body"), IdxTransferRef, ET_NONE, 0)     \
+    XX(float, experience, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Amount of experience"), IdxTransfer,         \
+       ET_ABS_DIF, 0.01 * ERR_COEF_VALUE_MINOR)                                                                        \
+    XX(float, ability, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0.2), DOC_MSG("Ability of (AI) unit"), IdxTransfer,     \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                               \
+    XX(int, semaphore, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, SemaphoreYellow), DOC_MSG("Combat mode"),           \
+       IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)                                                                       \
+    XX(int, combatModeMajor, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, CMAware), DOC_MSG("Behaviour"), IdxTransfer,  \
+       ET_NOT_EQUAL, ERR_COEF_MODE)                                                                                    \
+    XX(Time, dangerUntil, NDTTime, NCTNone, DEFVALUE(Time, Time(0)), DOC_MSG("In danger mode until..."), IdxTransfer,  \
+       ET_NOT_EQUAL, ERR_COEF_MODE)                                                                                    \
+    XX(bool, captive, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Captive unit"), IdxTransfer, ET_NONE, 0)       \
+    XX(OLink<Object>, house, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("House, where destination is"), IdxTransferRef,    \
+       ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR)                                                                             \
+    XX(int, housePos, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Destination position in house"),         \
+       IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR)                                                                \
+    XX(Vector3, wantedPosition, NDTVector, NCTNone, DEFVALUE(Vector3, VUndefined), DOC_MSG("Destination position"),    \
+       IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MINOR)                                                                \
+    XX(int, planningMode, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, DoNotPlan), DOC_MSG("How to plan path"),         \
+       IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MINOR)                                                                \
+    XX(float, formationAngle, NDTFloat, NCTFloatAngle, DEFVALUE(float, 0),                                             \
+       DOC_MSG("Relative orientation in formation"), IdxTransfer, ET_NONE, 0)                                          \
+    XX(Vector3, formationPos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Relative position in formation"), \
+       IdxTransfer, ET_NONE, 0)                                                                                        \
+    XX(int, state, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, Wait), DOC_MSG("Unit (FSM) state"), IdxTransfer,        \
+       ET_NOT_EQUAL, ERR_COEF_MODE)                                                                                    \
+    XX(int, mode, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, Normal), DOC_MSG("Precision of path planning"),          \
+       IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)                                                                       \
+    XX(int, lifeState, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, LSAlive),                                           \
+       DOC_MSG("Life state of unit (Alive, Death, Asleep etc.)"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)            \
+    XX(bool, getInAllowed, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Can get in vehicles"), IdxTransfer,        \
+       ET_NOT_EQUAL, ERR_COEF_MODE)                                                                                    \
+    XX(bool, getInOrdered, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Must get in vehicles"), IdxTransfer,      \
+       ET_NOT_EQUAL, ERR_COEF_MODE)
 
 DECLARE_NET_INDICES_EX_ERR(UpdateAIUnit, NetworkObject, UPDATE_AI_UNIT_MSG)
 DEFINE_NET_INDICES_EX_ERR(UpdateAIUnit, NetworkObject, UPDATE_AI_UNIT_MSG)

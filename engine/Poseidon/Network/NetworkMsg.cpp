@@ -281,11 +281,11 @@ int NetworkMessageFormatBase::FindIndex(const char* name) const
     }
 }
 
-#define MSG_FORMAT_ITEM_MSG(XX) \
-	XX(RString, name, NDTString, NCTDefault, ND_NULL, DOC_MSG("Item name"), IdxTransfer) \
-	XX(int, type, NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Item type"), IdxTransfer) \
-	XX(int, compression, NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Item compression"), IdxTransfer) \
-	XX(RefNetworkData, defValue, NDTData, NCTNone, ND_NULL, DOC_MSG("Default value of item"), IdxTransfer)
+#define MSG_FORMAT_ITEM_MSG(XX)                                                                           \
+    XX(RString, name, NDTString, NCTDefault, ND_NULL, DOC_MSG("Item name"), IdxTransfer)                  \
+    XX(int, type, NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Item type"), IdxTransfer)               \
+    XX(int, compression, NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Item compression"), IdxTransfer) \
+    XX(RefNetworkData, defValue, NDTData, NCTNone, ND_NULL, DOC_MSG("Default value of item"), IdxTransfer)
 
 DECLARE_NET_INDICES(MsgFormatItem, MSG_FORMAT_ITEM_MSG)
 DEFINE_NET_INDICES(MsgFormatItem, MSG_FORMAT_ITEM_MSG)
@@ -309,9 +309,10 @@ TMError NetworkMessageFormatItem::TransferMsg(NetworkMessageContext& ctx)
     return TMOK;
 }
 
-#define MSG_FORMAT_MSG(XX) \
-	XX(int, index, NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Index of message type"), IdxTransfer) \
-	XX(AutoArray<NetworkMessageFormatItem>, items, NDTObjectArray, NCTNone, DEFVALUE_MSG(NMTMsgFormatItem), DOC_MSG("List of items"), IdxTransferArray)
+#define MSG_FORMAT_MSG(XX)                                                                                  \
+    XX(int, index, NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Index of message type"), IdxTransfer)    \
+    XX(AutoArray<NetworkMessageFormatItem>, items, NDTObjectArray, NCTNone, DEFVALUE_MSG(NMTMsgFormatItem), \
+       DOC_MSG("List of items"), IdxTransferArray)
 
 DECLARE_NET_INDICES(MsgFormat, MSG_FORMAT_MSG)
 DEFINE_NET_INDICES(MsgFormat, MSG_FORMAT_MSG)

@@ -477,12 +477,13 @@ NetworkMessageType ObjectDestructed::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define CREATE_OBJECT_DESTRUCTED_MSG(XX) \
-	XX(OLink<Object>, destroy, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Destroying object"), IdxTransferRef) \
-	XX(float, timeToLive, NDTFloat, NCTNone, DEFVALUE(float, 2), DOC_MSG("Time to live"), IdxTransfer) \
-	XX(RString, soundName, NDTString, NCTNone, DEFVALUE(RString, RString(nullptr)), DOC_MSG("ID of played sound"), IdxTransfer) \
-	XX(float, soundVolume, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Volume of played sound"), IdxTransfer) \
-	XX(float, soundFrequency, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Pitch of played sound"), IdxTransfer)
+#define CREATE_OBJECT_DESTRUCTED_MSG(XX)                                                                           \
+    XX(OLink<Object>, destroy, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Destroying object"), IdxTransferRef)        \
+    XX(float, timeToLive, NDTFloat, NCTNone, DEFVALUE(float, 2), DOC_MSG("Time to live"), IdxTransfer)             \
+    XX(RString, soundName, NDTString, NCTNone, DEFVALUE(RString, RString(nullptr)), DOC_MSG("ID of played sound"), \
+       IdxTransfer)                                                                                                \
+    XX(float, soundVolume, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Volume of played sound"), IdxTransfer)  \
+    XX(float, soundFrequency, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Pitch of played sound"), IdxTransfer)
 
 DECLARE_NET_INDICES_EX(CreateObjectDestructed, CreateVehicle, CREATE_OBJECT_DESTRUCTED_MSG)
 DEFINE_NET_INDICES_EX(CreateObjectDestructed, CreateVehicle, CREATE_OBJECT_DESTRUCTED_MSG)
@@ -1400,13 +1401,13 @@ NetworkMessageType Crater::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define CREATE_CRATER_MSG(XX) \
-	XX(float, timeToLive, NDTFloat, NCTNone, DEFVALUE(float, 20), DOC_MSG("Time to live"), IdxTransfer) \
-	XX(float, size, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Size"), IdxTransfer) \
-	XX(bool, isSmoke, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Source of smoke"), IdxTransfer) \
-	XX(bool, isBlood, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Source of blood"), IdxTransfer) \
-	XX(bool, isWater, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Source of water"), IdxTransfer) \
-	XX(float, alpha, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Transparency"), IdxTransfer)
+#define CREATE_CRATER_MSG(XX)                                                                           \
+    XX(float, timeToLive, NDTFloat, NCTNone, DEFVALUE(float, 20), DOC_MSG("Time to live"), IdxTransfer) \
+    XX(float, size, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Size"), IdxTransfer)                \
+    XX(bool, isSmoke, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Source of smoke"), IdxTransfer)  \
+    XX(bool, isBlood, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Source of blood"), IdxTransfer) \
+    XX(bool, isWater, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Source of water"), IdxTransfer) \
+    XX(float, alpha, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Transparency"), IdxTransfer)
 
 DECLARE_NET_INDICES_EX(CreateCrater, CreateVehicle, CREATE_CRATER_MSG)
 DEFINE_NET_INDICES_EX(CreateCrater, CreateVehicle, CREATE_CRATER_MSG)
@@ -1568,10 +1569,11 @@ NetworkMessageType CraterOnVehicle::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define CREATE_CRATER_ON_VEHICLE_MSG(XX) \
-	XX(OLink<Object>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Attached vehicle (where this crater is)"), IdxTransferRef) \
-	XX(Vector3, pos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Position on vehicle"), IdxTransfer) \
-	XX(Vector3, dir, NDTVector, NCTNone, DEFVALUE(Vector3, VUp), DOC_MSG("Orientation on vehicle"), IdxTransfer)
+#define CREATE_CRATER_ON_VEHICLE_MSG(XX)                                                                          \
+    XX(OLink<Object>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Attached vehicle (where this crater is)"), \
+       IdxTransferRef)                                                                                            \
+    XX(Vector3, pos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Position on vehicle"), IdxTransfer)   \
+    XX(Vector3, dir, NDTVector, NCTNone, DEFVALUE(Vector3, VUp), DOC_MSG("Orientation on vehicle"), IdxTransfer)
 
 DECLARE_NET_INDICES_EX(CreateCraterOnVehicle, CreateCrater, CREATE_CRATER_ON_VEHICLE_MSG)
 DEFINE_NET_INDICES_EX(CreateCraterOnVehicle, CreateCrater, CREATE_CRATER_ON_VEHICLE_MSG)
@@ -1830,9 +1832,10 @@ NetworkMessageType Explosion::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-#define CREATE_EXPLOSION_MSG(XX) \
-	XX(OLink<Vehicle>, owner, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is responsible for explosion"), IdxTransferRef) \
-	XX(float, duration, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Duration of explosion"), IdxTransfer)
+#define CREATE_EXPLOSION_MSG(XX)                                                                          \
+    XX(OLink<Vehicle>, owner, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is responsible for explosion"), \
+       IdxTransferRef)                                                                                    \
+    XX(float, duration, NDTFloat, NCTNone, DEFVALUE(float, 1), DOC_MSG("Duration of explosion"), IdxTransfer)
 
 DECLARE_NET_INDICES_EX(CreateExplosion, CreateVehicle, CREATE_EXPLOSION_MSG)
 DEFINE_NET_INDICES_EX(CreateExplosion, CreateVehicle, CREATE_EXPLOSION_MSG)

@@ -156,9 +156,10 @@ DEFINE_GET_INDICES(RemoveMagazineCargo)
 
 DEFINE_NETWORK_OBJECT_SIMPLE(VehicleInitCmd, VehicleInit)
 
-#define VEHICLE_INIT_MSG(XX) \
-	XX(OLink<EntityAI>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which is initialized"), IdxTransferRef) \
-	XX(RString, init, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Initialization statement"), IdxTransfer)
+#define VEHICLE_INIT_MSG(XX)                                                                             \
+    XX(OLink<EntityAI>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which is initialized"), \
+       IdxTransferRef)                                                                                   \
+    XX(RString, init, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Initialization statement"), IdxTransfer)
 
 DECLARE_NET_INDICES(VehicleInit, VEHICLE_INIT_MSG)
 DEFINE_NET_INDICES(VehicleInit, VEHICLE_INIT_MSG)

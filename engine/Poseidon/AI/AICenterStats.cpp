@@ -1152,7 +1152,7 @@ NetworkMessageType AICenter::GetNMType(NetworkMessageClass cls) const
 }
 
 #define CREATE_AI_CENTER_MSG(XX) \
-	XX(int, side, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, TEast), DOC_MSG("Side of center"), IdxTransfer)
+    XX(int, side, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, TEast), DOC_MSG("Side of center"), IdxTransfer)
 
 DECLARE_NET_INDICES_EX(CreateAICenter, NetworkObject, CREATE_AI_CENTER_MSG)
 DEFINE_NET_INDICES_EX(CreateAICenter, NetworkObject, CREATE_AI_CENTER_MSG)
@@ -1164,11 +1164,11 @@ DEFINE_GET_INDICES(CreateAICenter)
 namespace Poseidon
 {
 
-#define UPDATE_AI_CENTER_MSG(XX) \
-	XX(float, friends0, NDTFloat, NCTNone, DEFVALUE(float, 1.0), DOC_MSG("Friendship to other side"), IdxTransfer) \
-	XX(float, friends1, NDTFloat, NCTNone, DEFVALUE(float, 1.0), DOC_MSG("Friendship to other side"), IdxTransfer) \
-	XX(float, friends2, NDTFloat, NCTNone, DEFVALUE(float, 1.0), DOC_MSG("Friendship to other side"), IdxTransfer) \
-	XX(float, friends3, NDTFloat, NCTNone, DEFVALUE(float, 1.0), DOC_MSG("Friendship to other side"), IdxTransfer)
+#define UPDATE_AI_CENTER_MSG(XX)                                                                                   \
+    XX(float, friends0, NDTFloat, NCTNone, DEFVALUE(float, 1.0), DOC_MSG("Friendship to other side"), IdxTransfer) \
+    XX(float, friends1, NDTFloat, NCTNone, DEFVALUE(float, 1.0), DOC_MSG("Friendship to other side"), IdxTransfer) \
+    XX(float, friends2, NDTFloat, NCTNone, DEFVALUE(float, 1.0), DOC_MSG("Friendship to other side"), IdxTransfer) \
+    XX(float, friends3, NDTFloat, NCTNone, DEFVALUE(float, 1.0), DOC_MSG("Friendship to other side"), IdxTransfer)
 
 DECLARE_NET_INDICES_EX(UpdateAICenter, NetworkObject, UPDATE_AI_CENTER_MSG)
 DEFINE_NET_INDICES_EX(UpdateAICenter, NetworkObject, UPDATE_AI_CENTER_MSG)
