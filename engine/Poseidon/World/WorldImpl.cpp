@@ -1599,6 +1599,10 @@ bool World::SaveBin(const char* name, int message) const
         LOG_DEBUG(World, "Total allocated after World::Serialize: {} MB", Foundation::MemoryUsed() / (1024 * 1024));
         ret = ar.SaveBin(name);
         LOG_DEBUG(World, "Total allocated after ar.SaveBin: {} MB", Foundation::MemoryUsed() / (1024 * 1024));
+        if (!ret)
+        {
+            LOG_WARN(World, "SaveBin failed for '{}'", name);
+        }
     }
 
     LOG_DEBUG(World, "Total allocated after ~ParamArchive: {} MB", Foundation::MemoryUsed() / (1024 * 1024));

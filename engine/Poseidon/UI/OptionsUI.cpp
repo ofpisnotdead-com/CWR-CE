@@ -220,6 +220,39 @@ void CreatePath(RString path)
     }
 }
 
+static std::string NormalizeSlashes(std::string path)
+{
+    for (char& ch : path)
+    {
+        if (ch == '\\')
+            ch = '/';
+    }
+    return path;
+}
+
+static RString GetSaveBaseDirectory()
+{
+    RString base = GetBaseDirectory();
+    if (base.GetLength() == 0)
+    {
+        return base;
+    }
+
+    std::string basePath = NormalizeSlashes((const char*)base);
+    std::string contentRoot = NormalizeSlashes(GamePaths::Instance().UserContentDir());
+    if (!contentRoot.empty() && contentRoot.back() != '/')
+    {
+        contentRoot += '/';
+    }
+
+    if (!contentRoot.empty() && basePath.rfind(contentRoot, 0) == 0)
+    {
+        return RString(basePath.c_str() + contentRoot.size());
+    }
+
+    return base;
+}
+
 RString GetSaveDirectory()
 {
     /*
@@ -227,7 +260,7 @@ RString GetSaveDirectory()
         mkdir(dir, nullptr);
         return dir;
     */
-    RString dir = GetUserDirectory() + RString("Saved/") + GetBaseDirectory();
+    RString dir = GetUserDirectory() + RString("Saved/") + GetSaveBaseDirectory();
     if (!IsCampaign())
     {
         dir = dir + GetBaseSubdirectory() + RString(Glob.header.filenameReal) + RString(".") +
@@ -250,12 +283,14 @@ RString GetCampaignSaveDirectory(RString campaign)
     {
     }
     RString dir = GetUserDirectory() + RString("Saved/campaigns/") + campaign + RString("/");
+    CreatePath(dir);
     return dir;
 }
 
 RString GetMissionSaveDirectory(RString mission)
 {
     RString dir = GetUserDirectory() + RString("Saved/missions/") + mission + RString("/");
+    CreatePath(dir);
     return dir;
 }
 
