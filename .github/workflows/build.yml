@@ -223,6 +223,7 @@ jobs:
           cmake --build ${{ matrix.build_dir }}
           --target ${{ matrix.build_target }}
           --
+          -quiet
           CODE_SIGNING_ALLOWED=NO
           CODE_SIGNING_REQUIRED=NO
 
