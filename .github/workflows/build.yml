@@ -221,7 +221,11 @@ jobs:
 
       - name: Configure
         if: matrix.xcode != true && runner.environment != 'self-hosted'
-        run: cmake --preset ${{ matrix.preset }}
+        run: >
+          cmake
+          --preset ${{ matrix.preset }}
+          -DCMAKE_C_COMPILER_LAUNCHER=
+          -DCMAKE_CXX_COMPILER_LAUNCHER=
 
       - name: Configure Xcode
         if: matrix.xcode == true
