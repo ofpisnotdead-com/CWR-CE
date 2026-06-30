@@ -49,7 +49,7 @@ constexpr float kMapPanMouseScaleY = 150.0f / 1.5f;
 constexpr float kMapPinchZoomScale = 5.0f;
 constexpr float kActionScrollStepY = 0.035f;
 constexpr float kActionScrollWheelTicks = 1.0f;
-constexpr float kEquipmentRadialCenterDeg = 220.0f;
+constexpr float kEquipmentRadialCenterDeg = 320.0f;
 constexpr float kEquipmentRadialMinSpanDeg = 58.0f;
 constexpr float kEquipmentRadialSpanStepDeg = 23.0f;
 constexpr float kEquipmentRadialMinDistance = 1.65f;
@@ -285,8 +285,8 @@ std::array<ButtonZone, (int)TouchButton::Count> BuildButtonZones(int width, int 
     if (height <= 0)
         height = 1080;
     const PixelLayout layout = BuildPixelLayout(width, height);
-    const float columnX = (float)width - layout.edgeMargin;
-    const float innerX = columnX - layout.buttonGap * 0.95f;
+    const float columnX = layout.edgeMargin;
+    const float innerX = columnX + layout.buttonGap * 0.95f;
     const float fireY = (float)height - layout.edgeMargin - layout.buttonRadius * 0.35f;
     const float actionY = fireY - layout.buttonGap * 0.88f;
     const float reloadY = fireY - layout.buttonGap * 1.78f;
@@ -298,8 +298,7 @@ std::array<ButtonZone, (int)TouchButton::Count> BuildButtonZones(int width, int 
              {TouchButton::Reload, NormX(columnX, width), NormY(reloadY, height), radius},
              {TouchButton::Optics, NormX(innerX, width), NormY(opticsY, height), radius},
              {TouchButton::Equipment, NormX(columnX, width), NormY(mapY, height), radius},
-             {TouchButton::Pause, NormX((float)width - layout.edgeMargin, width), NormY(layout.topMargin, height),
-              radius * 0.72f}}};
+             {TouchButton::Pause, NormX(layout.edgeMargin, width), NormY(layout.topMargin, height), radius * 0.72f}}};
 }
 
 ButtonZone GetEquipmentAnchor(int width, int height)
