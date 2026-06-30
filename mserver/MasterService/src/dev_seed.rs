@@ -259,6 +259,7 @@ struct DevServerSeed {
 impl DevServerSeed {
     fn to_request(&self) -> RegisterServerRequest {
         RegisterServerRequest {
+            app_name: "CWR-CE".to_string(),
             server_id: self.server_id.to_string(),
             address: "127.0.0.1".to_string(),
             hostport: self.hostport,

@@ -6,20 +6,20 @@ use sqlx::{AnyPool, Row};
 
 use crate::model::{
     DirectoryServerRecord, ListServersQuery, RegisterServerRequest, ServerPopulationSample,
-    ServerRecentSession, VerificationState,
+    ServerRecentSession, ServerVersionGroup, VerificationState,
 };
 
-/// Consecutive failed probes before a server is flipped to `unreachable` (and hidden from
-/// the default browse). Tolerates transient blips while still reacting within a few rounds.
-const UNREACHABLE_AFTER_FAILURES: i64 = 3;
+/// Consecutive failed probes before a server is flipped to `unreachable` and hidden from
+/// the default browse.
+const UNREACHABLE_AFTER_FAILURES: i64 = 1;
 
 /// Default browse hides a server whose last heartbeat is older than this (publisher
-/// heartbeats every ~30s, so this is several missed beats).
-const HEARTBEAT_FRESH_MS: i64 = 120_000;
+/// heartbeats every ~30s, so this is roughly two missed beats).
+const HEARTBEAT_FRESH_MS: i64 = 60_000;
 
 /// An `unreachable` verdict hides a row only while this fresh. A stale verdict (the prober
 /// stopped) expires, so the server reappears on heartbeat alone — self-healing.
-const UNREACHABLE_HIDE_MS: i64 = 300_000;
+const UNREACHABLE_HIDE_MS: i64 = 60_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Dialect {
@@ -84,6 +84,7 @@ impl ServerDirectory {
             .await
             .context("initializing schema")?;
         self.migrate_servers().await?;
+        self.create_post_migration_indexes().await?;
         Ok(())
     }
 
@@ -109,7 +110,8 @@ impl ServerDirectory {
             Dialect::Sqlite => "INTEGER",
         };
         // (column, type) — booleans are stored as 0/1 integers, like the rest of the schema.
-        let additions: [(&str, &str); 16] = [
+        let additions: [(&str, &str); 17] = [
+            ("app_name", "TEXT"),
             ("version_tag", "TEXT"),
             ("time_left", int_type),
             ("state_elapsed_seconds", int_type),
@@ -141,6 +143,16 @@ impl ServerDirectory {
             .await
             .with_context(|| format!("adding servers.{name}"))?;
         }
+        Ok(())
+    }
+
+    async fn create_post_migration_indexes(&self) -> Result<()> {
+        sqlx::raw_sql(
+            "CREATE INDEX IF NOT EXISTS idx_servers_app_version ON servers(app_name, actver, version_tag);",
+        )
+        .execute(&self.pool)
+        .await
+        .context("creating post-migration indexes")?;
         Ok(())
     }
 
@@ -187,7 +199,7 @@ impl ServerDirectory {
         let record = request.into_record(now_unix_ms);
         sqlx::query(&self.bind_sql(
             "INSERT INTO servers (
-                server_id, address, hostport, hostname, gametype, actver, reqver, version_tag, state,
+                app_name, server_id, address, hostport, hostname, gametype, actver, reqver, version_tag, state,
                 numplayers, maxplayers, password, mod_list, equal_mod_required, transport_impl,
                 platform, last_seen_unix_ms, verification_state, last_observed_unix_ms, observed_reachable,
                 time_left, state_elapsed_seconds,
@@ -195,9 +207,10 @@ impl ServerDirectory {
                 description, param1, param2, required_addons
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             ON CONFLICT(server_id) DO UPDATE SET
+                app_name = excluded.app_name,
                 address = excluded.address,
                 hostport = excluded.hostport,
                 hostname = excluded.hostname,
@@ -230,6 +243,7 @@ impl ServerDirectory {
                 param2 = excluded.param2,
                 required_addons = excluded.required_addons",
         ))
+        .bind(&record.app_name)
         .bind(&record.server_id)
         .bind(&record.address)
         .bind(i64::from(record.hostport))
@@ -358,11 +372,31 @@ impl ServerDirectory {
 
         let hostname_filter = query.hostname.as_ref().map(|value| value.to_lowercase());
         let mission_filter = query.gametype.as_ref().map(|value| value.to_lowercase());
+        let app_filter = query.app_name.as_ref().map(|value| value.to_lowercase());
+        let version_tag_filter = query.version_tag.as_ref().map(|value| value.to_lowercase());
         let include_unverified_servers = query.include_unverified_servers.unwrap_or(false);
         let include_full_servers = query.include_full_servers.unwrap_or(true);
         let include_passworded_servers = query.include_passworded_servers.unwrap_or(false);
 
         records.retain(|record| {
+            if let Some(filter) = &app_filter {
+                if record.app_name.to_lowercase() != *filter {
+                    return false;
+                }
+            }
+
+            if let Some(actver) = query.actver {
+                if record.actver != actver {
+                    return false;
+                }
+            }
+
+            if let Some(filter) = &version_tag_filter {
+                if record.version_tag.to_lowercase() != *filter {
+                    return false;
+                }
+            }
+
             if let Some(filter) = &hostname_filter {
                 if !record.hostname.to_lowercase().contains(filter) {
                     return false;
@@ -431,6 +465,37 @@ impl ServerDirectory {
         }
 
         Ok(records)
+    }
+
+    pub async fn version_groups(
+        &self,
+        query: &ListServersQuery,
+        now_unix_ms: i64,
+    ) -> Result<Vec<ServerVersionGroup>> {
+        let mut groups = Vec::<ServerVersionGroup>::new();
+        for record in self.list(query, now_unix_ms).await? {
+            if let Some(group) = groups.iter_mut().find(|group| {
+                group.app_name == record.app_name
+                    && group.actver == record.actver
+                    && group.version_tag == record.version_tag
+            }) {
+                group.servers += 1;
+            } else {
+                groups.push(ServerVersionGroup {
+                    app_name: record.app_name,
+                    actver: record.actver,
+                    version_tag: record.version_tag,
+                    servers: 1,
+                });
+            }
+        }
+        groups.sort_by(|lhs, rhs| {
+            lhs.app_name
+                .cmp(&rhs.app_name)
+                .then_with(|| rhs.actver.cmp(&lhs.actver))
+                .then_with(|| rhs.version_tag.cmp(&lhs.version_tag))
+        });
+        Ok(groups)
     }
 
     pub async fn unregister(&self, server_id: &str) -> Result<bool> {
@@ -591,7 +656,7 @@ impl ServerDirectory {
 }
 
 const SELECT_SERVER_COLUMNS: &str = "SELECT
-    server_id, address, hostport, hostname, gametype, actver, reqver, version_tag, state,
+    app_name, server_id, address, hostport, hostname, gametype, actver, reqver, version_tag, state,
     numplayers, maxplayers, password, mod_list, equal_mod_required, transport_impl,
     platform, last_seen_unix_ms, verification_state, last_observed_unix_ms, observed_reachable,
     time_left, state_elapsed_seconds,
@@ -601,41 +666,42 @@ FROM servers";
 
 fn map_row(row: &AnyRow) -> Result<DirectoryServerRecord> {
     Ok(DirectoryServerRecord {
-        server_id: row.try_get(0)?,
-        address: row.try_get(1)?,
-        hostport: u16::try_from(row.try_get::<i64, _>(2)?).unwrap_or(0),
-        hostname: row.try_get(3)?,
-        gametype: row.try_get(4)?,
-        actver: i32::try_from(row.try_get::<i64, _>(5)?).unwrap_or(0),
-        reqver: i32::try_from(row.try_get::<i64, _>(6)?).unwrap_or(0),
-        version_tag: row.try_get(7)?,
-        state: i32::try_from(row.try_get::<i64, _>(8)?).unwrap_or(0),
-        numplayers: i32::try_from(row.try_get::<i64, _>(9)?).unwrap_or(0),
-        maxplayers: i32::try_from(row.try_get::<i64, _>(10)?).unwrap_or(0),
-        password: row.try_get::<i64, _>(11)? != 0,
-        mod_list: row.try_get(12)?,
-        equal_mod_required: row.try_get::<i64, _>(13)? != 0,
-        transport_impl: row.try_get(14)?,
-        platform: row.try_get(15)?,
-        last_seen_unix_ms: row.try_get(16)?,
-        verification_state: verification_state_from_str(&row.try_get::<String, _>(17)?)?,
-        last_observed_unix_ms: row.try_get(18)?,
-        observed_reachable: row.try_get::<Option<i64>, _>(19)?.map(|value| value != 0),
-        time_left: i32::try_from(row.try_get::<i64, _>(20)?).unwrap_or(0),
-        state_elapsed_seconds: i32::try_from(row.try_get::<i64, _>(21)?).unwrap_or(0),
-        map_name: row.try_get(22)?,
-        cadet: row.try_get::<i64, _>(23)? != 0,
-        difficulty: i32::try_from(row.try_get::<i64, _>(24)?).unwrap_or(0),
-        jip: row.try_get::<i64, _>(25)? != 0,
-        disabled_ai: row.try_get::<i64, _>(26)? != 0,
-        respawn: i32::try_from(row.try_get::<i64, _>(27)?).unwrap_or(0),
-        respawn_delay: i32::try_from(row.try_get::<i64, _>(28)?).unwrap_or(0),
-        locked: row.try_get::<i64, _>(29)? != 0,
-        dedicated: row.try_get::<i64, _>(30)? != 0,
-        description: row.try_get(31)?,
-        param1: row.try_get(32)?,
-        param2: row.try_get(33)?,
-        required_addons: row.try_get(34)?,
+        app_name: row.try_get(0)?,
+        server_id: row.try_get(1)?,
+        address: row.try_get(2)?,
+        hostport: u16::try_from(row.try_get::<i64, _>(3)?).unwrap_or(0),
+        hostname: row.try_get(4)?,
+        gametype: row.try_get(5)?,
+        actver: i32::try_from(row.try_get::<i64, _>(6)?).unwrap_or(0),
+        reqver: i32::try_from(row.try_get::<i64, _>(7)?).unwrap_or(0),
+        version_tag: row.try_get(8)?,
+        state: i32::try_from(row.try_get::<i64, _>(9)?).unwrap_or(0),
+        numplayers: i32::try_from(row.try_get::<i64, _>(10)?).unwrap_or(0),
+        maxplayers: i32::try_from(row.try_get::<i64, _>(11)?).unwrap_or(0),
+        password: row.try_get::<i64, _>(12)? != 0,
+        mod_list: row.try_get(13)?,
+        equal_mod_required: row.try_get::<i64, _>(14)? != 0,
+        transport_impl: row.try_get(15)?,
+        platform: row.try_get(16)?,
+        last_seen_unix_ms: row.try_get(17)?,
+        verification_state: verification_state_from_str(&row.try_get::<String, _>(18)?)?,
+        last_observed_unix_ms: row.try_get(19)?,
+        observed_reachable: row.try_get::<Option<i64>, _>(20)?.map(|value| value != 0),
+        time_left: i32::try_from(row.try_get::<i64, _>(21)?).unwrap_or(0),
+        state_elapsed_seconds: i32::try_from(row.try_get::<i64, _>(22)?).unwrap_or(0),
+        map_name: row.try_get(23)?,
+        cadet: row.try_get::<i64, _>(24)? != 0,
+        difficulty: i32::try_from(row.try_get::<i64, _>(25)?).unwrap_or(0),
+        jip: row.try_get::<i64, _>(26)? != 0,
+        disabled_ai: row.try_get::<i64, _>(27)? != 0,
+        respawn: i32::try_from(row.try_get::<i64, _>(28)?).unwrap_or(0),
+        respawn_delay: i32::try_from(row.try_get::<i64, _>(29)?).unwrap_or(0),
+        locked: row.try_get::<i64, _>(30)? != 0,
+        dedicated: row.try_get::<i64, _>(31)? != 0,
+        description: row.try_get(32)?,
+        param1: row.try_get(33)?,
+        param2: row.try_get(34)?,
+        required_addons: row.try_get(35)?,
         token: None,
     })
 }
@@ -684,6 +750,7 @@ PRAGMA journal_mode = WAL;
 PRAGMA synchronous = NORMAL;
 CREATE TABLE IF NOT EXISTS servers (
     server_id TEXT PRIMARY KEY,
+    app_name TEXT NOT NULL DEFAULT '',
     address TEXT NOT NULL,
     hostport INTEGER NOT NULL,
     hostname TEXT NOT NULL,
@@ -749,6 +816,7 @@ CREATE INDEX IF NOT EXISTS idx_server_sessions_server_time
 const SCHEMA_POSTGRES: &str = "
 CREATE TABLE IF NOT EXISTS servers (
     server_id TEXT PRIMARY KEY,
+    app_name TEXT NOT NULL DEFAULT '',
     address TEXT NOT NULL,
     hostport BIGINT NOT NULL,
     hostname TEXT NOT NULL,

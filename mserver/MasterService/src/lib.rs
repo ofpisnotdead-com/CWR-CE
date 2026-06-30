@@ -8,9 +8,11 @@ pub mod service;
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::Arc;
 
     use axum::body::{to_bytes, Body};
+    use axum::extract::connect_info::ConnectInfo;
     use axum::http::{Request, StatusCode};
     use serde_json::json;
     use serde_json::Value;
@@ -30,6 +32,7 @@ mod tests {
 
     fn sample_request(server_id: &str, hostname: &str, now_suffix: &str) -> RegisterServerRequest {
         RegisterServerRequest {
+            app_name: "CWR-CE".to_string(),
             server_id: server_id.to_string(),
             address: format!("192.168.1.{now_suffix}"),
             hostport: 2302,
@@ -173,6 +176,7 @@ mod tests {
         assert_eq!(row.description, "");
         assert_eq!(row.required_addons, "");
         assert_eq!(row.version_tag, ""); // added column, defaults empty on a pre-vertag row
+        assert_eq!(row.app_name, ""); // legacy rows predate app identity
 
         // A fresh register still round-trips through the upgraded table.
         let fresh = directory
@@ -198,6 +202,7 @@ mod tests {
         // The host's build tag round-trips through the upsert (sample_request sets "rc1");
         // without the version_tag column/bind/select it would be absent or empty.
         assert_eq!(first.version_tag, "rc1");
+        assert_eq!(first.app_name, "CWR-CE");
 
         let listed = directory
             .list(
@@ -213,6 +218,7 @@ mod tests {
         assert_eq!(listed[0].hostname, "Alpha");
         // The served list row carries the tag the publisher registered with.
         assert_eq!(listed[0].version_tag, "rc1");
+        assert_eq!(listed[0].app_name, "CWR-CE");
 
         let updated = directory
             .register(sample_request("srv-1", "Bravo", "11"), 2000)
@@ -310,7 +316,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn observe_flips_to_unreachable_only_after_sustained_failures() {
+    async fn observe_flips_to_unreachable_after_one_failed_probe() {
         let temp_dir = tempdir().unwrap();
         let directory = SqliteServerDirectory::open_path(temp_dir.path().join("observe.sqlite"))
             .await
@@ -327,42 +333,28 @@ mod tests {
             .unwrap();
         assert_eq!(verified.verification_state, VerificationState::Verified);
 
-        // Two consecutive misses stay verified (transient-blip tolerance, threshold 3).
-        let blip1 = directory
-            .observe("srv-1", 1200, false)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(blip1.verification_state, VerificationState::Verified);
-        let blip2 = directory
-            .observe("srv-1", 1300, false)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(blip2.verification_state, VerificationState::Verified);
-
-        // Third consecutive miss flips it to unreachable (hidden from default browse).
+        // One failed probe flips it to unreachable so it disappears on the next browse.
         let down = directory
-            .observe("srv-1", 1400, false)
+            .observe("srv-1", 1200, false)
             .await
             .unwrap()
             .unwrap();
         assert_eq!(down.verification_state, VerificationState::Unreachable);
         assert_eq!(down.observed_reachable, Some(false));
 
-        // A reachable probe clears the streak; a later single miss stays verified.
+        // A reachable probe clears the streak; a later miss hides it again.
         let recovered = directory
-            .observe("srv-1", 1500, true)
+            .observe("srv-1", 1300, true)
             .await
             .unwrap()
             .unwrap();
         assert_eq!(recovered.verification_state, VerificationState::Verified);
         let after = directory
-            .observe("srv-1", 1600, false)
+            .observe("srv-1", 1400, false)
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(after.verification_state, VerificationState::Verified);
+        assert_eq!(after.verification_state, VerificationState::Unreachable);
     }
 
     #[tokio::test]
@@ -386,9 +378,9 @@ mod tests {
                 .len(),
             1
         );
-        // No heartbeat for > 120s -> dropped from the default list (still in DB until prune).
+        // No heartbeat for > 60s -> dropped from the default list (still in DB until prune).
         assert!(directory
-            .list(&ListServersQuery::default(), t + 130_000)
+            .list(&ListServersQuery::default(), t + 61_000)
             .await
             .unwrap()
             .is_empty());
@@ -432,6 +424,85 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn directory_filters_by_app_version_and_tag() {
+        let temp_dir = tempdir().unwrap();
+        let directory = SqliteServerDirectory::open_path(temp_dir.path().join("compat.sqlite"))
+            .await
+            .unwrap();
+        let t = 1_000_000;
+
+        directory
+            .register(sample_request("cwr-a", "CWR A", "1"), t)
+            .await
+            .unwrap();
+
+        let mut other_tag = sample_request("cwr-b", "CWR B", "2");
+        other_tag.version_tag = "rc2".to_string();
+        directory.register(other_tag, t).await.unwrap();
+
+        let mut other_app = sample_request("other-a", "Other A", "3");
+        other_app.app_name = "OTHER".to_string();
+        directory.register(other_app, t).await.unwrap();
+
+        let rows = directory
+            .list(
+                &ListServersQuery {
+                    app_name: Some("CWR-CE".to_string()),
+                    actver: Some(196),
+                    version_tag: Some("rc1".to_string()),
+                    include_unverified_servers: Some(true),
+                    ..Default::default()
+                },
+                t,
+            )
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].server_id, "cwr-a");
+    }
+
+    #[tokio::test]
+    async fn directory_groups_live_server_versions() {
+        let temp_dir = tempdir().unwrap();
+        let directory = SqliteServerDirectory::open_path(temp_dir.path().join("groups.sqlite"))
+            .await
+            .unwrap();
+        let t = 1_000_000;
+        directory
+            .register(sample_request("cwr-a", "CWR A", "1"), t)
+            .await
+            .unwrap();
+        directory
+            .register(sample_request("cwr-b", "CWR B", "2"), t)
+            .await
+            .unwrap();
+        let mut other = sample_request("other", "Other", "3");
+        other.app_name = "OTHER".to_string();
+        other.version_tag = "x1".to_string();
+        directory.register(other, t).await.unwrap();
+
+        let groups = directory
+            .version_groups(
+                &ListServersQuery {
+                    include_unverified_servers: Some(true),
+                    ..Default::default()
+                },
+                t,
+            )
+            .await
+            .unwrap();
+        assert_eq!(groups.len(), 2);
+        assert!(groups.iter().any(|group| group.app_name == "CWR-CE"
+            && group.actver == 196
+            && group.version_tag == "rc1"
+            && group.servers == 2));
+        assert!(groups.iter().any(|group| group.app_name == "OTHER"
+            && group.actver == 196
+            && group.version_tag == "x1"
+            && group.servers == 1));
+    }
+
+    #[tokio::test]
     async fn default_list_expires_stale_unreachable_verdicts() {
         let temp_dir = tempdir().unwrap();
         let directory = SqliteServerDirectory::open_path(temp_dir.path().join("expire.sqlite"))
@@ -442,9 +513,7 @@ mod tests {
             .register(sample_request("srv-1", "Alpha", "1"), t)
             .await
             .unwrap();
-        for _ in 0..3 {
-            directory.observe("srv-1", t, false).await.unwrap();
-        }
+        directory.observe("srv-1", t, false).await.unwrap();
 
         // Recently confirmed unreachable + fresh heartbeat -> hidden.
         assert!(directory
@@ -456,11 +525,11 @@ mod tests {
         // A fresh heartbeat later, with a now-stale unreachable verdict (prober gone),
         // self-heals: the row reappears on heartbeat alone.
         directory
-            .register(sample_request("srv-1", "Alpha", "1"), t + 300_000)
+            .register(sample_request("srv-1", "Alpha", "1"), t + 61_000)
             .await
             .unwrap();
         let rows = directory
-            .list(&ListServersQuery::default(), t + 350_000)
+            .list(&ListServersQuery::default(), t + 61_000)
             .await
             .unwrap();
         assert_eq!(rows.len(), 1);
@@ -765,6 +834,7 @@ mod tests {
             "hostport": 2302,
             "hostname": "Raw Server",
             "gametype": "coop",
+            "app": "CWR-CE",
             "actver": 196,
             "reqver": 196,
             "vertag": "rc2",
@@ -805,7 +875,147 @@ mod tests {
         let list_body = to_bytes(list.into_body(), usize::MAX).await.unwrap();
         let rows: Vec<Value> = serde_json::from_slice(&list_body).unwrap();
         assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["app"], "CWR-CE");
         assert_eq!(rows[0]["vertag"], "rc2");
+    }
+
+    #[tokio::test]
+    async fn http_list_filters_by_explicit_app_version_query() {
+        let temp_dir = tempdir().unwrap();
+        let directory = Arc::new(
+            SqliteServerDirectory::open_path(temp_dir.path().join("directory.sqlite"))
+                .await
+                .unwrap(),
+        );
+        let app = build_router(directory);
+
+        let register = |request: RegisterServerRequest| {
+            Request::builder()
+                .method("POST")
+                .uri("/v1/servers/register")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&request).unwrap()))
+                .unwrap()
+        };
+
+        app.clone()
+            .oneshot(register(sample_request("cwr-a", "CWR A", "1")))
+            .await
+            .unwrap();
+        let mut other_tag = sample_request("cwr-b", "CWR B", "2");
+        other_tag.version_tag = "rc2".to_string();
+        app.clone().oneshot(register(other_tag)).await.unwrap();
+        let mut other_app = sample_request("other-a", "Other A", "3");
+        other_app.app_name = "OTHER".to_string();
+        app.clone().oneshot(register(other_app)).await.unwrap();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/v1/servers?includeUnverifiedServers=true&app=CWR-CE&actver=196&vertag=rc1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let servers: Vec<DirectoryServerRecord> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[0].server_id, "cwr-a");
+    }
+
+    #[tokio::test]
+    async fn http_list_ignores_user_agent_compatibility_without_explicit_query() {
+        let temp_dir = tempdir().unwrap();
+        let directory = Arc::new(
+            SqliteServerDirectory::open_path(temp_dir.path().join("directory.sqlite"))
+                .await
+                .unwrap(),
+        );
+        let app = build_router(directory);
+
+        let mut other_tag = sample_request("cwr-b", "CWR B", "2");
+        other_tag.version_tag = "rc2".to_string();
+        for request in [sample_request("cwr-a", "CWR A", "1"), other_tag] {
+            app.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/v1/servers/register")
+                        .header("content-type", "application/json")
+                        .body(Body::from(serde_json::to_vec(&request).unwrap()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+        }
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/v1/servers?includeUnverifiedServers=true")
+                    .header("user-agent", "CWR-CE/196 (tag=rc1; role=client)")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let servers: Vec<DirectoryServerRecord> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(servers.len(), 2);
+        assert!(servers.iter().any(|server| server.server_id == "cwr-a"));
+        assert!(servers.iter().any(|server| server.server_id == "cwr-b"));
+    }
+
+    #[tokio::test]
+    async fn http_versions_groups_are_available_for_browser_selector() {
+        let temp_dir = tempdir().unwrap();
+        let directory = Arc::new(
+            SqliteServerDirectory::open_path(temp_dir.path().join("directory.sqlite"))
+                .await
+                .unwrap(),
+        );
+        let app = build_router(directory);
+
+        for request in [
+            sample_request("cwr-a", "CWR A", "1"),
+            sample_request("cwr-b", "CWR B", "2"),
+        ] {
+            app.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/v1/servers/register")
+                        .header("content-type", "application/json")
+                        .body(Body::from(serde_json::to_vec(&request).unwrap()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+        }
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/v1/servers/versions?includeUnverifiedServers=true")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let groups: Vec<crate::model::ServerVersionGroup> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].app_name, "CWR-CE");
+        assert_eq!(groups[0].actver, 196);
+        assert_eq!(groups[0].version_tag, "rc1");
+        assert_eq!(groups[0].servers, 2);
     }
 
     #[tokio::test]
@@ -1275,6 +1485,70 @@ mod tests {
         let record: DirectoryServerRecord = serde_json::from_slice(&body).unwrap();
         assert_eq!(record.address, "203.0.113.9");
         assert_eq!(record.server_id, "203.0.113.9:2302");
+
+        let mut public_body = sample_request("138.68.88.29:1985", "Public Body", "43");
+        public_body.address = "138.68.88.29".to_string();
+        public_body.hostport = 1985;
+        let private_forwarded = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/servers/register")
+                    .header("content-type", "application/json")
+                    .header("x-forwarded-for", "10.114.0.3, 10.244.0.1")
+                    .body(Body::from(serde_json::to_vec(&public_body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(private_forwarded.status(), StatusCode::OK);
+        let body = to_bytes(private_forwarded.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let record: DirectoryServerRecord = serde_json::from_slice(&body).unwrap();
+        assert_eq!(record.address, "138.68.88.29");
+        assert_eq!(record.server_id, "138.68.88.29:1985");
+
+        let mut peer_body = sample_request("claimed-peer", "Peer", "44");
+        peer_body.hostport = 1986;
+        let peer_register = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/servers/register")
+                    .header("content-type", "application/json")
+                    .extension(ConnectInfo(SocketAddr::new(
+                        IpAddr::V4(Ipv4Addr::new(198, 51, 100, 12)),
+                        52_000,
+                    )))
+                    .body(Body::from(serde_json::to_vec(&peer_body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(peer_register.status(), StatusCode::OK);
+        let body = to_bytes(peer_register.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let record: DirectoryServerRecord = serde_json::from_slice(&body).unwrap();
+        assert_eq!(record.address, "198.51.100.12");
+        assert_eq!(record.server_id, "198.51.100.12:1986");
+
+        let private_only_delete = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/v1/servers/138.68.88.29:1985")
+                    .header("x-forwarded-for", "10.114.0.3, 10.244.0.1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(private_only_delete.status(), StatusCode::FORBIDDEN);
 
         // A DELETE from a different IP is rejected; from the owning IP it succeeds.
         let forbidden = app

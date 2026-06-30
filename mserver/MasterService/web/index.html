@@ -58,7 +58,22 @@
     <section class="detail-panel detail-page">
       <div class="detail-header">
         <div class="detail-label">TOP VERIFIED SERVERS</div>
-        <a href="/browser">See full browser</a>
+        <a id="landing-browser-link" href="/browser">See full browser</a>
+      </div>
+      <div class="toolbar">
+        <label class="filter">
+          <span>game</span>
+          <select id="landing-game">
+            <option value="">all games</option>
+          </select>
+        </label>
+        <label class="filter">
+          <span>game + version</span>
+          <select id="landing-version">
+            <option value="">all game versions</option>
+          </select>
+        </label>
+        <span id="landing-browser-status" class="status-line">Loading...</span>
       </div>
       <div class="browser-table-wrap">
         <table id="landing-table">
