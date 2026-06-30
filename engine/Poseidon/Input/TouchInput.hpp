@@ -13,7 +13,7 @@ enum class TouchButton
     Action,
     Reload,
     Optics,
-    Map,
+    Equipment,
     Pause,
     Count,
 };

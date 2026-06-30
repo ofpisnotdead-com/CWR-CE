@@ -258,6 +258,24 @@ bool World::HasWatch() const
     return _showWatch && !_showMap;
 }
 
+bool World::CanShowMap() const
+{
+    DisplayMap* map = static_cast<DisplayMap*>((AbstractOptionsUI*)_map);
+    return map && map->IsShownMap();
+}
+
+bool World::CanShowCompass() const
+{
+    DisplayMap* map = static_cast<DisplayMap*>((AbstractOptionsUI*)_map);
+    return map && map->IsShownCompass();
+}
+
+bool World::CanShowWatch() const
+{
+    DisplayMap* map = static_cast<DisplayMap*>((AbstractOptionsUI*)_map);
+    return map && map->IsShownWatch();
+}
+
 void World::OnChannelChanged()
 {
     _channelChanged = Glob.uiTime;

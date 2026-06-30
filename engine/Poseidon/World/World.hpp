@@ -606,6 +606,9 @@ class World
 	bool HasMap() const {return (_showMap || _forceMap) && _map != nullptr;}
 	bool HasCompass() const;
 	bool HasWatch() const;
+	bool CanShowMap() const;
+	bool CanShowCompass() const;
+	bool CanShowWatch() const;
 	void ForceMap(bool force = true) {_forceMap = force;}
 	void DestroyOptions(int exitCode);
 	void DestroyMap(int exitCode);

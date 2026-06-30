@@ -8,6 +8,10 @@
 #include <Poseidon/Input/ControllerUiScene.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Input/KeyInput.hpp>
+#include <Poseidon/AI/AIUnit.hpp>
+#include <Poseidon/AI/EntityAI.hpp>
+#include <Poseidon/World/Entities/Infantry/Person.hpp>
+#include <Poseidon/World/Entities/Weapons/Weapons.hpp>
 #include <Poseidon/World/World.hpp>
 #include <SDL3/SDL_scancode.h>
 
@@ -45,6 +49,9 @@ constexpr float kMapPanMouseScaleY = 150.0f / 1.5f;
 constexpr float kMapPinchZoomScale = 5.0f;
 constexpr float kActionScrollStepY = 0.035f;
 constexpr float kActionScrollWheelTicks = 1.0f;
+constexpr float kEquipmentRadialStartDeg = 170.0f;
+constexpr float kEquipmentRadialEndDeg = 270.0f;
+constexpr float kEquipmentRadialDistance = 2.08f;
 
 #ifdef POSEIDON_TARGET_IOS
 constexpr bool kDefaultEnabled = true;
@@ -58,6 +65,16 @@ enum class FingerRole
     Move,
     Look,
     Button,
+};
+
+enum class EquipmentItem
+{
+    None,
+    Map,
+    Compass,
+    Watch,
+    Binocular,
+    NightVision,
 };
 
 struct Finger
@@ -81,6 +98,14 @@ struct ButtonZone
     float x;
     float y;
     float r;
+};
+
+struct EquipmentZone
+{
+    EquipmentItem item = EquipmentItem::None;
+    float x = 0.0f;
+    float y = 0.0f;
+    float r = 0.0f;
 };
 
 struct PixelLayout
@@ -117,6 +142,10 @@ float sActionScrollAccumY = 0.0f;
 int sActionScrollSteps = 0;
 bool sActionTapPending = false;
 SDL_FingerID sActionTapFingerId = 0;
+bool sEquipmentRadialActive = false;
+SDL_FingerID sEquipmentFingerId = 0;
+EquipmentItem sEquipmentHover = EquipmentItem::None;
+EquipmentItem sLatchedEquipment = EquipmentItem::None;
 int sViewportW = 1920;
 int sViewportH = 1080;
 float sAimSensitivity = 1.0f;
@@ -266,9 +295,92 @@ std::array<ButtonZone, (int)TouchButton::Count> BuildButtonZones(int width, int 
              {TouchButton::Action, NormX(innerX, width), NormY(actionY, height), radius},
              {TouchButton::Reload, NormX(columnX, width), NormY(reloadY, height), radius},
              {TouchButton::Optics, NormX(innerX, width), NormY(opticsY, height), radius},
-             {TouchButton::Map, NormX(columnX, width), NormY(mapY, height), radius},
+             {TouchButton::Equipment, NormX(columnX, width), NormY(mapY, height), radius},
              {TouchButton::Pause, NormX((float)width - layout.edgeMargin, width), NormY(layout.topMargin, height),
               radius * 0.72f}}};
+}
+
+ButtonZone GetEquipmentAnchor(int width, int height)
+{
+    return BuildButtonZones(width, height)[(int)TouchButton::Equipment];
+}
+
+bool PlayerHasBinocular()
+{
+    if (!GWorld || !GWorld->GetRealPlayer())
+        return false;
+
+    const Person* person = GWorld->GetRealPlayer();
+    for (int i = 0; i < person->NMagazineSlots(); i++)
+    {
+        const MagazineSlot& slot = person->GetMagazineSlot(i);
+        if (slot._weapon && (slot._weapon->_weaponType & MaskSlotBinocular))
+            return true;
+    }
+    return false;
+}
+
+int BuildAvailableEquipment(EquipmentItem* items, int maxItems)
+{
+    int count = 0;
+    auto add = [&](EquipmentItem item) {
+        if (count < maxItems)
+            items[count++] = item;
+    };
+
+    if (GWorld)
+    {
+        if (GWorld->CanShowMap())
+            add(EquipmentItem::Map);
+        if (GWorld->CanShowCompass())
+            add(EquipmentItem::Compass);
+        if (GWorld->CanShowWatch())
+            add(EquipmentItem::Watch);
+        if (PlayerHasBinocular())
+            add(EquipmentItem::Binocular);
+        Person* player = GWorld->GetRealPlayer();
+        if (player && player->IsNVEnabled())
+            add(EquipmentItem::NightVision);
+    }
+    return count;
+}
+
+int BuildEquipmentZones(EquipmentZone* zones, int maxZones, int width, int height)
+{
+    EquipmentItem items[5] = {};
+    const int count = BuildAvailableEquipment(items, 5);
+    if (count <= 0 || maxZones <= 0)
+        return 0;
+
+    const ButtonZone anchor = GetEquipmentAnchor(width, height);
+    const float step = count > 1 ? (kEquipmentRadialEndDeg - kEquipmentRadialStartDeg) / (float)(count - 1) : 0.0f;
+    const float distance = anchor.r * kEquipmentRadialDistance;
+    const int outCount = std::min(count, maxZones);
+    for (int i = 0; i < outCount; i++)
+    {
+        const float deg = count > 1 ? kEquipmentRadialStartDeg + step * (float)i : 220.0f;
+        const float rad = deg * (3.14159265359f / 180.0f);
+        zones[i].item = items[i];
+        zones[i].x = Clamp01(anchor.x + std::cos(rad) * distance * (float)height / (float)std::max(1, width));
+        zones[i].y = Clamp01(anchor.y + std::sin(rad) * distance);
+        zones[i].r = anchor.r * 0.82f;
+    }
+    return outCount;
+}
+
+EquipmentItem HitEquipmentItem(float x, float y)
+{
+    EquipmentZone zones[5];
+    const int count = BuildEquipmentZones(zones, 5, sViewportW, sViewportH);
+    for (int i = 0; i < count; i++)
+    {
+        const float dx = (x - zones[i].x) * (float)std::max(1, sViewportW);
+        const float dy = (y - zones[i].y) * (float)std::max(1, sViewportH);
+        const float r = zones[i].r * (float)std::max(1, sViewportH);
+        if (Length(dx, dy) <= r)
+            return zones[i].item;
+    }
+    return EquipmentItem::None;
 }
 
 TouchButton HitButton(float x, float y)
@@ -502,6 +614,77 @@ void ResetActionTap()
     sActionTapFingerId = 0;
 }
 
+void ResetEquipmentRadial()
+{
+    sEquipmentRadialActive = false;
+    sEquipmentFingerId = 0;
+    sEquipmentHover = EquipmentItem::None;
+}
+
+void EmitKeyTap(SDL_Scancode sc)
+{
+    SDLInput_BufferKeyEvent(sc, true, Foundation::GlobalTickCount());
+    SDLInput_BufferKeyEvent(sc, false, Foundation::GlobalTickCount());
+}
+
+SDL_Scancode EquipmentHoldScancode(EquipmentItem item)
+{
+    switch (item)
+    {
+        case EquipmentItem::Compass:
+            return SDL_SCANCODE_G;
+        case EquipmentItem::Watch:
+            return SDL_SCANCODE_T;
+        default:
+            return SDL_SCANCODE_UNKNOWN;
+    }
+}
+
+void SetLatchedEquipment(EquipmentItem item)
+{
+    const SDL_Scancode oldScancode = EquipmentHoldScancode(sLatchedEquipment);
+    if (oldScancode != SDL_SCANCODE_UNKNOWN)
+        SDLInput_BufferKeyEvent(oldScancode, false, Foundation::GlobalTickCount());
+
+    if (sLatchedEquipment == item)
+    {
+        sLatchedEquipment = EquipmentItem::None;
+        return;
+    }
+
+    sLatchedEquipment = item;
+    const SDL_Scancode newScancode = EquipmentHoldScancode(item);
+    if (newScancode != SDL_SCANCODE_UNKNOWN)
+        SDLInput_BufferKeyEvent(newScancode, true, Foundation::GlobalTickCount());
+}
+
+void EmitEquipmentItem(EquipmentItem item)
+{
+    switch (item)
+    {
+        case EquipmentItem::Map:
+            SetLatchedEquipment(EquipmentItem::None);
+            EmitKeyTap(SDL_SCANCODE_M);
+            break;
+        case EquipmentItem::Compass:
+            SetLatchedEquipment(EquipmentItem::Compass);
+            break;
+        case EquipmentItem::Watch:
+            SetLatchedEquipment(EquipmentItem::Watch);
+            break;
+        case EquipmentItem::Binocular:
+            SetLatchedEquipment(EquipmentItem::None);
+            EmitKeyTap(SDL_SCANCODE_B);
+            break;
+        case EquipmentItem::NightVision:
+            SetLatchedEquipment(EquipmentItem::None);
+            EmitKeyTap(SDL_SCANCODE_N);
+            break;
+        default:
+            break;
+    }
+}
+
 void EmitActionTap()
 {
     InputSubsystem::Instance().SetSyntheticStickButton(0, true);
@@ -554,8 +737,7 @@ void EmitButtonEdge(TouchButton button, bool down)
         case TouchButton::Optics:
             SDLInput_BufferKeyEvent(SDL_SCANCODE_V, down, Foundation::GlobalTickCount());
             break;
-        case TouchButton::Map:
-            SDLInput_BufferKeyEvent(SDL_SCANCODE_M, down, Foundation::GlobalTickCount());
+        case TouchButton::Equipment:
             break;
         case TouchButton::Pause:
             if (down)
@@ -573,6 +755,23 @@ void EmitFingerButtonEdge(const Finger& finger, bool down)
 {
     if (finger.role != FingerRole::Button || finger.button == TouchButton::Count)
         return;
+    if (finger.button == TouchButton::Equipment)
+    {
+        if (down)
+        {
+            sEquipmentRadialActive = true;
+            sEquipmentFingerId = finger.id;
+            sEquipmentHover = EquipmentItem::None;
+        }
+        else
+        {
+            if (sEquipmentRadialActive && sEquipmentFingerId == finger.id && sEquipmentHover != EquipmentItem::None)
+                EmitEquipmentItem(sEquipmentHover);
+            ResetEquipmentRadial();
+        }
+        sPrevButtonDown[(int)finger.button] = down;
+        return;
+    }
     if (finger.button == TouchButton::Action)
     {
         if (down)
@@ -681,7 +880,34 @@ void DrawTouchIcon(Engine* engine, const MipInfo& white, TouchButton button, flo
             DrawLineNorm(engine, cx - sx * 0.55f, cy, cx - sx * 0.25f, cy, color);
             DrawLineNorm(engine, cx + sx * 0.25f, cy, cx + sx * 0.55f, cy, color);
             break;
-        case TouchButton::Map:
+        case TouchButton::Equipment:
+            DrawLineNorm(engine, cx - sx * 0.48f, cy - sy * 0.34f, cx + sx * 0.48f, cy - sy * 0.26f, color);
+            DrawLineNorm(engine, cx + sx * 0.48f, cy - sy * 0.26f, cx + sx * 0.48f, cy + sy * 0.34f, color);
+            DrawLineNorm(engine, cx + sx * 0.48f, cy + sy * 0.34f, cx - sx * 0.48f, cy + sy * 0.26f, color);
+            DrawLineNorm(engine, cx - sx * 0.48f, cy + sy * 0.26f, cx - sx * 0.48f, cy - sy * 0.34f, color);
+            DrawLineNorm(engine, cx - sx * 0.16f, cy - sy * 0.31f, cx - sx * 0.16f, cy + sy * 0.29f, color);
+            DrawLineNorm(engine, cx + sx * 0.16f, cy - sy * 0.29f, cx + sx * 0.16f, cy + sy * 0.31f, color);
+            DrawCircleApprox(engine, white, cx, cy, r * 0.16f, color);
+            break;
+        case TouchButton::Pause:
+            DrawRectNorm(engine, white, cx - sx * 0.16f, cy, sx * 0.12f, sy * 0.62f, color);
+            DrawRectNorm(engine, white, cx + sx * 0.16f, cy, sx * 0.12f, sy * 0.62f, color);
+            break;
+        default:
+            break;
+    }
+}
+
+void DrawEquipmentItemIcon(Engine* engine, const MipInfo& white, EquipmentItem item, float cx, float cy, float r,
+                           PackedColor color)
+{
+    const float aspect = (float)engine->Height() / (float)std::max(1, engine->Width());
+    const float sx = r * aspect;
+    const float sy = r;
+
+    switch (item)
+    {
+        case EquipmentItem::Map:
             DrawLineNorm(engine, cx - sx * 0.48f, cy - sy * 0.34f, cx + sx * 0.48f, cy - sy * 0.26f, color);
             DrawLineNorm(engine, cx + sx * 0.48f, cy - sy * 0.26f, cx + sx * 0.48f, cy + sy * 0.34f, color);
             DrawLineNorm(engine, cx + sx * 0.48f, cy + sy * 0.34f, cx - sx * 0.48f, cy + sy * 0.26f, color);
@@ -689,9 +915,33 @@ void DrawTouchIcon(Engine* engine, const MipInfo& white, TouchButton button, flo
             DrawLineNorm(engine, cx - sx * 0.16f, cy - sy * 0.31f, cx - sx * 0.16f, cy + sy * 0.29f, color);
             DrawLineNorm(engine, cx + sx * 0.16f, cy - sy * 0.29f, cx + sx * 0.16f, cy + sy * 0.31f, color);
             break;
-        case TouchButton::Pause:
-            DrawRectNorm(engine, white, cx - sx * 0.16f, cy, sx * 0.12f, sy * 0.62f, color);
-            DrawRectNorm(engine, white, cx + sx * 0.16f, cy, sx * 0.12f, sy * 0.62f, color);
+        case EquipmentItem::Compass:
+            DrawCircleApprox(engine, white, cx, cy, r * 0.42f, color);
+            DrawLineNorm(engine, cx, cy - sy * 0.48f, cx + sx * 0.10f, cy - sy * 0.20f, color);
+            DrawLineNorm(engine, cx, cy - sy * 0.48f, cx - sx * 0.10f, cy - sy * 0.20f, color);
+            DrawLineNorm(engine, cx, cy - sy * 0.30f, cx, cy + sy * 0.34f, color);
+            break;
+        case EquipmentItem::Watch:
+            DrawCircleApprox(engine, white, cx, cy, r * 0.42f, color);
+            DrawLineNorm(engine, cx, cy, cx, cy - sy * 0.28f, color);
+            DrawLineNorm(engine, cx, cy, cx + sx * 0.24f, cy + sy * 0.10f, color);
+            DrawLineNorm(engine, cx - sx * 0.20f, cy - sy * 0.52f, cx + sx * 0.20f, cy - sy * 0.52f, color);
+            DrawLineNorm(engine, cx - sx * 0.20f, cy + sy * 0.52f, cx + sx * 0.20f, cy + sy * 0.52f, color);
+            break;
+        case EquipmentItem::Binocular:
+            DrawCircleApprox(engine, white, cx - sx * 0.22f, cy, r * 0.22f, color);
+            DrawCircleApprox(engine, white, cx + sx * 0.22f, cy, r * 0.22f, color);
+            DrawLineNorm(engine, cx - sx * 0.04f, cy, cx + sx * 0.04f, cy, color);
+            DrawLineNorm(engine, cx - sx * 0.44f, cy - sy * 0.34f, cx - sx * 0.18f, cy - sy * 0.18f, color);
+            DrawLineNorm(engine, cx + sx * 0.44f, cy - sy * 0.34f, cx + sx * 0.18f, cy - sy * 0.18f, color);
+            break;
+        case EquipmentItem::NightVision:
+            DrawCircleApprox(engine, white, cx - sx * 0.20f, cy, r * 0.20f, color);
+            DrawCircleApprox(engine, white, cx + sx * 0.20f, cy, r * 0.20f, color);
+            DrawLineNorm(engine, cx - sx * 0.38f, cy - sy * 0.30f, cx + sx * 0.38f, cy - sy * 0.30f, color);
+            DrawLineNorm(engine, cx, cy - sy * 0.30f, cx, cy - sy * 0.52f, color);
+            DrawLineNorm(engine, cx - sx * 0.18f, cy + sy * 0.22f, cx - sx * 0.32f, cy + sy * 0.44f, color);
+            DrawLineNorm(engine, cx + sx * 0.18f, cy + sy * 0.22f, cx + sx * 0.32f, cy + sy * 0.44f, color);
             break;
         default:
             break;
@@ -720,6 +970,9 @@ void TouchInput_HandleFingerEvent(const SDL_TouchFingerEvent& event)
         if (finger->role == FingerRole::Button && finger->button == TouchButton::Action &&
             sActionScrollFingerId == finger->id)
             ResetActionScroll();
+        if (finger->role == FingerRole::Button && finger->button == TouchButton::Equipment &&
+            sEquipmentRadialActive && sEquipmentFingerId == finger->id)
+            sEquipmentHover = HitEquipmentItem(finger->x, finger->y);
         EmitFingerButtonEdge(*finger, false);
         ReleaseDirectTouchFinger(*finger);
         if (finger->role == FingerRole::Look && finger->maxTravel <= kTapMaxTravel && IsGameplayScene())
@@ -734,7 +987,12 @@ void TouchInput_HandleFingerEvent(const SDL_TouchFingerEvent& event)
     finger->y = y;
     finger->maxTravel = std::max(finger->maxTravel, Length(finger->x - finger->startX, finger->y - finger->startY));
     if (event.type == SDL_EVENT_FINGER_MOTION)
+    {
         ProcessActionButtonDrag(*finger, finger->y - finger->lastY);
+        if (finger->role == FingerRole::Button && finger->button == TouchButton::Equipment &&
+            sEquipmentRadialActive && sEquipmentFingerId == finger->id)
+            sEquipmentHover = HitEquipmentItem(finger->x, finger->y);
+    }
     if (event.type == SDL_EVENT_FINGER_DOWN)
     {
         finger->startX = x;
@@ -859,6 +1117,21 @@ void TouchInput_DrawOverlay(Engine* engine)
 
     const int w = sViewportW > 0 ? sViewportW : engine->Width();
     const int h = sViewportH > 0 ? sViewportH : engine->Height();
+    if (sEquipmentRadialActive)
+    {
+        EquipmentZone zones[5];
+        const int count = BuildEquipmentZones(zones, 5, w, h);
+        const ButtonZone anchor = GetEquipmentAnchor(w, h);
+        for (int i = 0; i < count; i++)
+        {
+            DrawLineNorm(engine, anchor.x, anchor.y, zones[i].x, zones[i].y,
+                         PackedColor(Color(0.80f, 0.93f, 1.0f, 0.22f)));
+            const bool hover = zones[i].item == sEquipmentHover;
+            DrawCircleApprox(engine, white, zones[i].x, zones[i].y, zones[i].r, hover ? pressed : base);
+            DrawEquipmentItemIcon(engine, white, zones[i].item, zones[i].x, zones[i].y, zones[i].r * 0.82f,
+                                  hover ? PackedColor(Color(0.05f, 0.08f, 0.10f, 0.78f)) : active);
+        }
+    }
     for (const ButtonZone& zone : BuildButtonZones(w, h))
     {
         DrawCircleApprox(engine, white, zone.x, zone.y, zone.r,
@@ -907,6 +1180,8 @@ void TouchInput_Reset()
         EmitFingerButtonEdge(finger, false);
     ResetActionTap();
     ResetActionScroll();
+    SetLatchedEquipment(EquipmentItem::None);
+    ResetEquipmentRadial();
     EndMapPrimary();
     EndMapGesture();
     sFingers = {};
