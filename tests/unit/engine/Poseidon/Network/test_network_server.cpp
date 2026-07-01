@@ -3,6 +3,7 @@
 
 #include <Poseidon/AI/AI.hpp>
 #include <Poseidon/Audio/Dummy/WaveDummy.hpp>
+#include <Poseidon/Core/ModSystem.hpp>
 #include <Poseidon/Network/NetworkImpl.hpp>
 #include <Poseidon/Network/NetworkMissionTransfer.hpp>
 #include <Poseidon/Network/NetworkServerCommon.hpp>
@@ -10,6 +11,7 @@
 #include <Poseidon/IO/Streams/QBStream.hpp>
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -103,6 +105,25 @@ std::string ReadBinaryFile(const std::filesystem::path& path)
     std::ifstream input(path, std::ios::binary);
     return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
+
+std::filesystem::path MakeTempDir()
+{
+    std::random_device rd;
+    auto dir = std::filesystem::temp_directory_path() /
+               ("cwr_network_server_" + std::to_string(rd()) + "_" + std::to_string(rd()));
+    std::filesystem::create_directories(dir);
+    return dir;
+}
+
+class ScopedModPath
+{
+  public:
+    explicit ScopedModPath(const std::filesystem::path& path)
+    {
+        Poseidon::ModSystem::SetModPath(path.string().c_str());
+    }
+    ~ScopedModPath() { Poseidon::ModSystem::SetModPath(""); }
+};
 } // namespace
 
 TEST_CASE("networkImpl.hpp compiles", "[network][networkServer]")
@@ -229,6 +250,26 @@ TEST_CASE("mission params use description defaults when server.cfg omits values"
 
     REQUIRE(params.param1 == Catch::Approx(7.0f));
     REQUIRE(params.param2 == Catch::Approx(8.0f));
+}
+
+TEST_CASE("MP mission lookup resolves active mod mission PBOs before base directories", "[network][mission][mods]")
+{
+    const auto root = MakeTempDir();
+    const auto mod = root / "@missionmod";
+    const auto missions = mod / "mpmissions";
+    std::filesystem::create_directories(missions);
+    std::ofstream(missions / "addon_lookup.eden.pbo", std::ios::binary) << "test pbo marker";
+
+    RString resolved;
+    {
+        const ScopedModPath modPath(mod);
+        resolved = Poseidon::ResolveMPMissionTemplateBase("addon_lookup", "Eden");
+    }
+
+    CHECK(std::filesystem::path((const char*)resolved) == missions / "addon_lookup.eden");
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
 }
 
 TEST_CASE("voice channel routing targets normal network player ids", "[network][VoN]")

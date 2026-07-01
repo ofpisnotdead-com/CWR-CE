@@ -1499,6 +1499,12 @@ GameValue TriVisibleTexts(const GameState* state)
     return GameValue(out.c_str());
 }
 
+/// triActiveMods - return the active mod mount path list.
+GameValue TriActiveMods(const GameState* /*state*/)
+{
+    return GameValue((const char*)Poseidon::ModSystem::GetModList());
+}
+
 /// triAssertTreeText [idc, "text"] — assert a tree control contains an item
 /// with the given text anywhere in its hierarchy.
 GameValue TriAssertTreeText(const GameState* state, GameValuePar arg)
@@ -1529,6 +1535,85 @@ GameValue TriAssertTreeText(const GameState* state, GameValuePar arg)
         return GameValue(buf);
     }
     return GameValue(TreeContainsText(tree->GetRoot(), (const char*)expected) ? "OK" : "FAIL:text not found");
+}
+
+/// triAssertListText [idc, "text"] - assert a listbox contains an item with the
+/// given text.
+GameValue TriAssertListText(const GameState* /*state*/, GameValuePar arg)
+{
+    if (arg.GetType() != GameArray)
+    {
+        return GameValue("FAIL:expected [idc,text] array");
+    }
+    const GameArrayType& arr = arg;
+    if (arr.Size() < 2)
+    {
+        return GameValue("FAIL:expected [idc,text] array");
+    }
+
+    int idc = static_cast<int>(static_cast<GameScalarType>(arr[0]));
+    GameStringType expected = static_cast<GameStringType>(arr[1]);
+    auto* display = GetActiveDisplayForSQF();
+    if (!display)
+    {
+        return GameValue("FAIL:no active display");
+    }
+    IControl* ctrl = display->GetCtrl(idc);
+    if (!ctrl)
+    {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "FAIL:IDC %d not found", idc);
+        return GameValue(buf);
+    }
+
+    auto failWithRows = [](const std::vector<std::string>& rows) -> GameValue
+    {
+        std::string out = "FAIL:text not found";
+        if (!rows.empty())
+        {
+            out += ": ";
+            for (size_t i = 0; i < rows.size(); ++i)
+            {
+                if (i > 0)
+                {
+                    out += "|";
+                }
+                out += rows[i];
+            }
+        }
+        return GameValue(out.c_str());
+    };
+
+    if (auto* lb = dynamic_cast<CListBox*>(ctrl))
+    {
+        std::vector<std::string> rows;
+        for (int i = 0; i < lb->GetSize(); ++i)
+        {
+            rows.emplace_back(lb->GetText(i));
+            if (rows.back() == (const char*)expected)
+            {
+                return GameValue("OK");
+            }
+        }
+        return failWithRows(rows);
+    }
+    if (auto* lb3d = dynamic_cast<C3DListBox*>(ctrl))
+    {
+        std::vector<std::string> rows;
+        for (int i = 0; i < lb3d->GetSize(); ++i)
+        {
+            rows.emplace_back(lb3d->GetText(i));
+            if (rows.back() == (const char*)expected)
+            {
+                return GameValue("OK");
+            }
+        }
+        return failWithRows(rows);
+    }
+
+    char buf[64];
+    snprintf(buf, sizeof(buf), "FAIL:IDC %d not listbox", idc);
+    return GameValue(buf);
 }
 
 /// triVoiceLanguage — return the currently selected voice language as a string
