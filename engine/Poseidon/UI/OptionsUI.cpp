@@ -316,6 +316,8 @@ void FindEnvSound(RString name, SoundPars& day, SoundPars& night)
     Poseidon::Foundation::WarningMessage("Environmental sound %s not found", (const char*)name);
 }
 
+static void PreferExistingVoiceLanguageOverride(SoundPars& pars);
+
 void FindSFX(RString name, SoundEntry& emptySound, AutoArray<SoundEntry>& sounds)
 {
     // ignore @ - not used now
@@ -347,6 +349,7 @@ void FindSFX(RString name, SoundEntry& emptySound, AutoArray<SoundEntry>& sounds
             if (sound.name.GetLength() > 0)
             {
                 sound.name = GetMissionDirectory() + sound.name;
+                PreferExistingVoiceLanguageOverride(sound);
             }
         }
         // return sound location
@@ -376,6 +379,7 @@ void FindSFX(RString name, SoundEntry& emptySound, AutoArray<SoundEntry>& sounds
             if (sound.name.GetLength() > 0)
             {
                 sound.name = BaseDirectory + RString("dtaExt\\") + sound.name;
+                PreferExistingVoiceLanguageOverride(sound);
             }
         }
         // return sound location

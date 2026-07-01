@@ -13,3 +13,16 @@ class CfgSounds
         titles[] = { 0, "" };
     };
 };
+
+class CfgSFX
+{
+    sounds[] = { radio_sfx };
+
+    class radio_sfx
+    {
+        sounds[] = { sound1 };
+        name = "radio_sfx";
+        sound1[] = { "sound/test_campaign.ogg", db-40, 1.0, 1, 0, 0, 0 };
+        empty[] = { "", db-40, 1.0, 0, 0, 0, 0 };
+    };
+};
