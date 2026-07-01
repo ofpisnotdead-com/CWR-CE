@@ -85,4 +85,11 @@ const char* DirScanner::GetName() const
     return ((_finddata_t*)_info)->name;
 }
 
+bool DirScanner::IsDirectory() const
+{
+    if (!_info || _handle == -1)
+        return false;
+    return (((_finddata_t*)_info)->attrib & _A_SUBDIR) != 0;
+}
+
 } // namespace Poseidon

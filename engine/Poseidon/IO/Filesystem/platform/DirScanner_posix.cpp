@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cctype>
 #include <errno.h>
+#include <sys/stat.h>
 
 namespace Poseidon
 {
@@ -84,6 +85,7 @@ static DIR* ci_opendir(const char* path)
 DirScanner::DirScanner() : _dir(nullptr), _entry(nullptr)
 {
     _ext[0] = '\0';
+    _path[0] = '\0';
 }
 
 DirScanner::~DirScanner()
@@ -111,6 +113,7 @@ bool DirScanner::First(const char* dir, const char* ext)
     _dir = ci_opendir(dir);
     if (!_dir)
         return false;
+    snprintf(_path, sizeof(_path), "%s", dir);
 
     return Next();
 }
@@ -157,6 +160,7 @@ void DirScanner::Close()
         closedir((DIR*)_dir);
         _dir = nullptr;
         _entry = nullptr;
+        _path[0] = '\0';
     }
 }
 
@@ -165,6 +169,25 @@ const char* DirScanner::GetName() const
     if (!_dir || !_entry)
         return "";
     return ((struct dirent*)_entry)->d_name;
+}
+
+bool DirScanner::IsDirectory() const
+{
+    if (!_dir || !_entry)
+        return false;
+
+    const struct dirent* entry = (const struct dirent*)_entry;
+#ifdef DT_DIR
+    if (entry->d_type == DT_DIR)
+        return true;
+    if (entry->d_type != DT_UNKNOWN)
+        return false;
+#endif
+
+    char path[1024];
+    snprintf(path, sizeof(path), "%s/%s", _path, entry->d_name);
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
 } // namespace Poseidon

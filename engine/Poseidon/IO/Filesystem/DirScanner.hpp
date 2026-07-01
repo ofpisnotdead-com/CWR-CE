@@ -16,6 +16,7 @@ class DirScanner
     bool Next();
     void Close();
     const char* GetName() const;
+    bool IsDirectory() const;
 
   private:
 #ifdef _WIN32
@@ -26,6 +27,7 @@ class DirScanner
     void* _dir;    // DIR*
     void* _entry;  // struct dirent*
     char _ext[16]; // extension filter (lowercase)
+    char _path[512];
 #endif
 };
 
