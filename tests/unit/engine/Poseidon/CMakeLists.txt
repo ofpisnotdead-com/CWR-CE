@@ -260,6 +260,8 @@ list(APPEND POSEIDON_TEST_SOURCES
     World/test_terrain.cpp
     World/test_occlusion_contour.cpp
     World/test_occlusion_sphere_edge.cpp
+    World/test_landscape_layout.cpp
+    World/test_landscape_layout_no_pch.cpp
 
     # Audio tests (batch-09)
     Audio/test_pcm_cache.cpp
@@ -509,6 +511,10 @@ list(APPEND POSEIDON_TEST_SOURCES
 set(POSEIDON_TEST_HEADERS
     test_fixtures.hpp
     Asset/Formats/BISFramework/test_helpers.hpp
+)
+
+set_source_files_properties(World/test_landscape_layout_no_pch.cpp PROPERTIES
+    SKIP_PRECOMPILE_HEADERS ON
 )
 
 add_executable(PoseidonTests ${POSEIDON_TEST_SOURCES} ${POSEIDON_TEST_HEADERS})
