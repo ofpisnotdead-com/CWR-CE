@@ -2372,6 +2372,88 @@ void DisplayServer::SaveParams()
     }
 }
 
+namespace
+{
+void AddMPMissionBankRow(C3DListBox* lbox, const char* filename)
+{
+    char name[256];
+    snprintf(name, sizeof(name), "%s", filename);
+    char* ext = strrchr(name, '.'); // extension .pbo
+    if (!ext)
+    {
+        return;
+    }
+    *ext = 0;
+    ext = strrchr(name, '.'); // world name
+    if (!ext)
+    {
+        return;
+    }
+    *ext = 0;
+
+    const int index = lbox->AddString(name);
+    lbox->SetData(index, name);
+    lbox->SetValue(index, 0); // public/mod bank
+}
+
+bool MPMissionBankMatchesIsland(const char* filename, RString island)
+{
+    char name[256];
+    snprintf(name, sizeof(name), "%s", filename);
+    char* ext = strrchr(name, '.'); // extension .pbo
+    if (!ext || stricmp(ext + 1, "pbo") != 0)
+    {
+        return false;
+    }
+    *ext = 0;
+    ext = strrchr(name, '.'); // world name
+    if (!ext)
+    {
+        return false;
+    }
+    return stricmp(ext + 1, island) == 0;
+}
+
+struct AddModMPMissionsContext
+{
+    C3DListBox* lbox;
+    RString island;
+};
+
+void AddModMPMissionFilesInDir(AddModMPMissionsContext* ctx, const char* modDir, const char* missionsDir)
+{
+    char pattern[1024];
+    snprintf(pattern, sizeof(pattern), "%s%c%s%c*.pbo", modDir, PATH_SEP, missionsDir, PATH_SEP);
+
+    _finddata_t info;
+    intptr_t h = _findfirst(pattern, &info);
+    if (h != -1)
+    {
+        do
+        {
+            if ((info.attrib & _A_SUBDIR) == 0 && MPMissionBankMatchesIsland(info.name, ctx->island))
+            {
+                AddMPMissionBankRow(ctx->lbox, info.name);
+            }
+        } while (0 == _findnext(h, &info));
+        _findclose(h);
+    }
+}
+
+bool AddModMPMissionFiles(RStringB dir, void* context)
+{
+    if (dir.GetLength() == 0)
+    {
+        return false;
+    }
+
+    auto* ctx = static_cast<AddModMPMissionsContext*>(context);
+    AddModMPMissionFilesInDir(ctx, (const char*)dir, GameDirs::MPMissions);
+    AddModMPMissionFilesInDir(ctx, (const char*)dir, "mpmissions");
+    return false;
+}
+} // namespace
+
 void DisplayServer::UpdateMissions(RString filename)
 {
     C3DListBox* lbox = dynamic_cast<C3DListBox*>(GetCtrl(IDC_SERVER_ISLAND));
@@ -2430,19 +2512,16 @@ void DisplayServer::UpdateMissions(RString filename)
         {
             if ((info.attrib & _A_SUBDIR) == 0)
             {
-                char name[256];
-                snprintf(name, sizeof(name), "%s", (const char*)info.name);
-                char* ext = strrchr(name, '.'); // extension .pbo
-                *ext = 0;
-                ext = strrchr(name, '.'); // world name
-                *ext = 0;
-                int index = lbox->AddString(name);
-                lbox->SetData(index, name);
-                lbox->SetValue(index, 0); // public bank
+                AddMPMissionBankRow(lbox, info.name);
             }
         } while (0 == _findnext(h, &info));
         _findclose(h);
     }
+
+    AddModMPMissionsContext modMissions;
+    modMissions.lbox = lbox;
+    modMissions.island = island;
+    ModSystem::EnumDirectories(AddModMPMissionFiles, &modMissions);
 
     ::sprintf(buffer, "%s%c*.%s", GameDirs::MPMissions, PATH_SEP, (const char*)island);
 
