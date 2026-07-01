@@ -362,7 +362,7 @@ void EngineMTL::DrawPoly(const MipInfo& mip, const Vertex2DPixel* vertices, int 
               d.blend, d.sampler, d.surface, d.shader);
 }
 
-void EngineMTL::DrawDecal(Vector3Par screen, float /*rhw*/, float sizeX, float sizeY, PackedColor color,
+void EngineMTL::DrawDecal(Vector3Par screen, float rhw, float sizeX, float sizeY, PackedColor color,
                           const MipInfo& mip, int specFlags)
 {
     if (!mip.IsOK())
@@ -401,12 +401,14 @@ void EngineMTL::DrawDecal(Vector3Par screen, float /*rhw*/, float sizeX, float s
         return;
 
     const float xy[8] = {xBeg, yBeg, xEnd, yBeg, xEnd, yEnd, xBeg, yEnd};
+    const float z[4] = {screen.Z(), screen.Z(), screen.Z(), screen.Z()};
+    const float rhwValues[4] = {rhw, rhw, rhw, rhw};
     const float uv[8] = {uBeg, vBeg, uEnd, vBeg, uEnd, vEnd, uBeg, vEnd};
     const PackedColor colors[4] = {color, color, color, color};
     const Rect2DAbs clip(0, 0, static_cast<float>(_w), static_cast<float>(_h));
 
     const render::RenderPassDescriptor d = render::BuildRenderPassDescriptor(render::SplitLegacy(specFlags));
-    DrawFan2D(xy, nullptr, nullptr, uv, nullptr, colors, 4, GpuHandleOf(mip._texture), 0, clip, d.depth, d.blend,
+    DrawFan2D(xy, z, rhwValues, uv, nullptr, colors, 4, GpuHandleOf(mip._texture), 0, clip, d.depth, d.blend,
               d.sampler, d.surface, d.shader);
 }
 

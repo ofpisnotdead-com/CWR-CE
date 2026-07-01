@@ -134,3 +134,20 @@ TEST_CASE("CloudletSource::Load applies no-depth billboard flags to synthetic bi
     REQUIRE((special & IsColored) != 0);
     REQUIRE((special & IsAlphaOrdered) != 0);
 }
+
+TEST_CASE("Metal DrawDecal keeps billboard depth test inputs", "[Graphics][Effects][Cloudlet][Metal]")
+{
+    const std::string metal =
+        ReadTextFile(RepoRoot() / "engine" / "PoseidonMTL" / "EngineMTL.cpp");
+    REQUIRE_FALSE(metal.empty());
+
+    const size_t drawDecal = metal.find("void EngineMTL::DrawDecal");
+    REQUIRE(drawDecal != std::string::npos);
+    const size_t drawLine = metal.find("void EngineMTL::DrawLine", drawDecal);
+    REQUIRE(drawLine != std::string::npos);
+    const std::string drawDecalRegion = metal.substr(drawDecal, drawLine - drawDecal);
+
+    REQUIRE(drawDecalRegion.find("const float z[4]") != std::string::npos);
+    REQUIRE(drawDecalRegion.find("const float rhwValues[4]") != std::string::npos);
+    REQUIRE(drawDecalRegion.find("DrawFan2D(xy, z, rhwValues") != std::string::npos);
+}
