@@ -465,6 +465,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     UI/Locale/test_mission_language_detector.cpp
     UI/test_mouse_page.cpp
     UI/test_main_menu_layout.cpp
+    UI/test_notebook_theme.cpp
     UI/test_optionsUI.cpp
     UI/test_press_button_page.cpp
     UI/test_press_key_page.cpp

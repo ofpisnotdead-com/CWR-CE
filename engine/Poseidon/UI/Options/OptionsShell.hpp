@@ -91,6 +91,7 @@ private:
 	OptionsPage* TopPage();
 	OptionsPage* TopNonModalPage();
 	void ShowPageControls(OptionsPage* page, bool show);
+	void ApplyNotebookTheme(OptionsPage* page);
 	void TeardownShell();
 
 	// Trigger the notebook close-animation, then Exit(exitIdc) when it

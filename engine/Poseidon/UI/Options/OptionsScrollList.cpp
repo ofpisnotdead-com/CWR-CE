@@ -6,6 +6,7 @@ namespace Poseidon
 } // namespace Poseidon
 #include <Poseidon/UI/Options/OptionsScrollList.hpp>
 #include <Poseidon/UI/Options/MeterWidget.hpp>
+#include <Poseidon/UI/Options/NotebookTheme.hpp>
 #include <Poseidon/UI/UITestEngine.hpp>
 
 #include <Poseidon/Core/Global.hpp>
@@ -22,9 +23,29 @@ namespace Poseidon
 namespace Poseidon
 {
 
+namespace
+{
+PackedColor ModAlpha(PackedColor color, int percent)
+{
+    return PackedColorRGB(color, color.A8() * percent / 100);
+}
+} // namespace
+
 OptionsScrollList::OptionsScrollList(Display& host, Provider& provider)
     : m_host(host), m_provider(provider), m_notebook(dynamic_cast<ControlObjectContainer*>(host.GetCtrl(kIdcNotebook)))
 {
+    for (int slot = 0; slot < kVisibleSlots; ++slot)
+    {
+        m_slotLabelColor[slot] = NotebookTheme::ResourceColorOr(ControlColor(SlotIdcLabel(slot), PackedWhite));
+        m_slotValueStepColor[slot] = NotebookTheme::ResourceColorOr(ControlColor(SlotIdcValStep(slot), m_slotLabelColor[slot]));
+        m_slotValueBarColor[slot] = NotebookTheme::ResourceColorOr(ControlColor(SlotIdcValBar(slot), m_slotValueStepColor[slot]));
+        m_slotRowBgColor[slot] = NotebookTheme::ResourceColorOr(ControlColor(kIdcRowBgBase + slot, m_slotLabelColor[slot]));
+        m_slotRowBgFillColor[slot] = NotebookTheme::ResourceColorOr(ControlBgColor(kIdcRowBgBase + slot, ModAlpha(m_slotRowBgColor[slot], 65)));
+        m_slotTrackFillColor[slot] = NotebookTheme::ResourceColorOr(ControlBgColor(SlotIdcTrack(slot), ModAlpha(m_slotLabelColor[slot], 35)));
+        m_slotBarFillColor[slot] = NotebookTheme::ResourceColorOr(ControlBgColor(SlotIdcFill(slot), ModAlpha(m_slotLabelColor[slot], 95)));
+        m_slotPeakFillColor[slot] = NotebookTheme::ResourceColorOr(ControlBgColor(SlotIdcPeak(slot), m_slotLabelColor[slot]));
+    }
+    m_scrollbarColor = NotebookTheme::ResourceColorOr(m_slotLabelColor[0]);
 }
 
 OptionsScrollList::Kind OptionsScrollList::Provider::RowKind(int row) const
@@ -51,18 +72,6 @@ void OptionsScrollList::WithCloseRow::OnRowAction(int row, Display& host)
         return;
     }
     m_base.OnRowAction(row, host);
-}
-
-PackedColor OptionsScrollList::Provider::BindingPrimaryColor(int /*row*/, bool focused, bool selectedSlot) const
-{
-    return (focused && selectedSlot) ? PackedColor(Color(1.0f, 1.0f, 0.2f, 1.0f))
-                                     : PackedColor(Color(0.4f, 0.85f, 0.4f, 1.0f));
-}
-
-PackedColor OptionsScrollList::Provider::BindingAltColor(int /*row*/, bool focused, bool selectedSlot) const
-{
-    return (focused && selectedSlot) ? PackedColor(Color(1.0f, 1.0f, 0.2f, 1.0f))
-                                     : PackedColor(Color(0.4f, 0.85f, 0.4f, 1.0f));
 }
 
 // Static layout helpers.
@@ -263,16 +272,41 @@ void OptionsScrollList::SetLabelColor(int idc, PackedColor color)
         s3d->SetColor(color);
 }
 
+PackedColor OptionsScrollList::ControlColor(int idc, PackedColor fallback) const
+{
+    IControl* ctrl = m_notebook ? m_notebook->GetCtrl(idc) : nullptr;
+    if (!ctrl)
+        ctrl = m_host.GetCtrl(idc);
+    if (auto* s3d = dynamic_cast<C3DStatic*>(ctrl))
+        return s3d->GetColor();
+    return fallback;
+}
+
+PackedColor OptionsScrollList::ControlBgColor(int idc, PackedColor fallback) const
+{
+    IControl* ctrl = m_notebook ? m_notebook->GetCtrl(idc) : nullptr;
+    if (!ctrl)
+        ctrl = m_host.GetCtrl(idc);
+    if (auto* s3d = dynamic_cast<C3DStatic*>(ctrl))
+        return s3d->GetBgColor();
+    return fallback;
+}
+
+void OptionsScrollList::SetStaticColors(int idc, PackedColor color, PackedColor bgColor)
+{
+    IControl* ctrl = m_notebook ? m_notebook->GetCtrl(idc) : nullptr;
+    if (!ctrl)
+        ctrl = m_host.GetCtrl(idc);
+    if (auto* s3d = dynamic_cast<C3DStatic*>(ctrl))
+    {
+        s3d->SetColor(color);
+        s3d->SetBgColor(bgColor);
+    }
+}
+
 namespace
 {
-// Mirror of OPT_C_* constants from optionsTestUI.hpp — those are
-// resource-template literals (brace-init for the config parser),
-// these are their C++ counterparts used by the runtime renderer.
-// Keep in sync if the resource constants change.
-const PackedColor kRowColorGreen = PackedColor(Color(0.4f, 0.85f, 0.4f, 1.0f));
 const PackedColor kRowColorRed = PackedColor(Color(0.95f, 0.30f, 0.30f, 1.0f));
-const PackedColor kRowColorPending = PackedColor(Color(1.0f, 1.0f, 0.2f, 1.0f));
-const PackedColor kRowColorDisabled = PackedColor(Color(0.30f, 0.45f, 0.30f, 0.7f));
 } // namespace
 
 void OptionsScrollList::SetSliderBar(int fillIdc, int percent, float trackX, float trackY, float trackH,
@@ -329,10 +363,19 @@ void OptionsScrollList::RenderSlot(int slot, int logicalRow)
     bool isDisabled = m_provider.IsDisabled(logicalRow);
     bool focused = (m_rowFocus == logicalRow);
     bool bindingChevronUi = isBinding && m_provider.BindingUsesChevronUi(logicalRow);
+    PackedColor labelColor = m_slotLabelColor[slot];
+    PackedColor valueStepColor = m_slotValueStepColor[slot];
+    PackedColor valueBarColor = m_slotValueBarColor[slot];
+    PackedColor disabledLabelColor = ModAlpha(labelColor, 45);
+    PackedColor disabledValueStepColor = ModAlpha(valueStepColor, 45);
+    PackedColor disabledValueBarColor = ModAlpha(valueBarColor, 45);
+    SetStaticColors(idcTrack, ControlColor(idcTrack, PackedColor(0, 0, 0, 0)), m_slotTrackFillColor[slot]);
+    SetStaticColors(idcFill, ControlColor(idcFill, PackedColor(0, 0, 0, 0)), m_slotBarFillColor[slot]);
+    SetStaticColors(idcPeak, ControlColor(idcPeak, PackedColor(0, 0, 0, 0)), m_slotPeakFillColor[slot]);
 
     // Label colour is shared by left-column labels and centred
     // header/action text. The value-cell colour carries the focus cue.
-    SetLabelColor(idcLabel, isDisabled ? kRowColorDisabled : kRowColorGreen);
+    SetLabelColor(idcLabel, isDisabled ? disabledLabelColor : labelColor);
 
     // idcValStep is reused as Primary for binding rows.
     // idcValBar  is reused as Alt for binding rows.
@@ -379,7 +422,7 @@ void OptionsScrollList::RenderSlot(int slot, int logicalRow)
         // static control and never dispatch.
         SetCtrlEnabled(idcValStep, false);
         SetRowValue(idcValStep, m_provider.RowLabel(logicalRow));
-        SetLabelColor(idcValStep, isDisabled ? kRowColorDisabled : kRowColorGreen);
+        SetLabelColor(idcValStep, isDisabled ? disabledValueStepColor : valueStepColor);
         float rowY = SlotTrackY(slot) - 0.0285f;
         if (m_notebook)
             m_notebook->SetSubControlPos(idcValStep, 0.02f, rowY, 0.96f, 0.075f);
@@ -441,10 +484,8 @@ void OptionsScrollList::RenderSlot(int slot, int logicalRow)
         SetRowValue(idcValBar, altDisplay);
 
         // Highlight the slot Enter will target on the focused row.
-        PackedColor primaryColor =
-            isDisabled ? kRowColorDisabled : m_provider.BindingPrimaryColor(logicalRow, focused, m_bindingSlot == 0);
-        PackedColor altColor =
-            isDisabled ? kRowColorDisabled : m_provider.BindingAltColor(logicalRow, focused, m_bindingSlot == 1);
+        PackedColor primaryColor = isDisabled ? disabledValueStepColor : valueStepColor;
+        PackedColor altColor = isDisabled ? disabledValueBarColor : valueBarColor;
         SetLabelColor(idcValStep, primaryColor);
         SetLabelColor(idcValBar, altColor);
 
@@ -477,12 +518,11 @@ void OptionsScrollList::RenderSlot(int slot, int logicalRow)
         m_notebook->SetSubControlPos(idcBarClick, 0.40f, rowY, 0.40f, 0.075f);
     }
 
-    // Value-cell colour: yellow when pending, green otherwise.
-    PackedColor valueColor = isDisabled ? kRowColorDisabled : (isPending ? kRowColorPending : kRowColorGreen);
+    PackedColor valueColor = isDisabled ? disabledValueStepColor : valueStepColor;
     if (isBoolean && !isPending && !isDisabled)
-        valueColor = (m_provider.RowValue(logicalRow) != 0) ? kRowColorGreen : kRowColorRed;
+        valueColor = (m_provider.RowValue(logicalRow) != 0) ? valueStepColor : kRowColorRed;
     SetLabelColor(idcValStep, valueColor);
-    SetLabelColor(idcValBar, valueColor);
+    SetLabelColor(idcValBar, isDisabled ? disabledValueBarColor : valueBarColor);
 
     if (isStepper || isBoolean)
     {
@@ -646,6 +686,7 @@ void OptionsScrollList::UpdateScrollbar()
     auto* sb = dynamic_cast<C3DScrollBarStandalone*>(m_host.GetCtrl(kIdcScrollbar));
     if (!sb)
         return;
+    sb->SetColor(m_scrollbarColor);
     int contentRows = ContentRowCount();
     int contentSlots = ContentSlots();
     bool needScroll = contentRows > contentSlots;
@@ -663,7 +704,10 @@ void OptionsScrollList::UpdateRowHighlight()
 {
     int focusedSlot = SlotForRow(m_rowFocus);
     for (int s = 0; s < kVisibleSlots; ++s)
+    {
+        SetStaticColors(kIdcRowBgBase + s, m_slotRowBgColor[s], m_slotRowBgFillColor[s]);
         SetCtrlVisible(kIdcRowBgBase + s, s == focusedSlot);
+    }
 
     // Hint is single-line; long descriptions marquee-scroll horizontally.
     // Pause for kPauseMs after the row focus changes (so the user reads

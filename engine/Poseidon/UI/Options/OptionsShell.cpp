@@ -1,5 +1,6 @@
 #include <Poseidon/UI/Options/OptionsShell.hpp>
 #include <Poseidon/UI/Options/IndexPage.hpp>
+#include <Poseidon/UI/Options/NotebookTheme.hpp>
 
 #include <Poseidon/Core/Global.hpp>
 #include <Poseidon/Core/resincl.hpp>
@@ -138,6 +139,7 @@ void OptionsShell::PushPage(std::unique_ptr<OptionsPage> page)
     OptionsPage* p = page.get();
     m_stack.push_back(std::move(page));
     p->Mount(*this);
+    ApplyNotebookTheme(p);
     int focusIdc = p->DefaultFocusIdc();
     if (focusIdc >= 0)
         FocusNotebookCtrl(focusIdc);
@@ -204,6 +206,41 @@ void OptionsShell::ShowPageControls(OptionsPage* page, bool show)
     {
         if (auto* c = nb->GetCtrl(idc))
             c->ShowCtrl(show);
+    }
+    if (show)
+        ApplyNotebookTheme(page);
+}
+
+void OptionsShell::ApplyNotebookTheme(OptionsPage* page)
+{
+    if (!page)
+        return;
+    auto* nb = GetNotebook();
+    if (!nb)
+        return;
+
+    PackedColor textColor;
+    bool hasTextColor = NotebookTheme::ResourceColor("RscObjNotebookText", "color", textColor);
+    PackedColor buttonColor;
+    bool hasButtonColor = NotebookTheme::ResourceColor("RscObjNotebookButton", "color", buttonColor);
+    PackedColor buttonActiveColor;
+    bool hasButtonActiveColor = NotebookTheme::ResourceColor("RscObjNotebookButton", "colorActive", buttonActiveColor);
+
+    for (int idc : page->MountedIdcs())
+    {
+        IControl* c = nb->GetCtrl(idc);
+        if (auto* active = dynamic_cast<C3DActiveText*>(c))
+        {
+            if (hasButtonColor)
+                active->SetColor(buttonColor);
+            if (hasButtonActiveColor)
+                active->SetActiveColor(buttonActiveColor);
+        }
+        else if (auto* text = dynamic_cast<C3DStatic*>(c))
+        {
+            if (hasTextColor)
+                text->SetColor(textColor);
+        }
     }
 }
 

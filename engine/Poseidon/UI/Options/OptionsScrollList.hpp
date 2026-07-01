@@ -161,8 +161,6 @@ public:
         virtual const char* BindingPrimary(int /*row*/) const { return ""; }
         virtual const char* BindingAlt    (int /*row*/) const { return ""; }
         virtual const char* SliderValueText(int /*row*/) const { return nullptr; }
-        virtual PackedColor BindingPrimaryColor(int /*row*/, bool focused, bool selectedSlot) const;
-        virtual PackedColor BindingAltColor(int /*row*/, bool focused, bool selectedSlot) const;
         virtual bool BindingUsesChevronUi(int /*row*/) const { return false; }
 
         // Invoked when the user activates a Binding row's primary
@@ -325,6 +323,9 @@ private:
 	                  float trackX, float trackY, float trackH, float trackWidth);
 	void SetRowValue(int labelIdc, const char* text, const char* semanticText = nullptr);
 	void SetLabelColor(int idc, PackedColor color);
+	PackedColor ControlColor(int idc, PackedColor fallback) const;
+	PackedColor ControlBgColor(int idc, PackedColor fallback) const;
+	void SetStaticColors(int idc, PackedColor color, PackedColor bgColor);
 	void SetCtrlEnabled(int idc, bool enabled);
 	void SetCtrlVisible(int idc, bool visible);
 
@@ -351,6 +352,15 @@ private:
 	Display&                 m_host;
 	Provider&                m_provider;
 	ControlObjectContainer*  m_notebook = nullptr;   // resolved once in ctor
+	PackedColor              m_slotLabelColor[kVisibleSlots];
+	PackedColor              m_slotValueStepColor[kVisibleSlots];
+	PackedColor              m_slotValueBarColor[kVisibleSlots];
+	PackedColor              m_slotRowBgColor[kVisibleSlots];
+	PackedColor              m_slotRowBgFillColor[kVisibleSlots];
+	PackedColor              m_slotTrackFillColor[kVisibleSlots];
+	PackedColor              m_slotBarFillColor[kVisibleSlots];
+	PackedColor              m_slotPeakFillColor[kVisibleSlots];
+	PackedColor              m_scrollbarColor;
 
 	int   m_rowFocus       = 0;
 	int   m_scrollOffset   = 0;
