@@ -464,6 +464,8 @@ int SamplerIndex(Poseidon::render::SamplerMode mode)
     return (mode.filter == Poseidon::render::SamplerFilter::Point ? 4 : 0) | (mode.clampU ? 1 : 0) |
            (mode.clampV ? 2 : 0);
 }
+
+constexpr size_t kMaxQueued2DVertices = 65535;
 } // namespace
 
 struct EngineMTLBootstrap::Impl
@@ -551,6 +553,44 @@ struct EngineMTLBootstrap::Impl
     MTL::DepthStencilState* depthStateShadow = nullptr;
     MTL::Texture* depthTexture = nullptr;
     std::vector<MTL::Buffer*> meshBuffers; // handle = index + 1; 0 reserved for "none"
+
+    struct Triangles2DState
+    {
+        int textureHandle = 0;
+        int secondaryTextureHandle = 0;
+        int clipX = 0;
+        int clipY = 0;
+        int clipW = 0;
+        int clipH = 0;
+        bool useDepth = false;
+        Poseidon::render::DepthMode depthMode = Poseidon::render::DepthMode::Disabled;
+        Poseidon::render::BlendMode blendMode = Poseidon::render::BlendMode::AlphaBlend;
+        Poseidon::render::SamplerMode sampler = {Poseidon::render::SamplerFilter::Linear, true, true};
+        Poseidon::render::SurfaceMode surface = Poseidon::render::SurfaceMode::Default;
+        Poseidon::render::ShaderFamily shader = Poseidon::render::ShaderFamily::Normal;
+        float fogColor[3] = {0.0f, 0.0f, 0.0f};
+
+        bool operator==(const Triangles2DState& rhs) const
+        {
+            return textureHandle == rhs.textureHandle && secondaryTextureHandle == rhs.secondaryTextureHandle &&
+                   clipX == rhs.clipX && clipY == rhs.clipY && clipW == rhs.clipW && clipH == rhs.clipH &&
+                   useDepth == rhs.useDepth && depthMode == rhs.depthMode && blendMode == rhs.blendMode &&
+                   sampler == rhs.sampler && surface == rhs.surface && shader == rhs.shader &&
+                   fogColor[0] == rhs.fogColor[0] && fogColor[1] == rhs.fogColor[1] && fogColor[2] == rhs.fogColor[2];
+        }
+        bool operator!=(const Triangles2DState& rhs) const { return !(*this == rhs); }
+    };
+    bool queued2DActive = false;
+    Triangles2DState queued2DState;
+    std::vector<Vertex2DMTL> queued2DVertices;
+    std::vector<uint16_t> queued2DIndices;
+    MTL::Buffer* queued2DVertexBuffer = nullptr;
+    MTL::Buffer* queued2DIndexBuffer = nullptr;
+    size_t queued2DVertexBufferBytes = 0;
+    size_t queued2DIndexBufferBytes = 0;
+    size_t queued2DVertexBufferUsed = 0;
+    size_t queued2DIndexBufferUsed = 0;
+    std::vector<MTL::Buffer*> pending2DBufferRelease[2];
 
     // Open between BeginFrame/EndFrame.
     CA::MetalDrawable* currentDrawable = nullptr;
@@ -1199,6 +1239,7 @@ bool EngineMTLBootstrap::BeginFrame(float r, float g, float b, float a, bool cle
     {
         // Mid-frame Clear(): reuse the same drawable/command buffer, just
         // end the previous pass's encoder before opening a new one on it.
+        FlushTriangles2D();
         _impl->currentEncoder->endEncoding();
         _impl->currentEncoder->release();
         _impl->currentEncoder = nullptr;
@@ -1274,19 +1315,20 @@ bool EngineMTLBootstrap::BeginFrame(float r, float g, float b, float a, bool cle
     return true;
 }
 
-void EngineMTLBootstrap::DrawTriangles2D(const Vertex2DMTL* verts, int vertCount, const uint16_t* indices,
-                                         int indexCount, int textureHandle, int secondaryTextureHandle,
-                                         int clipX, int clipY, int clipW, int clipH,
-                                         bool useDepth,
-                                         Poseidon::render::DepthMode depthMode, Poseidon::render::BlendMode blendMode,
-                                         Poseidon::render::SamplerMode sampler, Poseidon::render::SurfaceMode surface,
-                                         Poseidon::render::ShaderFamily shader, const float fogColor[3])
+void EngineMTLBootstrap::FlushTriangles2D()
 {
-    if (_impl->currentEncoder == nullptr || vertCount <= 0 || indexCount <= 0)
+    if (_impl->currentEncoder == nullptr || !_impl->queued2DActive || _impl->queued2DVertices.empty() ||
+        _impl->queued2DIndices.empty())
+    {
+        _impl->queued2DActive = false;
+        _impl->queued2DVertices.clear();
+        _impl->queued2DIndices.clear();
         return;
+    }
 
-    const float fogColorBuf[4] = {fogColor ? fogColor[0] : 0.0f, fogColor ? fogColor[1] : 0.0f,
-                                  fogColor ? fogColor[2] : 0.0f, 0.0f};
+    const Impl::Triangles2DState& state = _impl->queued2DState;
+
+    const float fogColorBuf[4] = {state.fogColor[0], state.fogColor[1], state.fogColor[2], 0.0f};
     _impl->currentEncoder->setFragmentBytes(fogColorBuf, sizeof(fogColorBuf), 0);
 
     // Explicit rebind, not inherited from BeginFrame's initial bind -- a
@@ -1297,44 +1339,50 @@ void EngineMTLBootstrap::DrawTriangles2D(const Vertex2DMTL* verts, int vertCount
     // path. Non-shadow flat UI keeps depth disabled; legacy software-TL
     // callers opt into the descriptor depth state through useDepth.
     const bool isShadow =
-        blendMode == Poseidon::render::BlendMode::Shadow || depthMode == Poseidon::render::DepthMode::Shadow;
+        state.blendMode == Poseidon::render::BlendMode::Shadow ||
+        state.depthMode == Poseidon::render::DepthMode::Shadow;
     MTL::RenderPipelineState* pipeline = _impl->pipelineState;
     if (isShadow)
         pipeline = _impl->pipelineState2DShadow;
-    else if (blendMode == Poseidon::render::BlendMode::Additive && _impl->pipelineState2DAdditive != nullptr)
+    else if (state.blendMode == Poseidon::render::BlendMode::Additive && _impl->pipelineState2DAdditive != nullptr)
         pipeline = _impl->pipelineState2DAdditive;
     _impl->currentEncoder->setRenderPipelineState(pipeline);
     MTL::DepthStencilState* depthState = _impl->depthStateDisabled;
     if (isShadow)
         depthState = _impl->depthStateShadow;
-    else if (useDepth)
+    else if (state.useDepth)
     {
-        if (depthMode == Poseidon::render::DepthMode::ReadOnly)
+        if (state.depthMode == Poseidon::render::DepthMode::ReadOnly)
             depthState = _impl->depthStateTLNoWrite;
-        else if (depthMode == Poseidon::render::DepthMode::Normal)
+        else if (state.depthMode == Poseidon::render::DepthMode::Normal)
             depthState = _impl->depthStateTL;
     }
     _impl->currentEncoder->setDepthStencilState(depthState);
-    _impl->currentEncoder->setFragmentSamplerState(_impl->samplerStates[SamplerIndex(sampler)], 0);
+    _impl->currentEncoder->setFragmentSamplerState(_impl->samplerStates[SamplerIndex(state.sampler)], 0);
     // Detail/grass texture coordinates repeat far beyond 0..1 (legacy t1 is
     // uv*32, matching GL33's screen path), so slot 1 must stay wrap even when
     // the base terrain tile asks slot 0 to clamp at an island/segment edge.
     _impl->currentEncoder->setFragmentSamplerState(_impl->samplerStates[0], 1);
-    SetDepthBiasForDescriptor(_impl->currentEncoder, surface, isShadow ? Poseidon::render::ShaderFamily::Shadow
-                                                                       : shader);
+    SetDepthBiasForDescriptor(_impl->currentEncoder, state.surface,
+                              isShadow ? Poseidon::render::ShaderFamily::Shadow : state.shader);
 
     // Clamp to the drawable -- Metal's setScissorRect raises a validation
     // error if the rect extends past the render target.
-    int x0 = clipX < 0 ? 0 : clipX;
-    int y0 = clipY < 0 ? 0 : clipY;
-    int x1 = clipX + clipW;
-    int y1 = clipY + clipH;
+    int x0 = state.clipX < 0 ? 0 : state.clipX;
+    int y0 = state.clipY < 0 ? 0 : state.clipY;
+    int x1 = state.clipX + state.clipW;
+    int y1 = state.clipY + state.clipH;
     if (x1 > _impl->drawableWidth)
         x1 = _impl->drawableWidth;
     if (y1 > _impl->drawableHeight)
         y1 = _impl->drawableHeight;
     if (x1 <= x0 || y1 <= y0)
+    {
+        _impl->queued2DActive = false;
+        _impl->queued2DVertices.clear();
+        _impl->queued2DIndices.clear();
         return; // fully clipped
+    }
 
     MTL::ScissorRect scissor;
     scissor.x = static_cast<NS::UInteger>(x0);
@@ -1343,40 +1391,134 @@ void EngineMTLBootstrap::DrawTriangles2D(const Vertex2DMTL* verts, int vertCount
     scissor.height = static_cast<NS::UInteger>(y1 - y0);
     _impl->currentEncoder->setScissorRect(scissor);
 
-    MTL::Buffer* vbuf = _impl->device->newBuffer(verts, static_cast<NS::UInteger>(vertCount) * sizeof(Vertex2DMTL),
-                                                 MTL::ResourceStorageModeShared);
-    MTL::Buffer* ibuf = _impl->device->newBuffer(indices, static_cast<NS::UInteger>(indexCount) * sizeof(uint16_t),
-                                                 MTL::ResourceStorageModeShared);
-
     MTL::Texture* tex = _impl->fallbackWhite;
-    if (textureHandle > 0 && static_cast<size_t>(textureHandle) <= _impl->textures.size())
+    if (state.textureHandle > 0 && static_cast<size_t>(state.textureHandle) <= _impl->textures.size())
     {
-        MTL::Texture* found = _impl->textures[textureHandle - 1];
+        MTL::Texture* found = _impl->textures[state.textureHandle - 1];
         if (found != nullptr)
             tex = found;
     }
     MTL::Texture* secondaryTex = _impl->fallbackWhite;
-    if (secondaryTextureHandle > 0 && static_cast<size_t>(secondaryTextureHandle) <= _impl->textures.size())
+    if (state.secondaryTextureHandle > 0 && static_cast<size_t>(state.secondaryTextureHandle) <= _impl->textures.size())
     {
-        MTL::Texture* found = _impl->textures[secondaryTextureHandle - 1];
+        MTL::Texture* found = _impl->textures[state.secondaryTextureHandle - 1];
         if (found != nullptr)
             secondaryTex = found;
     }
 
-    _impl->currentEncoder->setVertexBuffer(vbuf, 0, 0);
+    const size_t vertexBytes = _impl->queued2DVertices.size() * sizeof(Vertex2DMTL);
+    const size_t indexBytes = _impl->queued2DIndices.size() * sizeof(uint16_t);
+    if (_impl->queued2DVertexBuffer == nullptr || _impl->queued2DVertexBufferUsed + vertexBytes > _impl->queued2DVertexBufferBytes)
+    {
+        if (_impl->queued2DVertexBuffer != nullptr)
+            _impl->pending2DBufferRelease[_impl->destroyGeneration].push_back(_impl->queued2DVertexBuffer);
+        const size_t minBytes = _impl->queued2DVertexBufferUsed + vertexBytes;
+        size_t newBytes = _impl->queued2DVertexBufferBytes > 0 ? _impl->queued2DVertexBufferBytes * 2 : 64 * 1024;
+        if (newBytes < minBytes)
+            newBytes = minBytes;
+        _impl->queued2DVertexBuffer =
+            _impl->device->newBuffer(static_cast<NS::UInteger>(newBytes), MTL::ResourceStorageModeShared);
+        _impl->queued2DVertexBufferBytes = newBytes;
+        _impl->queued2DVertexBufferUsed = 0;
+    }
+    if (_impl->queued2DIndexBuffer == nullptr || _impl->queued2DIndexBufferUsed + indexBytes > _impl->queued2DIndexBufferBytes)
+    {
+        if (_impl->queued2DIndexBuffer != nullptr)
+            _impl->pending2DBufferRelease[_impl->destroyGeneration].push_back(_impl->queued2DIndexBuffer);
+        const size_t minBytes = _impl->queued2DIndexBufferUsed + indexBytes;
+        size_t newBytes = _impl->queued2DIndexBufferBytes > 0 ? _impl->queued2DIndexBufferBytes * 2 : 16 * 1024;
+        if (newBytes < minBytes)
+            newBytes = minBytes;
+        _impl->queued2DIndexBuffer =
+            _impl->device->newBuffer(static_cast<NS::UInteger>(newBytes), MTL::ResourceStorageModeShared);
+        _impl->queued2DIndexBufferBytes = newBytes;
+        _impl->queued2DIndexBufferUsed = 0;
+    }
+    if (_impl->queued2DVertexBuffer == nullptr || _impl->queued2DIndexBuffer == nullptr)
+    {
+        _impl->queued2DActive = false;
+        _impl->queued2DVertices.clear();
+        _impl->queued2DIndices.clear();
+        return;
+    }
+    const size_t vertexOffset = _impl->queued2DVertexBufferUsed;
+    const size_t indexOffset = _impl->queued2DIndexBufferUsed;
+    std::memcpy(static_cast<uint8_t*>(_impl->queued2DVertexBuffer->contents()) + vertexOffset,
+                _impl->queued2DVertices.data(), vertexBytes);
+    std::memcpy(static_cast<uint8_t*>(_impl->queued2DIndexBuffer->contents()) + indexOffset,
+                _impl->queued2DIndices.data(), indexBytes);
+    _impl->queued2DVertexBufferUsed += vertexBytes;
+    _impl->queued2DIndexBufferUsed += indexBytes;
+
+    _impl->currentEncoder->setVertexBuffer(_impl->queued2DVertexBuffer, static_cast<NS::UInteger>(vertexOffset), 0);
     _impl->currentEncoder->setFragmentTexture(tex, 0);
     _impl->currentEncoder->setFragmentTexture(secondaryTex, 1);
-    _impl->currentEncoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, static_cast<NS::UInteger>(indexCount),
-                                                 MTL::IndexTypeUInt16, ibuf, 0);
+    _impl->currentEncoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle,
+                                                 static_cast<NS::UInteger>(_impl->queued2DIndices.size()),
+                                                 MTL::IndexTypeUInt16, _impl->queued2DIndexBuffer,
+                                                 static_cast<NS::UInteger>(indexOffset));
 
-    vbuf->release();
-    ibuf->release();
+    _impl->queued2DActive = false;
+    _impl->queued2DVertices.clear();
+    _impl->queued2DIndices.clear();
+}
+
+void EngineMTLBootstrap::DrawTriangles2D(const Vertex2DMTL* verts, int vertCount, const uint16_t* indices,
+                                         int indexCount, int textureHandle, int secondaryTextureHandle,
+                                         int clipX, int clipY, int clipW, int clipH,
+                                         bool useDepth,
+                                         Poseidon::render::DepthMode depthMode, Poseidon::render::BlendMode blendMode,
+                                         Poseidon::render::SamplerMode sampler, Poseidon::render::SurfaceMode surface,
+                                         Poseidon::render::ShaderFamily shader, const float fogColor[3])
+{
+    if (_impl->currentEncoder == nullptr || vertCount <= 0 || indexCount <= 0 || verts == nullptr ||
+        indices == nullptr)
+        return;
+
+    Impl::Triangles2DState state;
+    state.textureHandle = textureHandle;
+    state.secondaryTextureHandle = secondaryTextureHandle;
+    state.clipX = clipX;
+    state.clipY = clipY;
+    state.clipW = clipW;
+    state.clipH = clipH;
+    state.useDepth = useDepth;
+    state.depthMode = depthMode;
+    state.blendMode = blendMode;
+    state.sampler = sampler;
+    state.surface = surface;
+    state.shader = shader;
+    state.fogColor[0] = fogColor ? fogColor[0] : 0.0f;
+    state.fogColor[1] = fogColor ? fogColor[1] : 0.0f;
+    state.fogColor[2] = fogColor ? fogColor[2] : 0.0f;
+
+    if (_impl->queued2DActive &&
+        (_impl->queued2DState != state ||
+         _impl->queued2DVertices.size() + static_cast<size_t>(vertCount) > kMaxQueued2DVertices))
+    {
+        FlushTriangles2D();
+    }
+
+    if (!_impl->queued2DActive)
+    {
+        _impl->queued2DState = state;
+        _impl->queued2DActive = true;
+    }
+
+    const uint16_t baseVertex = static_cast<uint16_t>(_impl->queued2DVertices.size());
+    _impl->queued2DVertices.insert(_impl->queued2DVertices.end(), verts, verts + vertCount);
+    const size_t firstNewIndex = _impl->queued2DIndices.size();
+    _impl->queued2DIndices.resize(firstNewIndex + static_cast<size_t>(indexCount));
+    for (int i = 0; i < indexCount; ++i)
+        _impl->queued2DIndices[firstNewIndex + static_cast<size_t>(i)] = static_cast<uint16_t>(indices[i] + baseVertex);
 }
 
 void EngineMTLBootstrap::EndFrame()
 {
     if (_impl->currentEncoder == nullptr)
         return;
+
+    FlushTriangles2D();
 
     // Local pool just for incidental temporaries -- see BeginFrame()'s
     // comment. The encoder/command buffer/drawable were explicitly
@@ -1398,6 +1540,20 @@ void EngineMTLBootstrap::EndFrame()
     _impl->currentCommandBuffer = nullptr;
     _impl->currentDrawable = nullptr;
     _impl->frameHadColorClear = false;
+    if (_impl->queued2DVertexBuffer != nullptr)
+    {
+        _impl->pending2DBufferRelease[_impl->destroyGeneration].push_back(_impl->queued2DVertexBuffer);
+        _impl->queued2DVertexBuffer = nullptr;
+        _impl->queued2DVertexBufferBytes = 0;
+        _impl->queued2DVertexBufferUsed = 0;
+    }
+    if (_impl->queued2DIndexBuffer != nullptr)
+    {
+        _impl->pending2DBufferRelease[_impl->destroyGeneration].push_back(_impl->queued2DIndexBuffer);
+        _impl->queued2DIndexBuffer = nullptr;
+        _impl->queued2DIndexBufferBytes = 0;
+        _impl->queued2DIndexBufferUsed = 0;
+    }
 
     pool->release();
 
@@ -1406,6 +1562,12 @@ void EngineMTLBootstrap::EndFrame()
     // Then rotate so this frame's new deferred-destroys land in the slot
     // that just emptied out.
     int oldGen = 1 - _impl->destroyGeneration;
+    for (MTL::Buffer* buf : _impl->pending2DBufferRelease[oldGen])
+    {
+        if (buf != nullptr)
+            buf->release();
+    }
+    _impl->pending2DBufferRelease[oldGen].clear();
     for (int h : _impl->pendingMeshBufferDestroy[oldGen])
         DestroyMeshBuffer(h);
     _impl->pendingMeshBufferDestroy[oldGen].clear();
@@ -1470,6 +1632,8 @@ void EngineMTLBootstrap::DrawSectionTL(int vertexBufferHandle, int indexBufferHa
 {
     if (_impl->currentEncoder == nullptr || indexCount <= 0)
         return;
+
+    FlushTriangles2D();
 
     EnsureTLPipeline();
     if (_impl->pipelineStateTL == nullptr || _impl->pipelineStateTLBlend == nullptr ||
@@ -1642,6 +1806,8 @@ int EngineMTLBootstrap::CreateTextureMipped(const MipLevel* levels, int levelCou
 
 void EngineMTLBootstrap::UpdateTexture(int handle, int width, int height, const uint8_t* rgba)
 {
+    FlushTriangles2D();
+
     if (handle <= 0 || static_cast<size_t>(handle) > _impl->textures.size() || rgba == nullptr)
         return;
     MTL::Texture* tex = _impl->textures[handle - 1];
@@ -1654,6 +1820,8 @@ void EngineMTLBootstrap::UpdateTexture(int handle, int width, int height, const 
 
 void EngineMTLBootstrap::DestroyTexture(int handle)
 {
+    FlushTriangles2D();
+
     if (handle <= 0 || static_cast<size_t>(handle) > _impl->textures.size())
         return;
     MTL::Texture*& slot = _impl->textures[handle - 1];
@@ -1671,6 +1839,8 @@ uint64_t EngineMTLBootstrap::RecommendedMaxWorkingSetSize() const
 
 void EngineMTLBootstrap::ReleaseTextureToPool(int handle, int64_t bytes)
 {
+    FlushTriangles2D();
+
     if (handle <= 0 || static_cast<size_t>(handle) > _impl->textures.size())
         return;
     MTL::Texture*& slot = _impl->textures[handle - 1];
@@ -1768,6 +1938,32 @@ void EngineMTLBootstrap::Shutdown()
         }
     }
     _impl->meshBuffers.clear();
+    _impl->queued2DVertices.clear();
+    _impl->queued2DIndices.clear();
+    _impl->queued2DActive = false;
+    if (_impl->queued2DVertexBuffer != nullptr)
+    {
+        _impl->queued2DVertexBuffer->release();
+        _impl->queued2DVertexBuffer = nullptr;
+        _impl->queued2DVertexBufferBytes = 0;
+        _impl->queued2DVertexBufferUsed = 0;
+    }
+    if (_impl->queued2DIndexBuffer != nullptr)
+    {
+        _impl->queued2DIndexBuffer->release();
+        _impl->queued2DIndexBuffer = nullptr;
+        _impl->queued2DIndexBufferBytes = 0;
+        _impl->queued2DIndexBufferUsed = 0;
+    }
+    for (std::vector<MTL::Buffer*>& pending : _impl->pending2DBufferRelease)
+    {
+        for (MTL::Buffer* buf : pending)
+        {
+            if (buf != nullptr)
+                buf->release();
+        }
+        pending.clear();
+    }
     if (_impl->fallbackWhite != nullptr)
     {
         _impl->fallbackWhite->release();

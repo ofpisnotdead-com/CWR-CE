@@ -131,11 +131,11 @@ class EngineMTL : public Engine
     void BeginMeshTL(const Shape& sMesh, int spec, bool dynamic = false) override;
     void EndMeshTL(const Shape& sMesh) override {}
     void DrawSectionTL(const Shape& sMesh, int beg, int end) override;
+    void FlushQueues() override;
 
     // No BeginShadowPass/EndShadowPass override: GL33's versions only flush
-    // its batched-draw queue (EngineGL33_Draw.cpp), and this backend has no
-    // queue yet (every DrawSectionTL/DrawTriangles2D call draws immediately)
-    // -- nothing to bracket, so the base no-op (Engine.hpp) is correct as-is.
+    // its batched-draw queue (EngineGL33_Draw.cpp). Metal's queued 2D draws
+    // are drained by FlushQueues()/state-changing draw boundaries.
     // The actual single-pass shadow darken/exclusion happens per-draw via
     // DepthMode::Shadow + BlendMode::Shadow, same as every other descriptor
     // mode -- see Engine::BeginShadowPass's doc comment.

@@ -220,6 +220,7 @@ void EngineMTL::FinishDraw()
     Engine::FinishDraw();
     DrawFinishTexts();
     Dev::DebugOverlay::Render();
+    FlushQueues();
     _bootstrap.RenderDebugOverlay();
 
     if (_textBank)
@@ -867,6 +868,11 @@ void EngineMTL::DrawSectionTL(const Shape& sMesh, int beg, int end)
     _bootstrap.DrawSectionTL(buf->VertexBufferHandle(), buf->IndexBufferHandle(), firstIndex, indexCount,
                              _tlCurrentTexture, _tlSecondaryTexture, _tlObject, _tlFrame, _tlSectionDepthMode, _tlSectionBlendMode,
                              _tlSectionSampler, _tlSectionSurfaceMode, _tlSectionShader);
+}
+
+void EngineMTL::FlushQueues()
+{
+    _bootstrap.FlushTriangles2D();
 }
 
 void EngineMTL::DrawPolygon(const VertexIndex* i, int n)

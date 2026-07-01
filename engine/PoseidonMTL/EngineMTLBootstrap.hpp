@@ -208,9 +208,12 @@ class EngineMTLBootstrap
     // bool clear, ...) split.
     bool BeginFrame(float r, float g, float b, float a, bool clear, bool clearZ);
 
-    // Uploads `vertCount` vertices + `indexCount` uint16 indices and issues
-    // one indexed-triangle draw call sampling `textureHandle` (0 = an opaque
-    // white 1x1 fallback, so untextured colored quads/lines still work).
+    // Queues `vertCount` vertices + `indexCount` uint16 indices for batched
+    // indexed-triangle drawing sampling `textureHandle` (0 = an opaque white
+    // 1x1 fallback, so untextured colored quads/lines still work). Compatible
+    // adjacent 2D draws are coalesced into one GPU draw backed by persistent
+    // shared buffers; state changes or FlushTriangles2D/EndFrame drain the
+    // queue.
     // `clipX/Y/W/H` (pixels, already clamped to the drawable) set the hardware
     // scissor rect for this draw -- simpler than GL33's manual per-vertex UV
     // clip-rect remapping, since Metal does the pixel-discard for free.
@@ -245,6 +248,7 @@ class EngineMTLBootstrap
                          Poseidon::render::SurfaceMode surface = Poseidon::render::SurfaceMode::Default,
                          Poseidon::render::ShaderFamily shader = Poseidon::render::ShaderFamily::Normal,
                          const float fogColor[3] = nullptr);
+    void FlushTriangles2D();
 
     // Ends encoding, presents the drawable, commits the command buffer.
     void EndFrame();
@@ -370,9 +374,8 @@ class EngineMTLBootstrap
     // per-frame constants, and issues one indexed triangle draw (uint16
     // indices, `firstIndex` is index-element-relative). Must be called
     // between BeginFrame/EndFrame, same as DrawTriangles2D -- and can be
-    // freely interleaved with DrawTriangles2D calls within one frame; both
-    // explicitly rebind their own pipeline/depth state so draw order doesn't
-    // matter.
+    // freely interleaved with DrawTriangles2D calls within one frame. Pending
+    // queued 2D draws are flushed first so draw order stays exact.
     //
     // `depthMode`/`blendMode` are the same enums `BuildRenderPassDescriptor`
     // produces from a section's `LegacySpec` -- the caller (EngineMTL)
