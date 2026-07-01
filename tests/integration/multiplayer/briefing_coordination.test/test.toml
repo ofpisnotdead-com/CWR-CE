@@ -1,6 +1,7 @@
 mission = "tests/integration/missions/jip_basic.Demo"
+game_port = 0
 
-tags = ["headful", "ci-host-blocked"]
+tags = ["headful", "ci-host-blocked", "exclusive"]
 
 [[instances]]
 extra_args = ["--no-strict"]

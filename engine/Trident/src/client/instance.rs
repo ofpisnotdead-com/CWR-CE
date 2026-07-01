@@ -212,6 +212,13 @@ impl GameInstance {
         self.client = Some(client);
     }
 
+    /// Ask a still-attached harness client to end the test.
+    pub async fn request_end_test(&mut self) {
+        if let Some(client) = self.client.as_mut() {
+            let _ = client.exec("triEndTest").await;
+        }
+    }
+
     /// Wait for the "ready" event from the harness (main menu loaded).
     pub async fn wait_ready(&mut self, timeout: Duration) -> Result<Event> {
         self.client().wait_for_ready(timeout).await

@@ -1,0 +1,36 @@
+timeout = 120
+
+tags = ["headful", "ci-host-blocked", "exclusive"]
+
+[[services]]
+name = "master"
+type = "master-server"
+port = 0
+db = "${output}/master.sqlite3"
+extra_args = ["--mods-dir", "${output}/master-mods"]
+
+[[services.seed_mods]]
+id = "fixturemod"
+name = "Fixture Mod"
+version = "1.2.3"
+folder = "@fixturemod"
+source = "tests/fixtures/mods/@fixturemod"
+description = "Tiny downloadable fixture mod for Trident live workshop tests."
+authors = ["CWR test fixture"]
+
+[[instances]]
+name = "client"
+type = "client"
+use_mission = false
+no_autotest = true
+extra_args = [
+    "--no-strict",
+    "--lang",
+    "English",
+    "--master-server",
+    "${master.url}",
+    "--mods-dir",
+    "${output}/local-mods",
+    "--workshop-dir",
+    "${output}/client-workshop",
+]

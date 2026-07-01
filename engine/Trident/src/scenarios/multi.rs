@@ -12,8 +12,15 @@ use crate::client::{GameInstance, HarnessClient};
 use crate::protocol::Command;
 use crate::scenarios::ScenarioResult;
 use anyhow::{Context, Result};
-use std::path::{Component, Path};
+use papa_bear_archive::Pbo;
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::Write;
+use std::net::TcpListener;
+use std::path::{Component, Path, PathBuf};
+use std::process::Stdio;
 use std::time::{Duration, Instant};
+use tokio::process::{Child, Command as ProcessCommand};
 
 /// Parsed multi-instance test configuration from `test.toml`.
 #[derive(serde::Deserialize)]
@@ -25,6 +32,14 @@ pub struct MultiTestConfig {
     /// Game network port (default 2302)
     #[serde(default = "default_game_port")]
     pub game_port: u16,
+
+    /// Per-test timeout override in seconds.
+    #[serde(default)]
+    pub timeout: Option<u64>,
+
+    /// Background services — started before game instances in array order
+    #[serde(default)]
+    pub services: Vec<ServiceConfig>,
 
     /// Instance definitions — started in array order
     pub instances: Vec<InstanceConfig>,
@@ -68,6 +83,14 @@ pub struct InstanceConfig {
     #[serde(default)]
     pub mp_assign: Option<String>,
 
+    /// Whether this instance receives the shared mission as `--simulate` / `--test-mission`.
+    #[serde(default = "default_true")]
+    pub use_mission: bool,
+
+    /// Per-instance mission override.
+    #[serde(default)]
+    pub mission: Option<String>,
+
     /// Additional CLI args
     #[serde(default)]
     pub extra_args: Vec<String>,
@@ -95,12 +118,90 @@ pub struct InstanceConfig {
     /// Start this role automatically when the scenario begins.
     #[serde(default = "default_true")]
     pub autostart: bool,
+
+    /// Set true to suppress the default `--autotest` injection for client instances.
+    #[serde(default)]
+    pub no_autotest: bool,
 }
 
 #[derive(Clone, serde::Deserialize)]
 pub struct InstanceCopyFileConfig {
     pub source: String,
     pub target: String,
+}
+
+/// Configuration for a background process used by a multi-instance test.
+#[derive(Clone, serde::Deserialize)]
+pub struct ServiceConfig {
+    /// Service name, used by `after` and `${service.<name>.url}` placeholders.
+    pub name: String,
+
+    /// Service type: "master-server" or "master-probe".
+    #[serde(rename = "type")]
+    pub service_type: String,
+
+    /// Name of an earlier service that must exist before this starts.
+    #[serde(default)]
+    pub after: Option<String>,
+
+    /// Service listen port. Use 0 for an ephemeral localhost port.
+    #[serde(default)]
+    pub port: Option<u16>,
+
+    /// Listen address for HTTP services (default `127.0.0.1:<port>`).
+    #[serde(default)]
+    pub listen: Option<String>,
+
+    /// SQLite database path for master-server.
+    #[serde(default)]
+    pub db: Option<String>,
+
+    /// Explicit path to `papa-bear-master-service`.
+    #[serde(default)]
+    pub binary: Option<String>,
+
+    /// Master service name for master-probe (default `master`).
+    #[serde(default)]
+    pub master: Option<String>,
+
+    /// Probe interval.
+    #[serde(default)]
+    pub interval_secs: Option<u64>,
+
+    /// Probe request timeout.
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+
+    /// Age threshold for probe pruning.
+    #[serde(default)]
+    pub prune_max_age_secs: Option<u64>,
+
+    /// Additional process args appended after the typed service args.
+    #[serde(default)]
+    pub extra_args: Vec<String>,
+
+    /// Extra environment variables.
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+
+    /// Mods to seed into a local master-server mod store before it starts.
+    #[serde(default)]
+    pub seed_mods: Vec<ServiceSeedModConfig>,
+}
+
+#[derive(Clone, serde::Deserialize)]
+pub struct ServiceSeedModConfig {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub folder: String,
+    pub source: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub authors: Vec<String>,
+    #[serde(default)]
+    pub homepage_url: Option<String>,
 }
 
 fn default_client() -> String {
@@ -137,6 +238,333 @@ pub(super) fn repo_root() -> std::path::PathBuf {
         .to_path_buf()
 }
 
+fn reserve_local_port() -> Result<u16> {
+    let listener =
+        TcpListener::bind(("127.0.0.1", 0)).context("failed to reserve ephemeral port")?;
+    Ok(listener
+        .local_addr()
+        .context("failed to read reserved local address")?
+        .port())
+}
+
+fn expand_placeholders(value: &str, values: &HashMap<String, String>) -> String {
+    let mut expanded = value.to_string();
+    for (key, replacement) in values {
+        expanded = expanded.replace(&format!("${{{key}}}"), replacement);
+    }
+    expanded
+}
+
+fn expand_placeholders_vec(
+    values: &[String],
+    replacements: &HashMap<String, String>,
+) -> Vec<String> {
+    values
+        .iter()
+        .map(|value| expand_placeholders(value, replacements))
+        .collect()
+}
+
+fn resolve_repo_path(value: &str, replacements: &HashMap<String, String>) -> PathBuf {
+    let expanded = expand_placeholders(value, replacements);
+    let path = PathBuf::from(expanded);
+    if path.is_absolute() {
+        path
+    } else {
+        repo_root().join(path)
+    }
+}
+
+fn seed_mod_store(
+    mods_dir: &Path,
+    seeds: &[ServiceSeedModConfig],
+    replacements: &HashMap<String, String>,
+) -> Result<()> {
+    for seed in seeds {
+        let source = resolve_repo_path(&seed.source, replacements);
+        let pbo = Pbo::pack_dir(&source, None)
+            .with_context(|| format!("packing seed mod '{}' from {}", seed.id, source.display()))?;
+
+        let mod_dir = mods_dir.join(&seed.id);
+        std::fs::create_dir_all(&mod_dir)
+            .with_context(|| format!("creating seed mod store {}", mod_dir.display()))?;
+
+        let mut raw = Vec::new();
+        pbo.write(&mut raw)
+            .with_context(|| format!("serialising seed mod '{}'", seed.id))?;
+        let archive_path = mod_dir.join(format!("{}.pbo.zst", seed.id));
+        let mut archive = File::create(&archive_path)
+            .with_context(|| format!("creating {}", archive_path.display()))?;
+        {
+            let mut encoder = zstd::stream::write::Encoder::new(&mut archive, 19)
+                .with_context(|| format!("starting zstd encoder for {}", archive_path.display()))?;
+            encoder
+                .write_all(&raw)
+                .with_context(|| format!("compressing seed mod '{}'", seed.id))?;
+            encoder
+                .finish()
+                .with_context(|| format!("finishing zstd seed mod '{}'", seed.id))?;
+        }
+        let size_bytes = archive
+            .metadata()
+            .with_context(|| format!("sizing {}", archive_path.display()))?
+            .len();
+
+        let metadata = serde_json::json!({
+            "modId": seed.id,
+            "name": seed.name,
+            "version": seed.version,
+            "folderName": seed.folder,
+            "description": seed.description,
+            "authors": seed.authors,
+            "homepageUrl": seed.homepage_url,
+            "downloadUrl": format!("/v1/mods/{}/download", seed.id),
+            "sizeBytes": size_bytes
+        });
+        let metadata_path = mod_dir.join("mod.json");
+        std::fs::write(&metadata_path, serde_json::to_vec_pretty(&metadata)?)
+            .with_context(|| format!("writing {}", metadata_path.display()))?;
+    }
+    Ok(())
+}
+
+fn extract_mods_dir_arg(args: &[String]) -> Option<PathBuf> {
+    args.windows(2)
+        .find(|window| window[0] == "--mods-dir")
+        .map(|window| PathBuf::from(&window[1]))
+}
+
+fn resolve_master_service_binary(config: &ServiceConfig) -> Result<PathBuf> {
+    if let Some(binary) = &config.binary {
+        let expanded = PathBuf::from(binary);
+        if expanded.exists() {
+            return Ok(expanded);
+        }
+        anyhow::bail!(
+            "configured service binary does not exist: {}",
+            expanded.display()
+        );
+    }
+
+    if let Ok(binary) = std::env::var("PAPA_BEAR_MASTER_SERVICE") {
+        let path = PathBuf::from(binary);
+        if path.exists() {
+            return Ok(path);
+        }
+    }
+
+    let root = repo_root();
+    let candidates = [
+        root.join("mserver/MasterService/target/debug/papa-bear-master-service"),
+        root.join("mserver/MasterService/target/release/papa-bear-master-service"),
+    ];
+    candidates
+        .into_iter()
+        .find(|path| path.exists())
+        .with_context(|| {
+            "papa-bear-master-service was not found; build it with \
+             `cargo build --manifest-path mserver/MasterService/Cargo.toml`"
+        })
+}
+
+struct RunningService {
+    name: String,
+    child: Child,
+}
+
+impl RunningService {
+    async fn stop(&mut self, timeout: Duration) {
+        if matches!(self.child.try_wait(), Ok(Some(_))) {
+            return;
+        }
+        let _ = self.child.start_kill();
+        let _ = tokio::time::timeout(timeout, self.child.wait()).await;
+    }
+}
+
+fn service_url_from_listen(listen: &str) -> String {
+    let host_port = listen
+        .strip_prefix("0.0.0.0:")
+        .map(|port| format!("127.0.0.1:{port}"))
+        .unwrap_or_else(|| listen.to_string());
+    format!("http://{host_port}")
+}
+
+async fn wait_for_http_ok(url: &str, timeout: Duration) -> Result<()> {
+    let deadline = Instant::now() + timeout;
+    let client = reqwest::Client::new();
+    let health_url = format!("{}/healthz", url.trim_end_matches('/'));
+    loop {
+        match client.get(&health_url).send().await {
+            Ok(response) if response.status().is_success() => return Ok(()),
+            Ok(_) | Err(_) => {}
+        }
+        if Instant::now() >= deadline {
+            anyhow::bail!("timed out waiting for {health_url}");
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+async fn spawn_service_process(
+    test_name: &str,
+    config: &ServiceConfig,
+    args: &[String],
+    output_dir: &Path,
+    replacements: &HashMap<String, String>,
+) -> Result<Child> {
+    let binary = resolve_master_service_binary(config)?;
+    let service_output = output_dir.join("services").join(&config.name);
+    std::fs::create_dir_all(&service_output)
+        .with_context(|| format!("failed to create {}", service_output.display()))?;
+    let stdout = File::create(service_output.join("stdout.log"))
+        .with_context(|| format!("failed to create stdout log for service '{}'", config.name))?;
+    let stderr = File::create(service_output.join("stderr.log"))
+        .with_context(|| format!("failed to create stderr log for service '{}'", config.name))?;
+
+    let mut command = ProcessCommand::new(binary);
+    command
+        .args(args)
+        .stdout(Stdio::from(stdout))
+        .stderr(Stdio::from(stderr))
+        .kill_on_drop(true);
+    for (key, value) in &config.env {
+        command.env(key, expand_placeholders(value, replacements));
+    }
+
+    tracing::debug!(
+        "[{test_name}] spawning service '{}' ({})",
+        config.name,
+        args.join(" ")
+    );
+    command
+        .spawn()
+        .with_context(|| format!("failed to spawn service '{}'", config.name))
+}
+
+async fn start_services(
+    test_name: &str,
+    services: &[ServiceConfig],
+    output_dir: &Path,
+    replacements: &mut HashMap<String, String>,
+    timeout: Duration,
+) -> Result<Vec<RunningService>> {
+    let mut running = Vec::new();
+    for service in services {
+        if let Some(after) = &service.after {
+            let known_service = running
+                .iter()
+                .any(|item: &RunningService| &item.name == after);
+            if !known_service {
+                anyhow::bail!(
+                    "service '{}' depends on '{}' which has not been started",
+                    service.name,
+                    after
+                );
+            }
+        }
+
+        match service.service_type.as_str() {
+            "master-server" => {
+                let port = match service.port.unwrap_or(0) {
+                    0 => reserve_local_port()?,
+                    port => port,
+                };
+                let listen = service
+                    .listen
+                    .as_deref()
+                    .map(|value| expand_placeholders(value, replacements))
+                    .unwrap_or_else(|| format!("127.0.0.1:{port}"));
+                let url = service_url_from_listen(&listen);
+                let db = service
+                    .db
+                    .as_deref()
+                    .map(|value| expand_placeholders(value, replacements))
+                    .unwrap_or_else(|| {
+                        output_dir
+                            .join(format!("{}.sqlite3", service.name))
+                            .to_string_lossy()
+                            .to_string()
+                    });
+                let mut args = vec![
+                    "server".to_string(),
+                    "--listen".to_string(),
+                    listen.clone(),
+                    "--db".to_string(),
+                    db,
+                ];
+                args.extend(expand_placeholders_vec(&service.extra_args, replacements));
+                if !service.seed_mods.is_empty() {
+                    let mods_dir = extract_mods_dir_arg(&args).with_context(|| {
+                        format!(
+                            "service '{}' has seed_mods but no --mods-dir in extra_args",
+                            service.name
+                        )
+                    })?;
+                    seed_mod_store(&mods_dir, &service.seed_mods, replacements)?;
+                }
+                let child =
+                    spawn_service_process(test_name, service, &args, output_dir, replacements)
+                        .await?;
+                wait_for_http_ok(&url, timeout).await?;
+                replacements.insert(format!("service.{}.url", service.name), url.clone());
+                replacements.insert(format!("service.{}.port", service.name), port.to_string());
+                replacements.insert(format!("{}.url", service.name), url.clone());
+                replacements.insert(format!("ports.{}", service.name), port.to_string());
+                if service.name == "master" {
+                    replacements.insert("master.url".to_string(), url);
+                    replacements.insert("ports.master".to_string(), port.to_string());
+                }
+                running.push(RunningService {
+                    name: service.name.clone(),
+                    child,
+                });
+            }
+            "master-probe" => {
+                let master_name = service.master.as_deref().unwrap_or("master");
+                let master_url = replacements
+                    .get(&format!("service.{master_name}.url"))
+                    .or_else(|| replacements.get(&format!("{master_name}.url")))
+                    .with_context(|| {
+                        format!(
+                            "service '{}' needs master service '{}' to be started first",
+                            service.name, master_name
+                        )
+                    })?
+                    .clone();
+                let mut args = vec![
+                    "probe".to_string(),
+                    "--master-server".to_string(),
+                    master_url,
+                    "--interval-secs".to_string(),
+                    service.interval_secs.unwrap_or(1).to_string(),
+                    "--timeout-ms".to_string(),
+                    service.timeout_ms.unwrap_or(500).to_string(),
+                    "--prune-max-age-secs".to_string(),
+                    service.prune_max_age_secs.unwrap_or(60).to_string(),
+                ];
+                args.extend(expand_placeholders_vec(&service.extra_args, replacements));
+                let mut child =
+                    spawn_service_process(test_name, service, &args, output_dir, replacements)
+                        .await?;
+                tokio::time::sleep(Duration::from_millis(250)).await;
+                if let Some(status) = child
+                    .try_wait()
+                    .with_context(|| format!("failed to inspect service '{}'", service.name))?
+                {
+                    anyhow::bail!("service '{}' exited early with {status}", service.name);
+                }
+                running.push(RunningService {
+                    name: service.name.clone(),
+                    child,
+                });
+            }
+            other => anyhow::bail!("unsupported service type '{other}' for '{}'", service.name),
+        }
+    }
+    Ok(running)
+}
+
 /// Check if a directory is a multi-instance test (`*.test/` with `test.toml` containing instances).
 pub fn is_multi_test(p: &Path) -> bool {
     if !p.is_dir() {
@@ -159,6 +587,18 @@ pub fn is_multi_test(p: &Path) -> bool {
 /// Extract test name from a `*.test/` directory path.
 pub fn multi_test_name(s: &str) -> String {
     s.strip_suffix(".test").unwrap_or(s).to_string()
+}
+
+fn safe_output_name(name: &str) -> String {
+    name.chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 fn checked_relative_file_path(value: &str) -> Result<&Path> {
@@ -394,6 +834,10 @@ pub(super) async fn run_role_script(
                     }
                 }
                 Err(e) => {
+                    if stmt == "triEndTest" {
+                        succeeded = true;
+                        break;
+                    }
                     last_result = format!("connection error: {e}");
                     break;
                 }
@@ -436,6 +880,9 @@ pub async fn run_multi_test(
     cli_game_args: &[String],
 ) -> Result<ScenarioResult> {
     let start = Instant::now();
+    let test_output_dir = output_dir.join(safe_output_name(name));
+    std::fs::create_dir_all(&test_output_dir)
+        .with_context(|| format!("failed to create {}", test_output_dir.display()))?;
 
     // 1. Parse test.toml
     let toml_path = test_dir.join("test.toml");
@@ -453,11 +900,48 @@ pub async fn run_multi_test(
     }
 
     let effective_cfg = crate::config::get().clone();
-    let client_config = effective_cfg.client_config();
-    let timeout = effective_cfg.timeout;
+    let timeout = config
+        .timeout
+        .map(Duration::from_secs)
+        .unwrap_or(effective_cfg.timeout);
+    let client_config = config.timeout.map_or_else(
+        || effective_cfg.client_config(),
+        |timeout_secs| crate::config::TridentConfig::new(timeout_secs).client_config(),
+    );
 
     // Resolve mission path once
     let resolved_mission = resolve_mission_path(config.mission.as_deref());
+    let game_port = if config.game_port == 0 {
+        reserve_local_port()?
+    } else {
+        config.game_port
+    };
+    let mut replacements = HashMap::new();
+    replacements.insert(
+        "output".to_string(),
+        test_output_dir.to_string_lossy().to_string(),
+    );
+    replacements.insert("ports.game".to_string(), game_port.to_string());
+    replacements.insert("game.port".to_string(), game_port.to_string());
+
+    let mut services = match start_services(
+        name,
+        &config.services,
+        &test_output_dir,
+        &mut replacements,
+        timeout,
+    )
+    .await
+    {
+        Ok(services) => services,
+        Err(e) => {
+            return Ok(ScenarioResult {
+                passed: false,
+                message: format!("[service] {e} ({:.1}s)", start.elapsed().as_secs_f64()),
+                duration: start.elapsed(),
+            });
+        }
+    };
 
     // 2. Spawn all instances in order, respecting dependencies
     let mut instances: Vec<(String, GameInstance)> = Vec::new();
@@ -467,19 +951,27 @@ pub async fn run_multi_test(
 
         // Wait for dependency if specified
         if let Some(ref after_name) = inst.after {
+            let target_ngs = inst.wait_ngs.or(inst.wait_ngs_client);
             let dep = instances
                 .iter_mut()
                 .find(|(n, _)| n == after_name)
-                .map(|(_, g)| g)
-                .with_context(|| {
-                    format!(
-                        "instance '{}' depends on '{}' which hasn't been started",
-                        inst.name, after_name
-                    )
-                })?;
+                .map(|(_, g)| g);
+            if dep.is_none() {
+                let known_service = services.iter().any(|service| &service.name == after_name);
+                if !known_service || target_ngs.is_some() {
+                    failed_instance = Some((
+                        inst.name.clone(),
+                        format!(
+                            "depends on '{}' which hasn't been started as a game instance",
+                            after_name
+                        ),
+                    ));
+                    break;
+                }
+            }
 
-            let target_ngs = inst.wait_ngs.or(inst.wait_ngs_client);
             if let Some(target) = target_ngs {
+                let dep = dep.expect("target_ngs requires a game instance dependency");
                 let ngs_field = if inst.wait_ngs.is_some() {
                     "server_state"
                 } else {
@@ -538,22 +1030,35 @@ pub async fn run_multi_test(
             // it is inherently a server, so no --server flag.
             vec!["--nosound".into(), "--focus".into()]
         } else {
-            vec![
+            let mut args = vec![
                 "--window".into(),
                 "--no-splash".into(),
                 "--nosound".into(),
                 "--focus".into(),
-            ]
+            ];
+            if !inst.no_autotest {
+                args.push("--autotest".into());
+            }
+            args
         };
         extra_args.push("--port".into());
-        extra_args.push(inst.network_port.unwrap_or(config.game_port).to_string());
+        extra_args.push(inst.network_port.unwrap_or(game_port).to_string());
 
         if let Some(connect_port) = inst.connect_port {
             extra_args.push("--connect-port".into());
             extra_args.push(connect_port.to_string());
         }
 
-        if let Some(ref mission) = resolved_mission {
+        let instance_mission = if inst.use_mission {
+            if let Some(mission) = inst.mission.as_deref() {
+                resolve_mission_path(Some(mission))
+            } else {
+                resolved_mission.clone()
+            }
+        } else {
+            None
+        };
+        if let Some(ref mission) = instance_mission {
             if inst.is_server() {
                 extra_args.push("--simulate".into());
             } else {
@@ -566,23 +1071,24 @@ pub async fn run_multi_test(
             extra_args.push(
                 inst.connect_host
                     .clone()
+                    .map(|value| expand_placeholders(&value, &replacements))
                     .unwrap_or_else(|| "127.0.0.1".into()),
             );
         }
         if let Some(ref assign) = inst.mp_assign {
             extra_args.push("--mp-assign".into());
-            extra_args.push(assign.clone());
+            extra_args.push(expand_placeholders(assign, &replacements));
         }
         if let Some(r) = render {
             extra_args.push("--render".into());
             extra_args.push(r.into());
         }
-        extra_args.extend(inst.extra_args.iter().cloned());
+        extra_args.extend(expand_placeholders_vec(&inst.extra_args, &replacements));
         extra_args.extend(cli_game_args.iter().cloned());
         let extra_refs: Vec<&str> = extra_args.iter().map(String::as_str).collect();
 
         // Per-instance output subdir so logs don't overwrite each other
-        let inst_output = output_dir.join(&inst.name);
+        let inst_output = test_output_dir.join(&inst.name);
         let user_dir = inst_output.join("user");
         std::fs::create_dir_all(&user_dir)
             .with_context(|| format!("failed to create {}", user_dir.display()))?;
@@ -675,6 +1181,7 @@ pub async fn run_multi_test(
             }
             let sqf_code = std::fs::read_to_string(&sqf_path)
                 .with_context(|| format!("failed to read {}", sqf_path.display()))?;
+            let sqf_code = expand_placeholders(&sqf_code, &replacements);
             let statements = super::integration::parse_statements(&sqf_code);
             role_scripts.push((role_name.clone(), statements));
         }
@@ -731,9 +1238,16 @@ pub async fn run_multi_test(
         }
     }
 
+    for (_, inst) in instances.iter_mut().rev() {
+        inst.request_end_test().await;
+    }
+
     // 4. Wait for all processes to exit
     for (_, inst) in instances.iter_mut().rev() {
         let _ = inst.wait_exit(timeout).await;
+    }
+    for service in services.iter_mut().rev() {
+        service.stop(timeout).await;
     }
 
     let elapsed = start.elapsed();
@@ -759,5 +1273,40 @@ pub async fn run_multi_test(
             ),
             duration: elapsed,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expand_placeholders_replaces_known_values() {
+        let mut values = HashMap::new();
+        values.insert(
+            "master.url".to_string(),
+            "http://127.0.0.1:12345".to_string(),
+        );
+        values.insert("ports.game".to_string(), "23456".to_string());
+
+        let expanded = expand_placeholders(
+            "--master-server=${master.url} --port=${ports.game}",
+            &values,
+        );
+
+        assert_eq!(
+            expanded,
+            "--master-server=http://127.0.0.1:12345 --port=23456"
+        );
+    }
+
+    #[test]
+    fn expand_placeholders_preserves_unknown_values() {
+        let values = HashMap::new();
+
+        assert_eq!(
+            expand_placeholders("${missing.value}", &values),
+            "${missing.value}"
+        );
     }
 }

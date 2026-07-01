@@ -1,0 +1,50 @@
+mission = "tests/integration/missions/mp_browser_basic.Demo"
+game_port = 0
+timeout = 120
+
+tags = ["headful", "ci-host-blocked", "exclusive"]
+
+[[services]]
+name = "master"
+type = "master-server"
+port = 0
+db = "${output}/master.sqlite3"
+
+[[services]]
+name = "probe"
+type = "master-probe"
+after = "master"
+interval_secs = 1
+timeout_ms = 500
+prune_max_age_secs = 60
+
+[[instances]]
+name = "dedicated"
+type = "server"
+after = "master"
+extra_args = [
+    "--no-strict",
+    "--public",
+    "--master-server",
+    "${master.url}",
+    "--advertise-address",
+    "127.0.0.1",
+    "--mp-auto-start",
+    "1",
+]
+
+[[instances]]
+name = "client"
+type = "client"
+after = "dedicated"
+use_mission = false
+start_delay_ms = 3000
+extra_args = [
+    "--no-strict",
+    "--lang",
+    "English",
+    "--master-server",
+    "${master.url}",
+    "--mp-assign",
+    "WEST:1",
+]
