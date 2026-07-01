@@ -143,15 +143,7 @@ class DisplayMods : public Display
     bool _sortAscending = true;
 
   public:
-    DisplayMods(ControlsContainer* parent) : Display(parent)
-    {
-        _enableSimulation = false;
-        _exitWhenClose = -1;
-        Load("RscDisplayMods");
-        // Match the MP browser: open with a default Name-ascending sort and its
-        // caret shown (out-of-line; CModsList + ModsSortColumn aren't visible here).
-        ApplyInitialSort();
-    }
+    DisplayMods(ControlsContainer* parent);
 
     // Builds the catalog list as a CModsList (5-column DrawItem) and seeds it.
     // Out-of-line in OptionsUIApp.cpp where CModsList is fully visible.

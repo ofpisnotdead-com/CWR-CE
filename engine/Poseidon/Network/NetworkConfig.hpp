@@ -18,6 +18,7 @@ RString GetNetworkPassword();
 void SetNetworkPassword(const RString& password);
 RString GetNetworkMasterServer();
 void SetNetworkMasterServer(const RString& host);
+RString FormatNetworkMasterServerAttribution(const RString& host);
 bool GetNetworkPublicServer();
 void SetNetworkPublicServer(bool value);
 RString GetNetworkProxy();

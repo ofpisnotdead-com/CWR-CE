@@ -1,6 +1,7 @@
 #include <Poseidon/Network/NetworkConfig.hpp>
 #include <Poseidon/Core/Config/EngineConfig.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
+#include <cstring>
 
 const int DefaultNetworkPort = 1985;
 const char* DefaultMasterServer = "https://papa-bear.cz";
@@ -71,6 +72,20 @@ RString GetNetworkMasterServer()
 void SetNetworkMasterServer(const RString& host)
 {
     NetworkMasterServer = host;
+}
+
+RString FormatNetworkMasterServerAttribution(const RString& host)
+{
+    if (host.GetLength() == 0)
+        return "Operated by disabled";
+
+    const char* stripped = host;
+    if (std::strncmp(stripped, "https://", 8) == 0)
+        stripped += 8;
+    else if (std::strncmp(stripped, "http://", 7) == 0)
+        stripped += 7;
+
+    return RString("Operated by ") + stripped;
 }
 
 bool GetNetworkPublicServer()

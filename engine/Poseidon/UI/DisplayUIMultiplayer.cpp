@@ -788,7 +788,7 @@ DisplayMultiplayer::DisplayMultiplayer(ControlsContainer* parent) : Display(pare
     C3DActiveText* dplayButton = dynamic_cast<C3DActiveText*>(GetCtrl(IDC_MULTI_DPLAY));
     if (dplayButton)
     {
-        dplayButton->SetText(LocalizeString(IDS_DISP_MULTI_SOCKETS));
+        dplayButton->SetText(FormatNetworkMasterServerAttribution(GetNetworkMasterServer()));
     }
 
     SetSource(source);
@@ -1757,7 +1757,7 @@ void DisplayMultiplayer::RefreshLanguage()
 {
     if (auto* dplayButton = dynamic_cast<C3DActiveText*>(GetCtrl(IDC_MULTI_DPLAY)))
     {
-        dplayButton->SetText(LocalizeString(IDS_DISP_MULTI_SOCKETS));
+        dplayButton->SetText(FormatNetworkMasterServerAttribution(GetNetworkMasterServer()));
     }
 
     SetSource(_source);

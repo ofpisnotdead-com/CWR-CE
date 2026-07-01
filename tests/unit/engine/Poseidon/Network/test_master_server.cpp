@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include <Poseidon/Network/NetworkConfig.hpp>
 #include <Poseidon/Network/MasterServerServiceClient.hpp>
 
 using namespace Poseidon;
@@ -101,4 +102,13 @@ TEST_CASE("master service requests carry structured user-agent", "[network][mast
     REQUIRE(request.userAgent.find("CWR-CE/301") == 0);
     REQUIRE(request.userAgent.find("tag=") != std::string::npos);
     REQUIRE(request.userAgent.find("role=client") != std::string::npos);
+}
+
+TEST_CASE("master server attribution label includes the configured endpoint", "[network][master][ui]")
+{
+    REQUIRE(std::string(FormatNetworkMasterServerAttribution("https://master.example")) ==
+            "Operated by master.example");
+    REQUIRE(std::string(FormatNetworkMasterServerAttribution("http://master.example")) == "Operated by master.example");
+    REQUIRE(std::string(FormatNetworkMasterServerAttribution("master.example")) == "Operated by master.example");
+    REQUIRE(std::string(FormatNetworkMasterServerAttribution("")) == "Operated by disabled");
 }

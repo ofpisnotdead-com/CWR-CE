@@ -1306,6 +1306,45 @@ Control* DisplayMods::OnCreateCtrl(int type, int idc, const ParamEntry& cls)
     return Display::OnCreateCtrl(type, idc, cls);
 }
 
+DisplayMods::DisplayMods(ControlsContainer* parent) : Display(parent)
+{
+    _enableSimulation = false;
+    _exitWhenClose = -1;
+    Load("RscDisplayMods");
+
+    if (ControlObjectContainer* notebook = dynamic_cast<ControlObjectContainer*>(GetCtrl(IDC_MODS_NOTEBOOK)))
+    {
+        ParamEntry* sourceCls = Res.FindEntry("RscDisplayMods")
+                                    ? (Res >> "RscDisplayMods" >> "Notebook").FindEntry("ButtonSource")
+                                    : nullptr;
+        if (sourceCls != nullptr && sourceCls->IsClass())
+        {
+            static ParamFile s_masterServerLabelCfg;
+            s_masterServerLabelCfg.Clear();
+            ParamClass* cls = s_masterServerLabelCfg.AddClass("ModsMasterServerAttribution");
+            cls->Add("type", CT_3DSTATIC);
+            cls->Add("idc", IDC_MODS_MASTER_SERVER);
+            cls->Add("style", ST_LEFT);
+            cls->Add("text", RString(""));
+            cls->Add("x", 0.025f);
+            cls->Add("y", 0.925f);
+            cls->Add("w", 0.95f);
+            cls->Add("h", 0.045f);
+            cls->Add("selection", RString("display"));
+            cls->Add("angle", 0.0f);
+            cls->SetBase(sourceCls->GetClassInterface());
+
+            Control* ctrl = notebook->LoadControl(*cls);
+            if (C3DStatic* text = dynamic_cast<C3DStatic*>(ctrl))
+            {
+                text->SetText(FormatNetworkMasterServerAttribution(GetNetworkMasterServer()));
+            }
+        }
+    }
+
+    ApplyInitialSort();
+}
+
 void DisplayMods::SeedTestMods(int count)
 {
     CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST));
