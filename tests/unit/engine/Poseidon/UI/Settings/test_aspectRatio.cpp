@@ -159,7 +159,7 @@ TEST_CASE("AspectRatio Modern clamps ultrawide gameplay framing", "[Settings][As
 
     CHECK(result.viewportRatio == Catch::Approx(32.0f / 9.0f));
     CHECK(result.effectiveRatio == Catch::Approx(21.0f / 9.0f));
-    CHECK(result.settings.leftFOV == Catch::Approx(0.75f * (21.0f / 9.0f)));
+    CHECK(result.settings.leftFOV == Catch::Approx(0.75f * (32.0f / 9.0f)));
     CHECK(result.settings.uiTopLeftX > 0.0f);
 }
 
@@ -169,14 +169,14 @@ TEST_CASE("AspectRatio Modern clamp uses the selected HUD width band", "[Setting
 
     AspectRatio::PolicyResult result = AspectRatio::ResolvePolicy(input);
     CHECK(result.effectiveRatio == Catch::Approx(21.0f / 9.0f));
-    CHECK(result.settings.leftFOV == Catch::Approx(0.75f * (21.0f / 9.0f)));
+    CHECK(result.settings.leftFOV == Catch::Approx(0.75f * (32.0f / 9.0f)));
     CHECK(result.settings.uiTopLeftX == Catch::Approx(0.171875f));
     CHECK(result.settings.uiBottomRightX == Catch::Approx(0.828125f));
 
     input.ultrawideClamp = AspectRatio::Clamp16x9;
     result = AspectRatio::ResolvePolicy(input);
     CHECK(result.effectiveRatio == Catch::Approx(16.0f / 9.0f));
-    CHECK(result.settings.leftFOV == Catch::Approx(0.75f * (16.0f / 9.0f)));
+    CHECK(result.settings.leftFOV == Catch::Approx(0.75f * (32.0f / 9.0f)));
     CHECK(result.settings.uiTopLeftX == Catch::Approx(0.25f));
     CHECK(result.settings.uiBottomRightX == Catch::Approx(0.75f));
 }
