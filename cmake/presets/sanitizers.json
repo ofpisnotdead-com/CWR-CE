@@ -44,6 +44,26 @@
       }
     },
     {
+      "name": "linux-arm64-clang-san",
+      "displayName": "Linux arm64 Clang ASan+UBSan",
+      "inherits": "linux-clang-sanitizer",
+      "binaryDir": "${sourceDir}/build/linux-arm64-clang-san",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-linux-clang-san",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-arm64-clang-san.cmake"
+      }
+    },
+    {
+      "name": "linux-arm64-clang-tsan",
+      "displayName": "Linux arm64 Clang TSan",
+      "inherits": "linux-clang-sanitizer",
+      "binaryDir": "${sourceDir}/build/linux-arm64-clang-tsan",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-linux-clang-tsan",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-arm64-clang-tsan.cmake"
+      }
+    },
+    {
       "name": "linux-x64-clang-fuzz",
       "displayName": "Linux x64 Clang libFuzzer + ASan",
       "inherits": "base",

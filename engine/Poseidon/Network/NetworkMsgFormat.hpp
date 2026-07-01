@@ -470,8 +470,8 @@ struct EncodedMatrix3
 	short _01c,_11c;
 	// encoded col 2 (direction)
 	short _02c,_12c;
-	char _21sign;
-	char _22sign;
+	signed char _21sign;
+	signed char _22sign;
 
 	// encode 3x3 matrix
 	void Encode(const Matrix3 &m);
@@ -497,14 +497,14 @@ struct NetworkUpdEntityPos
 struct NetworkUpdManPos
 {
 	// 8b encoded, assumed in range -PI,+PI
-	char gunXRotWantedC;
-	char gunYRotWantedC;
-	char headXRotWantedC;
-	char headYRotWantedC;
+	signed char gunXRotWantedC;
+	signed char gunYRotWantedC;
+	signed char headXRotWantedC;
+	signed char headYRotWantedC;
 };
 
 // encode angle in range -PI to +PI to 8b represetation
-inline char EncodeRot8b(float x)
+inline signed char EncodeRot8b(float x)
 {
 	int c = toInt(x*(127/H_PI));
 	saturate(c,-127,+127);
@@ -512,13 +512,13 @@ inline char EncodeRot8b(float x)
 }
 
 // decode 8b angle to range -PI to +PI
-inline float DecodeRot8b(char x)
+inline float DecodeRot8b(signed char x)
 {
 	return x*(H_PI/127);
 }
 
 // compare two 8b angles
-inline float CompareRot8b(char x1, char x2)
+inline float CompareRot8b(signed char x1, signed char x2)
 {
 	return (x1-x2)*(H_PI/127);
 }
