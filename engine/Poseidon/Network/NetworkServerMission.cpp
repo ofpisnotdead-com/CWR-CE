@@ -1,5 +1,6 @@
 #include <Poseidon/Foundation/Platform/VersionNo.h>
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <Poseidon/Core/Application.hpp>
 #include <Poseidon/Foundation/Platform/AppConfig.hpp>
@@ -171,12 +172,31 @@ extern const char* GameStateNames[];
 std::vector<std::string> Poseidon::GetMPMissionLookupDirectories()
 {
     std::vector<std::string> dirs;
+
+    struct ActiveModMissionDirs
+    {
+        std::vector<std::string>* dirs;
+    } ctx{&dirs};
+    ModSystem::EnumDirectories(
+        [](RStringB dir, void* context) -> bool
+        {
+            if (dir.GetLength() == 0)
+            {
+                return false;
+            }
+            auto* active = static_cast<ActiveModMissionDirs*>(context);
+            active->dirs->push_back((std::filesystem::path((const char*)dir) / GameDirs::MPMissions).string());
+            active->dirs->push_back((std::filesystem::path((const char*)dir) / "mpmissions").string());
+            return false;
+        },
+        &ctx);
+
     dirs.emplace_back((const char*)GetMPMissionsDir());
 
     if (!AppConfig::Instance().IsSimulateMode())
     {
         const std::string userDir = GamePaths::Instance().MPMissionsDir();
-        if (!userDir.empty() && userDir != dirs.front())
+        if (!userDir.empty() && std::find(dirs.begin(), dirs.end(), userDir) == dirs.end())
         {
             dirs.emplace_back(userDir);
         }
@@ -184,22 +204,42 @@ std::vector<std::string> Poseidon::GetMPMissionLookupDirectories()
     return dirs;
 }
 
+static std::string LowerCopy(std::string value)
+{
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return value;
+}
+
 RString Poseidon::ResolveMPMissionTemplateBase(RString mission, RString world)
 {
-    const std::string templateName = std::string((const char*)mission) + "." + std::string((const char*)world);
+    const std::string missionName = (const char*)mission;
+    const std::string worldName = (const char*)world;
+    std::vector<std::string> templateNames;
+    templateNames.push_back(missionName + "." + worldName);
+
+    const std::string lowerWorld = LowerCopy(worldName);
+    if (lowerWorld != worldName)
+    {
+        templateNames.push_back(missionName + "." + lowerWorld);
+    }
+
     for (const std::string& dir : GetMPMissionLookupDirectories())
     {
-        std::filesystem::path base = std::filesystem::path(dir) / templateName;
-        std::error_code ec;
-        if (std::filesystem::exists(base.string() + ".pbo", ec))
+        for (const std::string& templateName : templateNames)
         {
-            LOG_DEBUG(Network, "MP mission template resolved: {} -> {}", templateName, base.string());
-            return base.string().c_str();
+            std::filesystem::path base = std::filesystem::path(dir) / templateName;
+            std::error_code ec;
+            if (std::filesystem::exists(base.string() + ".pbo", ec))
+            {
+                LOG_DEBUG(Network, "MP mission template resolved: {} -> {}", templateName, base.string());
+                return base.string().c_str();
+            }
         }
     }
 
     RString fallback = GetMPMissionsDir() + mission + RString(".") + world;
-    LOG_DEBUG(Network, "MP mission template using fallback: {} -> {}", templateName, (const char*)fallback);
+    LOG_DEBUG(Network, "MP mission template using fallback: {} -> {}", templateNames.front(), (const char*)fallback);
     return fallback;
 }
 
