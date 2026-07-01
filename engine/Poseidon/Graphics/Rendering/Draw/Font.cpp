@@ -51,6 +51,7 @@ static FreeTypeFontMapping s_fontTable[] = {
     {"cwrhand", "fonts\\cwr_hand.ttf", 27, 21, 1.183f, false, -1.60f, -0.90f, 0.0f},
     {"ru_audreyshand", "fonts\\cwr_hand.ttf", 27, 21, 1.183f, false, -1.60f, -0.90f, 0.0f},
     {"steelfishb", "fonts\\cwr_title.ttf", 59, 46, 0.628f, false, -6.0f, -1.5f, 0.0f},
+    {"impact", "fonts\\cwr_title.ttf", 59, 46, 0.628f, false, -6.0f, -1.5f, 0.0f},
     {"tahomab", "fonts\\cwr_body.ttf", 12, 10, 1.000f, false, 0.0f, 0.0f, 0.0f},
     {"fontmaincz", "fonts\\cwr_body.ttf", 12, 10, 1.000f, false, 0.0f, 0.0f, 0.0f},
     {"couriernewb", "fonts\\cwr_mono.ttf", 29, 28, 0.800f, false, 0.0f, -0.6f, 0.0f},
