@@ -213,8 +213,7 @@ add_subdirectory(apps/tools/Tools)
 add_subdirectory(apps/tools/TcPbo)
 add_subdirectory(apps/tools/TcLister)
 add_subdirectory(apps/tools/Studio)
-# tests/unit/apps/Studio's ImGui-Test-Engine UI suite is quarantined under
-# License-restricted UI test sources are not part of this public tree.
+add_subdirectory(tests/unit/apps/Studio)
 add_subdirectory(apps/tetris/Tetris)
 add_subdirectory(tests/unit/apps/Tetris)
 
