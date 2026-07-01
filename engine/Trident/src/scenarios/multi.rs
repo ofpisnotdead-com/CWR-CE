@@ -115,6 +115,11 @@ pub struct InstanceConfig {
     #[serde(default)]
     pub connect_port: Option<u16>,
 
+    /// Test-only machine identity seed used to derive the multiplayer player id.
+    /// Applied before process launch through `POSEIDON_TEST_MACHINE_ID`.
+    #[serde(default)]
+    pub machine_id: Option<String>,
+
     /// Start this role automatically when the scenario begins.
     #[serde(default = "default_true")]
     pub autostart: bool,
@@ -1115,7 +1120,11 @@ pub async fn run_multi_test(
         }
         let user_dir_str = user_dir.to_string_lossy().to_string();
         let output_str = inst_output.to_string_lossy().to_string();
-        let machine_id = format!("trident:{name}:{}", inst.name);
+        let machine_id = inst
+            .machine_id
+            .as_ref()
+            .map(|value| expand_placeholders(value, &replacements))
+            .unwrap_or_else(|| format!("trident:{name}:{}", inst.name));
         let env_vars = [
             ("POSEIDON_USER_DIR", user_dir_str.as_str()),
             ("POSEIDON_CACHE_DIR", user_dir_str.as_str()),

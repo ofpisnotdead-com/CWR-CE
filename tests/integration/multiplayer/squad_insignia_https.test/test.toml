@@ -16,6 +16,7 @@ connect = "server"
 after = "server"
 wait_ngs = 13
 mp_assign = "WEST:1"
+machine_id = "trident:squad_insignia_https:client1"
 copy_files = [
   { source = "client1/UserInfo.cfg", target = "Users/client1/UserInfo.cfg" },
 ]
@@ -28,6 +29,7 @@ connect = "server"
 after = "server"
 wait_ngs = 13
 mp_assign = "WEST:2"
+machine_id = "trident:squad_insignia_https:client2"
 copy_files = [
   { source = "client2/UserInfo.cfg", target = "Users/client2/UserInfo.cfg" },
 ]

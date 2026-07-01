@@ -168,6 +168,9 @@ jobs:
         working-directory: engine/Trident
         run: cargo build --locked
 
+      - name: Build MasterService
+        run: cargo build --locked --manifest-path mserver/MasterService/Cargo.toml
+
       - name: Build metadata
         id: build_metadata
         shell: bash
@@ -178,6 +181,13 @@ jobs:
         with:
           name: ${{ env.CWR_ARTIFACT_PREFIX }}-Trident-${{ steps.build_metadata.outputs.sha_short }}
           path: engine/Trident/target/debug/tri
+          if-no-files-found: error
+
+      - name: Upload MasterService
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-MasterService-${{ steps.build_metadata.outputs.sha_short }}
+          path: mserver/MasterService/target/debug/papa-bear-master-service
           if-no-files-found: error
 
       - name: Test
@@ -256,6 +266,12 @@ jobs:
           name: ${{ env.CWR_ARTIFACT_PREFIX }}-Trident-${{ steps.build_metadata.outputs.sha_short }}
           path: exe
 
+      - name: Download MasterService
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-MasterService-${{ steps.build_metadata.outputs.sha_short }}
+          path: exe
+
       - name: Write Trident env
         run: |
           chmod +x exe/*
@@ -267,6 +283,7 @@ jobs:
         env:
           ALSOFT_DRIVERS: 'null'
           HARNESS_CMD_TIMEOUT_SEC: '180'
+          PAPA_BEAR_MASTER_SERVICE: ${{ github.workspace }}/exe/papa-bear-master-service
           TRI_OUTPUT_DIR: ${{ github.workspace }}/trident-output
         run: |
           xvfb-run -a --server-args="$TRIDENT_XVFB_ARGS" \
