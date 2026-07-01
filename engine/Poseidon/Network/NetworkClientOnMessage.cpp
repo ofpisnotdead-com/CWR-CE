@@ -744,7 +744,6 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 RString path = transfer.path.Substring(0, ext - ptr);
                 CreateMPMissionBank(path, _missionHeader.island);
 
-                NET_ERROR(!_missionFileValid);
                 _missionFileValid = true;
                 NET_ERROR(!_parent->IsServer());
                 /*
