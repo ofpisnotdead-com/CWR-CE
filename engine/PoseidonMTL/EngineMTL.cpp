@@ -90,6 +90,18 @@ void EngineMTL::CreateWindowAndDevice()
     flags |= SDL_WINDOW_FULLSCREEN | SDL_WINDOW_BORDERLESS;
     _windowMode = WindowMode::Fullscreen;
     _windowed = false;
+    // "2" = dim the home indicator and defer ALL screen-edge system gestures
+    // (SDL_uikitviewcontroller.m: preferredScreenEdgesDeferringSystemGestures
+    // returns UIRectEdgeAll only for this value) -- without it, a tap that
+    // starts close enough to the bottom edge can be swallowed by iOS's
+    // swipe-up-for-home gesture recognizer before SDL ever sees a finger-down
+    // event, which is exactly what made some group-bar unit icons untappable.
+    // There's a passive default that resolves to the same UIRectEdgeAll for a
+    // fullscreen+borderless window (which this always is on iOS), but it
+    // depends on window->flags being settled at the exact moment UIKit first
+    // queries this property; setting the hint explicitly forces a
+    // deterministic re-query instead of relying on that timing.
+    SDL_SetHint(SDL_HINT_IOS_HIDE_HOME_INDICATOR, "2");
 #else
     switch (placement.mode)
     {
