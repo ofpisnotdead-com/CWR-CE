@@ -210,6 +210,30 @@ float TouchToUiY(float y)
     return Clamp01((y - as.uiTopLeftY) / height);
 }
 
+float TouchToCursorUiX(float x)
+{
+    if (!GEngine)
+        return x;
+    AspectSettings as;
+    GEngine->GetAspectSettings(as);
+    const float width = as.uiBottomRightX - as.uiTopLeftX;
+    if (width <= 0.0001f)
+        return x;
+    return (x - as.uiTopLeftX) / width;
+}
+
+float TouchToCursorUiY(float y)
+{
+    if (!GEngine)
+        return y;
+    AspectSettings as;
+    GEngine->GetAspectSettings(as);
+    const float height = as.uiBottomRightY - as.uiTopLeftY;
+    if (height <= 0.0001f)
+        return y;
+    return (y - as.uiTopLeftY) / height;
+}
+
 PixelLayout BuildPixelLayout(int width, int height)
 {
     if (width <= 0)
@@ -258,6 +282,13 @@ bool IsMapScene()
     return kind == ControllerSceneKind::Map || kind == ControllerSceneKind::EditorMap;
 }
 
+bool IsEditorMapScene()
+{
+    if (!GWorld)
+        return false;
+    return GWorld->GetControllerUiScene().kind == ControllerSceneKind::EditorMap;
+}
+
 bool IsDirectTouchScene()
 {
     if (sDirectTouchSceneOverrideEnabled)
@@ -281,6 +312,16 @@ bool IsDirectTouchScene()
         default:
             return false;
     }
+}
+
+float DirectTouchCursorX(float x)
+{
+    return IsEditorMapScene() ? TouchToUiX(x) : TouchToCursorUiX(x);
+}
+
+float DirectTouchCursorY(float y)
+{
+    return IsEditorMapScene() ? TouchToUiY(y) : TouchToCursorUiY(y);
 }
 
 float ClampSensitivity(float v)
@@ -477,8 +518,8 @@ int CollectMapGestureFingers(const Finger** first, const Finger** second)
 
 void BufferCursorToTouch(float x, float y)
 {
-    const float targetX = TouchToUiX(x) * 2.0f - 1.0f;
-    const float targetY = TouchToUiY(y) * 2.0f - 1.0f;
+    const float targetX = DirectTouchCursorX(x) * 2.0f - 1.0f;
+    const float targetY = DirectTouchCursorY(y) * 2.0f - 1.0f;
     const float cursorDx = targetX - GInput.cursor.cursorX;
     const float cursorDy = targetY - GInput.cursor.cursorY;
     if (std::fabs(cursorDx) > 0.0001f || std::fabs(cursorDy) > 0.0001f)
