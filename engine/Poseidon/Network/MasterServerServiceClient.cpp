@@ -28,6 +28,7 @@
 
 #include <curl/curl.h>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <mutex>
 
@@ -523,9 +524,6 @@ std::string BuildMasterServerServiceListUrl(const char* masterServerHost, const 
 
     bool hasQuery = false;
     AppendMasterServerServiceQueryParameter(url, hasQuery, "app", UrlEncodeMasterServerServiceValue(APP_NAME_SHORT));
-    AppendMasterServerServiceQueryParameter(url, hasQuery, "actver", APP_VERSION_NUM);
-    AppendMasterServerServiceQueryParameterEvenWhenEmpty(
-        url, hasQuery, "vertag", UrlEncodeMasterServerServiceValue((const char*)GetVersionTag()));
     VisitMasterServerBrowserFilterTerms(
         filter,
         [&](const MasterServerBrowserFilterTerm& term)
@@ -1098,6 +1096,12 @@ bool DownloadMasterServerServiceFile(const char* url, const char* proxyServer, c
     }
 
     const std::string tempPath = std::string(destPath) + ".part";
+    std::error_code ec;
+    const std::filesystem::path parent = std::filesystem::path(tempPath).parent_path();
+    if (!parent.empty())
+    {
+        std::filesystem::create_directories(parent, ec);
+    }
     FILE* out = fopen(tempPath.c_str(), "wb");
     if (out == nullptr)
     {

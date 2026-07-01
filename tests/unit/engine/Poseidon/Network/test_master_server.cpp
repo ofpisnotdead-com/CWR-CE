@@ -82,13 +82,13 @@ TEST_CASE("master registration builder carries platform", "[network][master]")
     REQUIRE(BuildMasterServerServiceRegistrationJson(registration).find("\"platform\":\"linux\"") != std::string::npos);
 }
 
-TEST_CASE("master service list URL carries explicit app compatibility", "[network][master][version]")
+TEST_CASE("master service list URL filters by app only", "[network][master][version]")
 {
     const std::string url = BuildMasterServerServiceListUrl("https://master.example", MasterServerBrowserFilter{});
 
     REQUIRE(url.find("app=CWR-CE") != std::string::npos);
-    REQUIRE(url.find("actver=301") != std::string::npos);
-    REQUIRE(url.find("vertag=") != std::string::npos);
+    REQUIRE(url.find("actver=") == std::string::npos);
+    REQUIRE(url.find("vertag=") == std::string::npos);
 }
 
 TEST_CASE("master service requests carry structured user-agent", "[network][master][version]")
