@@ -280,6 +280,26 @@ fn resolve_repo_path(value: &str, replacements: &HashMap<String, String>) -> Pat
     }
 }
 
+fn clear_legacy_network_asset_tmp(data_dir: Option<&str>) -> Result<()> {
+    let Some(data_dir) = data_dir else {
+        return Ok(());
+    };
+    let data_path = PathBuf::from(data_dir);
+    let data_path = if data_path.is_absolute() {
+        data_path
+    } else {
+        repo_root().join(data_path)
+    };
+    for relative in ["tmp/squads", "tmp/players"] {
+        let path = data_path.join(relative);
+        if path.exists() {
+            std::fs::remove_dir_all(&path)
+                .with_context(|| format!("failed to remove {}", path.display()))?;
+        }
+    }
+    Ok(())
+}
+
 fn seed_mod_store(
     mods_dir: &Path,
     seeds: &[ServiceSeedModConfig],
@@ -899,6 +919,8 @@ pub async fn run_multi_test(
     let config: MultiTestConfig = toml::from_str(&toml_content)
         .with_context(|| format!("failed to parse {}", toml_path.display()))?;
 
+    clear_legacy_network_asset_tmp(data_dir)?;
+
     if config.instances.is_empty() {
         return Ok(ScenarioResult {
             passed: false,
@@ -1131,6 +1153,7 @@ pub async fn run_multi_test(
         let env_vars = [
             ("POSEIDON_USER_DIR", user_dir_str.as_str()),
             ("POSEIDON_CACHE_DIR", user_dir_str.as_str()),
+            ("POSEIDON_TEMP_DIR", user_dir_str.as_str()),
             ("POSEIDON_TEST_MACHINE_ID", machine_id.as_str()),
             ("TRI_OUTPUT_DIR", output_str.as_str()),
             ("SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0"),

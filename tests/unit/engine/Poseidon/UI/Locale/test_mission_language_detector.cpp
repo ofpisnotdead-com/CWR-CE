@@ -25,10 +25,10 @@ using Poseidon::FindLocalizedMissionHtmlFile;
 using Poseidon::GetLanguage;
 using Poseidon::GetMissionStringtableFileForHtml;
 using Poseidon::ListMissionTemplates;
-using Poseidon::MissionTemplateEntry;
-using Poseidon::ResolveMissionTemplateDisplayName;
 using Poseidon::LoadLocalizedMissionHtmlUtf8;
 using Poseidon::LoadStringtable;
+using Poseidon::MissionTemplateEntry;
+using Poseidon::ResolveMissionTemplateDisplayName;
 using Poseidon::SetLanguage;
 
 namespace
@@ -336,8 +336,7 @@ TEST_CASE("mission template display name follows mission-local stringtable langu
 TEST_CASE("mission template catalog lists matching directories before banks", "[ui][missions][templates]")
 {
     const auto uniqueId = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-    const std::filesystem::path root =
-        std::filesystem::temp_directory_path() / ("ofpr-template-catalog-" + uniqueId);
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / ("ofpr-template-catalog-" + uniqueId);
     std::filesystem::create_directories(root / "Templates" / "DirectoryMission.Eden");
     std::filesystem::create_directories(root / "Templates" / "WrongWorld.Noe");
     std::ofstream(root / "Templates" / "BankMission.Eden.pbo").put('x');

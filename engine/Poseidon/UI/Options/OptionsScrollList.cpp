@@ -37,13 +37,20 @@ OptionsScrollList::OptionsScrollList(Display& host, Provider& provider)
     for (int slot = 0; slot < kVisibleSlots; ++slot)
     {
         m_slotLabelColor[slot] = NotebookTheme::ResourceColorOr(ControlColor(SlotIdcLabel(slot), PackedWhite));
-        m_slotValueStepColor[slot] = NotebookTheme::ResourceColorOr(ControlColor(SlotIdcValStep(slot), m_slotLabelColor[slot]));
-        m_slotValueBarColor[slot] = NotebookTheme::ResourceColorOr(ControlColor(SlotIdcValBar(slot), m_slotValueStepColor[slot]));
-        m_slotRowBgColor[slot] = NotebookTheme::ResourceColorOr(ControlColor(kIdcRowBgBase + slot, m_slotLabelColor[slot]));
-        m_slotRowBgFillColor[slot] = NotebookTheme::ResourceColorOr(ControlBgColor(kIdcRowBgBase + slot, ModAlpha(m_slotRowBgColor[slot], 65)));
-        m_slotTrackFillColor[slot] = NotebookTheme::ResourceColorOr(ControlBgColor(SlotIdcTrack(slot), ModAlpha(m_slotLabelColor[slot], 35)));
-        m_slotBarFillColor[slot] = NotebookTheme::ResourceColorOr(ControlBgColor(SlotIdcFill(slot), ModAlpha(m_slotLabelColor[slot], 95)));
-        m_slotPeakFillColor[slot] = NotebookTheme::ResourceColorOr(ControlBgColor(SlotIdcPeak(slot), m_slotLabelColor[slot]));
+        m_slotValueStepColor[slot] =
+            NotebookTheme::ResourceColorOr(ControlColor(SlotIdcValStep(slot), m_slotLabelColor[slot]));
+        m_slotValueBarColor[slot] =
+            NotebookTheme::ResourceColorOr(ControlColor(SlotIdcValBar(slot), m_slotValueStepColor[slot]));
+        m_slotRowBgColor[slot] =
+            NotebookTheme::ResourceColorOr(ControlColor(kIdcRowBgBase + slot, m_slotLabelColor[slot]));
+        m_slotRowBgFillColor[slot] =
+            NotebookTheme::ResourceColorOr(ControlBgColor(kIdcRowBgBase + slot, ModAlpha(m_slotRowBgColor[slot], 65)));
+        m_slotTrackFillColor[slot] =
+            NotebookTheme::ResourceColorOr(ControlBgColor(SlotIdcTrack(slot), ModAlpha(m_slotLabelColor[slot], 35)));
+        m_slotBarFillColor[slot] =
+            NotebookTheme::ResourceColorOr(ControlBgColor(SlotIdcFill(slot), ModAlpha(m_slotLabelColor[slot], 95)));
+        m_slotPeakFillColor[slot] =
+            NotebookTheme::ResourceColorOr(ControlBgColor(SlotIdcPeak(slot), m_slotLabelColor[slot]));
     }
     m_scrollbarColor = NotebookTheme::ResourceColorOr(m_slotLabelColor[0]);
 }
