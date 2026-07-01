@@ -15,6 +15,7 @@ using namespace Poseidon;
 // #include "strIncl.hpp"
 #include <Poseidon/UI/Locale/StringtableExt.hpp>
 #include <Poseidon/Foundation/Platform/GamePaths.hpp>
+#include <Poseidon/Network/NetworkMissionTransfer.hpp>
 
 #include <Poseidon/AI/ArcadeTemplate.hpp>
 #include <Poseidon/AI/AI.hpp>
@@ -633,16 +634,18 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             _playerRoles.Resize(0);
 
             // check if mission file is valid
-            RString fullname = _missionHeader.fileDir + _missionHeader.fileName;
-            _missionFileValid = CheckMissionFile(fullname, _missionHeader);
+            const RString missionCacheBasePath =
+                Poseidon::BuildNetworkMissionTransferCacheBasePath(_missionHeader.fileName);
+            RString fullname =
+                missionCacheBasePath.GetLength() > 0 ? _missionHeader.fileDir + _missionHeader.fileName : RString();
+            _missionFileValid = fullname.GetLength() > 0 && CheckMissionFile(fullname, _missionHeader);
             LOG_DEBUG(Network, "[MissionHeader] file='{}' valid={}", (const char*)fullname, _missionFileValid);
 
             if (!_missionFileValid)
             {
                 // check cache
-                RString fullname = RString(GamePaths::Instance().CacheDir().c_str()) +
-                                   RString(GameDirs::MPMissionsCachePath().c_str()) + _missionHeader.fileName;
-                _missionFileValid = CheckMissionFile(fullname, _missionHeader);
+                RString fullname = missionCacheBasePath;
+                _missionFileValid = fullname.GetLength() > 0 && CheckMissionFile(fullname, _missionHeader);
                 LOG_DEBUG(Network, "[MissionHeader] cache='{}' valid={}", (const char*)fullname, _missionFileValid);
             }
 
@@ -724,9 +727,13 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
 
             // Rewrite transfer path to use client's own cache dir
             // (server embeds its absolute CacheDir which differs per-instance)
-            transfer.path = RString(GamePaths::Instance().CacheDir().c_str()) +
-                            RString(GameDirs::MPMissionsCachePath().c_str()) + _missionHeader.fileName +
-                            RString(".pbo");
+            transfer.path = Poseidon::BuildNetworkMissionTransferCachePboPath(_missionHeader.fileName);
+            if (transfer.path.GetLength() == 0)
+            {
+                LOG_WARN(Network, "[NMTTransferMissionFile] rejected unsafe mission file name '{}'",
+                         (const char*)_missionHeader.fileName);
+                break;
+            }
 
             const std::string prefix = GameDirs::MPCurrentPrefix();
             RemoveBank(prefix.c_str());

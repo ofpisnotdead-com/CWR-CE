@@ -3,6 +3,7 @@
 
 #include <Poseidon/Foundation/platform.hpp>
 #include <Poseidon/Network/NetworkCustomAssets.hpp>
+#include <Poseidon/Network/NetworkMissionTransfer.hpp>
 #include <Poseidon/Network/NetworkPlayerRoleAssignment.hpp>
 #include <Poseidon/Network/NetworkServerAuth.hpp>
 
@@ -261,6 +262,18 @@ TEST_CASE("Transferred custom asset paths are confined to expected temp namespac
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Al/ice/face.jpg")));
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/mpmissions/__CUR_MP.pbo")));
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("../outside.bin")));
+}
+
+TEST_CASE("Mission transfer cache paths reject traversal in server-provided mission names",
+          "[network][mission][transfer][security]")
+{
+    REQUIRE(Poseidon::BuildNetworkMissionTransferCachePboPath("co06_clean_sweep.Intro").GetLength() > 0);
+
+    REQUIRE(Poseidon::BuildNetworkMissionTransferCachePboPath("../escape").GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkMissionTransferCachePboPath("nested/escape").GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkMissionTransferCachePboPath("/tmp/escape").GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkMissionTransferCachePboPath("C:/Windows/System32/escape").GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkMissionTransferCachePboPath("C:\\Windows\\System32\\escape").GetLength() == 0);
 }
 
 TEST_CASE("Transferred custom asset probe maps semantic asset names to temp paths", "[network][assets]")
