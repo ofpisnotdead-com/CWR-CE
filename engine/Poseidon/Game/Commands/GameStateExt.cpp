@@ -439,6 +439,7 @@ GameValue SideLogic(const GameState* state);
 GameValue SideResistance(const GameState* state);
 GameValue SideWest(const GameState* state);
 GameValue UsedVersion(const GameState* state);
+GameValue VoiceLanguage(const GameState* state);
 GameValue WorldName(const GameState* state);
 GameValue WorldSize(const GameState* state);
 
@@ -904,6 +905,7 @@ static const GameNular* GetExtNular(int& count)
         GameNular(GameString, "missionName", MissionName),
         GameNular(GameArray, "missionStart", MissionStart),
         GameNular(GameString, "getWorld", WorldName),
+        GameNular(GameString, "voiceLanguage", VoiceLanguage),
         GameNular(GameBool, "isServer", IsServer),
         GameNular(GameBool, "isJIP", IsJIP),
         GameNular(GameNothing, "serverPause", ServerPause),
