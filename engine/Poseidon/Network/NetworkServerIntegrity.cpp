@@ -750,6 +750,23 @@ void NetworkServer::OnPlayerDestroy(int dpid)
             }
         }
     }
+
+    if (_dedicated)
+    {
+        for (int i = 0; i < _votings.Size(); i++)
+        {
+            Voting& voting = _votings.Set(i);
+            for (int j = 0; j < voting.Size(); j++)
+            {
+                if(voting.Get(j).player == dpid)
+                {
+                    voting.Delete(j);
+                    j--;
+                }
+            }
+        }
+    }
+
     for (int i = 0; i < _playerRoles.Size(); i++)
     {
         PlayerRole& role = _playerRoles[i];

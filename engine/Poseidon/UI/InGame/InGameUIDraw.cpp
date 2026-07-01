@@ -1142,21 +1142,33 @@ void InGameUI::DrawCompass(EntityAI* vehicle)
     GLOB_ENGINE->DrawLine(Line2DPixel(xPos, coY * h, xPos + xSize, coY * h - ySize), col, col, compassClip);
     GLOB_ENGINE->DrawLine(Line2DPixel(xPos, coY * h, xPos - xSize, coY * h - ySize), col, col, compassClip);
 
-    int weapon = vehicle->SelectedWeapon();
-    if (weapon >= 0)
+    AIUnit* unit = GWorld->FocusOn();
+    PoseidonAssert(unit);
+
+    Vector3 vehDir = VZero;
+    if (unit && unit == vehicle->PilotUnit())
     {
-        // draw turret direction
-
-        Vector3Val dir = vehicle->DirectionWorldToModel(vehicle->GetWeaponDirection(weapon));
-
-        if (dir.SquareSizeXZ() > 0.1)
+        int weapon = vehicle->SelectedWeapon();
+        if (weapon >= 0)
         {
-            xAngle = atan2(dir.X(), dir.Z());
-            float xPos = (coX + 0.5 * coW + xAngle * coW * INV_W) * w;
-            PackedColor col = compassTurretDirColor;
-            GLOB_ENGINE->DrawLine(Line2DPixel(xPos, coY * h, xPos + xSize, coY * h - ySize), col, col, compassClip);
-            GLOB_ENGINE->DrawLine(Line2DPixel(xPos, coY * h, xPos - xSize, coY * h - ySize), col, col, compassClip);
+            // draw turret direction
+
+            vehDir = Vector3(VRotate, cam.GetInvTransform(), vehicle->GetWeaponDirection(weapon));
         }
+    }
+    else
+    {
+        // draw vehicle direction
+        vehDir = Vector3(VRotate, cam.GetInvTransform(), vehicle->Direction());
+    }
+
+    if (vehDir.SquareSizeXZ() > 0.1)
+    {
+        xAngle = atan2(vehDir.X(), vehDir.Z());
+        float xPos = (coX + 0.5 * coW + xAngle * coW * INV_W) * w;
+        PackedColor col = compassTurretDirColor;
+        GLOB_ENGINE->DrawLine(Line2DPixel(xPos, coY * h, xPos + xSize, coY * h - ySize), col, col, compassClip);
+        GLOB_ENGINE->DrawLine(Line2DPixel(xPos, coY * h, xPos - xSize, coY * h - ySize), col, col, compassClip);
     }
 }
 
