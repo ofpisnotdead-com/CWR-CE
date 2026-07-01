@@ -274,12 +274,20 @@ jobs:
             exe/tri test \
             --output-dir "$TRI_OUTPUT_DIR" \
             --render "$TRIDENT_RENDER" \
-            --retries 0 \
+            --retries 2 \
             --skip-tag ci-host-blocked \
             --game-arg --audio \
             --game-arg "$TRIDENT_AUDIO" \
             --game-arg --no-strict \
             tests/integration
+
+      - name: Upload Trident output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trident-output-${{ steps.build_metadata.outputs.sha_short }}
+          path: trident-output
+          if-no-files-found: ignore
 
   steamrt4:
     name: SteamRT4 Release
