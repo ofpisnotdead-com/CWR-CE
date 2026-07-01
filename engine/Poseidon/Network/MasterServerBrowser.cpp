@@ -6,6 +6,7 @@
 #include <Poseidon/Network/Network.hpp>
 
 #include <atomic>
+#include <memory>
 #include <thread>
 #include <string>
 #include <vector>
@@ -16,6 +17,17 @@
 namespace Poseidon
 {
 
+struct MasterServerBrowserFetchJob
+{
+    std::string host;
+    std::vector<MasterServerServiceSession> sessions;
+    std::atomic<bool> done{false};
+    std::string filterServerName;
+    std::string filterMissionName;
+    std::string proxyServer;
+    MasterServerBrowserFilter filter{};
+};
+
 struct MasterServerBrowser
 {
     void* instance = nullptr;
@@ -25,18 +37,12 @@ struct MasterServerBrowser
     MasterServerBrowserState serviceState = MasterServerBrowserState::Idle;
 
     // Async fetch: UpdateMasterServerBrowser() spawns `worker` to run the
-    // blocking HTTP query off the main thread, filling `pending` and flipping
-    // `fetchDone`; ThinkMasterServerBrowser() swaps it into serviceSessions on
-    // the main thread once done, so the UI never stalls on the round-trip.
+    // blocking HTTP query off the main thread. The worker owns its fetch job
+    // until done; ThinkMasterServerBrowser() then swaps its sessions into
+    // serviceSessions on the main thread so UI-visible state is not mutated
+    // from shutdown/HTTP worker code.
     std::thread worker;
-    std::vector<MasterServerServiceSession> pending;
-    std::atomic<bool> fetchDone{false};
-    // Worker-owned snapshots so it never reads UI memory that may change/free
-    // once UpdateMasterServerBrowser() returns.
-    std::string filterServerName;
-    std::string filterMissionName;
-    std::string proxySnapshot;
-    MasterServerBrowserFilter filterSnapshot{};
+    std::shared_ptr<MasterServerBrowserFetchJob> fetchJob;
 
     void joinWorker()
     {
@@ -47,6 +53,11 @@ struct MasterServerBrowser
 
 namespace
 {
+using MasterServerBrowserFetchFn = bool (*)(const char* masterServerHost, const MasterServerBrowserFilter& filter,
+                                            const char* proxyServer, std::vector<MasterServerServiceSession>& sessions);
+
+MasterServerBrowserFetchFn GMasterServerBrowserFetchOverride = nullptr;
+
 RString BuildBrowserFilterString(const MasterServerBrowserFilter& filter)
 {
     RString value;
@@ -56,7 +67,25 @@ RString BuildBrowserFilterString(const MasterServerBrowserFilter& filter)
 
     return value;
 }
+
+bool FetchMasterServerBrowserSessions(const char* masterServerHost, const MasterServerBrowserFilter& filter,
+                                      const char* proxyServer, std::vector<MasterServerServiceSession>& sessions)
+{
+    if (GMasterServerBrowserFetchOverride != nullptr)
+    {
+        return GMasterServerBrowserFetchOverride(masterServerHost, filter, proxyServer, sessions);
+    }
+
+    MasterServerBrowserState state = MasterServerBrowserState::ListTransfer;
+    return RefreshMasterServerServiceBrowserFromDirectory(masterServerHost, filter, proxyServer, sessions, state,
+                                                          nullptr, nullptr);
+}
 } // namespace
+
+void SetMasterServerBrowserFetchForTest(MasterServerBrowserFetchFn fetch)
+{
+    GMasterServerBrowserFetchOverride = fetch;
+}
 
 const RString& GetMasterServerBrowserFilterConjunction()
 {
@@ -129,6 +158,7 @@ void DestroyMasterServerBrowser(MasterServerBrowser* browser)
     if (browser)
     {
         browser->joinWorker();
+        browser->fetchJob.reset();
     }
     delete browser;
 }
@@ -150,7 +180,10 @@ void ClearMasterServerBrowser(MasterServerBrowser* browser)
 {
     if (browser != nullptr)
     {
+        browser->joinWorker();
+        browser->fetchJob.reset();
         browser->serviceSessions.clear();
+        browser->serviceState = MasterServerBrowserState::Idle;
     }
 }
 
@@ -170,34 +203,30 @@ void UpdateMasterServerBrowser(MasterServerBrowser* browser, const MasterServerB
     }
 
     browser->joinWorker(); // reap any finished worker not yet collected by Think
+    browser->fetchJob.reset();
 
-    // Snapshot everything the worker needs so it never touches UI-owned memory.
-    browser->filterServerName = filter.serverName != nullptr ? filter.serverName : "";
-    browser->filterMissionName = filter.missionName != nullptr ? filter.missionName : "";
-    browser->filterSnapshot = filter;
-    browser->filterSnapshot.serverName = browser->filterServerName.c_str();
-    browser->filterSnapshot.missionName = browser->filterMissionName.c_str();
+    auto job = std::make_shared<MasterServerBrowserFetchJob>();
+    job->host = browser->host;
+    job->filterServerName = filter.serverName != nullptr ? filter.serverName : "";
+    job->filterMissionName = filter.missionName != nullptr ? filter.missionName : "";
+    job->filter = filter;
+    job->filter.serverName = job->filterServerName.c_str();
+    job->filter.missionName = job->filterMissionName.c_str();
     RString proxy = GetNetworkProxy();
-    browser->proxySnapshot = proxy.GetLength() > 0 ? static_cast<const char*>(proxy) : "";
+    job->proxyServer = proxy.GetLength() > 0 ? static_cast<const char*>(proxy) : "";
 
-    browser->pending.clear();
-    browser->fetchDone.store(false, std::memory_order_relaxed);
+    browser->fetchJob = job;
     browser->serviceState = MasterServerBrowserState::ListTransfer;
 
-    const std::string host = browser->host;
     browser->worker = std::thread(
-        [browser, host]()
+        [job]()
         {
-            MasterServerBrowserState state = MasterServerBrowserState::ListTransfer;
-            const char* proxyServer = browser->proxySnapshot.empty() ? nullptr : browser->proxySnapshot.c_str();
-            // No instance / progress callback off-thread — progress is reflected
-            // to the UI via serviceState (ListTransfer → Idle), not a callback.
-            if (!RefreshMasterServerServiceBrowserFromDirectory(host.c_str(), browser->filterSnapshot, proxyServer,
-                                                                browser->pending, state, nullptr, nullptr))
+            const char* proxyServer = job->proxyServer.empty() ? nullptr : job->proxyServer.c_str();
+            if (!FetchMasterServerBrowserSessions(job->host.c_str(), job->filter, proxyServer, job->sessions))
             {
-                LOG_WARN(Network, "Failed to refresh master server service browser from '{}'", host);
+                LOG_WARN(Network, "Failed to refresh master server service browser from '{}'", job->host);
             }
-            browser->fetchDone.store(true, std::memory_order_release);
+            job->done.store(true, std::memory_order_release);
         });
 }
 
@@ -212,16 +241,16 @@ void ThinkMasterServerBrowser(MasterServerBrowser* browser)
     {
         return;
     }
-    if (!browser->fetchDone.load(std::memory_order_acquire))
+    auto job = browser->fetchJob;
+    if (job == nullptr || !job->done.load(std::memory_order_acquire))
     {
         return; // still fetching
     }
 
     browser->joinWorker();
-    browser->serviceSessions = std::move(browser->pending);
-    browser->pending.clear();
+    browser->serviceSessions = std::move(job->sessions);
+    browser->fetchJob.reset();
     browser->serviceState = MasterServerBrowserState::Idle;
-    browser->fetchDone.store(false, std::memory_order_relaxed);
 }
 
 int GetMasterServerBrowserCount(MasterServerBrowser* browser)
