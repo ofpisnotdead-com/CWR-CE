@@ -139,7 +139,16 @@ impl GameInstance {
         })?;
 
         let actual_port = if auto_port {
-            read_harness_port(&mut process, stdout_log, config.connect_timeout).await?
+            read_harness_port(&mut process, stdout_log, config.connect_timeout)
+                .await
+                .with_context(|| {
+                    format!(
+                        "while waiting for HARNESS_PORT from '{}' cwd='{}' args='--harness {port} {}'",
+                        binary.display(),
+                        work_dir.display(),
+                        extra_args.join(" ")
+                    )
+                })?
         } else {
             port
         };
@@ -368,13 +377,23 @@ async fn read_harness_port(
         .context("stdout not piped for harness port discovery")?;
     let mut lines = tokio::io::BufReader::new(stdout).lines();
     let deadline = tokio::time::Instant::now() + timeout;
+    let mut early_stdout = Vec::new();
     loop {
         let line = tokio::time::timeout_at(deadline, lines.next_line())
             .await
             .map_err(|_| anyhow::anyhow!("timeout waiting for HARNESS_PORT announcement"))?
             .context("I/O error reading game stdout")?;
         match line {
-            None => anyhow::bail!("game closed stdout before announcing HARNESS_PORT"),
+            None => {
+                let excerpt = if early_stdout.is_empty() {
+                    "<no stdout before exit>".to_string()
+                } else {
+                    early_stdout.join("\n")
+                };
+                anyhow::bail!(
+                    "game closed stdout before announcing HARNESS_PORT; early stdout:\n{excerpt}"
+                );
+            }
             Some(line) => {
                 if let Some(rest) = line.trim().strip_prefix("HARNESS_PORT=") {
                     if let Ok(port) = rest.parse::<u16>() {
@@ -390,6 +409,9 @@ async fn read_harness_port(
                         });
                         return Ok(port);
                     }
+                }
+                if early_stdout.len() < 80 {
+                    early_stdout.push(line);
                 }
             }
         }
