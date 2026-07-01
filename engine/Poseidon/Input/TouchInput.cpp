@@ -57,7 +57,7 @@ constexpr float kMapPanMouseScaleY = 150.0f / 1.5f;
 constexpr float kMapPinchZoomScale = 5.0f;
 constexpr float kActionScrollStepY = 0.035f;
 constexpr float kActionScrollWheelTicks = 1.0f;
-constexpr float kEquipmentRadialCenterDeg = 320.0f;
+constexpr float kEquipmentRadialCenterDeg = 135.0f;
 constexpr float kEquipmentRadialMinSpanDeg = 58.0f;
 constexpr float kEquipmentRadialSpanStepDeg = 23.0f;
 constexpr float kEquipmentRadialMinDistance = 1.65f;
@@ -371,6 +371,7 @@ bool IsTouchButtonAvailable(TouchButton button)
         case TouchButton::Action:
         case TouchButton::Reload:
         case TouchButton::Optics:
+        case TouchButton::CycleWeapon:
             return IsGameplayScene();
         case TouchButton::Equipment:
             return IsGameplayScene() || IsRegularMapScene();
@@ -448,30 +449,33 @@ std::array<ButtonZone, (int)TouchButton::Count> BuildButtonZones(int width, int 
     const float columnX = layout.edgeMargin;
     const float innerX = columnX + layout.buttonGap * 0.95f;
     const float fireY = (float)height - layout.edgeMargin - layout.buttonRadius * 0.35f;
-    const float actionY = fireY - layout.buttonGap * 0.88f;
-    const float reloadY = fireY - layout.buttonGap * 1.78f;
-    const float opticsY = fireY - layout.buttonGap * 2.68f;
-    const float mapY = fireY - layout.buttonGap * 3.58f;
+    const float opticsY = fireY - layout.buttonGap * 0.88f;
+    const float cycleWeaponY = fireY - layout.buttonGap * 1.78f;
+    const float reloadY = fireY - layout.buttonGap * 2.68f;
+    const float actionY = fireY - layout.buttonGap * 3.58f;
     const float radius = layout.buttonRadius / (float)height;
     const float oppositeX = (float)width - layout.edgeMargin;
+    const float equipmentY = layout.topMargin + layout.buttonGap * 1.12f;
     std::array<ButtonZone, (int)TouchButton::Count> zones = {
         {{TouchButton::Fire, NormX(columnX, width), NormY(fireY, height), radius * 1.18f},
-         {TouchButton::Action, NormX(innerX, width), NormY(actionY, height), radius},
-         {TouchButton::Reload, NormX(columnX, width), NormY(reloadY, height), radius},
+         {TouchButton::Action, NormX(columnX, width), NormY(actionY, height), radius},
+         {TouchButton::Reload, NormX(innerX, width), NormY(reloadY, height), radius},
          {TouchButton::Optics, NormX(innerX, width), NormY(opticsY, height), radius},
-         {TouchButton::Equipment, NormX(columnX, width), NormY(mapY, height), radius},
+         {TouchButton::Equipment, NormX(oppositeX, width), NormY(equipmentY, height), radius * 0.86f},
          {TouchButton::PersonView, NormX(oppositeX, width), NormY(layout.topMargin, height), radius * 0.72f},
+         {TouchButton::CycleWeapon, NormX(columnX, width), NormY(cycleWeaponY, height), radius},
          {TouchButton::Pause, NormX(layout.edgeMargin, width), NormY(layout.topMargin, height), radius * 0.72f}}};
-    const int leftCluster[] = {(int)TouchButton::Fire,   (int)TouchButton::Action,    (int)TouchButton::Reload,
-                               (int)TouchButton::Optics, (int)TouchButton::Equipment, (int)TouchButton::Pause};
-    const int rightCluster[] = {(int)TouchButton::PersonView};
+    const int leftCluster[] = {(int)TouchButton::Fire,        (int)TouchButton::Action, (int)TouchButton::Reload,
+                               (int)TouchButton::Optics,      (int)TouchButton::CycleWeapon,
+                               (int)TouchButton::Pause};
+    const int rightCluster[] = {(int)TouchButton::PersonView, (int)TouchButton::Equipment};
     const int lowerCluster[] = {(int)TouchButton::Fire,   (int)TouchButton::Action, (int)TouchButton::Reload,
-                                (int)TouchButton::Optics, (int)TouchButton::Equipment};
-    const int upperCluster[] = {(int)TouchButton::Pause, (int)TouchButton::PersonView};
+                                (int)TouchButton::Optics, (int)TouchButton::CycleWeapon};
+    const int upperCluster[] = {(int)TouchButton::Pause, (int)TouchButton::PersonView, (int)TouchButton::Equipment};
     ClampButtonGroupToSafeArea(zones, leftCluster, 6, width, height, true, false);
-    ClampButtonGroupToSafeArea(zones, rightCluster, 1, width, height, true, false);
+    ClampButtonGroupToSafeArea(zones, rightCluster, 2, width, height, true, false);
     ClampButtonGroupToSafeArea(zones, lowerCluster, 5, width, height, false, true);
-    ClampButtonGroupToSafeArea(zones, upperCluster, 2, width, height, false, true);
+    ClampButtonGroupToSafeArea(zones, upperCluster, 3, width, height, false, true);
     return zones;
 }
 
@@ -493,6 +497,23 @@ bool PlayerHasBinocular()
             return true;
     }
     return false;
+}
+
+void CyclePlayerWeapon()
+{
+    if (!GWorld)
+        return;
+
+    AIUnit* unit = GWorld->FocusOn();
+    if (!unit || !unit->IsPlayer() || !GWorld->PlayerManual() || GWorld->GetPlayerSuspended())
+        return;
+
+    EntityAI* vehicle = unit->GetVehicle();
+    if (!vehicle || !vehicle->EnableWeaponManipulation())
+        return;
+
+    const int weapon = vehicle->NextWeapon(vehicle->SelectedWeapon());
+    vehicle->SelectWeaponCommander(unit, weapon);
 }
 
 int BuildAvailableEquipment(EquipmentItem* items, int maxItems)
@@ -931,6 +952,10 @@ void EmitButtonEdge(TouchButton button, bool down)
             else
                 SDLInput_BufferKeyEvent(SDL_SCANCODE_KP_ENTER, false, Foundation::GlobalTickCount());
             break;
+        case TouchButton::CycleWeapon:
+            if (down)
+                CyclePlayerWeapon();
+            break;
         case TouchButton::Pause:
             if (down)
                 SDLInput_BufferControllerUiAction(IsGameplayScene() ? ControllerUiAction::Pause : ControllerUiAction::Cancel,
@@ -1087,6 +1112,15 @@ void DrawTouchIcon(Engine* engine, const MipInfo& white, TouchButton button, flo
             DrawLineNorm(engine, cx, cy - sy * 0.38f, cx + sx * 0.46f, cy + sy * 0.10f, color);
             DrawLineNorm(engine, cx - sx * 0.46f, cy + sy * 0.10f, cx - sx * 0.26f, cy + sy * 0.36f, color);
             DrawLineNorm(engine, cx + sx * 0.46f, cy + sy * 0.10f, cx + sx * 0.26f, cy + sy * 0.36f, color);
+            break;
+        case TouchButton::CycleWeapon:
+            DrawLineNorm(engine, cx - sx * 0.42f, cy - sy * 0.18f, cx + sx * 0.30f, cy - sy * 0.18f, color);
+            DrawLineNorm(engine, cx + sx * 0.30f, cy - sy * 0.18f, cx + sx * 0.12f, cy - sy * 0.36f, color);
+            DrawLineNorm(engine, cx + sx * 0.30f, cy - sy * 0.18f, cx + sx * 0.12f, cy, color);
+            DrawLineNorm(engine, cx + sx * 0.42f, cy + sy * 0.18f, cx - sx * 0.30f, cy + sy * 0.18f, color);
+            DrawLineNorm(engine, cx - sx * 0.30f, cy + sy * 0.18f, cx - sx * 0.12f, cy, color);
+            DrawLineNorm(engine, cx - sx * 0.30f, cy + sy * 0.18f, cx - sx * 0.12f, cy + sy * 0.36f, color);
+            DrawRectNorm(engine, white, cx - sx * 0.08f, cy, sx * 0.28f, sy * 0.12f, color);
             break;
         case TouchButton::Pause:
             DrawRectNorm(engine, white, cx - sx * 0.16f, cy, sx * 0.12f, sy * 0.62f, color);

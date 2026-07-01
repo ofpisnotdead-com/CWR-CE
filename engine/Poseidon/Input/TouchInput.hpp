@@ -17,6 +17,7 @@ enum class TouchButton
     Optics,
     Equipment,
     PersonView,
+    CycleWeapon,
     Pause,
     Count,
 };
