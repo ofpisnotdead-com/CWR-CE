@@ -1,11 +1,14 @@
 #include <Poseidon/IO/Streams/QBStream.hpp>
+#include <Poseidon/Core/ModSystem.hpp>
 #ifndef _WIN32
 #include <climits>
 #include <dirent.h>
 #endif
+#include <cctype>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <string>
 #include <Poseidon/Foundation/Containers/Array.hpp>
 #include <Poseidon/Foundation/Framework/AppFrame.hpp>
 #include <Poseidon/Foundation/Framework/DebugLog.hpp>
@@ -32,6 +35,80 @@
 
 namespace Poseidon
 {
+namespace
+{
+bool EqualPathComponent(const std::string& a, const char* b, size_t bLen)
+{
+    if (a.size() != bLen)
+        return false;
+    for (size_t i = 0; i < bLen; ++i)
+    {
+        if (tolower(static_cast<unsigned char>(a[i])) != tolower(static_cast<unsigned char>(b[i])))
+            return false;
+    }
+    return true;
+}
+
+const char* LastPathComponent(const char* path)
+{
+    const char* last = path;
+    for (const char* p = path; *p; ++p)
+    {
+        if (*p == '/' || *p == '\\')
+            last = p + 1;
+    }
+    return last;
+}
+
+struct ModRootAliasContext
+{
+    const char* prefix;
+    size_t prefixLen;
+    const char* rest;
+    std::string resolved;
+};
+
+bool ResolveModRootAliasCallback(RStringB dir, void* opaque)
+{
+    if (dir.GetLength() == 0)
+        return false;
+
+    auto* context = static_cast<ModRootAliasContext*>(opaque);
+    if (!EqualPathComponent(LastPathComponent(dir), context->prefix, context->prefixLen))
+        return false;
+
+    std::string candidate = (const char*)dir;
+    if (!candidate.empty() && candidate.back() != '/' && candidate.back() != '\\')
+        candidate += "/";
+    candidate += context->rest;
+    if (!QIFStream::FileExists(candidate.c_str()))
+        return false;
+
+    context->resolved = std::move(candidate);
+    return true;
+}
+
+std::string ResolveModRootAlias(const char* name)
+{
+    if (!name || !*name || name[1] == ':' || *name == '/' || *name == '\\')
+        return {};
+
+    const char* separator = strpbrk(name, "/\\");
+    if (!separator)
+        return {};
+
+    ModRootAliasContext context;
+    context.prefix = name;
+    context.prefixLen = separator - name;
+    context.rest = separator + 1;
+    if (context.prefixLen == 0 || !*context.rest)
+        return {};
+
+    ModSystem::EnumDirectories(ResolveModRootAliasCallback, &context);
+    return context.resolved;
+}
+} // namespace
+
 QFBank::QFBank()
 {
     EXCLUSIVE();
@@ -1369,6 +1446,16 @@ void QIFStreamB::AutoOpen(const char* name, IQFBankContext* context)
         }
     }
     QIFStream::open(name0);
+    if (_sharedData && !_sharedData->GetError())
+    {
+        return;
+    }
+
+    std::string modAlias = ResolveModRootAlias(name0);
+    if (!modAlias.empty())
+    {
+        QIFStream::open(modAlias.c_str());
+    }
 }
 
 bool QIFStreamB::IsFromBank(const QFBank* bank) const
@@ -1405,7 +1492,13 @@ bool QIFStreamB::FileExist(const char* name, IQFBankContext* context)
             }
         }
     }
-    return QIFStream::FileExists(name);
+    if (QIFStream::FileExists(name))
+    {
+        return true;
+    }
+
+    std::string modAlias = ResolveModRootAlias(name);
+    return !modAlias.empty();
 }
 
 struct EncryptorInformation

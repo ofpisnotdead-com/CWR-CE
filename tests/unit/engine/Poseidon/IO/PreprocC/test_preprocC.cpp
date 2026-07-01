@@ -1,7 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
+#include <Poseidon/Core/ModSystem.hpp>
 #include <Poseidon/IO/PreprocC/PreprocC.hpp>
 #include <Poseidon/IO/Streams/QStream.hpp>
 #include "../Support/test_fixtures.hpp"
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <cstdio>
@@ -270,6 +272,33 @@ TEST_CASE("PreprocC - Nested includes limited", "[preprocC][include]")
     REQUIRE(processed.find("mainValue = 1") != std::string::npos);
     REQUIRE(processed.find("outerValue = 2") != std::string::npos);
     REQUIRE(processed.find("innerValue = 3") != std::string::npos);
+}
+
+TEST_CASE("PreprocC - Include resolves active mod alias", "[preprocC][include][mods]")
+{
+    const auto uniqueId = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / ("ofpr-preproc-mod-" + uniqueId);
+    const std::filesystem::path mod = root / "@TemplateMod";
+    std::filesystem::create_directories(mod / "dta");
+    std::filesystem::create_directories(mod / "bin");
+    std::ofstream(mod / "bin" / "included.hpp") << "modValue = 7;\n";
+    const std::filesystem::path main = root / "main.hpp";
+    std::ofstream(main) << "#include \"@templatemod/bin/included.hpp\"\nmainValue = 1;\n";
+
+    const RStringB oldModPath = Poseidon::ModSystem::GetModList();
+    Poseidon::ModSystem::SetModPath(mod.string().c_str());
+
+    CPreprocessorFunctions preproc;
+    QOStream output;
+    const bool result = preproc.Preprocess(output, main.string().c_str());
+
+    Poseidon::ModSystem::SetModPath(oldModPath);
+    std::filesystem::remove_all(root);
+
+    REQUIRE(result == true);
+    const std::string processed = ReadOutput(output);
+    REQUIRE(processed.find("modValue = 7") != std::string::npos);
+    REQUIRE(processed.find("mainValue = 1") != std::string::npos);
 }
 
 // Section 3: Macro Processing (5 tests)
