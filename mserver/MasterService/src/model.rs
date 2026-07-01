@@ -210,6 +210,11 @@ pub struct ServerVersionGroup {
 #[derive(Clone, Debug, Default, Deserialize, IntoParams, PartialEq, Eq, Serialize)]
 #[into_params(parameter_in = Query)]
 pub struct ListModsQuery {
+    #[serde(rename = "app")]
+    pub app_name: Option<String>,
+    pub actver: Option<i32>,
+    #[serde(rename = "vertag")]
+    pub version_tag: Option<String>,
     pub q: Option<String>,
     pub limit: Option<usize>,
 }
@@ -264,6 +269,14 @@ pub struct ServiceSummary {
 pub struct ModCatalogEntry {
     #[serde(rename = "modId")]
     pub mod_id: String,
+    #[serde(rename = "app", default, skip_serializing_if = "Option::is_none")]
+    pub app_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actver: Option<i32>,
+    #[serde(rename = "vertag", default, skip_serializing_if = "Option::is_none")]
+    pub version_tag: Option<String>,
+    #[serde(default)]
+    pub compatible: bool,
     pub name: String,
     pub version: String,
     /// Canonical on-disk mod folder name (verbatim, incl. any `@` and case) the client

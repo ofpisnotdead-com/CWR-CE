@@ -112,3 +112,27 @@ TEST_CASE("master server attribution label includes the configured endpoint", "[
     REQUIRE(std::string(FormatNetworkMasterServerAttribution("master.example")) == "Operated by master.example");
     REQUIRE(std::string(FormatNetworkMasterServerAttribution("")) == "Operated by disabled");
 }
+
+TEST_CASE("master mod list URL filters by current app and version", "[network][master][mods]")
+{
+    const std::string url = BuildMasterServerServiceModListUrl("https://master.example", "effects");
+
+    REQUIRE(url.find("/v1/mods?") != std::string::npos);
+    REQUIRE(url.find("app=CWR-CE") != std::string::npos);
+    REQUIRE(url.find("actver=301") != std::string::npos);
+    REQUIRE(url.find("vertag=") != std::string::npos);
+    REQUIRE(url.find("q=effects") != std::string::npos);
+}
+
+TEST_CASE("master mod catalog parse carries compatibility fields", "[network][master][mods]")
+{
+    const char* json = R"json({"modId":"effects-pack","app":"CWR-CE","actver":301,"vertag":"dev","compatible":true,"name":"Effects Pack","version":"1.0","description":"fx","authors":["simi"],"sizeBytes":42})json";
+
+    MasterServerServiceModCatalogEntry entry;
+    REQUIRE(ParseMasterServerServiceModDetailResponse(json, entry));
+    REQUIRE(entry.modId == "effects-pack");
+    REQUIRE(entry.app == "CWR-CE");
+    REQUIRE(entry.actualVersion == 301);
+    REQUIRE(entry.versionTag == "dev");
+    REQUIRE(entry.compatible);
+}

@@ -454,8 +454,9 @@ async fn list_mod_servers(
 }
 
 /// Publish a packed mod to the workshop. Admin-gated (`x-api-key`); accepts a
-/// `multipart/form-data` body with a `name` field, an optional `version`/`description`/
-/// `homepageUrl`, repeated `author` fields, and the PBO as the `file` field.
+/// `multipart/form-data` body with a `name` field, optional `app`/`actver`/`vertag`,
+/// optional `version`/`description`/`homepageUrl`, repeated `author` fields, and the PBO
+/// as the `file` field.
 async fn publish_mod(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -482,6 +483,9 @@ async fn publish_mod(
     };
 
     let mut name: Option<String> = None;
+    let mut app_name: Option<String> = None;
+    let mut actver: Option<String> = None;
+    let mut version_tag: Option<String> = None;
     let mut version: Option<String> = None;
     let mut folder_name: Option<String> = None;
     let mut description: Option<String> = None;
@@ -497,6 +501,9 @@ async fn publish_mod(
         let field_name = field.name().map(str::to_string);
         match field_name.as_deref() {
             Some("name") => name = Some(read_text_field(field).await?),
+            Some("app") => app_name = Some(read_text_field(field).await?),
+            Some("actver") => actver = Some(read_text_field(field).await?),
+            Some("vertag") => version_tag = Some(read_text_field(field).await?),
             Some("version") => version = Some(read_text_field(field).await?),
             Some("folderName") => folder_name = Some(read_text_field(field).await?),
             Some("description") => description = Some(read_text_field(field).await?),
@@ -540,6 +547,9 @@ async fn publish_mod(
             upload,
             ModUploadMeta {
                 name: name.unwrap(),
+                app_name: app_name.filter(|value| !value.trim().is_empty()),
+                actver: actver.and_then(|value| value.trim().parse().ok()),
+                version_tag: version_tag.filter(|value| !value.trim().is_empty()),
                 version: version.filter(|value| !value.trim().is_empty()),
                 folder_name: folder_name.filter(|value| !value.trim().is_empty()),
                 description: description.filter(|value| !value.is_empty()),

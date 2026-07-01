@@ -78,6 +78,28 @@ mod tests {
         version: &str,
         homepage_url: Option<&str>,
     ) {
+        write_mod_metadata_for_game(
+            root,
+            mod_id,
+            name,
+            version,
+            homepage_url,
+            "CWR-CE",
+            301,
+            None,
+        );
+    }
+
+    fn write_mod_metadata_for_game(
+        root: &std::path::Path,
+        mod_id: &str,
+        name: &str,
+        version: &str,
+        homepage_url: Option<&str>,
+        app: &str,
+        actver: i32,
+        vertag: Option<&str>,
+    ) {
         let mod_dir = root.join(mod_id);
         fs::create_dir_all(&mod_dir).unwrap();
         let homepage_url = homepage_url.map_or_else(
@@ -88,6 +110,9 @@ mod tests {
             mod_dir.join("mod.json"),
             serde_json::to_vec(&json!({
                 "modId": mod_id,
+                "app": app,
+                "actver": actver,
+                "vertag": vertag,
                 "name": name,
                 "version": version,
                 "description": format!("{name} description"),
@@ -1101,6 +1126,9 @@ mod tests {
                 boundary,
                 &[
                     ("name", "Synthetic Upload"),
+                    ("app", "CWR-CE"),
+                    ("actver", "301"),
+                    ("vertag", "rc1"),
                     ("author", "simi"),
                     ("description", "a mod"),
                 ],
@@ -1164,6 +1192,9 @@ mod tests {
             entry.mod_id
         );
         assert_eq!(entry.version.len(), 8); // default version = sha256[..8] hex
+        assert_eq!(entry.app_name.as_deref(), Some("CWR-CE"));
+        assert_eq!(entry.actver, Some(301));
+        assert_eq!(entry.version_tag.as_deref(), Some("rc1"));
         assert_eq!(entry.authors, vec!["simi".to_string()]);
         assert_eq!(
             entry.download_url.as_deref(),
@@ -1181,7 +1212,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri("/v1/mods")
+                    .uri("/v1/mods?app=CWR-CE&actver=301&vertag=rc1")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1190,7 +1221,8 @@ mod tests {
         assert_eq!(list.status(), StatusCode::OK);
         let mods: Vec<ModCatalogEntry> =
             serde_json::from_slice(&to_bytes(list.into_body(), usize::MAX).await.unwrap()).unwrap();
-        assert!(mods.iter().any(|m| m.mod_id == entry.mod_id));
+        let listed = mods.iter().find(|m| m.mod_id == entry.mod_id).unwrap();
+        assert!(listed.compatible);
 
         // The publisher uploads an already-compressed artifact; the service stores and serves it
         // verbatim, so the download is byte-for-byte what was uploaded.
@@ -1834,6 +1866,65 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(limited.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn local_mods_catalog_filters_and_marks_current_game_compatibility() {
+        let temp_dir = tempdir().unwrap();
+        let mods_root = temp_dir.path().join("mods");
+        write_mod_metadata_for_game(
+            &mods_root,
+            "cwr-effects",
+            "CWR Effects",
+            "1.0.0",
+            None,
+            "CWR-CE",
+            301,
+            Some("rc1"),
+        );
+        write_mod_metadata_for_game(
+            &mods_root,
+            "ofp-effects",
+            "OFP Effects",
+            "1.0.0",
+            None,
+            "OFP",
+            196,
+            None,
+        );
+        write_mod_metadata_for_game(
+            &mods_root,
+            "future-effects",
+            "Future Effects",
+            "1.0.0",
+            None,
+            "CWR-CE",
+            302,
+            None,
+        );
+
+        let directory_path = temp_dir.path().join("directory.sqlite");
+        let directory = Arc::new(
+            SqliteServerDirectory::open_path(&directory_path)
+                .await
+                .unwrap(),
+        );
+        let service = crate::service::PapaBearService::with_mods_root(directory, Some(mods_root));
+
+        let mods = service
+            .list_mods(&ListModsQuery {
+                app_name: Some("CWR-CE".to_string()),
+                actver: Some(301),
+                version_tag: Some("rc1".to_string()),
+                q: Some("effects".to_string()),
+                ..ListModsQuery::default()
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(mods.len(), 1);
+        assert_eq!(mods[0].mod_id, "cwr-effects");
+        assert!(mods[0].compatible);
     }
 
     #[tokio::test]

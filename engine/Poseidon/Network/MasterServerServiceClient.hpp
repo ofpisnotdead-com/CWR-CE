@@ -95,6 +95,10 @@ struct MasterServerServiceModReference
 struct MasterServerServiceModCatalogEntry
 {
     std::string modId;
+    std::string app;
+    int actualVersion = 0;
+    std::string versionTag;
+    bool compatible = false;
     std::string name;
     std::string version;
     std::string folderName;

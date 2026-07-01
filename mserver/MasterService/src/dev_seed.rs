@@ -227,6 +227,10 @@ pub async fn seed_dev_mods(store: &ModStore) -> Result<usize> {
 
         let metadata = ModCatalogEntry {
             mod_id: row.mod_id,
+            app_name: Some("CWR-CE".to_string()),
+            actver: Some(301),
+            version_tag: None,
+            compatible: false,
             name: row.name,
             version,
             folder_name: None,

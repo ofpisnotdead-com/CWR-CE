@@ -592,6 +592,11 @@ std::string BuildMasterServerServiceModListUrl(const char* masterServerHost, con
     }
 
     bool hasQuery = false;
+    AppendMasterServerServiceQueryParameter(url, hasQuery, "app", UrlEncodeMasterServerServiceValue(APP_NAME_SHORT));
+    AppendMasterServerServiceQueryParameter(url, hasQuery, MasterServerFieldActualVersion,
+                                            std::to_string(APP_VERSION_NUM));
+    AppendMasterServerServiceQueryParameter(url, hasQuery, MasterServerFieldVersionTag,
+                                            UrlEncodeMasterServerServiceValue((const char*)GetVersionTag()));
     if (query != nullptr)
     {
         AppendMasterServerServiceQueryParameter(url, hasQuery, "q", UrlEncodeMasterServerServiceValue(query));
@@ -717,6 +722,10 @@ bool TryParseMasterServerServiceModCatalogEntry(const cJSON* object, MasterServe
 
     entry = {};
     entry.modId = GetMasterServerServiceJsonString(object, "modId");
+    entry.app = GetMasterServerServiceJsonString(object, "app");
+    entry.actualVersion = GetMasterServerServiceJsonInt(object, MasterServerFieldActualVersion, 0);
+    entry.versionTag = GetMasterServerServiceJsonString(object, MasterServerFieldVersionTag);
+    entry.compatible = GetMasterServerServiceJsonBool(object, "compatible", false);
     entry.name = GetMasterServerServiceJsonString(object, "name");
     entry.version = GetMasterServerServiceJsonString(object, "version");
     entry.folderName = GetMasterServerServiceJsonString(object, "folderName");
