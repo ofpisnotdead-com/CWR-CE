@@ -35,6 +35,8 @@ struct TextureDescGL33
     bool compressed;
 };
 
+Poseidon::PacFormat UploadFormatForTextureGL33(Poseidon::PacFormat format, bool interpolate);
+
 class SurfaceInfoGL33
 {
   private:
