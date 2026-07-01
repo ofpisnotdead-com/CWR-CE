@@ -548,7 +548,11 @@ void InputSubsystem::ComputeMovementState()
             lookAroundEnabled_ = lookAroundToggled_;
 
         if (oldLookAround != lookAroundEnabled_)
+        {
             freelookChanged_ = true;
+            if (oldLookAround && !lookAroundEnabled_)
+                GInput.cursor.aimDeltaX = GInput.cursor.aimDeltaY = GInput.cursor.aimDeltaZ = 0;
+        }
 
         moveUp_ += GetAction(UAMoveUp, true);
         moveDown_ += GetAction(UAMoveDown, true);
