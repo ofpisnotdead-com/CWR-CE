@@ -16,6 +16,17 @@ a:hover {
     text-decoration: underline;
 }
 
+.community-banner {
+    border: 1px solid #0e9b0e;
+    padding: 4px 8px;
+    margin-bottom: 12px;
+    color: #96ff96;
+}
+
+.community-banner a {
+    text-decoration: underline;
+}
+
 .top-menu {
     display: flex;
     gap: 12px;

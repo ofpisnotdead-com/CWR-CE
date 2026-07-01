@@ -126,7 +126,9 @@ TEST_CASE("master mod list URL filters by current app and version", "[network][m
 
 TEST_CASE("master mod catalog parse carries compatibility fields", "[network][master][mods]")
 {
-    const char* json = R"json({"modId":"effects-pack","app":"CWR-CE","actver":301,"vertag":"dev","compatible":true,"name":"Effects Pack","version":"1.0","description":"fx","authors":["simi"],"sizeBytes":42})json";
+    const char* json = "{\"modId\":\"effects-pack\",\"app\":\"CWR-CE\",\"actver\":301,\"vertag\":\"dev\","
+                       "\"compatible\":true,\"name\":\"Effects Pack\",\"version\":\"1.0\","
+                       "\"description\":\"fx\",\"authors\":[\"simi\"],\"sizeBytes\":42}";
 
     MasterServerServiceModCatalogEntry entry;
     REQUIRE(ParseMasterServerServiceModDetailResponse(json, entry));

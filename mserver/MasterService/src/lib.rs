@@ -90,6 +90,7 @@ mod tests {
         );
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn write_mod_metadata_for_game(
         root: &std::path::Path,
         mod_id: &str,
@@ -2658,6 +2659,11 @@ mod tests {
         assert!(js_text.contains("loadModDetailPage"));
         assert!(!js_text.contains("loadLandingSummary"));
         // Shared top nav lives only in the JS, so every page gets the same HOME/SERVERS/MODS links.
+        assert!(js_text.contains("renderCommunityBanner"));
+        assert!(js_text
+            .contains("github.com/ofpisnotdead-com/CWR-CE/discussions/new?category=papa-bear-cz"));
+        assert!(js_text.contains("Share your ideas, issues, and mod requests"));
+        assert!(js_text.contains("GitHub Discussions</a>."));
         assert!(js_text.contains("renderTopMenu"));
         assert!(js_text.contains("\"HOME\""));
         assert!(js_text.contains("\"SERVERS\""));

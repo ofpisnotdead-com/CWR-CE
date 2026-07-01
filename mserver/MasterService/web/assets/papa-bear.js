@@ -935,6 +935,16 @@
     }
     // Single source of truth for the top navigation. Each page ships an empty
     // <nav class="top-menu"> placeholder; the active link is derived from data-page.
+    function renderCommunityBanner() {
+        if (document.querySelector(".community-banner")) {
+            return;
+        }
+        const banner = document.createElement("div");
+        banner.className = "community-banner";
+        banner.innerHTML = 'Share your ideas, issues, and mod requests at <a href="https://github.com/ofpisnotdead-com/CWR-CE/discussions/new?category=papa-bear-cz">GitHub Discussions</a>.';
+        document.body.insertBefore(banner, document.body.firstChild);
+    }
+
     function renderTopMenu() {
         const nav = document.querySelector("nav.top-menu");
         if (!nav) {
@@ -954,6 +964,7 @@
             .join("");
     }
 
+    renderCommunityBanner();
     renderTopMenu();
 
     if (document.body.dataset.page === "landing") {

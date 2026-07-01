@@ -589,10 +589,10 @@ fn apply_mod_filters(mods: &mut Vec<ModCatalogEntry>, query: &ListModsQuery) {
 
     mods.retain_mut(|entry| {
         entry.compatible = is_mod_compatible(entry, query);
-        if query.app_name.is_some() || query.actver.is_some() || query.version_tag.is_some() {
-            if !entry.compatible {
-                return false;
-            }
+        if (query.app_name.is_some() || query.actver.is_some() || query.version_tag.is_some())
+            && !entry.compatible
+        {
+            return false;
         }
 
         if let Some(filter) = &text_filter {
