@@ -899,12 +899,19 @@ RString CreateSingleMissionBank(RString filename)
     // suppose filename is without extension (.pbo)
 
     // remove bank
+    // QFBank::SetPrefix() runs the stored value through platformPath(), so on
+    // POSIX bank.GetPrefix() uses '/'. Match against a normalized copy while
+    // keeping the returned prefix in backslash form (the caller parses it
+    // with strrchr(buf, '\\')).
     const char* prefix = "missions\\__cur_sp.";
-    int prefixLen = strlen(prefix);
+    char matchBuf[64];
+    snprintf(matchBuf, sizeof(matchBuf), "%s", prefix);
+    platformPath(matchBuf);
+    const int matchLen = strlen(matchBuf);
     for (int i = 0; i < GFileBanks.Size();)
     {
         QFBank& bank = GFileBanks[i];
-        if (strnicmp(bank.GetPrefix(), prefix, prefixLen) == 0)
+        if (strnicmp(bank.GetPrefix(), matchBuf, matchLen) == 0)
         {
             GFileBanks.Delete(i);
         }

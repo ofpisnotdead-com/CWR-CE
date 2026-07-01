@@ -6,7 +6,26 @@ namespace Poseidon::Foundation
 
 #ifndef _WIN32
 
+#if defined(PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP)
+// Linux glibc / Bionic ship a recursive-mutex static initializer macro.
 pthread_mutex_t mutexInit = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+static inline void initRecursiveMutex(pthread_mutex_t& m)
+{
+    m = mutexInit;
+}
+#else
+// FreeBSD and other POSIX libcs have no equivalent macro. Copying a
+// pthread_mutex_t is unsafe (mutex bodies can hold internal pointers),
+// so initialize each mutex in-place via attribute.
+static inline void initRecursiveMutex(pthread_mutex_t& m)
+{
+    pthread_mutexattr_t a;
+    pthread_mutexattr_init(&a);
+    pthread_mutexattr_settype(&a, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&m, &a);
+    pthread_mutexattr_destroy(&a);
+}
+#endif
 
 #endif
 
@@ -22,7 +41,7 @@ PoCriticalSection::PoCriticalSection(const char* srcFile, int lineNo, const char
 #ifdef _WIN32
     InitializeCriticalSection(&cs);
 #else
-    mutex = mutexInit;
+    initRecursiveMutex(mutex);
 #endif
     id = registerLock(srcFile, lineNo, descr);
     error = false;
@@ -43,7 +62,7 @@ PoCriticalSection::PoCriticalSection(bool val)
 #ifdef _WIN32
         InitializeCriticalSection(&cs);
 #else
-        mutex = mutexInit;
+        initRecursiveMutex(mutex);
 #endif
     }
     error = false;
@@ -58,7 +77,7 @@ PoCriticalSection::PoCriticalSection()
 #ifdef _WIN32
     InitializeCriticalSection(&cs);
 #else
-    mutex = mutexInit;
+    initRecursiveMutex(mutex);
 #endif
     error = false;
 #ifdef LOCK_TRACING
