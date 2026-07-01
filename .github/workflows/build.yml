@@ -149,6 +149,16 @@ jobs:
         run: |
           export CCACHE_DIR="$HOME/.cache/ccache/${{ matrix.preset }}"
           mkdir -p "$CCACHE_DIR"
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            current_clang="$(xcrun clang --version | head -n 1)"
+            clang_stamp="$CCACHE_DIR/.xcode-clang-version"
+            echo "CCACHE_COMPILERCHECK=string:$current_clang" >> "$GITHUB_ENV"
+            if [ ! -f "$clang_stamp" ] || [ "$(cat "$clang_stamp")" != "$current_clang" ]; then
+              echo "Xcode/clang changed; clearing ccache for ${{ matrix.preset }}"
+              ccache --clear
+              printf '%s\n' "$current_clang" > "$clang_stamp"
+            fi
+          fi
           ccache --set-config=max_size=1G
           ccache --zero-stats
           echo "CCACHE_DIR=$CCACHE_DIR" >> "$GITHUB_ENV"
