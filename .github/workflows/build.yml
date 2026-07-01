@@ -24,15 +24,23 @@ env:
 
 jobs:
   build-linux:
-    name: Linux RelWithDebInfo
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            os: ubuntu-24.04-arm
+          - arch: x64
+            os: ubuntu-24.04
+    name: Linux ${{ matrix.arch }} RelWithDebInfo
+    runs-on: ${{ matrix.os }}
     env:
-      CWR_PRESET: linux-x64-clang-rwdi
-      CWR_VCPKG_TRIPLET: x64-linux-clang
-      CWR_BUILD_DIR: build/linux-x64-clang-rwdi
+      CWR_PRESET: linux-${{ matrix.arch }}-clang-rwdi
+      CWR_VCPKG_TRIPLET: ${{ matrix.arch }}-linux-clang
+      CWR_BUILD_DIR: build/linux-${{ matrix.arch }}-clang-rwdi
       CWR_CTEST_EXCLUDE: 'PoseidonTests - OAL -'
-      CWR_DIST_DIR: dist/x64-linux-rwdi
-      CWR_ARTIFACT_PREFIX: Linux-x64-rwdi
+      CWR_DIST_DIR: dist/${{ matrix.arch }}-linux-rwdi
+      CWR_ARTIFACT_PREFIX: Linux-${{ matrix.arch }}-rwdi
 
     steps:
       - name: Checkout
