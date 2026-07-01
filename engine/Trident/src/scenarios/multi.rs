@@ -359,9 +359,12 @@ fn resolve_master_service_binary(config: &ServiceConfig) -> Result<PathBuf> {
     }
 
     let root = repo_root();
+    let binary_name = format!("papa-bear-master-service{}", std::env::consts::EXE_SUFFIX);
     let candidates = [
-        root.join("mserver/MasterService/target/debug/papa-bear-master-service"),
-        root.join("mserver/MasterService/target/release/papa-bear-master-service"),
+        root.join("mserver/MasterService/target/debug")
+            .join(&binary_name),
+        root.join("mserver/MasterService/target/release")
+            .join(&binary_name),
     ];
     candidates
         .into_iter()
