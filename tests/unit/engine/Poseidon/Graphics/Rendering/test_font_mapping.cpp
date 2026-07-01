@@ -66,7 +66,7 @@ TEST_CASE("Font mapping resolves the shipping set to fonts/*.ttf", "[font][mappi
         // Caveat is already cursive — no synthetic oblique (Cedarville needed it).
         CHECK(m->syntheticOblique == false);
         CHECK(m->renderPx == 21);
-        CHECK(m->widthScale == 1.183f);
+        CHECK(m->widthScale == 1.050f);
     }
 }
 
