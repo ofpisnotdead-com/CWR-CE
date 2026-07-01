@@ -1079,12 +1079,16 @@ pub async fn run_multi_test(
             extra_args.push("--mp-assign".into());
             extra_args.push(expand_placeholders(assign, &replacements));
         }
-        if let Some(r) = render {
-            extra_args.push("--render".into());
-            extra_args.push(r.into());
+        if !inst.is_server() {
+            if let Some(r) = render {
+                extra_args.push("--render".into());
+                extra_args.push(r.into());
+            }
         }
         extra_args.extend(expand_placeholders_vec(&inst.extra_args, &replacements));
-        extra_args.extend(cli_game_args.iter().cloned());
+        if !inst.is_server() {
+            extra_args.extend(cli_game_args.iter().cloned());
+        }
         let extra_refs: Vec<&str> = extra_args.iter().map(String::as_str).collect();
 
         // Per-instance output subdir so logs don't overwrite each other
@@ -1164,7 +1168,7 @@ pub async fn run_multi_test(
                 instances.push((inst.name.clone(), game));
             }
             Err(e) => {
-                failed_instance = Some((inst.name.clone(), format!("spawn failed: {e}")));
+                failed_instance = Some((inst.name.clone(), format!("spawn failed: {e:#}")));
                 break;
             }
         }
