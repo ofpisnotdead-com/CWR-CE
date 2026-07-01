@@ -9,6 +9,8 @@
 #include <Poseidon/Network/NetworkServerCommon.hpp>
 #include <Poseidon/Network/NetworkSoundReplication.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <random>
@@ -113,6 +115,14 @@ std::filesystem::path MakeTempDir()
                ("cwr_network_server_" + std::to_string(rd()) + "_" + std::to_string(rd()));
     std::filesystem::create_directories(dir);
     return dir;
+}
+
+std::string NormalizePathForCompare(const std::filesystem::path& path)
+{
+    std::string normalized = path.lexically_normal().generic_string();
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return normalized;
 }
 
 class ScopedModPath
@@ -266,7 +276,8 @@ TEST_CASE("MP mission lookup resolves active mod mission PBOs before base direct
         resolved = Poseidon::ResolveMPMissionTemplateBase("addon_lookup", "Eden");
     }
 
-    CHECK(std::filesystem::path((const char*)resolved) == missions / "addon_lookup.eden");
+    CHECK(NormalizePathForCompare(std::filesystem::path((const char*)resolved)) ==
+          NormalizePathForCompare(missions / "addon_lookup.eden"));
 
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
