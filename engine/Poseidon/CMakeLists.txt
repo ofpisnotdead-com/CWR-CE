@@ -64,6 +64,12 @@ list(APPEND ALL_SOURCES
 
 # Global exclusions
 list(FILTER ALL_SOURCES EXCLUDE REGEX "Memory/MemTable\.cpp$")
+# FreeBSD's libmimalloc.so is built with MI_OVERRIDE=ON and supplies its own
+# operator new/delete. Linking GlobalOperators.cpp on top causes duplicate-symbol
+# errors at link time, so let mimalloc own the global new/delete on this platform.
+if(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+    list(FILTER ALL_SOURCES EXCLUDE REGEX "Core/GlobalOperators\.cpp$")
+endif()
 list(FILTER ALL_SOURCES EXCLUDE REGEX ".*soundDummy\.cpp$")
 list(FILTER ALL_SOURCES EXCLUDE REGEX "Audio/OpenAL/")
 # IO/Filesystem platform sources are added explicitly below via MERGED_SUPPORT_SOURCES.
@@ -263,6 +269,11 @@ target_link_libraries(Poseidon PUBLIC
 if(NOT WIN32)
     target_link_libraries(Poseidon PUBLIC pthread dl)
 endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+    # backtrace(3) / backtrace_symbols_fd(3) live in libexecinfo on FreeBSD,
+    # not in libc. CrashHandler.cpp pulls them in.
+    target_link_libraries(Poseidon PUBLIC execinfo)
+endif()
 
 if(WIN32)
     # MasterServerServiceClient + master-server publisher call WinSock /
@@ -282,27 +293,58 @@ target_link_libraries(Poseidon PRIVATE zstd::libzstd)
 
 # libcurl: the single cross-platform HTTP/HTTPS client for the master-server publisher
 # (Schannel on Windows, OpenSSL elsewhere — see vcpkg.json).
-find_package(CURL CONFIG REQUIRED)
+if(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+    # FreeBSD ftp/curl ships only libcurl.pc — use CMake's bundled FindCURL.cmake.
+    find_package(CURL REQUIRED)
+else()
+    find_package(CURL CONFIG REQUIRED)
+endif()
 target_link_libraries(Poseidon PRIVATE CURL::libcurl)
 
-find_package(Opus CONFIG REQUIRED)
-target_link_libraries(Poseidon PUBLIC Opus::opus)
-
-# libogg + libvorbis (vcpkg).  Vorbisfile is the high-level API that
-# WaveStreamOGG.cpp uses (ov_open_callbacks / ov_read / ov_pcm_seek /
-# ov_clear) — pulls in vorbis and ogg transitively.
-find_package(Ogg     CONFIG REQUIRED)
-find_package(Vorbis  CONFIG REQUIRED)
-target_link_libraries(Poseidon PUBLIC Vorbis::vorbisfile Vorbis::vorbis Ogg::ogg)
+if(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+    # FreeBSD audio/opus, audio/libogg, audio/libvorbis ship only .pc files.
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(opus       REQUIRED IMPORTED_TARGET opus)
+    pkg_check_modules(ogg        REQUIRED IMPORTED_TARGET ogg)
+    pkg_check_modules(vorbis     REQUIRED IMPORTED_TARGET vorbis)
+    pkg_check_modules(vorbisfile REQUIRED IMPORTED_TARGET vorbisfile)
+    target_link_libraries(Poseidon PUBLIC
+        PkgConfig::opus
+        PkgConfig::vorbisfile
+        PkgConfig::vorbis
+        PkgConfig::ogg)
+else()
+    find_package(Opus CONFIG REQUIRED)
+    target_link_libraries(Poseidon PUBLIC Opus::opus)
+    # libogg + libvorbis (vcpkg). Vorbisfile is the high-level API that
+    # WaveStreamOGG.cpp uses (ov_open_callbacks / ov_read / ov_pcm_seek /
+    # ov_clear) — pulls in vorbis and ogg transitively.
+    find_package(Ogg    CONFIG REQUIRED)
+    find_package(Vorbis CONFIG REQUIRED)
+    target_link_libraries(Poseidon PUBLIC Vorbis::vorbisfile Vorbis::vorbis Ogg::ogg)
+endif()
 
 find_package(CLI11 CONFIG REQUIRED)
 target_link_libraries(Poseidon PRIVATE CLI11::CLI11)
 
-find_package(freetype CONFIG REQUIRED)
+if(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+    # print/freetype2 exports Freetype::Freetype via freetype-config.cmake.
+    # Use title-case name so downstream find_dependency(Freetype) chains hit
+    # the same cache entry (CMake CONFIG mode is case-sensitive on Unix).
+    find_package(Freetype CONFIG REQUIRED)
+else()
+    find_package(freetype CONFIG REQUIRED)
+endif()
 target_link_libraries(Poseidon PUBLIC Freetype::Freetype)
 
 # stb — PNGWriter/TGAWriter and textures
-find_package(Stb REQUIRED)
+# vcpkg's Stb-Config flattens stb_*.h into a single include dir; FreeBSD's
+# devel/stb puts them under <prefix>/include/stb. Sources include them
+# unprefixed (#include <stb_image.h>), so point the include dir at /stb.
+find_path(Stb_INCLUDE_DIR
+    NAMES stb_image.h
+    PATH_SUFFIXES stb
+    REQUIRED)
 target_include_directories(Poseidon PRIVATE ${Stb_INCLUDE_DIR})
 
 # mimalloc
