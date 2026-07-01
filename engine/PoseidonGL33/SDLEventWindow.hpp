@@ -270,7 +270,10 @@ class SDLEventWindow
                 SDLInput_BufferMouseWheel(event.wheel.y);
             else if (event.type == SDL_EVENT_FINGER_DOWN || event.type == SDL_EVENT_FINGER_MOTION ||
                      event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED)
-                Poseidon::TouchInput_HandleFingerEvent(event.tfinger);
+            {
+                if (SDL_GetTouchDeviceType(event.tfinger.touchID) == SDL_TOUCH_DEVICE_DIRECT)
+                    Poseidon::TouchInput_HandleFingerEvent(event.tfinger);
+            }
             else if (event.type == SDL_EVENT_GAMEPAD_ADDED)
                 SDLInput_GamepadAdded(event.gdevice.which);
             else if (event.type == SDL_EVENT_GAMEPAD_REMOVED)

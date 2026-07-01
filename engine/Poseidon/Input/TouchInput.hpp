@@ -15,6 +15,7 @@ enum class TouchButton
     Action,
     Reload,
     Optics,
+    Stance,
     Equipment,
     PersonView,
     CycleWeapon,

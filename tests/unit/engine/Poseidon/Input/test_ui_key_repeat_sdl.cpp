@@ -42,6 +42,8 @@ TEST_CASE("UI key repeat uses SDL system repeat events", "[input][ui-repeat]")
     REQUIRE(glRegion.find("SDLInput_BufferUIKeyEvent") != std::string::npos);
     REQUIRE(glRegion.find("event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat") == std::string::npos);
     REQUIRE(glWindow.find("SDL_EVENT_FINGER_DOWN") != std::string::npos);
+    REQUIRE(glWindow.find("SDL_GetTouchDeviceType(event.tfinger.touchID) == SDL_TOUCH_DEVICE_DIRECT") !=
+            std::string::npos);
     REQUIRE(glWindow.find("TouchInput_HandleFingerEvent(event.tfinger)") != std::string::npos);
 
     const std::size_t dummyKeyDown = dummyWindow.find("case SDL_EVENT_KEY_DOWN:");

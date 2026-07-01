@@ -18,8 +18,10 @@ namespace
 {
 constexpr float kFireButtonX = 0.042f;
 constexpr float kFireButtonY = 0.907f;
-constexpr float kActionButtonX = 0.042f;
-constexpr float kActionButtonY = 0.531f;
+constexpr float kActionButtonX = 0.098f;
+constexpr float kActionButtonY = 0.436f;
+constexpr float kStanceButtonX = 0.042f;
+constexpr float kStanceButtonY = 0.720f;
 constexpr float kEquipmentButtonX = 0.958f;
 constexpr float kEquipmentButtonY = 0.173f;
 
@@ -52,6 +54,14 @@ void ClearBufferedInput()
     GInput.mouse.middleToDo = false;
     GInput.mouse.doubleClickToDo = false;
     GInput.keyboard.ForgetKeys();
+    GInput.keyboard.moveLastActive = UITIME_MIN;
+    GInput.keyboard.turnLastActive = UITIME_MIN;
+    GInput.keyboard.cursorLastActive = UITIME_MIN;
+    GInput.keyboard.thrustLastActive = UITIME_MIN;
+    GInput.mouse.cursorLastActive = UITIME_MIN;
+    GInput.mouse.turnLastActive = UITIME_MIN;
+    GInput.gamepad.moveLastActive = UITIME_MIN;
+    GInput.gamepad.thrustLastActive = UITIME_MIN;
 }
 
 struct TouchFixture
@@ -331,7 +341,7 @@ TEST_CASE("TouchInput: safe area preserves staggered action column", "[input][to
     TouchInput_TestSetGameplaySceneOverride(true, true);
     TouchInput_TestSetSafeArea(0.12f, 0.0f, 1.0f, 1.0f);
 
-    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 2, 0.16f, kActionButtonY));
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 2, 0.21f, kActionButtonY));
     TouchInput_ProcessFrame(1920, 1080);
     CHECK(TouchInput_GetDebugState().buttons[(int)TouchButton::Action]);
 }
@@ -511,6 +521,26 @@ TEST_CASE("TouchInput: quick action tap emits action key on release", "[input][t
     CHECK(GInput.keyboard.keysToDo[SDL_SCANCODE_RETURN]);
 }
 
+TEST_CASE("TouchInput: stance button emits move-down stance key", "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_TestSetGameplaySceneOverride(true, true);
+    GInput.keyboard.ForgetKeys();
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, kStanceButtonX, kStanceButtonY));
+    TouchInput_ProcessFrame(1920, 1080);
+
+    CHECK(TouchInput_GetDebugState().buttons[(int)TouchButton::Stance]);
+
+    GInput.keyboard.Update(17, 16, true);
+    CHECK(GInput.keyboard.keysToDo[SDL_SCANCODE_Z]);
+    CHECK(GInput.keyboard.keys[SDL_SCANCODE_Z] > 0.0f);
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_UP, 1, kStanceButtonX, kStanceButtonY));
+    GInput.keyboard.Update(17, 16, true);
+    CHECK(GInput.keyboard.keys[SDL_SCANCODE_Z] == 0.0f);
+}
+
 TEST_CASE("TouchInput: action hold with drag does not trigger action on release", "[input][touch]")
 {
     TouchFixture fixture;
@@ -579,6 +609,47 @@ TEST_CASE("TouchInput: Auto display mode keeps touch shown within the debounce g
 
     CHECK(TouchInput_IsEnabled());
     TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_UP, 1, 0.5f, 0.5f));
+}
+
+TEST_CASE("TouchInput: Auto display mode keeps touch shown while touch remains the last input mode", "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_SetDisplayMode(TouchDisplayMode::Auto);
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, 0.5f, 0.5f));
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_UP, 1, 0.5f, 0.5f));
+    TouchInput_ProcessFrame(1920, 1080);
+    REQUIRE(TouchInput_IsEnabled());
+
+    Glob.uiTime += 5.0f;
+    TouchInput_ProcessFrame(1920, 1080);
+
+    CHECK(TouchInput_IsEnabled());
+}
+
+TEST_CASE("TouchInput: Auto display mode keeps touch shown while movement stick is held", "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_SetDisplayMode(TouchDisplayMode::Auto);
+    TouchInput_TestSetGameplaySceneOverride(true, true);
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, 0.20f, 0.80f));
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_MOTION, 1, 0.28f, 0.72f));
+    TouchInput_ProcessFrame(1920, 1080);
+    REQUIRE(TouchInput_IsEnabled());
+    REQUIRE(TouchInput_GetDebugState().moveActive);
+
+    // Holding the virtual stick can go quiet at the SDL event layer. Even if
+    // another input timestamp becomes newer after the debounce window, the
+    // still-held finger should keep the touch layout visible.
+    Glob.uiTime += 5.0f;
+    GInput.keyboard.moveLastActive = Glob.uiTime;
+    GInput.gamepad.moveLastActive = Glob.uiTime;
+    TouchInput_ProcessFrame(1920, 1080);
+
+    CHECK(TouchInput_IsEnabled());
+    CHECK(TouchInput_GetDebugState().moveActive);
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_UP, 1, 0.28f, 0.72f));
 }
 
 TEST_CASE("TouchInput: AlwaysOn/AlwaysOff display modes ignore activity entirely", "[input][touch]")

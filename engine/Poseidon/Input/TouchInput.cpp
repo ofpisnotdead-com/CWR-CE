@@ -89,6 +89,7 @@ enum class FingerRole
 enum class EquipmentItem
 {
     None,
+    CommandMenu,
     Map,
     Compass,
     Watch,
@@ -126,6 +127,12 @@ struct EquipmentZone
     float x = 0.0f;
     float y = 0.0f;
     float r = 0.0f;
+};
+
+enum class TouchBarSide
+{
+    Left,
+    Right,
 };
 
 struct PixelLayout
@@ -382,6 +389,7 @@ bool IsTouchButtonAvailable(TouchButton button)
         case TouchButton::Action:
         case TouchButton::Reload:
         case TouchButton::Optics:
+        case TouchButton::Stance:
         case TouchButton::CycleWeapon:
             return IsGameplayScene();
         case TouchButton::Equipment:
@@ -481,6 +489,27 @@ void EmitCommandMenuSelectTap(const Finger& finger)
     SDLInput_BufferKeyEvent((SDL_Scancode)key, false, Foundation::GlobalTickCount());
 }
 
+void PlaceZigZagButtonBar(std::array<ButtonZone, (int)TouchButton::Count>& zones, const TouchButton* buttons,
+                          int buttonCount, TouchBarSide side, const PixelLayout& layout, int width, int height,
+                          float startY, float stepY, float radius, int* sideCluster, int& sideCount,
+                          int* lowerCluster, int& lowerCount)
+{
+    const float outerX = side == TouchBarSide::Left ? layout.edgeMargin : (float)width - layout.edgeMargin;
+    const float innerX =
+        side == TouchBarSide::Left ? outerX + layout.buttonGap * 0.95f : outerX - layout.buttonGap * 0.95f;
+
+    for (int i = 0; i < buttonCount; i++)
+    {
+        const TouchButton button = buttons[i];
+        const float x = (i % 2) == 0 ? outerX : innerX;
+        const float y = startY - stepY * (float)i;
+        const float buttonRadius = radius * (button == TouchButton::Fire ? 1.18f : 1.0f);
+        zones[(int)button] = {button, NormX(x, width), NormY(y, height), buttonRadius};
+        sideCluster[sideCount++] = (int)button;
+        lowerCluster[lowerCount++] = (int)button;
+    }
+}
+
 std::array<ButtonZone, (int)TouchButton::Count> BuildButtonZones(int width, int height)
 {
     if (width <= 0)
@@ -488,35 +517,34 @@ std::array<ButtonZone, (int)TouchButton::Count> BuildButtonZones(int width, int 
     if (height <= 0)
         height = 1080;
     const PixelLayout layout = BuildPixelLayout(width, height);
-    const float columnX = layout.edgeMargin;
-    const float innerX = columnX + layout.buttonGap * 0.95f;
     const float fireY = (float)height - layout.edgeMargin - layout.buttonRadius * 0.35f;
-    const float opticsY = fireY - layout.buttonGap * 0.88f;
-    const float cycleWeaponY = fireY - layout.buttonGap * 1.78f;
-    const float reloadY = fireY - layout.buttonGap * 2.68f;
-    const float actionY = fireY - layout.buttonGap * 3.58f;
+    const float actionStepY = layout.buttonGap * 0.90f;
     const float radius = layout.buttonRadius / (float)height;
     const float oppositeX = (float)width - layout.edgeMargin;
     const float equipmentY = layout.topMargin + layout.buttonGap * 1.12f;
-    std::array<ButtonZone, (int)TouchButton::Count> zones = {
-        {{TouchButton::Fire, NormX(columnX, width), NormY(fireY, height), radius * 1.18f},
-         {TouchButton::Action, NormX(columnX, width), NormY(actionY, height), radius},
-         {TouchButton::Reload, NormX(innerX, width), NormY(reloadY, height), radius},
-         {TouchButton::Optics, NormX(innerX, width), NormY(opticsY, height), radius},
-         {TouchButton::Equipment, NormX(oppositeX, width), NormY(equipmentY, height), radius * 0.86f},
-         {TouchButton::PersonView, NormX(oppositeX, width), NormY(layout.topMargin, height), radius * 0.72f},
-         {TouchButton::CycleWeapon, NormX(columnX, width), NormY(cycleWeaponY, height), radius},
-         {TouchButton::Pause, NormX(layout.edgeMargin, width), NormY(layout.topMargin, height), radius * 0.72f}}};
-    const int leftCluster[] = {(int)TouchButton::Fire,        (int)TouchButton::Action, (int)TouchButton::Reload,
-                               (int)TouchButton::Optics,      (int)TouchButton::CycleWeapon,
-                               (int)TouchButton::Pause};
+    std::array<ButtonZone, (int)TouchButton::Count> zones = {};
+    const TouchButton leftActionButtons[] = {TouchButton::Fire,        TouchButton::Optics, TouchButton::Stance,
+                                             TouchButton::CycleWeapon, TouchButton::Reload, TouchButton::Action};
+    int leftCluster[(int)TouchButton::Count] = {};
+    int lowerCluster[(int)TouchButton::Count] = {};
+    int leftCount = 0;
+    int lowerCount = 0;
+    PlaceZigZagButtonBar(zones, leftActionButtons,
+                         (int)(sizeof(leftActionButtons) / sizeof(leftActionButtons[0])), TouchBarSide::Left,
+                         layout, width, height, fireY, actionStepY, radius, leftCluster, leftCount, lowerCluster,
+                         lowerCount);
+    zones[(int)TouchButton::Equipment] =
+        {TouchButton::Equipment, NormX(oppositeX, width), NormY(equipmentY, height), radius * 0.86f};
+    zones[(int)TouchButton::PersonView] =
+        {TouchButton::PersonView, NormX(oppositeX, width), NormY(layout.topMargin, height), radius * 0.72f};
+    zones[(int)TouchButton::Pause] =
+        {TouchButton::Pause, NormX(layout.edgeMargin, width), NormY(layout.topMargin, height), radius * 0.72f};
+    leftCluster[leftCount++] = (int)TouchButton::Pause;
     const int rightCluster[] = {(int)TouchButton::PersonView, (int)TouchButton::Equipment};
-    const int lowerCluster[] = {(int)TouchButton::Fire,   (int)TouchButton::Action, (int)TouchButton::Reload,
-                                (int)TouchButton::Optics, (int)TouchButton::CycleWeapon};
     const int upperCluster[] = {(int)TouchButton::Pause, (int)TouchButton::PersonView, (int)TouchButton::Equipment};
-    ClampButtonGroupToSafeArea(zones, leftCluster, 6, width, height, true, false);
+    ClampButtonGroupToSafeArea(zones, leftCluster, leftCount, width, height, true, false);
     ClampButtonGroupToSafeArea(zones, rightCluster, 2, width, height, true, false);
-    ClampButtonGroupToSafeArea(zones, lowerCluster, 5, width, height, false, true);
+    ClampButtonGroupToSafeArea(zones, lowerCluster, lowerCount, width, height, false, true);
     ClampButtonGroupToSafeArea(zones, upperCluster, 3, width, height, false, true);
     return zones;
 }
@@ -568,6 +596,8 @@ int BuildAvailableEquipment(EquipmentItem* items, int maxItems)
 
     if (GWorld)
     {
+        if (IsGameplayScene())
+            add(EquipmentItem::CommandMenu);
         if (GWorld->CanShowMap())
             add(EquipmentItem::Map);
         if (GWorld->CanShowCompass())
@@ -585,8 +615,8 @@ int BuildAvailableEquipment(EquipmentItem* items, int maxItems)
 
 int BuildEquipmentZones(EquipmentZone* zones, int maxZones, int width, int height)
 {
-    EquipmentItem items[5] = {};
-    const int count = BuildAvailableEquipment(items, 5);
+    EquipmentItem items[6] = {};
+    const int count = BuildAvailableEquipment(items, 6);
     if (count <= 0 || maxZones <= 0)
         return 0;
 
@@ -610,8 +640,8 @@ int BuildEquipmentZones(EquipmentZone* zones, int maxZones, int width, int heigh
 
 EquipmentItem HitEquipmentItem(float x, float y)
 {
-    EquipmentZone zones[5];
-    const int count = BuildEquipmentZones(zones, 5, sViewportW, sViewportH);
+    EquipmentZone zones[6];
+    const int count = BuildEquipmentZones(zones, 6, sViewportW, sViewportH);
     for (int i = 0; i < count; i++)
     {
         const float dx = (x - zones[i].x) * (float)std::max(1, sViewportW);
@@ -676,6 +706,16 @@ bool RoleActive(FingerRole role)
 bool IsTouchButtonFinger(const Finger& finger)
 {
     return finger.role == FingerRole::Button || finger.button != TouchButton::Count;
+}
+
+bool AnyFingerActive()
+{
+    for (const Finger& finger : sFingers)
+    {
+        if (finger.active)
+            return true;
+    }
+    return false;
 }
 
 int CollectMapGestureFingers(const Finger** first, const Finger** second)
@@ -923,6 +963,10 @@ void EmitEquipmentItem(EquipmentItem item)
 {
     switch (item)
     {
+        case EquipmentItem::CommandMenu:
+            SetLatchedEquipment(EquipmentItem::None);
+            EmitKeyTap(SDL_SCANCODE_BACKSPACE);
+            break;
         case EquipmentItem::Map:
             SetLatchedEquipment(EquipmentItem::None);
             EmitKeyTap(SDL_SCANCODE_M);
@@ -997,6 +1041,9 @@ void EmitButtonEdge(TouchButton button, bool down)
             break;
         case TouchButton::Optics:
             SDLInput_BufferKeyEvent(SDL_SCANCODE_V, down, Foundation::GlobalTickCount());
+            break;
+        case TouchButton::Stance:
+            SDLInput_BufferKeyEvent(SDL_SCANCODE_Z, down, std::max<DWORD>(1, Foundation::GlobalTickCount()));
             break;
         case TouchButton::Equipment:
             break;
@@ -1151,6 +1198,13 @@ void DrawTouchIcon(Engine* engine, const MipInfo& white, TouchButton button, flo
             DrawLineNorm(engine, cx - sx * 0.55f, cy, cx - sx * 0.25f, cy, color);
             DrawLineNorm(engine, cx + sx * 0.25f, cy, cx + sx * 0.55f, cy, color);
             break;
+        case TouchButton::Stance:
+            DrawLineNorm(engine, cx, cy - sy * 0.50f, cx, cy + sy * 0.46f, color);
+            DrawLineNorm(engine, cx - sx * 0.32f, cy - sy * 0.18f, cx, cy - sy * 0.50f, color);
+            DrawLineNorm(engine, cx + sx * 0.32f, cy - sy * 0.18f, cx, cy - sy * 0.50f, color);
+            DrawLineNorm(engine, cx - sx * 0.34f, cy + sy * 0.12f, cx, cy + sy * 0.46f, color);
+            DrawLineNorm(engine, cx + sx * 0.34f, cy + sy * 0.12f, cx, cy + sy * 0.46f, color);
+            break;
         case TouchButton::Equipment:
             DrawLineNorm(engine, cx - sx * 0.48f, cy - sy * 0.34f, cx + sx * 0.48f, cy - sy * 0.26f, color);
             DrawLineNorm(engine, cx + sx * 0.48f, cy - sy * 0.26f, cx + sx * 0.48f, cy + sy * 0.34f, color);
@@ -1209,6 +1263,13 @@ void DrawEquipmentItemIcon(Engine* engine, const MipInfo& white, EquipmentItem i
 
     switch (item)
     {
+        case EquipmentItem::CommandMenu:
+            DrawLineNorm(engine, cx - sx * 0.44f, cy - sy * 0.36f, cx + sx * 0.44f, cy - sy * 0.36f, color);
+            DrawLineNorm(engine, cx - sx * 0.44f, cy, cx + sx * 0.44f, cy, color);
+            DrawLineNorm(engine, cx - sx * 0.44f, cy + sy * 0.36f, cx + sx * 0.22f, cy + sy * 0.36f, color);
+            DrawLineNorm(engine, cx + sx * 0.22f, cy + sy * 0.36f, cx + sx * 0.44f, cy + sy * 0.18f, color);
+            DrawLineNorm(engine, cx + sx * 0.22f, cy + sy * 0.36f, cx + sx * 0.44f, cy + sy * 0.54f, color);
+            break;
         case EquipmentItem::Map:
             DrawLineNorm(engine, cx - sx * 0.48f, cy - sy * 0.34f, cx + sx * 0.48f, cy - sy * 0.26f, color);
             DrawLineNorm(engine, cx + sx * 0.48f, cy - sy * 0.26f, cx + sx * 0.48f, cy + sy * 0.34f, color);
@@ -1276,19 +1337,17 @@ void DrawTouchButtonFrame(Engine* engine, const MipInfo& white, float cx, float 
     DrawCircleApprox(engine, white, cx, cy, r * 0.78f, glint);
 }
 
-// Auto display mode: is touch "the active input" right now? Compares
-// touch's own last-active timestamp against keyboard/mouse/gamepad's.
-//
-// Those other timestamps can be nudged by touch's own synthetic input (the
-// virtual move/look stick writes into the same GInput.gamepad fields a real
-// gamepad would, and InputSubsystem::GetAction deliberately blends touch's
-// stick into keyboard forward/back) - but that happens in lockstep with
-// sTouchLastActive below, at the same instant, so it never creates a false
-// gap. Only a genuine separate keyboard/mouse/gamepad event, arriving with
-// no touch activity alongside it, can pull "other" ahead of touch by more
-// than the debounce window.
+// Auto display mode: a direct touch keeps touch as the active input mode until
+// keyboard/mouse/gamepad activity becomes newer. A currently held finger wins
+// outright so controls do not disappear while holding a stick/button.
 bool ResolveAutoTouchEnabled()
 {
+    if (AnyFingerActive())
+        return true;
+
+    if (sTouchLastActive == UITIME_MIN)
+        return kDefaultEnabled; // nothing has happened yet this session
+
     if (Glob.uiTime - sTouchLastActive <= kInputModeSwitchDebounce)
         return true;
 
@@ -1296,9 +1355,6 @@ bool ResolveAutoTouchEnabled()
         std::max({GInput.keyboard.moveLastActive, GInput.keyboard.turnLastActive, GInput.keyboard.cursorLastActive,
                   GInput.keyboard.thrustLastActive, GInput.mouse.cursorLastActive, GInput.mouse.turnLastActive,
                   GInput.gamepad.moveLastActive, GInput.gamepad.thrustLastActive});
-
-    if (sTouchLastActive == UITIME_MIN && otherMostRecent == UITIME_MIN)
-        return kDefaultEnabled; // nothing has happened yet this session
 
     return otherMostRecent <= sTouchLastActive;
 }
@@ -1556,8 +1612,8 @@ void TouchInput_DrawOverlay(Engine* engine)
     const int h = sViewportH > 0 ? sViewportH : engine->Height();
     if (sEquipmentRadialActive)
     {
-        EquipmentZone zones[5];
-        const int count = BuildEquipmentZones(zones, 5, w, h);
+        EquipmentZone zones[6];
+        const int count = BuildEquipmentZones(zones, 6, w, h);
         const ButtonZone anchor = GetEquipmentAnchor(w, h);
         for (int i = 0; i < count; i++)
         {
