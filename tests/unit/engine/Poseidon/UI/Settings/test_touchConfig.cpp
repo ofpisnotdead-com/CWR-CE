@@ -28,6 +28,7 @@ TEST_CASE("TouchConfig: factory defaults", "[Settings][TouchConfig]")
     TouchConfig c;
     CHECK(c.aimSensitivity == 1.0f);
     CHECK(c.cursorSensitivity == 1.0f);
+    CHECK(c.displayMode == 0);
 }
 
 TEST_CASE("TouchConfig: LoadDefaults resets a mutated instance", "[Settings][TouchConfig]")
@@ -35,9 +36,19 @@ TEST_CASE("TouchConfig: LoadDefaults resets a mutated instance", "[Settings][Tou
     TouchConfig c;
     c.aimSensitivity = 2.25f;
     c.cursorSensitivity = 0.4f;
+    c.displayMode = 1;
     c.LoadDefaults();
     CHECK(c.aimSensitivity == 1.0f);
     CHECK(c.cursorSensitivity == 1.0f);
+    CHECK(c.displayMode == 0);
+}
+
+TEST_CASE("TouchConfig: Normalize resets an out-of-range displayMode to Auto", "[Settings][TouchConfig]")
+{
+    TouchConfig c;
+    c.displayMode = 7;
+    REQUIRE(c.Normalize());
+    CHECK(c.displayMode == 0);
 }
 
 TEST_CASE("TouchConfig: Normalize clamps sensitivities to supported range", "[Settings][TouchConfig]")
@@ -74,12 +85,14 @@ TEST_CASE("TouchConfig: Save then Load round-trips every field", "[Settings][Tou
     TouchConfig src;
     src.aimSensitivity = 2.4f;
     src.cursorSensitivity = 0.6f;
+    src.displayMode = 2;
     REQUIRE(src.Save(path));
 
     TouchConfig dst;
     REQUIRE(dst.Load(path));
     CHECK(dst.aimSensitivity == 2.4f);
     CHECK(dst.cursorSensitivity == 0.6f);
+    CHECK(dst.displayMode == 2);
 
     std::filesystem::remove(path);
 }

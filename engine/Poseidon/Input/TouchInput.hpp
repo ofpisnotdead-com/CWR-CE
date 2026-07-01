@@ -42,12 +42,24 @@ struct TouchInputDebugState
     bool buttons[(int)TouchButton::Count] = {};
 };
 
+// Values match TouchConfig::displayMode's persisted int, kept in sync
+// deliberately rather than sharing a header (TouchConfig.hpp is UI/Settings
+// layer, this is Input layer).
+enum class TouchDisplayMode
+{
+    Auto = 0,     // show/hide based on which input was most recently used
+    AlwaysOn = 1,
+    AlwaysOff = 2,
+};
+
 void TouchInput_HandleFingerEvent(const SDL_TouchFingerEvent& event);
 void TouchInput_UpdateSafeAreaFromWindow(SDL_Window* window);
 void TouchInput_ProcessFrame(int viewportWidth, int viewportHeight);
 void TouchInput_DrawOverlay(Engine* engine);
 void TouchInput_SetEnabled(bool enabled);
 bool TouchInput_IsEnabled();
+void TouchInput_SetDisplayMode(TouchDisplayMode mode);
+TouchDisplayMode TouchInput_GetDisplayMode();
 bool TouchInput_IsAimFocusActive();
 void TouchInput_SetAimSensitivity(float sensitivity);
 float TouchInput_GetAimSensitivity();

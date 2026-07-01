@@ -91,6 +91,8 @@ const char* TouchPage::TouchProvider::RowLabel(int row) const
             return LocalizeString("STR_DISP_OPT_TOUCH_AIM_SENSITIVITY");
         case kRowCursorSensitivity:
             return LocalizeString("STR_DISP_OPT_TOUCH_CURSOR_SENSITIVITY");
+        case kRowDisplayMode:
+            return LocalizeString("STR_DISP_OPT_TOUCH_DISPLAY_MODE");
         default:
             return "";
     }
@@ -104,6 +106,8 @@ const char* TouchPage::TouchProvider::RowDescription(int row) const
             return LocalizeString("STR_DISP_OPT_TOUCH_AIM_SENSITIVITY_DESC");
         case kRowCursorSensitivity:
             return LocalizeString("STR_DISP_OPT_TOUCH_CURSOR_SENSITIVITY_DESC");
+        case kRowDisplayMode:
+            return LocalizeString("STR_DISP_OPT_TOUCH_DISPLAY_MODE_DESC");
         default:
             return "";
     }
@@ -117,6 +121,18 @@ OptionsScrollList::RowDef TouchPage::TouchProvider::RowFor(int row) const
             return {642, nullptr, -1};
         case kRowCursorSensitivity:
             return {652, nullptr, -1};
+        case kRowDisplayMode:
+        {
+            // Stepper options - static, re-populated (harmlessly, same
+            // values) on every call rather than cached, matching this
+            // page's other rows calling LocalizeString() fresh each time.
+            // Must be static since RowDef only carries a pointer into it.
+            static const char* options[3];
+            options[0] = LocalizeString("STR_DISP_OPT_TOUCH_DISPLAY_MODE_AUTO");
+            options[1] = LocalizeString("STR_DISP_OPT_TOUCH_DISPLAY_MODE_ALWAYS_ON");
+            options[2] = LocalizeString("STR_DISP_OPT_TOUCH_DISPLAY_MODE_ALWAYS_OFF");
+            return {662, options, 3};
+        }
         default:
             return {-1, nullptr, 0};
     }
@@ -130,6 +146,8 @@ int TouchPage::TouchProvider::RowValue(int row) const
             return TouchPage::SensitivityToPercent(TouchInput_GetAimSensitivity());
         case kRowCursorSensitivity:
             return TouchPage::CursorSensitivityToPercent(TouchInput_GetCursorSensitivity());
+        case kRowDisplayMode:
+            return static_cast<int>(TouchInput_GetDisplayMode());
         default:
             return 0;
     }
@@ -144,6 +162,10 @@ void TouchPage::TouchProvider::SetRowValue(int row, int value)
             return;
         case kRowCursorSensitivity:
             TouchInput_SetCursorSensitivity(TouchPage::PercentToCursorSensitivity(value));
+            return;
+        case kRowDisplayMode:
+            if (value >= 0 && value <= 2)
+                TouchInput_SetDisplayMode(static_cast<TouchDisplayMode>(value));
             return;
     }
 }

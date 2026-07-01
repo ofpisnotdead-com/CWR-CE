@@ -1125,6 +1125,7 @@ void InputSubsystem::LoadKeys()
     touch.Normalize();
     TouchInput_SetAimSensitivity(touch.aimSensitivity);
     TouchInput_SetCursorSensitivity(touch.cursorSensitivity);
+    TouchInput_SetDisplayMode(static_cast<TouchDisplayMode>(touch.displayMode));
 }
 void InputSubsystem::SaveKeys()
 {
@@ -1149,6 +1150,7 @@ void InputSubsystem::SaveKeys()
     TouchConfig touch;
     touch.aimSensitivity = TouchInput_GetAimSensitivity();
     touch.cursorSensitivity = TouchInput_GetCursorSensitivity();
+    touch.displayMode = static_cast<int>(TouchInput_GetDisplayMode());
     touch.Save(TouchCfgPath());
 }
 

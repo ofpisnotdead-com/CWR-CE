@@ -21,16 +21,19 @@ class TouchStateSnapshot
     {
         aim = TouchInput_GetAimSensitivity();
         cursor = TouchInput_GetCursorSensitivity();
+        mode = TouchInput_GetDisplayMode();
     }
     ~TouchStateSnapshot()
     {
         TouchInput_SetAimSensitivity(aim);
         TouchInput_SetCursorSensitivity(cursor);
+        TouchInput_SetDisplayMode(mode);
     }
 
   private:
     float aim = 1.0f;
     float cursor = 1.0f;
+    TouchDisplayMode mode = TouchDisplayMode::Auto;
 };
 
 class TestableTouchPage : public TouchPage
@@ -56,10 +59,10 @@ void LoadMainMenuStringtable()
 }
 } // namespace
 
-TEST_CASE("TouchPage: provider exposes 2 rows + close", "[UI][TouchPage]")
+TEST_CASE("TouchPage: provider exposes 3 rows + close", "[UI][TouchPage]")
 {
     TestableTouchPage page;
-    CHECK(page.Provider().RowCount() == 3);
+    CHECK(page.Provider().RowCount() == 4);
 }
 
 TEST_CASE("TouchPage: row labels and descriptions match stringtable", "[UI][TouchPage]")
@@ -73,6 +76,34 @@ TEST_CASE("TouchPage: row labels and descriptions match stringtable", "[UI][Touc
     CHECK(std::string(p.RowDescription(0)) == "Right-side touch look and aim sensitivity. Range 0.25x to 3.0x.");
     CHECK(std::string(p.RowLabel(1)) == "Cursor movement sensitivity");
     CHECK(std::string(p.RowDescription(1)) == "Touch cursor movement sensitivity outside gameplay. Range 0.25x to 3.0x.");
+    CHECK(std::string(p.RowLabel(2)) == "Show touch controls");
+    CHECK(std::string(p.RowDescription(2)) ==
+          "Auto shows touch controls when you're using touch and hides them when you switch to keyboard or a gamepad.");
+}
+
+TEST_CASE("TouchPage: display mode row exposes 3 stepper options and round-trips", "[UI][TouchPage]")
+{
+    LoadMainMenuStringtable();
+    TouchStateSnapshot snap;
+    TestableTouchPage page;
+    auto& p = page.Provider();
+
+    const OptionsScrollList::RowDef def = p.RowFor(2);
+    REQUIRE(def.count == 3);
+    REQUIRE(def.options != nullptr);
+    CHECK(std::string(def.options[0]) == "Auto");
+    CHECK(std::string(def.options[1]) == "Always on");
+    CHECK(std::string(def.options[2]) == "Always off");
+
+    p.SetRowValue(2, static_cast<int>(TouchDisplayMode::AlwaysOn));
+    CHECK(p.RowValue(2) == static_cast<int>(TouchDisplayMode::AlwaysOn));
+    CHECK(TouchInput_GetDisplayMode() == TouchDisplayMode::AlwaysOn);
+
+    p.SetRowValue(2, static_cast<int>(TouchDisplayMode::AlwaysOff));
+    CHECK(TouchInput_GetDisplayMode() == TouchDisplayMode::AlwaysOff);
+
+    p.SetRowValue(2, static_cast<int>(TouchDisplayMode::Auto));
+    CHECK(TouchInput_GetDisplayMode() == TouchDisplayMode::Auto);
 }
 
 TEST_CASE("TouchPage: aim sensitivity slider maps 0..100 to 0.25..3.0 linearly", "[UI][TouchPage]")

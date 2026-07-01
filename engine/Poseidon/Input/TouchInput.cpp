@@ -53,6 +53,12 @@ constexpr float kMinSensitivity = 0.25f;
 constexpr float kMaxSensitivity = 3.0f;
 constexpr float kTapMaxTravel = 0.018f;
 constexpr float kTapMaxSeconds = 0.30f;
+// Auto display mode: how long touch stays "the active input" after the last
+// real finger event before a more-recently-used keyboard/mouse/gamepad can
+// take over. Short enough to react promptly, long enough that a quick touch
+// tap followed by an incidental keypress (e.g. chat) doesn't instantly hide
+// the touch UI out from under a still-touch-using player.
+constexpr float kInputModeSwitchDebounce = 1.5f;
 constexpr float kMapPanMouseScaleX = 200.0f / 1.5f;
 constexpr float kMapPanMouseScaleY = 150.0f / 1.5f;
 constexpr float kMapPinchZoomScale = 5.0f;
@@ -140,6 +146,8 @@ struct SafeArea
 
 std::array<Finger, kMaxFingers> sFingers;
 bool sEnabled = kDefaultEnabled;
+TouchDisplayMode sDisplayMode = TouchDisplayMode::Auto;
+Foundation::UITime sTouchLastActive = UITIME_MIN;
 bool sButtonDown[(int)TouchButton::Count] = {};
 bool sPrevButtonDown[(int)TouchButton::Count] = {};
 float sMoveX = 0.0f;
@@ -1268,10 +1276,43 @@ void DrawTouchButtonFrame(Engine* engine, const MipInfo& white, float cx, float 
     DrawCircleApprox(engine, white, cx, cy, r * 0.78f, glint);
 }
 
+// Auto display mode: is touch "the active input" right now? Compares
+// touch's own last-active timestamp against keyboard/mouse/gamepad's.
+//
+// Those other timestamps can be nudged by touch's own synthetic input (the
+// virtual move/look stick writes into the same GInput.gamepad fields a real
+// gamepad would, and InputSubsystem::GetAction deliberately blends touch's
+// stick into keyboard forward/back) - but that happens in lockstep with
+// sTouchLastActive below, at the same instant, so it never creates a false
+// gap. Only a genuine separate keyboard/mouse/gamepad event, arriving with
+// no touch activity alongside it, can pull "other" ahead of touch by more
+// than the debounce window.
+bool ResolveAutoTouchEnabled()
+{
+    if (Glob.uiTime - sTouchLastActive <= kInputModeSwitchDebounce)
+        return true;
+
+    const Foundation::UITime otherMostRecent =
+        std::max({GInput.keyboard.moveLastActive, GInput.keyboard.turnLastActive, GInput.keyboard.cursorLastActive,
+                  GInput.keyboard.thrustLastActive, GInput.mouse.cursorLastActive, GInput.mouse.turnLastActive,
+                  GInput.gamepad.moveLastActive, GInput.gamepad.thrustLastActive});
+
+    if (sTouchLastActive == UITIME_MIN && otherMostRecent == UITIME_MIN)
+        return kDefaultEnabled; // nothing has happened yet this session
+
+    return otherMostRecent <= sTouchLastActive;
+}
+
 } // namespace
 
 void TouchInput_HandleFingerEvent(const SDL_TouchFingerEvent& event)
 {
+    // Mark touch activity before the enabled gate below, even while
+    // auto-disabled - otherwise a fresh touch could never "wake up" Auto
+    // display mode, since the very event that should trigger re-enabling
+    // would already have been dropped.
+    sTouchLastActive = Glob.uiTime;
+
     if (!sEnabled)
         return;
 
@@ -1355,6 +1396,9 @@ void TouchInput_UpdateSafeAreaFromWindow(SDL_Window* window)
 
 void TouchInput_ProcessFrame(int viewportWidth, int viewportHeight)
 {
+    if (sDisplayMode == TouchDisplayMode::Auto)
+        TouchInput_SetEnabled(ResolveAutoTouchEnabled());
+
     sViewportW = viewportWidth;
     sViewportH = viewportHeight;
     sMoveX = 0.0f;
@@ -1549,6 +1593,22 @@ void TouchInput_SetEnabled(bool enabled)
 bool TouchInput_IsEnabled()
 {
     return sEnabled;
+}
+
+void TouchInput_SetDisplayMode(TouchDisplayMode mode)
+{
+    sDisplayMode = mode;
+    if (mode == TouchDisplayMode::AlwaysOn)
+        TouchInput_SetEnabled(true);
+    else if (mode == TouchDisplayMode::AlwaysOff)
+        TouchInput_SetEnabled(false);
+    // Auto: leave sEnabled as-is - TouchInput_ProcessFrame resolves it every
+    // frame from here on.
+}
+
+TouchDisplayMode TouchInput_GetDisplayMode()
+{
+    return sDisplayMode;
 }
 
 bool TouchInput_IsAimFocusActive()

@@ -59,7 +59,13 @@ struct TouchFixture
     TouchFixture()
     {
         ClearBufferedInput();
-        TouchInput_SetEnabled(true);
+        // AlwaysOn, not just SetEnabled(true): most existing tests here
+        // predate Auto display mode and assert on behavior that assumes
+        // touch stays unconditionally enabled for the whole test, which
+        // Auto mode's per-frame ResolveAutoTouchEnabled() would otherwise
+        // fight with. Tests that specifically exercise Auto mode switch to
+        // it explicitly.
+        TouchInput_SetDisplayMode(TouchDisplayMode::AlwaysOn);
         TouchInput_SetAimSensitivity(1.0f);
         TouchInput_SetCursorSensitivity(1.0f);
         TouchInput_TestSetGameplaySceneOverride(false, false);
@@ -81,7 +87,7 @@ struct TouchFixture
         TouchInput_SetAimSensitivity(1.0f);
         TouchInput_SetCursorSensitivity(1.0f);
         Glob.uiTime = Poseidon::Foundation::UITime(0);
-        TouchInput_SetEnabled(false);
+        TouchInput_SetDisplayMode(TouchDisplayMode::AlwaysOff);
     }
 };
 } // namespace
@@ -517,4 +523,78 @@ TEST_CASE("TouchInput: action hold with drag does not trigger action on release"
 
     GInput.keyboard.Update(Poseidon::Foundation::GlobalTickCount(), 16, true);
     CHECK_FALSE(GInput.keyboard.keysToDo[SDL_SCANCODE_RETURN]);
+}
+
+// Auto display mode (issue #53): touch controls should show/hide based on
+// which input was most recently used, rather than being unconditionally on
+// (iOS) or off (elsewhere) for the whole session.
+TEST_CASE("TouchInput: Auto display mode enables after a real touch event", "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_SetDisplayMode(TouchDisplayMode::Auto);
+    TouchInput_SetEnabled(false); // start from "off" so this isn't just AlwaysOn's default
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, 0.5f, 0.5f));
+    TouchInput_ProcessFrame(1920, 1080);
+
+    CHECK(TouchInput_IsEnabled());
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_UP, 1, 0.5f, 0.5f));
+}
+
+TEST_CASE("TouchInput: Auto display mode disables once keyboard activity outpaces touch beyond the debounce",
+          "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_SetDisplayMode(TouchDisplayMode::Auto);
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, 0.5f, 0.5f));
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_UP, 1, 0.5f, 0.5f));
+    TouchInput_ProcessFrame(1920, 1080);
+    REQUIRE(TouchInput_IsEnabled()); // touch was just used - sanity check before advancing time
+
+    // Advance well past the switch debounce, then mark genuine (non-touch)
+    // keyboard movement activity more recently than touch's last timestamp.
+    Glob.uiTime += 5.0f;
+    GInput.keyboard.moveLastActive = Glob.uiTime;
+    TouchInput_ProcessFrame(1920, 1080);
+
+    CHECK_FALSE(TouchInput_IsEnabled());
+}
+
+TEST_CASE("TouchInput: Auto display mode keeps touch shown within the debounce grace window", "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_SetDisplayMode(TouchDisplayMode::Auto);
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, 0.5f, 0.5f));
+    TouchInput_ProcessFrame(1920, 1080);
+    REQUIRE(TouchInput_IsEnabled());
+
+    // A keypress arrives shortly after (e.g. incidental chat), but still
+    // within the grace window - shouldn't hide touch out from under an
+    // actively-touching player.
+    Glob.uiTime += 0.5f;
+    GInput.keyboard.moveLastActive = Glob.uiTime;
+    TouchInput_ProcessFrame(1920, 1080);
+
+    CHECK(TouchInput_IsEnabled());
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_UP, 1, 0.5f, 0.5f));
+}
+
+TEST_CASE("TouchInput: AlwaysOn/AlwaysOff display modes ignore activity entirely", "[input][touch]")
+{
+    TouchFixture fixture;
+
+    TouchInput_SetDisplayMode(TouchDisplayMode::AlwaysOff);
+    Glob.uiTime += 5.0f;
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, 0.5f, 0.5f));
+    TouchInput_ProcessFrame(1920, 1080);
+    CHECK_FALSE(TouchInput_IsEnabled());
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_UP, 1, 0.5f, 0.5f));
+
+    TouchInput_SetDisplayMode(TouchDisplayMode::AlwaysOn);
+    Glob.uiTime += 5.0f;
+    GInput.keyboard.moveLastActive = Glob.uiTime; // heavy keyboard activity
+    TouchInput_ProcessFrame(1920, 1080);
+    CHECK(TouchInput_IsEnabled());
 }

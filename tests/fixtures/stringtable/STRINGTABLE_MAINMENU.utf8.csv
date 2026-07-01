@@ -48,3 +48,8 @@ STR_DISP_OPT_TOUCH_AIM_SENSITIVITY,Aim sensitivity
 STR_DISP_OPT_TOUCH_AIM_SENSITIVITY_DESC,Right-side touch look and aim sensitivity. Range 0.25x to 3.0x.
 STR_DISP_OPT_TOUCH_CURSOR_SENSITIVITY,Cursor movement sensitivity
 STR_DISP_OPT_TOUCH_CURSOR_SENSITIVITY_DESC,Touch cursor movement sensitivity outside gameplay. Range 0.25x to 3.0x.
+STR_DISP_OPT_TOUCH_DISPLAY_MODE,Show touch controls
+STR_DISP_OPT_TOUCH_DISPLAY_MODE_DESC,Auto shows touch controls when you're using touch and hides them when you switch to keyboard or a gamepad.
+STR_DISP_OPT_TOUCH_DISPLAY_MODE_AUTO,Auto
+STR_DISP_OPT_TOUCH_DISPLAY_MODE_ALWAYS_ON,Always on
+STR_DISP_OPT_TOUCH_DISPLAY_MODE_ALWAYS_OFF,Always off

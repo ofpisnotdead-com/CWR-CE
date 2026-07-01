@@ -35,6 +35,11 @@ bool TouchConfig::Normalize()
     };
     clamp(aimSensitivity);
     clamp(cursorSensitivity);
+    if (displayMode < 0 || displayMode > 2)
+    {
+        displayMode = 0;
+        changed = true;
+    }
     return changed;
 }
 
@@ -51,6 +56,8 @@ bool TouchConfig::Load(const std::string& path)
         aimSensitivity = (float)*e;
     if (auto* e = cfg.FindEntry("cursorSensitivity"))
         cursorSensitivity = (float)*e;
+    if (auto* e = cfg.FindEntry("displayMode"))
+        displayMode = (int)*e;
 
     return true;
 }
@@ -65,6 +72,7 @@ bool TouchConfig::Save(const std::string& path) const
     ParamFile cfg;
     cfg.Add("aimSensitivity", aimSensitivity);
     cfg.Add("cursorSensitivity", cursorSensitivity);
+    cfg.Add("displayMode", displayMode);
 
     cfg.Save(RString(path.c_str()));
     return std::filesystem::exists(path, ec);

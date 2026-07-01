@@ -33,7 +33,8 @@ class TouchPage : public ScrollListPage
         {
             kRowAimSensitivity = 0,
             kRowCursorSensitivity = 1,
-            kRowCount = 2,
+            kRowDisplayMode = 2,
+            kRowCount = 3,
         };
 
         int RowCount() const override { return kRowCount; }
