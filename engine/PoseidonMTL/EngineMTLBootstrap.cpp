@@ -1365,6 +1365,14 @@ void EngineMTLBootstrap::FlushTriangles2D()
     _impl->currentEncoder->setFragmentSamplerState(_impl->samplerStates[0], 1);
     SetDepthBiasForDescriptor(_impl->currentEncoder, state.surface,
                               isShadow ? Poseidon::render::ShaderFamily::Shadow : state.shader);
+    // The 3D mesh path (DrawIndexedTL) sets CullModeBack + WindingClockwise
+    // on this same encoder for closed-hull culling and never resets it --
+    // it's sticky state, not per-draw. 2D screen-space UI quads have no
+    // "back face" and their vertex winding isn't normalized against that
+    // convention (DrawLine's perpendicular-offset quads come out the
+    // opposite handedness from Draw2D's TL/TR/BR/BL rects for some
+    // orientations), so leftover backface culling silently drops them.
+    _impl->currentEncoder->setCullMode(MTL::CullModeNone);
 
     // Clamp to the drawable -- Metal's setScissorRect raises a validation
     // error if the rect extends past the render target.
