@@ -2593,6 +2593,8 @@ mod tests {
             .unwrap();
         let mods_text = String::from_utf8(mods_body.to_vec()).unwrap();
         assert!(mods_text.contains("mods browser BETA"));
+        assert!(mods_text.contains("id=\"mods-game\""));
+        assert!(mods_text.contains("id=\"mods-version\""));
         assert!(mods_text.contains("id=\"mods-table\""));
 
         let mod_detail_response = app
@@ -2650,6 +2652,9 @@ mod tests {
         assert!(js_text.contains("loadBrowserList"));
         assert!(js_text.contains("loadServerDetailPage"));
         assert!(js_text.contains("loadModsList"));
+        assert!(js_text.contains("currentModsTextFilter"));
+        assert!(js_text.contains("modCompatibilityGroups"));
+        assert!(js_text.contains("updateModsUrl"));
         assert!(js_text.contains("loadModDetailPage"));
         assert!(!js_text.contains("loadLandingSummary"));
         // Shared top nav lives only in the JS, so every page gets the same HOME/SERVERS/MODS links.

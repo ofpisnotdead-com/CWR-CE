@@ -285,6 +285,10 @@
         return new URLSearchParams(window.location.search).get("hostname") || "";
     }
 
+    function currentModsTextFilter() {
+        return new URLSearchParams(window.location.search).get("q") || "";
+    }
+
     function currentBrowserVersionFilter() {
         const params = new URLSearchParams(window.location.search);
         const app = params.get("app") || "";
@@ -318,10 +322,31 @@
     }
 
     function gameLabel(app, groups) {
-        const servers = groups
+        const entries = groups
             .filter((group) => (group.app || "") === app)
             .reduce((total, group) => total + (Number(group.servers) || 0), 0);
-        return `${app || "unknown"} (${servers})`;
+        return `${app || "unknown"} (${entries})`;
+    }
+
+    function modCompatibilityGroups(mods) {
+        const groups = new Map();
+        mods.forEach((mod) => {
+            const app = String(mod.app || "").trim();
+            const actver = Number(mod.actver) || 0;
+            if (!app || actver <= 0) {
+                return;
+            }
+            const vertag = String(mod.vertag || "").trim();
+            const key = `${app}/${actver}/${vertag}`;
+            const group = groups.get(key) || { app, actver, vertag, servers: 0 };
+            group.servers += 1;
+            groups.set(key, group);
+        });
+        return [...groups.values()].sort((a, b) =>
+            String(a.app).localeCompare(String(b.app)) ||
+            Number(a.actver) - Number(b.actver) ||
+            String(a.vertag || "").localeCompare(String(b.vertag || "")),
+        );
     }
 
     function populateGameSelect(element, groups) {
@@ -370,6 +395,22 @@
 
     function updateBrowserUrl(filterValue, verificationValue, gameValue, versionValue) {
         window.history.replaceState({}, "", browserUrlFor(filterValue, verificationValue, gameValue, versionValue));
+    }
+
+    function modsUrlFor(filterValue, gameValue, versionValue) {
+        const params = new URLSearchParams();
+        const needle = filterValue.trim();
+        if (needle) {
+            params.set("q", needle);
+        }
+        applyCompatibilityParams(params, gameValue, versionValue);
+
+        const next = params.toString();
+        return next ? `/mods?${next}` : "/mods";
+    }
+
+    function updateModsUrl(filterValue, gameValue, versionValue) {
+        window.history.replaceState({}, "", modsUrlFor(filterValue, gameValue, versionValue));
     }
 
     function renderPlayerHistory(detail) {
@@ -750,28 +791,42 @@
     async function loadModsList() {
         const rowsElement = document.getElementById("mods-rows");
         const filterElement = document.getElementById("mods-filter");
+        const gameElement = document.getElementById("mods-game");
+        const versionElement = document.getElementById("mods-version");
         const statusElement = document.getElementById("mods-status");
-        if (!rowsElement || !filterElement || !statusElement) {
+        if (!rowsElement || !filterElement || !gameElement || !versionElement || !statusElement) {
             return;
         }
 
         try {
-            const mods = await fetchJson("/v1/mods");
+            const catalog = await fetchJson("/v1/mods");
+            const versions = modCompatibilityGroups(catalog);
             const selected = new Set();
+            filterElement.value = currentModsTextFilter();
+            gameElement.value = currentBrowserGameFilter();
+            populateGameSelect(gameElement, versions);
+            gameElement.value = currentBrowserGameFilter();
+            populateVersionSelect(versionElement, versions, gameElement.value);
+            versionElement.value = currentBrowserVersionFilter();
 
-            const render = () => {
-                const needle = filterElement.value.trim().toLowerCase();
-                const filtered = mods
-                    .filter(
-                        (mod) =>
-                            !needle ||
-                            mod.modId.toLowerCase().includes(needle) ||
-                            mod.name.toLowerCase().includes(needle) ||
-                            (mod.folderName || "").toLowerCase().includes(needle),
-                    )
-                    .sort((a, b) => a.name.localeCompare(b.name));
-                rowsElement.innerHTML = renderModsRows(filtered);
-                statusElement.textContent = `${filtered.length} shown / ${mods.length} total`;
+            const render = async () => {
+                const params = new URLSearchParams();
+                const needle = filterElement.value.trim();
+                if (needle) {
+                    params.set("q", needle);
+                }
+                applyCompatibilityParams(params, gameElement.value, versionElement.value);
+                updateModsUrl(needle, gameElement.value, versionElement.value);
+
+                const query = params.toString();
+                const mods = await fetchJson(query ? `/v1/mods?${query}` : "/v1/mods");
+                mods.sort((a, b) => a.name.localeCompare(b.name));
+                rowsElement.innerHTML = renderModsRows(mods);
+                statusElement.textContent = selected.size
+                    ? `${mods.length} shown / ${selected.size} selected`
+                    : versionElement.value ? `${mods.length} compatible mods`
+                    : gameElement.value ? `${mods.length} ${gameElement.value} mods`
+                    : `${mods.length} shown`;
                 rowsElement.querySelectorAll("[data-mod-id]").forEach((row) => {
                     row.addEventListener("click", (event) => {
                         if (event.target.closest("a,button")) {
@@ -784,6 +839,10 @@
                     });
                 });
                 rowsElement.querySelectorAll("[data-add-mod-id]").forEach((button) => {
+                    const modId = button.getAttribute("data-add-mod-id");
+                    if (modId && selected.has(modId)) {
+                        button.textContent = "ADDED";
+                    }
                     button.addEventListener("click", () => {
                         const modId = button.getAttribute("data-add-mod-id");
                         if (!modId) {
@@ -797,14 +856,40 @@
                             button.textContent = "ADDED";
                         }
                         statusElement.textContent = selected.size
-                            ? `${filtered.length} shown / ${mods.length} total / ${selected.size} selected`
-                            : `${filtered.length} shown / ${mods.length} total`;
+                            ? `${mods.length} shown / ${selected.size} selected`
+                            : versionElement.value ? `${mods.length} compatible mods`
+                            : gameElement.value ? `${mods.length} ${gameElement.value} mods`
+                            : `${mods.length} shown`;
                     });
                 });
             };
 
-            filterElement.addEventListener("input", render);
-            render();
+            const rerender = () => {
+                render().catch(() => {
+                    rowsElement.innerHTML = '<tr><td colspan="5">Failed to load mod catalog.</td></tr>';
+                    statusElement.textContent = "Unavailable";
+                });
+            };
+
+            filterElement.addEventListener("input", rerender);
+            gameElement.addEventListener("change", () => {
+                const selectedVersion = parseVersionKey(versionElement.value);
+                if (selectedVersion.app && selectedVersion.app !== gameElement.value) {
+                    versionElement.value = "";
+                }
+                populateVersionSelect(versionElement, versions, gameElement.value);
+                rerender();
+            });
+            versionElement.addEventListener("change", () => {
+                const selectedVersion = parseVersionKey(versionElement.value);
+                if (selectedVersion.app) {
+                    gameElement.value = selectedVersion.app;
+                    populateVersionSelect(versionElement, versions, gameElement.value);
+                    versionElement.value = versionKey(selectedVersion);
+                }
+                rerender();
+            });
+            await render();
         } catch {
             rowsElement.innerHTML = '<tr><td colspan="5">Failed to load mod catalog.</td></tr>';
             statusElement.textContent = "Unavailable";
