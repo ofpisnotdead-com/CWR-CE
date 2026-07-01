@@ -19,23 +19,6 @@ using namespace Poseidon;
 namespace Poseidon
 {
 
-LightSun::LightSun()
-{
-    _moonPhase = 0;
-    _diffuse = _colorFull; // default - full sun
-    _diffuse.SaturateMinMax();
-}
-
-Color LightSun::AmbientResult() const
-{
-    return _ambientPrecalc;
-}
-
-Color LightSun::FullResult(float diffuse) const
-{
-    return _diffusePrecalc * diffuse + _ambientPrecalc;
-}
-
 static const Color BackgroundColor(0.55, 0.6, 0.8);
 static const Color FullSunColor(0.85, 0.75, 0.4);
 
@@ -52,6 +35,44 @@ static const Color MoonObjectColor(0.9, 0.9, 1.0, 0.7);      // color of full mo
 static const Color MoonHaloObjectColor(0.9, 0.9, 1.0, 0.05); // color of full moon halo
 static const Color MoonsetObjectColor(0.9, 0.75, 0.4);       // color of setting moon
 static const Color MoonsetHaloObjectColor(0.9, 0.5, 0.2);    // color of setting moon halo
+
+LightSun::LightSun()
+{
+    _direction = VForward;
+    _shadowDirection = VForward;
+    _sunDirection = VForward;
+    _moonDirection = VForward;
+    _moonDirectionUp = VUp;
+    _starsOrientation = M3Identity;
+
+    _moonPhase = 0;
+    _nightEffect = 0;
+    _starsVisible = 0;
+
+    _colorFull = FullSunColor;
+    _diffuse = _colorFull; // default - full sun
+    _diffuse.SaturateMinMax();
+    _ambient = BackgroundColor;
+    _sunColor = _colorFull;
+    _sunObjectColor = ::SunObjectColor;
+    _sunHaloObjectColor = ::SunHaloObjectColor;
+    _moonObjectColor = ::MoonObjectColor;
+    _moonHaloObjectColor = ::MoonHaloObjectColor;
+    _skyColor = BackgroundColor + _colorFull * 0.5f;
+    _sunSkyColor = _colorFull;
+    _ambientPrecalc = _ambient;
+    _diffusePrecalc = _diffuse;
+}
+
+Color LightSun::AmbientResult() const
+{
+    return _ambientPrecalc;
+}
+
+Color LightSun::FullResult(float diffuse) const
+{
+    return _diffusePrecalc * diffuse + _ambientPrecalc;
+}
 
 #define MIN_BACK_INTENSITY 0.05
 #define MIN_SKY_INTENSITY 0.03

@@ -445,6 +445,7 @@ void Weather::Init()
     _rainDensity = 0;
     _rainDensityWanted = 0;
     _rainDensitySpeed = 1;
+    _windSpeed = VZero;
     _lastWindSpeedChange = Glob.time;
     _gust = VZero;
     _gustUntil = Glob.time;
@@ -452,7 +453,6 @@ void Weather::Init()
 
 Weather::Weather()
 {
-    _windSpeed = VZero;
     Init();
 }
 

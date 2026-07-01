@@ -43,6 +43,12 @@ std::filesystem::path LandscapeCpp()
            "Landscape.cpp";
 }
 
+std::filesystem::path LightsCpp()
+{
+    return std::filesystem::path(TESTS_ROOT_DIR).parent_path() / "engine" / "Poseidon" / "Graphics" / "Rendering" /
+           "Lighting" / "Lights.cpp";
+}
+
 int CountOccurrences(const std::string& haystack, const std::string& needle)
 {
     if (needle.empty())
@@ -132,7 +138,43 @@ TEST_CASE("Weather::Init initializes sky and cloud render state", "[World][SkyLo
     REQUIRE(initBody.find("_cloudsBrightness = 1.0f") != std::string::npos);
     REQUIRE(initBody.find("_cloudsSpeed = 0.2f") != std::string::npos);
     REQUIRE(initBody.find("_skyThrough = 1.0f") != std::string::npos);
+    REQUIRE(initBody.find("_windSpeed = VZero") != std::string::npos);
     REQUIRE(initBody.find("_lastWindSpeedChange = Glob.time") != std::string::npos);
     REQUIRE(initBody.find("_gust = VZero") != std::string::npos);
     REQUIRE(initBody.find("_gustUntil = Glob.time") != std::string::npos);
+}
+
+TEST_CASE("LightSun default state is safe for first-frame cloud lighting", "[World][SkyLoadOrKeep][CloudLighting]")
+{
+    const std::string body = ReadTextFile(LightsCpp());
+    REQUIRE_FALSE(body.empty());
+
+    const std::string signature = "LightSun::LightSun()";
+    const size_t begin = body.find(signature);
+    REQUIRE(begin != std::string::npos);
+    const size_t end = body.find("\n}", begin);
+    REQUIRE(end != std::string::npos);
+    const std::string ctorBody = body.substr(begin, end - begin);
+
+    REQUIRE(ctorBody.find("_direction =") != std::string::npos);
+    REQUIRE(ctorBody.find("_shadowDirection =") != std::string::npos);
+    REQUIRE(ctorBody.find("_sunDirection =") != std::string::npos);
+    REQUIRE(ctorBody.find("_moonDirection =") != std::string::npos);
+    REQUIRE(ctorBody.find("_moonDirectionUp =") != std::string::npos);
+    REQUIRE(ctorBody.find("_starsOrientation =") != std::string::npos);
+    REQUIRE(ctorBody.find("_moonPhase =") != std::string::npos);
+    REQUIRE(ctorBody.find("_nightEffect =") != std::string::npos);
+    REQUIRE(ctorBody.find("_starsVisible =") != std::string::npos);
+    REQUIRE(ctorBody.find("_colorFull =") != std::string::npos);
+    REQUIRE(ctorBody.find("_diffuse =") != std::string::npos);
+    REQUIRE(ctorBody.find("_ambient =") != std::string::npos);
+    REQUIRE(ctorBody.find("_sunColor =") != std::string::npos);
+    REQUIRE(ctorBody.find("_sunObjectColor =") != std::string::npos);
+    REQUIRE(ctorBody.find("_sunHaloObjectColor =") != std::string::npos);
+    REQUIRE(ctorBody.find("_moonObjectColor =") != std::string::npos);
+    REQUIRE(ctorBody.find("_moonHaloObjectColor =") != std::string::npos);
+    REQUIRE(ctorBody.find("_skyColor =") != std::string::npos);
+    REQUIRE(ctorBody.find("_sunSkyColor =") != std::string::npos);
+    REQUIRE(ctorBody.find("_ambientPrecalc =") != std::string::npos);
+    REQUIRE(ctorBody.find("_diffusePrecalc =") != std::string::npos);
 }
