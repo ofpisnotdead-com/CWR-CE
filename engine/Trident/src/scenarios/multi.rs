@@ -199,6 +199,12 @@ pub struct ServiceSeedModConfig {
     pub id: String,
     pub name: String,
     pub version: String,
+    #[serde(default)]
+    pub app: Option<String>,
+    #[serde(default)]
+    pub actver: Option<i32>,
+    #[serde(rename = "vertag", default)]
+    pub version_tag: Option<String>,
     pub folder: String,
     pub source: String,
     #[serde(default)]
@@ -337,6 +343,9 @@ fn seed_mod_store(
 
         let metadata = serde_json::json!({
             "modId": seed.id,
+            "app": seed.app,
+            "actver": seed.actver,
+            "vertag": seed.version_tag,
             "name": seed.name,
             "version": seed.version,
             "folderName": seed.folder,
