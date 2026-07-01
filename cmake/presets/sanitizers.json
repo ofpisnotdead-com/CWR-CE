@@ -74,6 +74,54 @@
         "VCPKG_TARGET_TRIPLET": "x64-linux-clang-tsan",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-x64-clang-tsan.cmake"
       }
+    },
+    {
+      "name": "darwin-clang-sanitizer",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "darwin-arm64-clang-san",
+      "displayName": "Darwin arm64 Clang ASan+UBSan",
+      "inherits": "darwin-clang-sanitizer",
+      "binaryDir": "${sourceDir}/build/darwin-arm64-clang-san",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-darwin-clang-san",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/darwin-arm64-clang-san.cmake"
+      }
+    },
+    {
+      "name": "darwin-arm64-clang-tsan",
+      "displayName": "Darwin arm64 Clang TSan",
+      "inherits": "darwin-clang-sanitizer",
+      "binaryDir": "${sourceDir}/build/darwin-arm64-clang-tsan",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-darwin-clang-tsan",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/darwin-arm64-clang-tsan.cmake"
+      }
+    },
+    {
+      "name": "darwin-x64-clang-san",
+      "displayName": "Darwin x64 Clang ASan+UBSan",
+      "inherits": "darwin-clang-sanitizer",
+      "binaryDir": "${sourceDir}/build/darwin-x64-clang-san",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-darwin-clang-san",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/darwin-x64-clang-san.cmake"
+      }
+    },
+    {
+      "name": "darwin-x64-clang-tsan",
+      "displayName": "Darwin x64 Clang TSan",
+      "inherits": "darwin-clang-sanitizer",
+      "binaryDir": "${sourceDir}/build/darwin-x64-clang-tsan",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-darwin-clang-tsan",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/darwin-x64-clang-tsan.cmake"
+      }
     }
   ]
 }

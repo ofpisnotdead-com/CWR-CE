@@ -61,10 +61,8 @@ if(WIN32)
 else()
     target_link_libraries(PoseidonTools
         PRIVATE
-            -Wl,--start-group
             Poseidon
             PoseidonOpenAL
-            -Wl,--end-group
             CLI11::CLI11
             SDL3::SDL3
     )

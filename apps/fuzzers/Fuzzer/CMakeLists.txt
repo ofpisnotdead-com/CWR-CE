@@ -34,9 +34,7 @@ function(add_fuzzer name source)
         # driver flag; no explicit clang_rt naming is needed.
         target_link_options(${name} PRIVATE -fsanitize=fuzzer,address,undefined)
         target_link_libraries(${name} PRIVATE
-            -Wl,--start-group
             Poseidon
-            -Wl,--end-group
             pthread
             dl
         )

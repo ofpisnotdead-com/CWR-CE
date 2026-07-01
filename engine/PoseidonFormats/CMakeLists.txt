@@ -27,9 +27,8 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
             POSITION_INDEPENDENT_CODE ON
         )
         target_link_libraries(PoseidonFormatsDLL PRIVATE
-            -Wl,--start-group Poseidon -Wl,--end-group
+            Poseidon
         )
-        target_link_options(PoseidonFormatsDLL PRIVATE -Wl,-Bsymbolic)
     endif()
     set_target_properties(PoseidonFormatsDLL PROPERTIES
         OUTPUT_NAME "PoseidonFormats"

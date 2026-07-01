@@ -1,0 +1,92 @@
+{
+  "version": 6,
+  "include": [
+    "base.json"
+  ],
+  "configurePresets": [
+    {
+      "name": "darwin-clang-debug",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "darwin-clang-relwithdebinfo",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "darwin-clang-release",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "darwin-arm64-clang",
+      "displayName": "Darwin arm64 Clang Debug",
+      "inherits": "darwin-clang-debug",
+      "binaryDir": "${sourceDir}/build/darwin-arm64-clang",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-darwin-clang",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/darwin-arm64-clang.cmake"
+      }
+    },
+    {
+      "name": "darwin-arm64-clang-rwdi",
+      "displayName": "Darwin arm64 Clang RelWithDebInfo",
+      "inherits": "darwin-clang-relwithdebinfo",
+      "binaryDir": "${sourceDir}/build/darwin-arm64-clang-rwdi",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-darwin-clang",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/darwin-arm64-clang.cmake"
+      }
+    },
+    {
+      "name": "darwin-arm64-clang-rel",
+      "displayName": "Darwin arm64 Clang Release",
+      "inherits": "darwin-clang-release",
+      "binaryDir": "${sourceDir}/build/darwin-arm64-clang-rel",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-darwin-clang",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/darwin-arm64-clang.cmake"
+      }
+    },
+    {
+      "name": "darwin-x64-clang",
+      "displayName": "Darwin x64 Clang Debug",
+      "inherits": "darwin-clang-debug",
+      "binaryDir": "${sourceDir}/build/darwin-x64-clang",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-darwin-clang",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/darwin-x64-clang.cmake"
+      }
+    },
+    {
+      "name": "darwin-x64-clang-rwdi",
+      "displayName": "Darwin x64 Clang RelWithDebInfo",
+      "inherits": "darwin-clang-relwithdebinfo",
+      "binaryDir": "${sourceDir}/build/darwin-x64-clang-rwdi",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-darwin-clang",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/darwin-x64-clang.cmake"
+      }
+    },
+    {
+      "name": "darwin-x64-clang-rel",
+      "displayName": "Darwin x64 Clang Release",
+      "inherits": "darwin-clang-release",
+      "binaryDir": "${sourceDir}/build/darwin-x64-clang-rel",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-darwin-clang",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/darwin-x64-clang.cmake"
+      }
+    }
+  ]
+}

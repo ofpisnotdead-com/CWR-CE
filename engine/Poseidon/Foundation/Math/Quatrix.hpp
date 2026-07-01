@@ -1,9 +1,13 @@
 #pragma once
 
+#ifdef __aarch64__
+#include <sse2neon/sse2neon.h>
+#else
 #ifdef _MSC_VER
 #include <intrin.h>
 #else
 #include <xmmintrin.h>
+#endif
 #endif
 
 namespace Poseidon::Foundation

@@ -545,9 +545,7 @@ if(WIN32)
     )
 else()
     target_link_libraries(PoseidonTests PRIVATE
-        -Wl,--start-group
         PoseidonGL33 Poseidon PoseidonOpenAL
-        -Wl,--end-group
         pthread dl
     )
 endif()
