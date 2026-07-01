@@ -162,6 +162,7 @@ public:
 
 	Poseidon::Foundation::UITime _moveStart;
 	Poseidon::Foundation::UITime _moveLast;
+	Poseidon::Foundation::UITime _edgeScrollLast;
 	unsigned _moveKey;
 	unsigned _mouseKey;
 
@@ -295,6 +296,7 @@ public:
 
 	void ScrollX(float dif);
 	void ScrollY(float dif);
+	void ScrollOnEdges(float mouseX, float mouseY);
 
 	bool IsShowingIds() const {return _showIds;}
 	void ShowIds(bool show = true) {_showIds = show;}

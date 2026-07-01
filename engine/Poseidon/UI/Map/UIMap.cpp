@@ -371,6 +371,7 @@ CStaticMap::CStaticMap(ControlsContainer* parent, int idc, const ParamEntry& cls
 
     _moveKey = 0;
     _mouseKey = 0;
+    _edgeScrollLast = Glob.uiTime;
 
     _scaleMin = scaleMin;
     _scaleMax = scaleMax;
@@ -2457,6 +2458,51 @@ void CStaticMap::ScrollY(float dif)
 {
     _mapY += dif;
     SaturateY(_mapY);
+}
+
+void CStaticMap::ScrollOnEdges(float mouseX, float mouseY)
+{
+    // The edge scroll step used to be applied once per OnSimulate, so it scaled
+    // directly with the framerate.
+    // We'll assume a target frame rate of 60 FPS, and scale the step accordingly.
+    const float refFrameTime = 1.0f / 60.0f;
+    float dt = Glob.uiTime - _edgeScrollLast;
+    _edgeScrollLast = Glob.uiTime;
+    // Limit scroll speed to avoid excessive movement during lag spikes, alt-tab, etc.
+    saturate(dt, 0.0f, 0.1f);
+    float scale = dt / refFrameTime;
+
+    saturate(mouseX, 0, 1);
+    saturate(mouseY, 0, 1);
+
+    // Extracted from DisplayWizardMap::OnSimulate and DisplayMap::OnSimulate
+    float dif = 0.02f - mouseX;
+    if (dif > 0)
+    {
+        ScrollX(scale * 0.003f * exp(dif * 100.0f));
+    }
+    else
+    {
+        dif = mouseX - 0.98f;
+        if (dif > 0)
+        {
+            ScrollX(-scale * 0.003f * exp(dif * 100.0f));
+        }
+    }
+
+    dif = 0.02f - mouseY;
+    if (dif > 0)
+    {
+        ScrollY(scale * 0.003f * exp(dif * 100.0f));
+    }
+    else
+    {
+        dif = mouseY - 0.98f;
+        if (dif > 0)
+        {
+            ScrollY(-scale * 0.003f * exp(dif * 100.0f));
+        }
+    }
 }
 
 void CStaticMap::SetVisibleRect(float x, float y, float w, float h)
