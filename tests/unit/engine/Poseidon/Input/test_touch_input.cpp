@@ -161,6 +161,51 @@ TEST_CASE("TouchInput: stationary held look finger does not repeat movement", "[
     CHECK(state.lookDy == Catch::Approx(0.0f));
 }
 
+// GroupBarUnitsAtTouch (the commanding group-bar hit test) requires a live GWorld/AIGroup,
+// which this Input-layer unit test binary never sets up (GWorld stays null). A tap over
+// where the group bar would be must therefore keep falling back to the pre-existing
+// Look-region quick-tap behavior instead of silently doing nothing or crashing.
+TEST_CASE("TouchInput: group-bar tap without a live world falls back to primary click", "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_TestSetGameplaySceneOverride(true, true);
+    GInput.keyboard.ForgetKeys();
+    GInput.mouse.FlushAndReset();
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, 0.50f, 0.95f));
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_UP, 1, 0.50f, 0.95f));
+
+    GInput.keyboard.Update(Poseidon::Foundation::GlobalTickCount(), 16, true);
+    GInput.mouse.Update(GInput.cursor, 0, false,
+                        Poseidon::Foundation::UITime((int)Poseidon::Foundation::GlobalTickCount()), nullptr);
+
+    CHECK_FALSE(GInput.keyboard.keysToDo[SDL_SCANCODE_F1]);
+    CHECK(GInput.mouse.buttonsToDo[0]);
+}
+
+// Same reasoning as the group-bar test above: CommandMenuKeyAtTouch requires
+// a live GWorld/InGameUI to have anything recorded in _commandMenuTapZones,
+// which this Input-layer unit test binary never sets up. A tap over where
+// the commanding menu would be (upper-right, away from the group bar) must
+// keep falling back to the pre-existing Look-region quick-tap behavior.
+TEST_CASE("TouchInput: command-menu tap without a live world falls back to primary click", "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_TestSetGameplaySceneOverride(true, true);
+    GInput.keyboard.ForgetKeys();
+    GInput.mouse.FlushAndReset();
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, 0.72f, 0.18f));
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_UP, 1, 0.72f, 0.18f));
+
+    GInput.keyboard.Update(Poseidon::Foundation::GlobalTickCount(), 16, true);
+    GInput.mouse.Update(GInput.cursor, 0, false,
+                        Poseidon::Foundation::UITime((int)Poseidon::Foundation::GlobalTickCount()), nullptr);
+
+    CHECK_FALSE(GInput.keyboard.keysToDo[SDL_SCANCODE_1]);
+    CHECK(GInput.mouse.buttonsToDo[0]);
+}
+
 TEST_CASE("TouchInput: long gameplay look hold does not fire on release", "[input][touch]")
 {
     TouchFixture fixture;

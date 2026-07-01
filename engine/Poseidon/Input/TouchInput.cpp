@@ -12,6 +12,7 @@
 #include <Poseidon/Input/KeyInput.hpp>
 #include <Poseidon/AI/AIUnit.hpp>
 #include <Poseidon/AI/EntityAI.hpp>
+#include <Poseidon/UI/InGame/InGameUI.hpp>
 #include <Poseidon/World/Entities/Infantry/Person.hpp>
 #include <Poseidon/World/Entities/Weapons/Weapons.hpp>
 #include <Poseidon/World/World.hpp>
@@ -75,6 +76,8 @@ enum class FingerRole
     Move,
     Look,
     Button,
+    GroupSelect,
+    CommandMenuSelect,
 };
 
 enum class EquipmentItem
@@ -439,6 +442,37 @@ void EmitPrimaryClick()
     SDLInput_BufferMouseButton(0, false);
 }
 
+void EmitGroupSelectTap(const Finger& finger)
+{
+    if (!GWorld || !GWorld->GetUI())
+        return;
+
+    // A vehicle crew sharing one dedup'd icon (driver+gunner+commander)
+    // returns more than one unit ID here - synthesize a key tap per ID so
+    // the tap selects the whole crew, the same as pressing each of their
+    // individual F-keys in the same frame would.
+    const AutoArray<int> unitIds = GWorld->GetUI()->GroupBarUnitsAtTouch(TouchToUiX(finger.x), TouchToUiY(finger.y));
+    for (int i = 0; i < unitIds.Size(); i++)
+    {
+        const SDL_Scancode key = (SDL_Scancode)(SDL_SCANCODE_F1 + (unitIds[i] - 1));
+        SDLInput_BufferKeyEvent(key, true, Foundation::GlobalTickCount());
+        SDLInput_BufferKeyEvent(key, false, Foundation::GlobalTickCount());
+    }
+}
+
+void EmitCommandMenuSelectTap(const Finger& finger)
+{
+    if (!GWorld || !GWorld->GetUI())
+        return;
+
+    const int key = GWorld->GetUI()->CommandMenuKeyAtTouch(TouchToUiX(finger.x), TouchToUiY(finger.y));
+    if (key == SDL_SCANCODE_UNKNOWN)
+        return;
+
+    SDLInput_BufferKeyEvent((SDL_Scancode)key, true, Foundation::GlobalTickCount());
+    SDLInput_BufferKeyEvent((SDL_Scancode)key, false, Foundation::GlobalTickCount());
+}
+
 std::array<ButtonZone, (int)TouchButton::Count> BuildButtonZones(int width, int height)
 {
     if (width <= 0)
@@ -673,6 +707,18 @@ void ClassifyFinger(Finger& finger)
     if (IsDirectTouchScene())
     {
         finger.role = FingerRole::None;
+        return;
+    }
+    if (IsGameplayScene() && GWorld && GWorld->GetUI() &&
+        GWorld->GetUI()->GroupBarUnitsAtTouch(TouchToUiX(finger.x), TouchToUiY(finger.y)).Size() > 0)
+    {
+        finger.role = FingerRole::GroupSelect;
+        return;
+    }
+    if (IsGameplayScene() && GWorld && GWorld->GetUI() &&
+        GWorld->GetUI()->CommandMenuKeyAtTouch(TouchToUiX(finger.x), TouchToUiY(finger.y)) != SDL_SCANCODE_UNKNOWN)
+    {
+        finger.role = FingerRole::CommandMenuSelect;
         return;
     }
     if (!RoleActive(FingerRole::Move) && finger.x <= kMoveRegionX && finger.y >= kLowerRegionY)
@@ -1252,6 +1298,10 @@ void TouchInput_HandleFingerEvent(const SDL_TouchFingerEvent& event)
         const bool quickTap = Glob.uiTime - finger->startTime <= kTapMaxSeconds;
         if (finger->role == FingerRole::Look && finger->maxTravel <= kTapMaxTravel && quickTap && IsGameplayScene())
             EmitPrimaryClick();
+        if (finger->role == FingerRole::GroupSelect && finger->maxTravel <= kTapMaxTravel && quickTap)
+            EmitGroupSelectTap(*finger);
+        if (finger->role == FingerRole::CommandMenuSelect && finger->maxTravel <= kTapMaxTravel && quickTap)
+            EmitCommandMenuSelectTap(*finger);
         *finger = {};
         return;
     }
