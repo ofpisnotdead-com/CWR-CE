@@ -301,11 +301,11 @@ bool ConfigurationSystem::InitializeGameConfiguration(const char* language)
     GLanguage = normalizedLanguage.c_str();
     LOG_INFO(Config, "  Language: {}", normalizedLanguage);
 
-    // Load stringtables from all mod directories.  Each successful load
-    // flips StringtableSystem's available flag so Localize(int) returns
-    // real strings; if no mod has a stringtable.csv the flag stays false
-    // and Localize(int) short-circuits to "" silently.
+    // Load the base stringtable first, then let mods overlay the keys they
+    // actually provide. Older total-conversion mods often ship a partial
+    // bin/stringtable.csv; loading only the mod table drops remaster UI keys.
     LOG_TRACE(Config, "  Loading stringtables from mod directories...");
+    ParseStringtable("", nullptr);
     ModSystem::EnumDirectories(ParseStringtable, nullptr);
 
     // Initialize modules (must be after stringtable, before config)
