@@ -1313,11 +1313,6 @@ void WaveOAL::LastLoop()
     _state.looping = false;
     if (_alSource && !_isStreamed)
         alSourcei(_alSource, AL_LOOPING, AL_FALSE);
-    if (_playing && _alSource)
-    {
-        DoStop();
-        DoPlay();
-    }
 }
 
 void WaveOAL::PlayUntilStopValue(float time)
