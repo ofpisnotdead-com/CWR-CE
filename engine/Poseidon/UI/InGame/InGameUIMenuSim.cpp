@@ -415,6 +415,12 @@ void InGameUI::SimulateHUD(const Camera& camera, EntityAI* vehicle, CameraType c
         return;
     }
 
+    if (!ShouldShowGameplayHUD())
+    {
+        _actions.Clear();
+        return;
+    }
+
     ProcessMenu(camera, vehicle);
 
     if (GWorld->HasMap())

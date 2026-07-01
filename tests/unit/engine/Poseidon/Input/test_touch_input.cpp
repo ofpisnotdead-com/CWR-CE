@@ -20,6 +20,8 @@ constexpr float kFireButtonX = 0.042f;
 constexpr float kFireButtonY = 0.907f;
 constexpr float kActionButtonX = 0.098f;
 constexpr float kActionButtonY = 0.814f;
+constexpr float kEquipmentButtonX = 0.042f;
+constexpr float kEquipmentButtonY = 0.531f;
 
 SDL_TouchFingerEvent Finger(SDL_EventType type, SDL_FingerID id, float x, float y)
 {
@@ -40,7 +42,9 @@ struct TouchFixture
         TouchInput_SetCursorSensitivity(1.0f);
         TouchInput_TestSetGameplaySceneOverride(false, false);
         TouchInput_TestSetMapSceneOverride(false, false);
+        TouchInput_TestSetEditorMapSceneOverride(false, false);
         TouchInput_TestSetDirectTouchSceneOverride(false, false);
+        TouchInput_TestSetSafeArea(0.0f, 0.0f, 1.0f, 1.0f);
         TouchInput_Reset();
     }
     ~TouchFixture()
@@ -48,7 +52,9 @@ struct TouchFixture
         TouchInput_Reset();
         TouchInput_TestSetGameplaySceneOverride(false, false);
         TouchInput_TestSetMapSceneOverride(false, false);
+        TouchInput_TestSetEditorMapSceneOverride(false, false);
         TouchInput_TestSetDirectTouchSceneOverride(false, false);
+        TouchInput_TestSetSafeArea(0.0f, 0.0f, 1.0f, 1.0f);
         TouchInput_SetAimSensitivity(1.0f);
         TouchInput_SetCursorSensitivity(1.0f);
         Glob.uiTime = Poseidon::Foundation::UITime(0);
@@ -98,6 +104,7 @@ TEST_CASE("TouchInput: mostly horizontal gameplay move snaps to pure strafe", "[
 TEST_CASE("TouchInput: right-side drag owns cursor/look and does not steal button touches", "[input][touch]")
 {
     TouchFixture fixture;
+    TouchInput_TestSetGameplaySceneOverride(true, true);
 
     TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, 0.70f, 0.50f));
     TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 2, kFireButtonX, kFireButtonY));
@@ -108,8 +115,8 @@ TEST_CASE("TouchInput: right-side drag owns cursor/look and does not steal butto
     REQUIRE(state.lookActive);
     CHECK_FALSE(state.moveActive);
     CHECK(state.buttons[(int)TouchButton::Fire]);
-    CHECK(state.lookDx == Catch::Approx(57.6f).margin(0.1f));
-    CHECK(state.lookDy == Catch::Approx(-32.4f).margin(0.1f));
+    CHECK(state.lookDx == Catch::Approx(21.6f).margin(0.1f));
+    CHECK(state.lookDy == Catch::Approx(-15.6f).margin(0.1f));
 }
 
 TEST_CASE("TouchInput: stationary held look finger does not repeat movement", "[input][touch]")
@@ -152,6 +159,7 @@ TEST_CASE("TouchInput: long gameplay look hold does not fire on release", "[inpu
 TEST_CASE("TouchInput: simultaneous move look and button state coexist", "[input][touch]")
 {
     TouchFixture fixture;
+    TouchInput_TestSetGameplaySceneOverride(true, true);
 
     TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, 0.18f, 0.78f));
     TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_MOTION, 1, 0.18f, 0.66f));
@@ -216,6 +224,44 @@ TEST_CASE("TouchInput: finger coordinates are clamped before classification", "[
     CHECK(state.moveY == Catch::Approx(-1.0f));
 }
 
+TEST_CASE("TouchInput: safe area clamps edge buttons out of unsafe strips", "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_TestSetGameplaySceneOverride(true, true);
+    TouchInput_TestSetSafeArea(0.12f, 0.0f, 1.0f, 1.0f);
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, kFireButtonX, kFireButtonY));
+    TouchInput_ProcessFrame(1920, 1080);
+    CHECK_FALSE(TouchInput_GetDebugState().buttons[(int)TouchButton::Fire]);
+
+    TouchInput_Reset();
+    TouchInput_TestSetGameplaySceneOverride(true, true);
+    TouchInput_TestSetSafeArea(0.12f, 0.0f, 1.0f, 1.0f);
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 2, 0.15f, kFireButtonY));
+    TouchInput_ProcessFrame(1920, 1080);
+    CHECK(TouchInput_GetDebugState().buttons[(int)TouchButton::Fire]);
+}
+
+TEST_CASE("TouchInput: safe area preserves staggered action column", "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_TestSetGameplaySceneOverride(true, true);
+    TouchInput_TestSetSafeArea(0.12f, 0.0f, 1.0f, 1.0f);
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, 0.15f, kActionButtonY));
+    TouchInput_ProcessFrame(1920, 1080);
+    CHECK_FALSE(TouchInput_GetDebugState().buttons[(int)TouchButton::Action]);
+
+    TouchInput_Reset();
+    TouchInput_TestSetGameplaySceneOverride(true, true);
+    TouchInput_TestSetSafeArea(0.12f, 0.0f, 1.0f, 1.0f);
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 2, 0.21f, kActionButtonY));
+    TouchInput_ProcessFrame(1920, 1080);
+    CHECK(TouchInput_GetDebugState().buttons[(int)TouchButton::Action]);
+}
+
 TEST_CASE("TouchInput: map scene one finger drives primary map interaction", "[input][touch]")
 {
     TouchFixture fixture;
@@ -232,6 +278,45 @@ TEST_CASE("TouchInput: map scene one finger drives primary map interaction", "[i
     CHECK_FALSE(state.mapGestureActive);
     CHECK(state.mapPanX == Catch::Approx(0.0f));
     CHECK(state.mapZoom == Catch::Approx(0.0f));
+}
+
+TEST_CASE("TouchInput: action button is hidden outside gameplay", "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_TestSetDirectTouchSceneOverride(true, true);
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, kActionButtonX, kActionButtonY));
+    TouchInput_ProcessFrame(1920, 1080);
+
+    TouchInputDebugState state = TouchInput_GetDebugState();
+    CHECK_FALSE(state.buttons[(int)TouchButton::Action]);
+}
+
+TEST_CASE("TouchInput: map scene keeps equipment button for map toggle", "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_TestSetMapSceneOverride(true, true);
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, kActionButtonX, kActionButtonY));
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 2, kEquipmentButtonX, kEquipmentButtonY));
+    TouchInput_ProcessFrame(1920, 1080);
+
+    TouchInputDebugState state = TouchInput_GetDebugState();
+    CHECK_FALSE(state.buttons[(int)TouchButton::Action]);
+    CHECK(state.buttons[(int)TouchButton::Equipment]);
+}
+
+TEST_CASE("TouchInput: editor map hides equipment button", "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_TestSetEditorMapSceneOverride(true, true);
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, kEquipmentButtonX, kEquipmentButtonY));
+    TouchInput_ProcessFrame(1920, 1080);
+
+    TouchInputDebugState state = TouchInput_GetDebugState();
+    CHECK_FALSE(state.buttons[(int)TouchButton::Equipment]);
+    CHECK(state.mapPrimaryActive);
 }
 
 TEST_CASE("TouchInput: map scene two-finger gesture pans and pinches", "[input][touch]")

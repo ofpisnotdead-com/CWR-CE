@@ -46,6 +46,7 @@ class SDLEventWindow
 
         if (_sdlWindow)
         {
+            Poseidon::TouchInput_UpdateSafeAreaFromWindow(_sdlWindow);
             if (_mouseGrab)
                 SDL_SetWindowRelativeMouseMode(_sdlWindow, true);
 #ifndef POSEIDON_TARGET_IOS
@@ -65,6 +66,7 @@ class SDLEventWindow
 
     void Detach()
     {
+        Poseidon::TouchInput_UpdateSafeAreaFromWindow(nullptr);
         _sdlWindow = nullptr;
         _open = false;
     }
@@ -125,11 +127,16 @@ class SDLEventWindow
             {
                 if (_sdlWindow)
                     SDL_GetWindowSizeInPixels(_sdlWindow, &_width, &_height);
+                Poseidon::TouchInput_UpdateSafeAreaFromWindow(_sdlWindow);
                 _resized = true;
                 // Notify the engine so it can resize the swap chain with the
                 // correct final dimensions (critical for D3D11 FLIP_DISCARD).
                 if (::Poseidon::GEngine)
                     ::Poseidon::GEngine->OnWindowResized(_width, _height);
+            }
+            else if (event.type == SDL_EVENT_WINDOW_SAFE_AREA_CHANGED)
+            {
+                Poseidon::TouchInput_UpdateSafeAreaFromWindow(_sdlWindow);
             }
             else if (event.type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN)
             {

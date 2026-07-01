@@ -16,6 +16,7 @@
 #include <Poseidon/World/Entities/Weapons/Weapons.hpp>
 #include <Poseidon/World/World.hpp>
 #include <SDL3/SDL_scancode.h>
+#include <SDL3/SDL_video.h>
 
 #include <algorithm>
 #include <array>
@@ -126,6 +127,14 @@ struct PixelLayout
     float buttonGap;
 };
 
+struct SafeArea
+{
+    float left = 0.0f;
+    float top = 0.0f;
+    float right = 1.0f;
+    float bottom = 1.0f;
+};
+
 std::array<Finger, kMaxFingers> sFingers;
 bool sEnabled = kDefaultEnabled;
 bool sButtonDown[(int)TouchButton::Count] = {};
@@ -166,8 +175,11 @@ float sCursorSensitivity = 1.0f;
 
 bool sMapSceneOverrideEnabled = false;
 bool sMapSceneOverride = false;
+bool sEditorMapSceneOverrideEnabled = false;
+bool sEditorMapSceneOverride = false;
 bool sDirectTouchSceneOverrideEnabled = false;
 bool sDirectTouchSceneOverride = false;
+SafeArea sSafeArea;
 bool sGameplaySceneOverrideEnabled = false;
 bool sGameplaySceneOverride = false;
 
@@ -260,6 +272,62 @@ float NormY(float pixelY, int height)
     return Clamp01(pixelY / (float)std::max(1, height));
 }
 
+float ButtonXRadius(const ButtonZone& zone, int width, int height)
+{
+    return zone.r * (float)std::max(1, height) / (float)std::max(1, width);
+}
+
+void ShiftButtonGroup(std::array<ButtonZone, (int)TouchButton::Count>& zones, const int* ids, int count, float dx,
+                      float dy)
+{
+    for (int i = 0; i < count; i++)
+    {
+        ButtonZone& zone = zones[ids[i]];
+        zone.x = Clamp01(zone.x + dx);
+        zone.y = Clamp01(zone.y + dy);
+    }
+}
+
+void ClampButtonGroupToSafeArea(std::array<ButtonZone, (int)TouchButton::Count>& zones, const int* ids, int count,
+                                int width, int height, bool clampX, bool clampY)
+{
+    if (count <= 0)
+        return;
+
+    float minX = 1.0f;
+    float maxX = 0.0f;
+    float minY = 1.0f;
+    float maxY = 0.0f;
+    for (int i = 0; i < count; i++)
+    {
+        const ButtonZone& zone = zones[ids[i]];
+        const float xRadius = ButtonXRadius(zone, width, height);
+        const float yRadius = zone.r;
+        minX = std::min(minX, zone.x - xRadius);
+        maxX = std::max(maxX, zone.x + xRadius);
+        minY = std::min(minY, zone.y - yRadius);
+        maxY = std::max(maxY, zone.y + yRadius);
+    }
+
+    float dx = 0.0f;
+    float dy = 0.0f;
+    if (clampX)
+    {
+        if (minX < sSafeArea.left)
+            dx = sSafeArea.left - minX;
+        if (maxX + dx > sSafeArea.right)
+            dx = sSafeArea.right - maxX;
+    }
+    if (clampY)
+    {
+        if (minY < sSafeArea.top)
+            dy = sSafeArea.top - minY;
+        if (maxY + dy > sSafeArea.bottom)
+            dy = sSafeArea.bottom - maxY;
+    }
+    ShiftButtonGroup(zones, ids, count, dx, dy);
+}
+
 bool IsGameplayScene()
 {
     if (sGameplaySceneOverrideEnabled)
@@ -274,6 +342,8 @@ bool IsPersonViewButtonAvailable()
 
 bool IsMapScene()
 {
+    if (sEditorMapSceneOverrideEnabled && sEditorMapSceneOverride)
+        return true;
     if (sMapSceneOverrideEnabled)
         return sMapSceneOverride;
     if (!GWorld)
@@ -282,8 +352,41 @@ bool IsMapScene()
     return kind == ControllerSceneKind::Map || kind == ControllerSceneKind::EditorMap;
 }
 
+bool IsRegularMapScene()
+{
+    if (sEditorMapSceneOverrideEnabled && sEditorMapSceneOverride)
+        return false;
+    if (sMapSceneOverrideEnabled)
+        return sMapSceneOverride;
+    if (!GWorld)
+        return false;
+    return GWorld->GetControllerUiScene().kind == ControllerSceneKind::Map;
+}
+
+bool IsTouchButtonAvailable(TouchButton button)
+{
+    switch (button)
+    {
+        case TouchButton::Fire:
+        case TouchButton::Action:
+        case TouchButton::Reload:
+        case TouchButton::Optics:
+            return IsGameplayScene();
+        case TouchButton::Equipment:
+            return IsGameplayScene() || IsRegularMapScene();
+        case TouchButton::PersonView:
+            return IsPersonViewButtonAvailable();
+        case TouchButton::Pause:
+            return true;
+        default:
+            return false;
+    }
+}
+
 bool IsEditorMapScene()
 {
+    if (sEditorMapSceneOverrideEnabled)
+        return sEditorMapSceneOverride;
     if (!GWorld)
         return false;
     return GWorld->GetControllerUiScene().kind == ControllerSceneKind::EditorMap;
@@ -351,13 +454,25 @@ std::array<ButtonZone, (int)TouchButton::Count> BuildButtonZones(int width, int 
     const float mapY = fireY - layout.buttonGap * 3.58f;
     const float radius = layout.buttonRadius / (float)height;
     const float oppositeX = (float)width - layout.edgeMargin;
-    return {{{TouchButton::Fire, NormX(columnX, width), NormY(fireY, height), radius * 1.18f},
-             {TouchButton::Action, NormX(innerX, width), NormY(actionY, height), radius},
-             {TouchButton::Reload, NormX(columnX, width), NormY(reloadY, height), radius},
-             {TouchButton::Optics, NormX(innerX, width), NormY(opticsY, height), radius},
-             {TouchButton::Equipment, NormX(columnX, width), NormY(mapY, height), radius},
-             {TouchButton::PersonView, NormX(oppositeX, width), NormY(layout.topMargin, height), radius * 0.72f},
-             {TouchButton::Pause, NormX(layout.edgeMargin, width), NormY(layout.topMargin, height), radius * 0.72f}}};
+    std::array<ButtonZone, (int)TouchButton::Count> zones = {
+        {{TouchButton::Fire, NormX(columnX, width), NormY(fireY, height), radius * 1.18f},
+         {TouchButton::Action, NormX(innerX, width), NormY(actionY, height), radius},
+         {TouchButton::Reload, NormX(columnX, width), NormY(reloadY, height), radius},
+         {TouchButton::Optics, NormX(innerX, width), NormY(opticsY, height), radius},
+         {TouchButton::Equipment, NormX(columnX, width), NormY(mapY, height), radius},
+         {TouchButton::PersonView, NormX(oppositeX, width), NormY(layout.topMargin, height), radius * 0.72f},
+         {TouchButton::Pause, NormX(layout.edgeMargin, width), NormY(layout.topMargin, height), radius * 0.72f}}};
+    const int leftCluster[] = {(int)TouchButton::Fire,   (int)TouchButton::Action,    (int)TouchButton::Reload,
+                               (int)TouchButton::Optics, (int)TouchButton::Equipment, (int)TouchButton::Pause};
+    const int rightCluster[] = {(int)TouchButton::PersonView};
+    const int lowerCluster[] = {(int)TouchButton::Fire,   (int)TouchButton::Action, (int)TouchButton::Reload,
+                                (int)TouchButton::Optics, (int)TouchButton::Equipment};
+    const int upperCluster[] = {(int)TouchButton::Pause, (int)TouchButton::PersonView};
+    ClampButtonGroupToSafeArea(zones, leftCluster, 6, width, height, true, false);
+    ClampButtonGroupToSafeArea(zones, rightCluster, 1, width, height, true, false);
+    ClampButtonGroupToSafeArea(zones, lowerCluster, 5, width, height, false, true);
+    ClampButtonGroupToSafeArea(zones, upperCluster, 2, width, height, false, true);
+    return zones;
 }
 
 ButtonZone GetEquipmentAnchor(int width, int height)
@@ -449,7 +564,7 @@ TouchButton HitButton(float x, float y)
 {
     for (const ButtonZone& zone : BuildButtonZones(sViewportW, sViewportH))
     {
-        if (zone.button == TouchButton::PersonView && !IsPersonViewButtonAvailable())
+        if (!IsTouchButtonAvailable(zone.button))
             continue;
         const float dx = (x - zone.x) * (float)std::max(1, sViewportW);
         const float dy = (y - zone.y) * (float)std::max(1, sViewportH);
@@ -982,6 +1097,21 @@ void DrawTouchIcon(Engine* engine, const MipInfo& white, TouchButton button, flo
     }
 }
 
+void DrawTouchIconContrast(Engine* engine, const MipInfo& white, TouchButton button, float cx, float cy, float r,
+                           bool pressed)
+{
+    const float dx = 1.2f / (float)std::max(1, engine->Width());
+    const float dy = 1.2f / (float)std::max(1, engine->Height());
+    const PackedColor halo(Color(0.0f, 0.0f, 0.0f, pressed ? 0.52f : 0.72f));
+    const PackedColor icon(pressed ? Color(0.02f, 0.04f, 0.05f, 0.92f) : Color(0.98f, 1.0f, 1.0f, 0.92f));
+
+    DrawTouchIcon(engine, white, button, cx - dx, cy, r, halo);
+    DrawTouchIcon(engine, white, button, cx + dx, cy, r, halo);
+    DrawTouchIcon(engine, white, button, cx, cy - dy, r, halo);
+    DrawTouchIcon(engine, white, button, cx, cy + dy, r, halo);
+    DrawTouchIcon(engine, white, button, cx, cy, r, icon);
+}
+
 void DrawEquipmentItemIcon(Engine* engine, const MipInfo& white, EquipmentItem item, float cx, float cy, float r,
                            PackedColor color)
 {
@@ -1030,6 +1160,32 @@ void DrawEquipmentItemIcon(Engine* engine, const MipInfo& white, EquipmentItem i
         default:
             break;
     }
+}
+
+void DrawEquipmentItemIconContrast(Engine* engine, const MipInfo& white, EquipmentItem item, float cx, float cy,
+                                   float r, bool hover)
+{
+    const float dx = 1.2f / (float)std::max(1, engine->Width());
+    const float dy = 1.2f / (float)std::max(1, engine->Height());
+    const PackedColor halo(Color(0.0f, 0.0f, 0.0f, hover ? 0.52f : 0.72f));
+    const PackedColor icon(hover ? Color(0.02f, 0.04f, 0.05f, 0.92f) : Color(0.98f, 1.0f, 1.0f, 0.92f));
+
+    DrawEquipmentItemIcon(engine, white, item, cx - dx, cy, r, halo);
+    DrawEquipmentItemIcon(engine, white, item, cx + dx, cy, r, halo);
+    DrawEquipmentItemIcon(engine, white, item, cx, cy - dy, r, halo);
+    DrawEquipmentItemIcon(engine, white, item, cx, cy + dy, r, halo);
+    DrawEquipmentItemIcon(engine, white, item, cx, cy, r, icon);
+}
+
+void DrawTouchButtonFrame(Engine* engine, const MipInfo& white, float cx, float cy, float r, bool pressed)
+{
+    const PackedColor outer(Color(0.0f, 0.0f, 0.0f, pressed ? 0.78f : 0.66f));
+    const PackedColor inner(pressed ? Color(0.86f, 0.95f, 1.0f, 0.82f) : Color(0.94f, 0.98f, 1.0f, 0.62f));
+    const PackedColor glint(Color(1.0f, 1.0f, 1.0f, pressed ? 0.52f : 0.34f));
+
+    DrawCircleApprox(engine, white, cx, cy, r * 1.07f, outer);
+    DrawCircleApprox(engine, white, cx, cy, r, inner);
+    DrawCircleApprox(engine, white, cx, cy, r * 0.78f, glint);
 }
 
 } // namespace
@@ -1089,6 +1245,28 @@ void TouchInput_HandleFingerEvent(const SDL_TouchFingerEvent& event)
         ClassifyFinger(*finger);
         EmitFingerButtonEdge(*finger, true);
     }
+}
+
+void TouchInput_UpdateSafeAreaFromWindow(SDL_Window* window)
+{
+    SafeArea safe;
+    if (window)
+    {
+        int windowW = 0;
+        int windowH = 0;
+        SDL_Rect rect{};
+        if (SDL_GetWindowSize(window, &windowW, &windowH) && SDL_GetWindowSafeArea(window, &rect) && windowW > 0 &&
+            windowH > 0 && rect.w > 0 && rect.h > 0)
+        {
+            safe.left = Clamp01((float)rect.x / (float)windowW);
+            safe.top = Clamp01((float)rect.y / (float)windowH);
+            safe.right = Clamp01((float)(rect.x + rect.w) / (float)windowW);
+            safe.bottom = Clamp01((float)(rect.y + rect.h) / (float)windowH);
+            if (safe.right <= safe.left || safe.bottom <= safe.top)
+                safe = SafeArea();
+        }
+    }
+    sSafeArea = safe;
 }
 
 void TouchInput_ProcessFrame(int viewportWidth, int viewportHeight)
@@ -1235,9 +1413,8 @@ void TouchInput_DrawOverlay(Engine* engine)
         return;
 
     const MipInfo white = engine->TextBank()->UseMipmap(nullptr, 0, 0);
-    const PackedColor base(Color(0.02f, 0.03f, 0.04f, 0.24f));
-    const PackedColor active(Color(0.95f, 0.98f, 1.0f, 0.42f));
-    const PackedColor pressed(Color(0.80f, 0.93f, 1.0f, 0.58f));
+    const PackedColor base(Color(0.02f, 0.03f, 0.04f, 0.44f));
+    const PackedColor active(Color(0.98f, 1.0f, 1.0f, 0.72f));
 
     if (std::fabs(sMoveX) > 0.001f || std::fabs(sMoveY) > 0.001f)
     {
@@ -1257,22 +1434,23 @@ void TouchInput_DrawOverlay(Engine* engine)
         for (int i = 0; i < count; i++)
         {
             DrawLineNorm(engine, anchor.x, anchor.y, zones[i].x, zones[i].y,
-                         PackedColor(Color(0.80f, 0.93f, 1.0f, 0.22f)));
+                         PackedColor(Color(0.0f, 0.0f, 0.0f, 0.54f)));
+            DrawLineNorm(engine, anchor.x, anchor.y, zones[i].x, zones[i].y,
+                         PackedColor(Color(0.95f, 0.98f, 1.0f, 0.44f)));
             const bool hover = zones[i].item == sEquipmentHover;
-            DrawCircleApprox(engine, white, zones[i].x, zones[i].y, zones[i].r, hover ? pressed : base);
-            DrawEquipmentItemIcon(engine, white, zones[i].item, zones[i].x, zones[i].y, zones[i].r * 0.82f,
-                                  hover ? PackedColor(Color(0.05f, 0.08f, 0.10f, 0.78f)) : active);
+            DrawTouchButtonFrame(engine, white, zones[i].x, zones[i].y, zones[i].r, hover);
+            DrawEquipmentItemIconContrast(engine, white, zones[i].item, zones[i].x, zones[i].y, zones[i].r * 0.82f,
+                                          hover);
         }
         return;
     }
     for (const ButtonZone& zone : BuildButtonZones(w, h))
     {
-        if (zone.button == TouchButton::PersonView && !IsPersonViewButtonAvailable())
+        if (!IsTouchButtonAvailable(zone.button))
             continue;
-        DrawCircleApprox(engine, white, zone.x, zone.y, zone.r,
-                         sButtonDown[(int)zone.button] ? pressed : base);
-        DrawTouchIcon(engine, white, zone.button, zone.x, zone.y, zone.r * 0.82f,
-                      sButtonDown[(int)zone.button] ? PackedColor(Color(0.05f, 0.08f, 0.10f, 0.78f)) : active);
+        const bool down = sButtonDown[(int)zone.button];
+        DrawTouchButtonFrame(engine, white, zone.x, zone.y, zone.r, down);
+        DrawTouchIconContrast(engine, white, zone.button, zone.x, zone.y, zone.r * 0.82f, down);
     }
 }
 
@@ -1361,6 +1539,12 @@ void TouchInput_TestSetMapSceneOverride(bool enabled, bool isMapScene)
     sMapSceneOverride = isMapScene;
 }
 
+void TouchInput_TestSetEditorMapSceneOverride(bool enabled, bool isEditorMapScene)
+{
+    sEditorMapSceneOverrideEnabled = enabled;
+    sEditorMapSceneOverride = isEditorMapScene;
+}
+
 void TouchInput_TestSetDirectTouchSceneOverride(bool enabled, bool isDirectTouchScene)
 {
     sDirectTouchSceneOverrideEnabled = enabled;
@@ -1371,6 +1555,18 @@ void TouchInput_TestSetGameplaySceneOverride(bool enabled, bool isGameplayScene)
 {
     sGameplaySceneOverrideEnabled = enabled;
     sGameplaySceneOverride = isGameplayScene;
+}
+
+void TouchInput_TestSetSafeArea(float left, float top, float right, float bottom)
+{
+    SafeArea safe;
+    safe.left = Clamp01(left);
+    safe.top = Clamp01(top);
+    safe.right = Clamp01(right);
+    safe.bottom = Clamp01(bottom);
+    if (safe.right <= safe.left || safe.bottom <= safe.top)
+        safe = SafeArea();
+    sSafeArea = safe;
 }
 
 } // namespace Poseidon

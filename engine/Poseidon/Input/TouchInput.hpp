@@ -2,6 +2,8 @@
 
 #include <SDL3/SDL_events.h>
 
+struct SDL_Window;
+
 namespace Poseidon
 {
 
@@ -40,6 +42,7 @@ struct TouchInputDebugState
 };
 
 void TouchInput_HandleFingerEvent(const SDL_TouchFingerEvent& event);
+void TouchInput_UpdateSafeAreaFromWindow(SDL_Window* window);
 void TouchInput_ProcessFrame(int viewportWidth, int viewportHeight);
 void TouchInput_DrawOverlay(Engine* engine);
 void TouchInput_SetEnabled(bool enabled);
@@ -54,6 +57,8 @@ TouchInputDebugState TouchInput_GetDebugState();
 
 void TouchInput_TestSetGameplaySceneOverride(bool enabled, bool isGameplayScene);
 void TouchInput_TestSetMapSceneOverride(bool enabled, bool isMapScene);
+void TouchInput_TestSetEditorMapSceneOverride(bool enabled, bool isEditorMapScene);
 void TouchInput_TestSetDirectTouchSceneOverride(bool enabled, bool isDirectTouchScene);
+void TouchInput_TestSetSafeArea(float left, float top, float right, float bottom);
 
 } // namespace Poseidon

@@ -1,5 +1,6 @@
 #include <Poseidon/Core/Config/UserConfig.hpp>
 #include <Poseidon/World/World.hpp>
+#include <Poseidon/Input/ControllerUiScene.hpp>
 #include <Poseidon/AI/AI.hpp>
 #include <Poseidon/World/Entities/Infantry/Person.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
@@ -97,6 +98,11 @@ PackedBoolArray ListTeam(Team team);
 
 RString InGameUI::GetActionMenuTexts() const
 {
+    if (!ShouldShowGameplayHUD())
+    {
+        return RString();
+    }
+
     AIUnit* unit = GWorld->FocusOn();
     if (!unit)
     {
@@ -139,8 +145,24 @@ RString InGameUI::GetCommandMenuTexts() const
     return result;
 }
 
+bool InGameUI::ShouldShowGameplayHUD() const
+{
+    if (!GWorld)
+    {
+        return false;
+    }
+
+    return GWorld->GetControllerUiScene().kind == ControllerSceneKind::Gameplay;
+}
+
 void InGameUI::ProcessActions(AIUnit* unit)
 {
+    if (!ShouldShowGameplayHUD())
+    {
+        _actions.Clear();
+        return;
+    }
+
     if (unit->GetLifeState() != AIUnit::LSAlive || !unit->GetGroup())
     {
         _actions.Clear();

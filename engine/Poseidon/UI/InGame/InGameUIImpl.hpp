@@ -439,6 +439,7 @@ private:
 	void CreateAttackList(AIGroup *group, Menu *submenu, int cmdBase);
 
 	void ProcessMenu(const Camera &camera, EntityAI *vehicle);
+	bool ShouldShowGameplayHUD() const;
 	void ProcessActions(AIUnit *unit);
 	void RefreshActionsMenu();
 	void CollectActions(UIActions &actions);
