@@ -114,3 +114,25 @@ TEST_CASE("I-23 T1: no direct land->SetSkyTexture(nullptr) in landscape.cpp", "[
     REQUIRE(body.find("SetSkyTexture(NULL)") == std::string::npos);
     REQUIRE(body.find("SetSkyTexture(0)") == std::string::npos);
 }
+
+TEST_CASE("Weather::Init initializes sky and cloud render state", "[World][SkyLoadOrKeep][WeatherInit]")
+{
+    const std::string body = ReadTextFile(LandscapeCpp());
+    REQUIRE_FALSE(body.empty());
+
+    const std::string signature = "void Weather::Init()";
+    const size_t begin = body.find(signature);
+    REQUIRE(begin != std::string::npos);
+    const size_t end = body.find("\n}", begin);
+    REQUIRE(end != std::string::npos);
+    const std::string initBody = body.substr(begin, end - begin);
+
+    REQUIRE(initBody.find("_fogSet = 0.0f") != std::string::npos);
+    REQUIRE(initBody.find("_cloudsAlpha = 0.0f") != std::string::npos);
+    REQUIRE(initBody.find("_cloudsBrightness = 1.0f") != std::string::npos);
+    REQUIRE(initBody.find("_cloudsSpeed = 0.2f") != std::string::npos);
+    REQUIRE(initBody.find("_skyThrough = 1.0f") != std::string::npos);
+    REQUIRE(initBody.find("_lastWindSpeedChange = Glob.time") != std::string::npos);
+    REQUIRE(initBody.find("_gust = VZero") != std::string::npos);
+    REQUIRE(initBody.find("_gustUntil = Glob.time") != std::string::npos);
+}

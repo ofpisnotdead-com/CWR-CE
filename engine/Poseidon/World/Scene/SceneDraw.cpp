@@ -34,6 +34,7 @@ using Poseidon::Foundation::Time;
 #include <Poseidon/Graphics/Textures/TexturePreload.hpp>
 #include <Poseidon/World/Scene/Object.hpp>
 #include <Poseidon/World/Scene/SurfaceDrawOrder.hpp>
+#include <Poseidon/World/Scene/AlphaSortOrder.hpp>
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
 #include <Poseidon/Graphics/Rendering/Primitives/Poly.hpp>
 #include <Poseidon/Graphics/Shadow/ShadowMath.hpp>
@@ -81,6 +82,12 @@ static int CmpRevDistObj(const SortObjectItem* p1, const SortObjectItem* p0)
         return +1;
     }
     return 0;
+}
+
+// far-to-near by camera-space depth, for the alpha pass (see AlphaSortOrder.hpp)
+static int CmpRevAlphaSortObj(const SortObjectItem* p1, const SortObjectItem* p0)
+{
+    return AlphaSort::CompareAlphaDepth((*p1)->zCoord, (*p0)->zCoord);
 }
 
 static int CmpShapeObj(const SortObjectItem* p1, const SortObjectItem* p2)
@@ -1745,7 +1752,7 @@ void Scene::DrawObjectsAndShadowsPass2()
     // draw alpha parts of roads
     GEngine->FlushQueues();
     GEngine->EnableReorderQueues(false);
-    QSort(_drawMergers.Data(), _drawMergers.Size(), CmpRevDistObj);
+    QSort(_drawMergers.Data(), _drawMergers.Size(), CmpRevAlphaSortObj);
     // last draw alpha objects (not roads - they are already drawn)
     for (int i = 0; i < nDraw; i++)
     {

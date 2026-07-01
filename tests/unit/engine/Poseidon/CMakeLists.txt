@@ -416,6 +416,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     World/Scene/test_scene.cpp
     World/Scene/test_scene_preloader.cpp
     World/Scene/test_surface_draw_order.cpp
+    World/Scene/test_alpha_sort_order.cpp
 
     # Core subsystem tests
     UI/Locale/test_stringtable_system.cpp

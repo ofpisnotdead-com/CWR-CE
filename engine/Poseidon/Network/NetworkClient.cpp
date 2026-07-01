@@ -223,6 +223,8 @@ NetworkClient::~NetworkClient()
     // Mute/ignore are per-session, client-local: drop them when the MP client
     // tears down so they don't leak into the next session.
     ClearMuteIgnore();
+    // Drop the server difficulty override so it doesn't leak into a later session.
+    USER_CONFIG.ClearServerDifficulty();
     Poseidon::DeleteDirectoryStructure("tmp", true);
 }
 

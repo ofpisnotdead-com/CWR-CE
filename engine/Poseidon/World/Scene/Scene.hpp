@@ -56,6 +56,8 @@ class SortObject : public RefCount
 
     float distance2;
 
+    float zCoord; // alpha-pass sort key: camera-space depth; see AlphaSortOrder.hpp
+
     USE_FAST_ALLOCATOR
 };
 
