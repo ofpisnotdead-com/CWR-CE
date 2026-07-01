@@ -349,27 +349,10 @@ RString CreateMPMissionBank(RString filename, RString island)
     return str;
 }
 
-NetworkMessageType NetworkSimpleObject::GetNMType(NetworkMessageClass cls) const
-{
-    return NMTNone;
-}
+DEFINE_NETWORK_OBJECT_SIMPLE(NetworkSimpleObject, None)
 
-IndicesNetworkObject::IndicesNetworkObject()
-{
-    objectCreator = -1;
-    objectId = -1;
-    objectPosition = -1;
-    guaranteed = -1;
-}
-
-void IndicesNetworkObject::Scan(NetworkMessageFormatBase* format){SCAN(objectCreator) SCAN(objectId)
-                                                                      SCAN(objectPosition) SCAN(guaranteed)}
-
-// Create network message indices for NetworkObject class
-NetworkMessageIndices* GetIndicesNetworkObject()
-{
-    return new IndicesNetworkObject();
-}
+DEFINE_NET_INDICES(NetworkObject, NETWORK_OBJECT_MSG)
+DEFINE_GET_INDICES(NetworkObject)
 
 NetworkObject::NetworkObject()
 {
@@ -395,12 +378,7 @@ bool NetworkObject::CheckPredictionFrozen() const
 
 NetworkMessageFormat& NetworkObject::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("objectCreator", NDTInteger, NCTNone, DEFVALUE(int, 0),
-               DOC_MSG("ID of client, which created this object"));
-    format.Add("objectId", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unique (for client) ID of object"));
-    format.Add("objectPosition", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Current position of object"));
-    format.Add("guaranteed", NDTBool, NCTNone, DEFVALUE(bool, false),
-               DOC_MSG("Message is guaranteed (must be delivered)"));
+    NETWORK_OBJECT_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -472,37 +450,13 @@ NetworkMessageType ClientInfoObject::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-// network message indices for ClientInfoObject class
-class IndicesUpdateClientInfo : public IndicesNetworkObject
-{
-    typedef IndicesNetworkObject base;
+#define UPDATE_CLIENT_INFO_MSG(XX)                                                    \
+    XX(Vector3, cameraPosition, NDTVector, NCTNone, DEFVALUE(Vector3, InvalidCamPos), \
+       DOC_MSG("Position of camera on client"), IdxTransfer)
 
-  public:
-    // index of field in message format
-    int cameraPosition;
-
-    IndicesUpdateClientInfo();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateClientInfo; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateClientInfo::IndicesUpdateClientInfo()
-{
-    cameraPosition = -1;
-}
-
-void IndicesUpdateClientInfo::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(cameraPosition)
-}
-
-// Create network message indices for ClientInfoObject class
-NetworkMessageIndices* GetIndicesUpdateClientInfo()
-{
-    return new IndicesUpdateClientInfo();
-}
+DECLARE_NET_INDICES_EX(UpdateClientInfo, NetworkObject, UPDATE_CLIENT_INFO_MSG)
+DEFINE_NET_INDICES_EX(UpdateClientInfo, NetworkObject, UPDATE_CLIENT_INFO_MSG)
+DEFINE_GET_INDICES(UpdateClientInfo)
 
 NetworkMessageFormat& ClientInfoObject::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
@@ -510,8 +464,7 @@ NetworkMessageFormat& ClientInfoObject::CreateFormat(NetworkMessageClass cls, Ne
     {
         case NMCUpdateGeneric:
             NetworkObject::CreateFormat(cls, format);
-            format.Add("cameraPosition", NDTVector, NCTNone, DEFVALUE(Vector3, InvalidCamPos),
-                       DOC_MSG("Position of camera on client"));
+            UPDATE_CLIENT_INFO_MSG(MSG_FORMAT)
             break;
         default:
             NetworkObject::CreateFormat(cls, format);
@@ -586,73 +539,14 @@ RString ClientInfoObject::GetDebugName() const
 
 // static (nonregistered) messages
 
-// network message indices for PlayerMessage class
-class IndicesPlayer : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int player;
-    int name;
-    int server;
+DEFINE_NET_MESSAGE(Player, PLAYER_MSG)
+DEFINE_GET_INDICES(Player)
 
-    IndicesPlayer();
-    NetworkMessageIndices* Clone() const override { return new IndicesPlayer; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
+#define MESSAGES_MSG(XX)
 
-IndicesPlayer::IndicesPlayer()
-{
-    player = -1;
-    name = -1;
-    server = -1;
-}
-
-void IndicesPlayer::Scan(NetworkMessageFormatBase* format){SCAN(player) SCAN(name) SCAN(server)}
-
-// Create network message indices for PlayerMessage class
-NetworkMessageIndices* GetIndicesPlayer()
-{
-    return new IndicesPlayer();
-}
-
-NetworkMessageFormat& PlayerMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("player", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Unique ID of client (player)"));
-    format.Add("name", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Player's name"));
-    format.Add("server", NDTBool, NCTNone, DEFVALUE(bool, false),
-               DOC_MSG("Bot client (running in the same process as server)"));
-    return format;
-}
-
-TMError PlayerMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesPlayer*>(ctx.GetIndices()))
-    const IndicesPlayer* indices = static_cast<const IndicesPlayer*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->player, player))
-    TMCHECK(ctx.IdxTransfer(indices->name, name))
-    TMCHECK(ctx.IdxTransfer(indices->server, server))
-    return TMOK;
-}
-
-// network message indices for NetworkMessageQueue class
-class IndicesMessages : public NetworkMessageIndices
-{
-  public:
-    IndicesMessages();
-    NetworkMessageIndices* Clone() const override { return new IndicesMessages; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesMessages::IndicesMessages() = default;
-
-void IndicesMessages::Scan(NetworkMessageFormatBase* format) {}
-
-// Create network message indices for NetworkMessageQueue class
-NetworkMessageIndices* GetIndicesMessages()
-{
-    return new IndicesMessages();
-}
+DECLARE_NET_INDICES(Messages, MESSAGES_MSG)
+DEFINE_NET_INDICES(Messages, MESSAGES_MSG)
+DEFINE_GET_INDICES(Messages)
 
 NetworkMessageFormat& NetworkMessageQueue::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
@@ -666,34 +560,17 @@ TMError NetworkMessageQueue::TransferMsg(NetworkMessageContext& ctx)
 
 // variant (registered) messages
 
-// network message indices for ChangeGameState class
-class IndicesGameState : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int gameState;
+#define GAME_STATE_MSG(XX)                                                                                        \
+    XX(int, gameState, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Current multiplayer game state"), \
+       IdxTransfer)
 
-    IndicesGameState();
-    NetworkMessageIndices* Clone() const override { return new IndicesGameState; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesGameState::IndicesGameState()
-{
-    gameState = -1;
-}
-
-void IndicesGameState::Scan(NetworkMessageFormatBase* format){SCAN(gameState)}
-
-// Create network message indices for ChangeGameState class
-NetworkMessageIndices* GetIndicesGameState()
-{
-    return new IndicesGameState();
-}
+DECLARE_NET_INDICES(GameState, GAME_STATE_MSG)
+DEFINE_NET_INDICES(GameState, GAME_STATE_MSG)
+DEFINE_GET_INDICES(GameState)
 
 NetworkMessageFormat& ChangeGameState::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("gameState", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Current multiplayer game state"));
+    GAME_STATE_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -706,159 +583,11 @@ TMError ChangeGameState::TransferMsg(NetworkMessageContext& ctx)
     return TMOK;
 }
 
-// network message indices for LogoutMessage class
-class IndicesLogout : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int dpnid;
+DEFINE_NET_MESSAGE(Logout, LOGOUT_MSG)
+DEFINE_GET_INDICES(Logout)
 
-    IndicesLogout();
-    NetworkMessageIndices* Clone() const override { return new IndicesLogout; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesLogout::IndicesLogout()
-{
-    dpnid = -1;
-}
-
-void IndicesLogout::Scan(NetworkMessageFormatBase* format){SCAN(dpnid)}
-
-// Create network message indices for LogoutMessage class
-NetworkMessageIndices* GetIndicesLogout()
-{
-    return new IndicesLogout();
-}
-
-NetworkMessageFormat& LogoutMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("dpnid", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of client (player)"));
-    return format;
-}
-
-TMError LogoutMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesLogout*>(ctx.GetIndices()))
-    const IndicesLogout* indices = static_cast<const IndicesLogout*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->dpnid, (int&)dpnid))
-    return TMOK;
-}
-
-// network message indices for MissionHeader class
-class IndicesMissionHeader : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int island;
-    int name;
-    int description;
-    int fileName;
-    int fileDir;
-    int fileSizeL;
-    int fileSizeH;
-    int fileCRC;
-    int respawn;
-    int respawnDelay;
-    int cadetMode;
-    int disabledAI;
-    int aiKills;
-    int updateOnly;
-    int joinInProgress;
-    int difficulty[DTN];
-    int addOns;
-    int estimatedEndTime;
-
-    int titleParam1;
-    int valuesParam1;
-    int textsParam1;
-    int defValueParam1;
-    int titleParam2;
-    int valuesParam2;
-    int textsParam2;
-    int defValueParam2;
-
-    IndicesMissionHeader();
-    NetworkMessageIndices* Clone() const override { return new IndicesMissionHeader; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesMissionHeader::IndicesMissionHeader()
-{
-    island = -1;
-    name = -1;
-    description = -1;
-    fileName = -1;
-    fileDir = -1;
-    fileSizeL = -1;
-    fileSizeH = -1;
-    fileCRC = -1;
-    respawn = -1;
-    respawnDelay = -1;
-    cadetMode = -1;
-    disabledAI = -1;
-    aiKills = -1;
-    updateOnly = -1;
-    joinInProgress = -1;
-    for (int i = 0; i < DTN; i++)
-    {
-        difficulty[i] = -1;
-    }
-    addOns = -1;
-    estimatedEndTime = -1;
-
-    titleParam1 = -1;
-    valuesParam1 = -1;
-    textsParam1 = -1;
-    defValueParam1 = -1;
-    titleParam2 = -1;
-    valuesParam2 = -1;
-    textsParam2 = -1;
-    defValueParam2 = -1;
-}
-
-void IndicesMissionHeader::Scan(NetworkMessageFormatBase* format)
-{
-    SCAN(island)
-    SCAN(name)
-    SCAN(description)
-    SCAN(fileName)
-    SCAN(fileDir)
-    SCAN(fileSizeL)
-    SCAN(fileSizeH)
-    SCAN(fileCRC)
-    SCAN(respawn)
-    SCAN(respawnDelay)
-    SCAN(cadetMode)
-    SCAN(disabledAI)
-    SCAN(aiKills)
-    SCAN(updateOnly)
-    SCAN(joinInProgress)
-    for (int i = 0; i < DTN; i++)
-    {
-        RString name = RString("diff") + RString(Config::diffDesc[i].name);
-        difficulty[i] = format->FindIndex(name);
-    }
-    SCAN(addOns)
-
-    SCAN(estimatedEndTime)
-
-    SCAN(titleParam1)
-    SCAN(valuesParam1)
-    SCAN(textsParam1)
-    SCAN(defValueParam1)
-    SCAN(titleParam2)
-    SCAN(valuesParam2)
-    SCAN(textsParam2)
-    SCAN(defValueParam2)
-}
-
-// Create network message indices for MissionHeader class
-NetworkMessageIndices* GetIndicesMissionHeader()
-{
-    return new IndicesMissionHeader();
-}
+DEFINE_NET_INDICES(MissionHeader, MISSION_HEADER_MSG)
+DEFINE_GET_INDICES(MissionHeader)
 
 MissionHeader::MissionHeader()
 {
@@ -884,56 +613,11 @@ MissionHeader::MissionHeader()
 
 NetworkMessageFormat& MissionHeader::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("island", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Island (map), where mission is placed"));
-    format.Add("name", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Name of mission"));
-    format.Add("description", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Description of mission"));
-
-    format.Add("fileName", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Name of mission file"));
-    format.Add("fileDir", NDTString, NCTNone, DEFVALUE(RString, ""),
-               DOC_MSG("Directory, where mission file is placed"));
-    format.Add("fileSizeL", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Size of mission file (low DWORD)"));
-    format.Add("fileSizeH", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Size of mission file (high DWORD)"));
-    format.Add("fileCRC", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("CRC of mission file"));
-
-    format.Add("respawn", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, RespawnSeaGull), DOC_MSG("Respawn type"));
-    format.Add("respawnDelay", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Respawn delay (in seconds)"));
-
-    format.Add("cadetMode", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Cadet / Veteran mode"));
-    format.Add("disabledAI", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("AI is disabled"));
-    format.Add("aiKills", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Write AI kills into statistics"));
-
-    format.Add("updateOnly", NDTBool, NCTNone, DEFVALUE(bool, false),
-               DOC_MSG("This message is only update of (recently sent) mission info"));
-
-    format.Add("joinInProgress", NDTBool, NCTNone, DEFVALUE(bool, false),
-               DOC_MSG("Allow players to join after mission has started"));
-
-    for (int i = 0; i < DTN; i++)
-    {
-        RString name = RString("diff") + RString(Config::diffDesc[i].name);
-        format.Add(name, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Difficulty settings"));
-    }
-
-    format.Add("addOns", NDTStringArray, NCTNone, DEFVALUESTRINGARRAY, DOC_MSG("List of used addons"));
-
-    format.Add("estimatedEndTime", NDTTime, NCTNone, DEFVALUE(Time, TIME_MIN),
-               DOC_MSG("Time of estimated end of mission"));
-
-    format.Add("titleParam1", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Mission parameter - title"));
-    format.Add("valuesParam1", NDTFloatArray, NCTNone, DEFVALUEFLOATARRAY,
-               DOC_MSG("Mission parameter - list of values"));
-    format.Add("textsParam1", NDTStringArray, NCTNone, DEFVALUESTRINGARRAY,
-               DOC_MSG("Mission parameter - list of value names"));
-    format.Add("defValueParam1", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Mission parameter - default value"));
-    format.Add("titleParam2", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Mission parameter - title"));
-    format.Add("valuesParam2", NDTFloatArray, NCTNone, DEFVALUEFLOATARRAY,
-               DOC_MSG("Mission parameter - list of values"));
-    format.Add("textsParam2", NDTStringArray, NCTNone, DEFVALUESTRINGARRAY,
-               DOC_MSG("Mission parameter - list of value names"));
-    format.Add("defValueParam2", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Mission parameter - default value"));
-
+    MISSION_HEADER_MSG(MSG_FORMAT)
     return format;
 }
+
+#define DIFF_TRANSFER(name, XX) TMCHECK(ctx.IdxTransfer(indices->diff##name, difficulty[DT##name]))
 
 TMError MissionHeader::TransferMsg(NetworkMessageContext& ctx)
 {
@@ -958,10 +642,8 @@ TMError MissionHeader::TransferMsg(NetworkMessageContext& ctx)
     TMCHECK(ctx.IdxTransfer(indices->aiKills, aiKills))
     TMCHECK(ctx.IdxTransfer(indices->updateOnly, updateOnly))
     TMCHECK(ctx.IdxTransfer(indices->joinInProgress, joinInProgress))
-    for (int i = 0; i < DTN; i++)
-    {
-        TMCHECK(ctx.IdxTransfer(indices->difficulty[i], difficulty[i]))
-    }
+
+    DIFFICULTY_TYPE_ENUM(DIFF_TRANSFER, ignored)
 
     TMCHECK(ctx.IdxTransfer(indices->addOns, addOns))
 
@@ -979,46 +661,12 @@ TMError MissionHeader::TransferMsg(NetworkMessageContext& ctx)
     return TMOK;
 }
 
-IndicesPlayerRole::IndicesPlayerRole()
-{
-    index = -1;
-    side = -1;
-    group = -1;
-    unit = -1;
-    vehicle = -1;
-    position = -1;
-    leader = -1;
-    roleLocked = -1;
-    player = -1;
-}
-
-void IndicesPlayerRole::Scan(NetworkMessageFormatBase* format){SCAN(index) SCAN(side) SCAN(group) SCAN(unit)
-                                                                   SCAN(vehicle) SCAN(position) SCAN(leader)
-                                                                       SCAN(roleLocked) SCAN(player)}
-
-// Create network message indices for PlayerRole class
-NetworkMessageIndices* GetIndicesPlayerRole()
-{
-    return new IndicesPlayerRole();
-}
-NetworkMessageIndices* GetIndicesPlayerSide()
-{
-    return new IndicesPlayerRole();
-}
+DEFINE_NET_INDICES(PlayerRole, PLAYER_ROLE_MSG)
+DEFINE_GET_INDICES(PlayerRole)
 
 NetworkMessageFormat& PlayerRole::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("index", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Index of role"));
-    format.Add("side", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Side of role"));
-    format.Add("group", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Group ID of role"));
-    format.Add("unit", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unit ID of role"));
-    format.Add("vehicle", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Vehicle used by this role"));
-    format.Add("position", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0),
-               DOC_MSG("Position in vehicle (driver, commander, ...)"));
-    format.Add("leader", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Is this unit group leader"));
-    format.Add("roleLocked", NDTBool, NCTNone, DEFVALUE(bool, false),
-               DOC_MSG("Role is locked (only admin can assign this role)"));
-    format.Add("player", NDTInteger, NCTNone, DEFVALUE(int, AI_PLAYER), DOC_MSG("Currently attached player"));
+    PLAYER_ROLE_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -1039,573 +687,91 @@ TMError PlayerRole::TransferMsg(NetworkMessageContext& ctx)
 }
 
 DEFINE_NET_MESSAGE(PublicVariable, PUB_VAR_MSG)
+DEFINE_GET_INDICES(PublicVariable)
 
 DEFINE_NET_MESSAGE(GroupSynchronization, GROUP_SYNC_MSG)
+DEFINE_GET_INDICES(GroupSynchronization)
 
 DEFINE_NET_MESSAGE(DetectorActivation, DET_ACT_MSG)
+DEFINE_GET_INDICES(DetectorActivation)
 
 DEFINE_NET_MESSAGE(AskForCreateUnit, CREATE_UNIT_MSG)
+DEFINE_GET_INDICES(AskForCreateUnit)
 
 DEFINE_NET_MESSAGE(AskForDeleteVehicle, DELETE_VEHICLE_MSG)
+DEFINE_GET_INDICES(AskForDeleteVehicle)
 
 DEFINE_NET_MESSAGE(AskForReceiveUnitAnswer, UNIT_ANSWER_MSG)
+DEFINE_GET_INDICES(AskForReceiveUnitAnswer)
 
 DEFINE_NET_MESSAGE(AskForGroupRespawn, GROUP_RESPAWN_MSG)
+DEFINE_GET_INDICES(AskForGroupRespawn)
 
 DEFINE_NET_MESSAGE(CopyUnitInfo, COPY_UNIT_INFO_MSG)
+DEFINE_GET_INDICES(CopyUnitInfo)
 
 DEFINE_NET_MESSAGE(GroupRespawnDone, GROUP_RESPAWN_DONE_MSG)
+DEFINE_GET_INDICES(GroupRespawnDone)
 
 DEFINE_NET_MESSAGE(MissionParams, MISSION_PARAMS_MSG)
+DEFINE_GET_INDICES(MissionParams)
 
 DEFINE_NET_MESSAGE(AskForActivateMine, ACTIVATE_MINE_MSG)
+DEFINE_GET_INDICES(AskForActivateMine)
 
 DEFINE_NET_MESSAGE(VehicleDamaged, VEHICLE_DAMAGED_MSG)
+DEFINE_GET_INDICES(VehicleDamaged)
 
 DEFINE_NET_MESSAGE(AskForInflameFire, INFLAME_FIRE_MSG)
+DEFINE_GET_INDICES(AskForInflameFire)
 
 DEFINE_NET_MESSAGE(AskForAnimationPhase, ANIMATION_PHASE_MSG)
+DEFINE_GET_INDICES(AskForAnimationPhase)
 
 DEFINE_NET_MESSAGE(IncomingMissile, INCOMING_MISSILE_MSG)
+DEFINE_GET_INDICES(IncomingMissile)
 
 DEFINE_NET_MESSAGE(PublicExec, PUBLICEXEC_MSG)
+DEFINE_GET_INDICES(PublicExec)
 
 DEFINE_NET_MESSAGE(RemoteExec, REMOTEEXEC_MSG)
+DEFINE_GET_INDICES(RemoteExec)
 
-IndicesChat::IndicesChat()
-{
-    channel = -1;
-    sender = -1;
-    units = -1;
-    name = -1;
-    text = -1;
-}
+DEFINE_NET_MESSAGE(Chat, CHAT_MSG)
+DEFINE_GET_INDICES(Chat)
 
-void IndicesChat::Scan(NetworkMessageFormatBase* format){SCAN(channel) SCAN(sender) SCAN(units) SCAN(name) SCAN(text)}
+DEFINE_NET_MESSAGE(RadioChat, RADIO_CHAT_MSG)
+DEFINE_GET_INDICES(RadioChat)
 
-// Create network message indices for ChatMessage class
-NetworkMessageIndices* GetIndicesChat()
-{
-    return new IndicesChat();
-}
+DEFINE_NET_MESSAGE(RadioChatWave, RADIO_CHAT_WAVE_MSG)
+DEFINE_GET_INDICES(RadioChatWave)
 
-NetworkMessageFormat& ChatMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("channel", NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Radio channel"));
-    format.Add("sender", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Sender unit"));
-    format.Add("units", NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("List of receiving units"));
-    format.Add("name", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Sender name"));
-    format.Add("text", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Message content"));
-    return format;
-}
+DEFINE_NET_MESSAGE(SetVoiceChannel, SET_VOICE_CHANNEL_MSG)
+DEFINE_GET_INDICES(SetVoiceChannel)
 
-TMError ChatMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesChat*>(ctx.GetIndices()))
-    const IndicesChat* indices = static_cast<const IndicesChat*>(ctx.GetIndices());
+DEFINE_NET_MESSAGE(SetSpeaker, SET_SPEAKER_MSG)
+DEFINE_GET_INDICES(SetSpeaker)
 
-    TMCHECK(ctx.IdxTransfer(indices->channel, channel))
-    TMCHECK(ctx.IdxTransferRef(indices->sender, sender))
-    TMCHECK(ctx.IdxTransferRefs(indices->units, units))
-    TMCHECK(ctx.IdxTransfer(indices->name, name))
-    TMCHECK(ctx.IdxTransfer(indices->text, text))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(SelectPlayer, SELECT_PLAYER_MSG)
+DEFINE_GET_INDICES(SelectPlayer)
 
-IndicesRadioChat::IndicesRadioChat()
-{
-    channel = -1;
-    sender = -1;
-    units = -1;
-    text = -1;
-    sentence = -1;
-}
+DEFINE_NET_MESSAGE(ChangeOwner, CHANGE_OWNER_MSG)
+DEFINE_GET_INDICES(ChangeOwner)
 
-void IndicesRadioChat::Scan(NetworkMessageFormatBase* format){SCAN(channel) SCAN(sender) SCAN(units) SCAN(text)
-                                                                  SCAN(sentence)}
+DEFINE_NET_MESSAGE(PlaySound, PLAY_SOUND_MSG)
+DEFINE_GET_INDICES(PlaySound)
 
-// Create network message indices for RadioChatMessage class
-NetworkMessageIndices* GetIndicesRadioChat()
-{
-    return new IndicesRadioChat();
-}
+DEFINE_NET_MESSAGE(SoundState, SOUND_STATE_MSG)
+DEFINE_GET_INDICES(SoundState)
 
-NetworkMessageFormat& RadioChatMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("channel", NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Radio channel"));
-    format.Add("sender", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Sender unit"));
-    format.Add("units", NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("List of receiving units"));
-    format.Add("text", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Content of message (text)"));
-    format.Add("sentence", NDTSentence, NCTNone, DEFVALUE(RadioSentence, RadioSentence()),
-               DOC_MSG("Content of message (list of words to say)"));
-    return format;
-}
+DEFINE_NET_MESSAGE(TransferFile, TRANSFER_FILE_MSG)
+DEFINE_GET_INDICES(TransferFile)
 
-TMError RadioChatMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesRadioChat*>(ctx.GetIndices()))
-    const IndicesRadioChat* indices = static_cast<const IndicesRadioChat*>(ctx.GetIndices());
+DEFINE_NET_INDICES_EX(TransferMissionFile, TransferFile, TRANSFER_MISSION_FILE_MSG)
+DEFINE_GET_INDICES(TransferMissionFile)
 
-    TMCHECK(ctx.IdxTransfer(indices->channel, channel))
-    TMCHECK(ctx.IdxTransferRef(indices->sender, sender))
-    TMCHECK(ctx.IdxTransferRefs(indices->units, units))
-    TMCHECK(ctx.IdxTransfer(indices->text, text))
-    TMCHECK(ctx.IdxTransfer(indices->sentence, sentence))
-    return TMOK;
-}
+DEFINE_NET_INDICES_EX(TransferFileToServer, TransferFile, TRANSFER_MISSION_FILE_MSG)
+DEFINE_GET_INDICES(TransferFileToServer)
 
-IndicesRadioChatWave::IndicesRadioChatWave()
-{
-    channel = -1;
-    units = -1;
-    wave = -1;
-    sender = -1;
-    senderName = -1;
-}
-
-void IndicesRadioChatWave::Scan(NetworkMessageFormatBase* format){SCAN(channel) SCAN(units) SCAN(wave) SCAN(sender)
-                                                                      SCAN(senderName)}
-
-// Create network message indices for RadioChatWaveMessage class
-NetworkMessageIndices* GetIndicesRadioChatWave()
-{
-    return new IndicesRadioChatWave();
-}
-
-NetworkMessageFormat& RadioChatWaveMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("channel", NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Radio channel"));
-    format.Add("units", NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("List of receiving units"));
-    format.Add("wave", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Sound identifier"));
-    format.Add("sender", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Sender unit"));
-    format.Add("senderName", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Sender name"));
-    return format;
-}
-
-TMError RadioChatWaveMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesRadioChatWave*>(ctx.GetIndices()))
-    const IndicesRadioChatWave* indices = static_cast<const IndicesRadioChatWave*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->channel, channel))
-    TMCHECK(ctx.IdxTransferRefs(indices->units, units))
-    TMCHECK(ctx.IdxTransfer(indices->wave, wave))
-    TMCHECK(ctx.IdxTransferRef(indices->sender, sender))
-    TMCHECK(ctx.IdxTransfer(indices->senderName, senderName))
-    return TMOK;
-}
-
-IndicesSetVoiceChannel::IndicesSetVoiceChannel()
-{
-    channel = -1;
-    units = -1;
-}
-
-void IndicesSetVoiceChannel::Scan(NetworkMessageFormatBase* format){SCAN(channel) SCAN(units)}
-
-// Create network message indices for SetVoiceChannelMessage class
-NetworkMessageIndices* GetIndicesSetVoiceChannel()
-{
-    return new IndicesSetVoiceChannel();
-}
-
-NetworkMessageFormat& SetVoiceChannelMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("channel", NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Radio channel"));
-    format.Add("units", NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("List of receiving units"));
-    return format;
-}
-
-TMError SetVoiceChannelMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesSetVoiceChannel*>(ctx.GetIndices()))
-    const IndicesSetVoiceChannel* indices = static_cast<const IndicesSetVoiceChannel*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->channel, channel))
-    TMCHECK(ctx.IdxTransferRefs(indices->units, units))
-    return TMOK;
-}
-
-// network message indices for SetSpeakerMessage class
-class IndicesSetSpeaker : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int player;
-    int on;
-    int creator;
-    int id;
-
-    IndicesSetSpeaker();
-    NetworkMessageIndices* Clone() const override { return new IndicesSetSpeaker; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesSetSpeaker::IndicesSetSpeaker()
-{
-    player = -1;
-    on = -1;
-    creator = -1;
-    id = -1;
-}
-
-void IndicesSetSpeaker::Scan(NetworkMessageFormatBase* format){SCAN(player) SCAN(on) SCAN(creator) SCAN(id)}
-
-// Create network message indices for SetSpeakerMessage class
-NetworkMessageIndices* GetIndicesSetSpeaker()
-{
-    return new IndicesSetSpeaker();
-}
-
-NetworkMessageFormat& SetSpeakerMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("player", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Client (player) ID of speaking player"));
-    format.Add("on", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Turn on / off direct speaking"));
-    format.Add("creator", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of speaking unit"));
-    format.Add("id", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID of speaking unit"));
-    return format;
-}
-
-TMError SetSpeakerMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesSetSpeaker*>(ctx.GetIndices()))
-    const IndicesSetSpeaker* indices = static_cast<const IndicesSetSpeaker*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->player, player))
-    TMCHECK(ctx.IdxTransfer(indices->on, on))
-    TMCHECK(ctx.IdxTransfer(indices->creator, object.creator))
-    TMCHECK(ctx.IdxTransfer(indices->id, object.id))
-    return TMOK;
-}
-
-// network message indices for SelectPlayerMessage class
-class IndicesSelectPlayer : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int player;
-    int creator;
-    int id;
-    int position;
-    int respawn;
-
-    IndicesSelectPlayer();
-    NetworkMessageIndices* Clone() const override { return new IndicesSelectPlayer; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesSelectPlayer::IndicesSelectPlayer()
-{
-    player = -1;
-    creator = -1;
-    id = -1;
-    position = -1;
-    respawn = -1;
-}
-
-void IndicesSelectPlayer::Scan(NetworkMessageFormatBase* format){SCAN(player) SCAN(creator) SCAN(id) SCAN(position)
-                                                                     SCAN(respawn)}
-
-// Create network message indices for SelectPlayerMessage class
-NetworkMessageIndices* GetIndicesSelectPlayer()
-{
-    return new IndicesSelectPlayer();
-}
-
-NetworkMessageFormat& SelectPlayerMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("player", NDTInteger, NCTNone, DEFVALUE(int, AI_PLAYER), DOC_MSG("Client (player) ID of player"));
-    format.Add("creator", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of player's unit"));
-    format.Add("id", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID of player's unit"));
-    format.Add("position", NDTVector, NCTNone, DEFVALUE(Vector3, Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX)),
-               DOC_MSG("Player's unit position"));
-    format.Add("respawn", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Selection of player's unit after respawn"));
-    return format;
-}
-
-TMError SelectPlayerMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesSelectPlayer*>(ctx.GetIndices()))
-    const IndicesSelectPlayer* indices = static_cast<const IndicesSelectPlayer*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->player, player))
-    TMCHECK(ctx.IdxTransfer(indices->creator, person.creator))
-    TMCHECK(ctx.IdxTransfer(indices->id, person.id))
-    TMCHECK(ctx.IdxTransfer(indices->position, position))
-    TMCHECK(ctx.IdxTransfer(indices->respawn, respawn))
-    return TMOK;
-}
-
-// network message indices for ChangeOwnerMessage class
-class IndicesChangeOwner : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int creator;
-    int id;
-    int owner;
-
-    IndicesChangeOwner();
-    NetworkMessageIndices* Clone() const override { return new IndicesChangeOwner; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesChangeOwner::IndicesChangeOwner()
-{
-    creator = -1;
-    id = -1;
-    owner = -1;
-}
-
-void IndicesChangeOwner::Scan(NetworkMessageFormatBase* format){SCAN(creator) SCAN(id) SCAN(owner)}
-
-// Create network message indices for ChangeOwnerMessage class
-NetworkMessageIndices* GetIndicesChangeOwner()
-{
-    return new IndicesChangeOwner();
-}
-
-NetworkMessageFormat& ChangeOwnerMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("creator", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of object, which owner is changing"));
-    format.Add("id", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID of object, whic player is changing"));
-    format.Add("owner", NDTInteger, NCTNone, DEFVALUE(int, AI_PLAYER), DOC_MSG("Client ID of new owner"));
-    return format;
-}
-
-TMError ChangeOwnerMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesChangeOwner*>(ctx.GetIndices()))
-    const IndicesChangeOwner* indices = static_cast<const IndicesChangeOwner*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->creator, object.creator))
-    TMCHECK(ctx.IdxTransfer(indices->id, object.id))
-    TMCHECK(ctx.IdxTransfer(indices->owner, owner))
-    return TMOK;
-}
-
-// network message indices for PlaySoundMessage class
-class IndicesPlaySound : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int name;
-    int position;
-    int speed;
-    int volume;
-    int frequency;
-    int creator;
-    int soundId;
-
-    IndicesPlaySound();
-    NetworkMessageIndices* Clone() const override { return new IndicesPlaySound; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesPlaySound::IndicesPlaySound()
-{
-    name = -1;
-    position = -1;
-    speed = -1;
-    volume = -1;
-    frequency = -1;
-    creator = -1;
-    soundId = -1;
-}
-
-void IndicesPlaySound::Scan(NetworkMessageFormatBase* format){SCAN(name) SCAN(position) SCAN(speed) SCAN(volume)
-                                                                  SCAN(frequency) SCAN(creator) SCAN(soundId)}
-
-// Create network message indices for PlaySoundMessage class
-NetworkMessageIndices* GetIndicesPlaySound()
-{
-    return new IndicesPlaySound();
-}
-
-NetworkMessageFormat& PlaySoundMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    Vector3 temp = VZero;
-    format.Add("name", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Sound identifier"));
-    format.Add("position", NDTVector, NCTNone, DEFVALUE(Vector3, temp), DOC_MSG("Sound source position"));
-    format.Add("speed", NDTVector, NCTNone, DEFVALUE(Vector3, temp), DOC_MSG("Sound source speed"));
-    format.Add("volume", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Sound volume"));
-    format.Add("frequency", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Sound pitch"));
-    format.Add("creator", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Unique network ID of sound"));
-    format.Add("soundId", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unique network ID of sound"));
-    return format;
-}
-
-TMError PlaySoundMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesPlaySound*>(ctx.GetIndices()))
-    const IndicesPlaySound* indices = static_cast<const IndicesPlaySound*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->name, name))
-    TMCHECK(ctx.IdxTransfer(indices->position, position))
-    TMCHECK(ctx.IdxTransfer(indices->speed, speed))
-    TMCHECK(ctx.IdxTransfer(indices->volume, volume))
-    TMCHECK(ctx.IdxTransfer(indices->frequency, freq))
-    TMCHECK(ctx.IdxTransfer(indices->creator, creator))
-    TMCHECK(ctx.IdxTransfer(indices->soundId, soundId))
-    return TMOK;
-}
-
-// network message indices for SoundStateMessage class
-class IndicesSoundState : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int state;
-    int creator;
-    int soundId;
-
-    IndicesSoundState();
-    NetworkMessageIndices* Clone() const override { return new IndicesSoundState; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesSoundState::IndicesSoundState()
-{
-    state = -1;
-    creator = -1;
-    soundId = -1;
-}
-
-void IndicesSoundState::Scan(NetworkMessageFormatBase* format){SCAN(state) SCAN(creator) SCAN(soundId)}
-
-// Create network message indices for SoundStateMessage class
-NetworkMessageIndices* GetIndicesSoundState()
-{
-    return new IndicesSoundState();
-}
-
-NetworkMessageFormat& SoundStateMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("state", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("New state of sound"));
-    format.Add("creator", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Network ID of sound"));
-    format.Add("soundId", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Network ID of sound"));
-    return format;
-}
-
-TMError SoundStateMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesSoundState*>(ctx.GetIndices()))
-    const IndicesSoundState* indices = static_cast<const IndicesSoundState*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->state, (int&)state))
-    TMCHECK(ctx.IdxTransfer(indices->creator, creator))
-    TMCHECK(ctx.IdxTransfer(indices->soundId, soundId))
-    return TMOK;
-}
-
-// network message indices for TransferFileMessage, TransferMissionFileMessage and TransferFileToServerMessage classes
-class IndicesTransferFile : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int path;
-    int data;
-    int totSize;
-    int offset;
-    int totSegments;
-    int curSegment;
-
-    IndicesTransferFile();
-    NetworkMessageIndices* Clone() const override { return new IndicesTransferFile; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesTransferFile::IndicesTransferFile()
-{
-    path = -1;
-    data = -1;
-    totSize = -1;
-    offset = -1;
-    totSegments = -1;
-    curSegment = -1;
-}
-
-void IndicesTransferFile::Scan(NetworkMessageFormatBase* format){SCAN(path) SCAN(data) SCAN(totSize) SCAN(offset)
-                                                                     SCAN(totSegments) SCAN(curSegment)}
-
-// Create network message indices for TransferFileMessage class
-NetworkMessageIndices* GetIndicesTransferFile()
-{
-    return new IndicesTransferFile();
-}
-// Create network message indices for TransferMissionFileMessage class
-NetworkMessageIndices* GetIndicesTransferMissionFile()
-{
-    return new IndicesTransferFile();
-}
-// Create network message indices for TransferFileToServerMessage class
-NetworkMessageIndices* GetIndicesTransferFileToServer()
-{
-    return new IndicesTransferFile();
-}
-
-NetworkMessageFormat& TransferFileMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("path", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Path of transferred file"));
-    format.Add("data", NDTRawData, NCTNone, DEFVALUERAWDATA, DOC_MSG("Content of file (single segment)"));
-    format.Add("totSize", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Total size of file"));
-    format.Add("offset", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Offset of this segment"));
-    format.Add("totSegments", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 1), DOC_MSG("Total number of segments"));
-    format.Add("curSegment", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Index of this segment"));
-    return format;
-}
-
-TMError TransferFileMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesTransferFile*>(ctx.GetIndices()))
-    const IndicesTransferFile* indices = static_cast<const IndicesTransferFile*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->path, path))
-    TMCHECK(ctx.IdxTransfer(indices->data, data))
-    TMCHECK(ctx.IdxTransfer(indices->totSize, totSize))
-    TMCHECK(ctx.IdxTransfer(indices->offset, offset))
-    TMCHECK(ctx.IdxTransfer(indices->totSegments, totSegments))
-    TMCHECK(ctx.IdxTransfer(indices->curSegment, curSegment))
-    return TMOK;
-}
-
-// network message indices for AskMissionFileMessage class
-class IndicesAskMissionFile : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int valid;
-
-    IndicesAskMissionFile();
-    NetworkMessageIndices* Clone() const override { return new IndicesAskMissionFile; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesAskMissionFile::IndicesAskMissionFile()
-{
-    valid = -1;
-}
-
-void IndicesAskMissionFile::Scan(NetworkMessageFormatBase* format){SCAN(valid)}
-
-// Create network message indices for AskMissionFileMessage class
-NetworkMessageIndices* GetIndicesAskMissionFile()
-{
-    return new IndicesAskMissionFile();
-}
-
-NetworkMessageFormat& AskMissionFileMessage::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("valid", NDTBool, NCTNone, DEFVALUE(bool, false),
-               DOC_MSG("Mission file is valid (present on client computer)"));
-    return format;
-}
-
-TMError AskMissionFileMessage::TransferMsg(NetworkMessageContext& ctx)
-{
-    NET_ERROR(dynamic_cast<const IndicesAskMissionFile*>(ctx.GetIndices()))
-    const IndicesAskMissionFile* indices = static_cast<const IndicesAskMissionFile*>(ctx.GetIndices());
-
-    TMCHECK(ctx.IdxTransfer(indices->valid, valid))
-    return TMOK;
-}
+DEFINE_NET_MESSAGE(AskMissionFile, ASK_MISSION_FILE_MSG)
+DEFINE_GET_INDICES(AskMissionFile)

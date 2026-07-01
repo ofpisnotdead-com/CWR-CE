@@ -13,31 +13,23 @@ namespace Poseidon
 {
 extern const Vector3 VUndefined;
 
+#define CREATE_AI_UNIT_MSG(XX) \
+	XX(OLink<Person>, person, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Attached body"), IdxTransferRef) \
+	XX(OLink<AISubgroup>, subgroup, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Superior subgroup"), IdxTransferRef) \
+	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID in group"), IdxTransfer) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Full name"), IdxTransfer) \
+	XX(RString, face, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Face"), IdxTransfer) \
+	XX(RString, glasses, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Glasses type"), IdxTransfer) \
+	XX(RString, speaker, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Speaker"), IdxTransfer) \
+	XX(float, pitch, NDTFloat, NCTNone, DEFVALUE(float, 1.0f), DOC_MSG("Voice pitch"), IdxTransfer) \
+	XX(int, rank, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, RankPrivate), DOC_MSG("Current rank"), IdxTransfer) \
+	XX(float, experience, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Amount of experience"), IdxTransfer) \
+	XX(float, initExperience, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Initial amount of experience"), IdxTransfer) \
+	XX(bool, playable, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Is unit playable"), IdxTransfer) \
+	XX(RString, squadPicture, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Squad picture (shown on vehicles)"), IdxTransfer) \
+	XX(RString, squadTitle, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Squad title (shown on vehicles)"), IdxTransfer)
 
-class IndicesCreateAIUnit : public IndicesNetworkObject
-{
-	typedef IndicesNetworkObject base;
-
-public:
-	int person;
-	int subgroup;
-	int id;
-	int name;
-	int face;
-	int glasses;
-	int speaker;
-	int pitch;
-	int rank;
-	int experience;
-	int initExperience;
-	int playable;
-	int squadPicture;
-	int squadTitle;
-
-	IndicesCreateAIUnit();
-	NetworkMessageIndices *Clone() const override {return new IndicesCreateAIUnit;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES_EX(CreateAIUnit, NetworkObject, CREATE_AI_UNIT_MSG)
 
 // callback function type - see also FindNearestEmptyCallback
 typedef bool FindFreePositionCallback(Vector3Par pos, void *context);
@@ -502,31 +494,29 @@ struct FormInfo
 
 extern const FormInfo formations[AI::NForms][MAX_UNITS_PER_GROUP];
 
-class IndicesCreateCommand : public IndicesNetworkObject
-{
-	typedef IndicesNetworkObject base;
+#define CREATE_COMMAND_MSG(XX) \
+	XX(OLink<AISubgroup>, subgroup, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Subgroup, executing this command"), IdxTransferRef) \
+	XX(int, index, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Index of command in subgroup"), IdxTransfer) \
+	XX(int, message, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, NoCommand), DOC_MSG("Type of command"), IdxTransfer) \
+	XX(TargetId, target, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Target (exact) of command - used for well known targets"), IdxTransferRef) \
+	XX(LinkTarget, targetE, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Target (inexact) - used for enemies"), IdxTransferRef) \
+	XX(Vector3, destination, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Destination position"), IdxTransfer) \
+	XX(Time, time, NDTTime, NCTNone, DEFVALUE(Time, Time(0)), DOC_MSG("Time, when command timeouts"), IdxTransfer) \
+	XX(OLink<AISubgroup>, join, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Join to main subroup after completition"), IdxTransferRef) \
+	XX(int, action, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Type of action for Action command"), IdxTransfer) \
+	XX(int, param, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Action parameter"), IdxTransfer) \
+	XX(int, param2, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Action parameter"), IdxTransfer) \
+	XX(RString, param3, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Action parameter"), IdxTransfer) \
+	XX(int, discretion, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, Undefined), DOC_MSG("Subgroup discretion"), IdxTransfer) \
+	XX(int, context, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, CtxUndefined), DOC_MSG("How command was ordered"), IdxTransfer) \
+	XX(int, id, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Unique (in group) id of command"), IdxTransfer)
 
-public:
-	int subgroup;
-	int index;
-	int message;
-	int target;
-	int targetE;
-	int destination;
-	int time;
-	int join;
-	int action;
-	int param;
-	int param2;
-	int param3;
-	int discretion;
-	int context;
-	int id;
+DECLARE_NET_INDICES_EX(CreateCommand, NetworkObject, CREATE_COMMAND_MSG)
 
-	IndicesCreateCommand();
-	NetworkMessageIndices *Clone() const override {return new IndicesCreateCommand;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+#define UPDATE_COMMAND_MSG(XX) \
+	XX(Vector3, destination, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Destination position"), IdxTransfer)
+
+DECLARE_NET_INDICES_EX(UpdateCommand, NetworkObject, UPDATE_COMMAND_MSG)
 
 // fix for a bug makes MP incompatible with 1.52
 #define ENABLE_HOLDFIRE_FIX 1
@@ -696,26 +686,18 @@ void CheckCommandFailed(AISubgroupContext *context);
 
 void CreateUnitsList(PackedBoolArray list, char *buffer);
 
+#define UPDATE_AI_SUBGROUP_MSG(XX) \
+	XX(OLink<AIGroup>, group, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Superior group"), IdxTransferRef, ET_NONE, 0) \
+	XX(RefArray<AIUnit>, units, NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("Member units"), IdxTransferRefs, ET_NOT_CONTAIN_COUNT, ERR_COEF_STRUCTURE) \
+	XX(OLink<AIUnit>, leader, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Leader unit"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_STRUCTURE) \
+	XX(int, mode, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, PlanAndGo), DOC_MSG("Planning mode"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(Vector3, wantedPosition, NDTVector, NCTNone, DEFVALUE(Vector3, VUndefined), DOC_MSG("Destination"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, formation, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, FormVee), DOC_MSG("Formation type"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, speedMode, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, SpeedNormal), DOC_MSG("Speed mode"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, lastPrec, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, LevelOperative), DOC_MSG("Planning precision"), IdxTransfer, ET_NONE, 0) \
+	XX(float, formationCoef, NDTFloat, NCTNone, DEFVALUE(float, 1.0), DOC_MSG("Formation spacing"), IdxTransfer, ET_NONE, 0) \
+	XX(Vector3, direction, NDTVector, NCTNone, DEFVALUE(Vector3, VForward), DOC_MSG("Formation direction"), IdxTransfer, ET_NONE, 0)
 
-class IndicesUpdateAISubgroup : public IndicesNetworkObject
-{
-	typedef IndicesNetworkObject base;
-
-public:
-	int group;
-	int units;
-	int leader;
-	int mode;
-	int wantedPosition;
-	int formation;
-	int speedMode;
-	int lastPrec;
-	int formationCoef;
-	int direction;
-
-	IndicesUpdateAISubgroup();
-	NetworkMessageIndices *Clone() const override {return new IndicesUpdateAISubgroup;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES_EX_ERR(UpdateAISubgroup, NetworkObject, UPDATE_AI_SUBGROUP_MSG)
 
 }  // namespace Poseidon

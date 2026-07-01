@@ -998,36 +998,17 @@ NetworkMessageType ParachuteAuto::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesUpdateParachute : public IndicesUpdateTransport
-{
-    typedef IndicesUpdateTransport base;
+#define UPDATE_PARACHUTE_MSG(XX)                                                                               \
+    XX(float, backRotorWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Obsolete"), IdxTransfer, \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
-  public:
-    int backRotorWanted;
-
-    IndicesUpdateParachute();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateParachute; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateParachute::IndicesUpdateParachute()
-{
-    backRotorWanted = -1;
-}
-
-void IndicesUpdateParachute::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(backRotorWanted)
-}
+DECLARE_NET_INDICES_EX_ERR(UpdateParachute, UpdateTransport, UPDATE_PARACHUTE_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdateParachute, UpdateTransport, UPDATE_PARACHUTE_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateParachute()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateParachute();
-}
+
+DEFINE_GET_INDICES(UpdateParachute)
+
 namespace Poseidon
 {
 
@@ -1037,9 +1018,7 @@ NetworkMessageFormat& ParachuteAuto::CreateFormat(NetworkMessageClass cls, Netwo
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-
-            format.Add("backRotorWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Obsolete"), ET_ABS_DIF,
-                       ERR_COEF_VALUE_MAJOR);
+            UPDATE_PARACHUTE_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);

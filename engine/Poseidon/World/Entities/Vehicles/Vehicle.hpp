@@ -194,48 +194,31 @@ struct FrictionPoint
 typedef StaticArrayAuto<ContactPoint> ContactArray;
 typedef StaticArrayAuto<FrictionPoint> FrictionArray;
 
-class IndicesCreateVehicle : public IndicesNetworkObject
-{
-	// derived directly form NetworkObject, not Object !!!
-	typedef IndicesNetworkObject base;
+#define CREATE_VEHICLE_MSG(XX) \
+	XX(int, list, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Container, which manage this entity"), IdxTransfer) \
+	XX(RString, type, NDTString, NCTDefault, DEFVALUE(RString, ""), DOC_MSG("Entity type"), IdxTransfer) \
+	XX(RString, shape, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Entity shape (model)"), IdxTransfer) \
+	XX(Vector3, position, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Current position"), IdxTransfer) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Name of variable"), IdxTransfer) \
+	XX(int, idVehicle, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("ID in map of vehicles (used in waypoints and triggers)"), IdxTransfer) \
+	XX(OLink<Object>, hierParent, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Parent in hierarchy"), IdxTransferRef)
 
-public:
-	int list;
-	int type;
-	int shape;
-	int position;
-	int name;
-	int idVehicle;
-	int hierParent;
+DECLARE_NET_INDICES_EX(CreateVehicle, NetworkObject, CREATE_VEHICLE_MSG)
 
-	IndicesCreateVehicle();
-	NetworkMessageIndices *Clone() const override {return new IndicesCreateVehicle;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-class IndicesUpdateVehicle : public IndicesUpdateObject
-{
-	typedef IndicesUpdateObject base;
+#define UPDATE_VEHICLE_MSG(XX) \
+	XX(int, targetSide, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, TWest), DOC_MSG("Side"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_STRUCTURE) \
+	XX(AutoArray<float>, animations, NDTFloatArray, NCTNone, DEFVALUEFLOATARRAY, DOC_MSG("Current state of users defined animations"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
-public:
-	int targetSide;
-	int animations;
+DECLARE_NET_INDICES_EX_ERR(UpdateVehicle, UpdateObject, UPDATE_VEHICLE_MSG)
 
-	IndicesUpdateVehicle();
-	NetworkMessageIndices *Clone() const override {return new IndicesUpdateVehicle;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-class IndicesUpdatePositionVehicle : public IndicesNetworkObject
-{
-	typedef IndicesNetworkObject base;
+#define UPDATE_POSITION_VEHICLE_MSG(XX) \
+	XX(Vector3, position, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Current position"), IdxTransfer, ET_ABS_DIF, 1) \
+	XX(Matrix3, orientation, NDTMatrix, NCTMatrixOrientation, DEFVALUE(Matrix3, M3Identity), DOC_MSG("Current orientation"), IdxTransfer, ET_ABS_DIF, 1) \
+	XX(Vector3, speed, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Current speed"), IdxTransfer, ET_DER_DIF, ERR_COEF_VALUE_NORMAL) \
+	XX(Vector3, angMomentum, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Current angular momentum"), IdxTransfer, ET_DER_DIF, ERR_COEF_VALUE_NORMAL) \
+	XX(int, prec, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, SimulateDefault), DOC_MSG("Simulation precision"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR)
 
-public:
-	int entityUpdPos;
-	int prec;
-
-	IndicesUpdatePositionVehicle();
-	NetworkMessageIndices *Clone() const override {return new IndicesUpdatePositionVehicle;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES_EX_ERR(UpdatePositionVehicle, NetworkObject, UPDATE_POSITION_VEHICLE_MSG)
 
 enum MoveOutState
 {

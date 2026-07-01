@@ -399,24 +399,12 @@ NetworkMessageType Person::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-IndicesUpdateVehicleBrain::IndicesUpdateVehicleBrain()
-{
-    remotePlayer = -1;
-}
-
-void IndicesUpdateVehicleBrain::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(remotePlayer)
-}
+DEFINE_NET_INDICES_EX_ERR(UpdateVehicleBrain, UpdateVehicleSupply, UPDATE_VEHICLE_BRAIN_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateVehicleBrain()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateVehicleBrain();
-}
+
+DEFINE_GET_INDICES(UpdateVehicleBrain)
+
 namespace Poseidon
 {
 
@@ -426,8 +414,7 @@ NetworkMessageFormat& Person::CreateFormat(NetworkMessageClass cls, NetworkMessa
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-            format.Add("remotePlayer", NDTInteger, NCTNone, DEFVALUE(int, 1),
-                       DOC_MSG("Person is controled by player on some client"), ET_NOT_EQUAL, ERR_COEF_MODE);
+            UPDATE_VEHICLE_BRAIN_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);

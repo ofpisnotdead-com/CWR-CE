@@ -115,68 +115,23 @@ NetworkMessageType Shot::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesCreateShot : public IndicesCreateVehicle
-{
-    typedef IndicesCreateVehicle base;
+#define CREATE_SHOT_MSG(XX)                                                                                          \
+    XX(OLink<EntityAI>, parent, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Owner of shot"), IdxTransferRef)             \
+    XX(float, timeToLive, NDTFloat, NCTNone, DEFVALUE(float, 10), DOC_MSG("Time to live (in seconds)"), IdxTransfer) \
+    XX(Vector3, createPos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Initial position"), IdxTransfer)   \
+    XX(Vector3, createSpeed, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Initial speed"), IdxTransfer)    \
+    XX(Matrix3, createOrient, NDTMatrix, NCTMatrixOrientation, DEFVALUE(Matrix3, M3Identity),                        \
+       DOC_MSG("Initial orientation"), IdxTransfer)
 
-  public:
-    int parent;
-    int timeToLive;
-    int createPos;
-    int createSpeed;
-    int createOrient;
+DECLARE_NET_INDICES_EX(CreateShot, CreateVehicle, CREATE_SHOT_MSG)
+DEFINE_NET_INDICES_EX(CreateShot, CreateVehicle, CREATE_SHOT_MSG)
+DEFINE_GET_INDICES(CreateShot)
 
-    IndicesCreateShot();
-    NetworkMessageIndices* Clone() const override { return new IndicesCreateShot; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
+#define UPDATE_SHOT_MSG(XX)
 
-IndicesCreateShot::IndicesCreateShot()
-{
-    parent = -1;
-    timeToLive = -1;
-    createPos = -1;
-    createSpeed = -1;
-    createOrient = -1;
-}
-
-void IndicesCreateShot::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(parent)
-    SCAN(timeToLive)
-    SCAN(createPos)
-    SCAN(createSpeed)
-    SCAN(createOrient)
-}
-
-NetworkMessageIndices* GetIndicesCreateShot()
-{
-    return new IndicesCreateShot();
-}
-
-class IndicesUpdateShot : public IndicesUpdateVehicle
-{
-    typedef IndicesUpdateVehicle base;
-
-  public:
-    IndicesUpdateShot();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateShot; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateShot::IndicesUpdateShot() = default;
-
-void IndicesUpdateShot::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-}
-
-NetworkMessageIndices* GetIndicesUpdateShot()
-{
-    return new IndicesUpdateShot();
-}
+DECLARE_NET_INDICES_EX(UpdateShot, UpdateVehicle, UPDATE_SHOT_MSG)
+DEFINE_NET_INDICES_EX(UpdateShot, UpdateVehicle, UPDATE_SHOT_MSG)
+DEFINE_GET_INDICES(UpdateShot)
 
 NetworkMessageFormat& Shot::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
@@ -186,15 +141,11 @@ NetworkMessageFormat& Shot::CreateFormat(NetworkMessageClass cls, NetworkMessage
     {
         case NMCCreate:
             base::CreateFormat(cls, format);
-            format.Add("parent", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Owner of shot"));
-            format.Add("timeToLive", NDTFloat, NCTNone, DEFVALUE(float, 10), DOC_MSG("Time to live (in seconds)"));
-            format.Add("createPos", NDTVector, NCTNone, DEFVALUE(Vector3, temp), DOC_MSG("Initial position"));
-            format.Add("createSpeed", NDTVector, NCTNone, DEFVALUE(Vector3, temp), DOC_MSG("Initial speed"));
-            format.Add("createOrient", NDTMatrix, NCTMatrixOrientation, DEFVALUE(Matrix3, tempM),
-                       DOC_MSG("Initial orientation"));
+            CREATE_SHOT_MSG(MSG_FORMAT)
             break;
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
+            UPDATE_SHOT_MSG(MSG_FORMAT)
             break;
         default:
             base::CreateFormat(cls, format);
@@ -512,33 +463,13 @@ NetworkMessageType Mine::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesUpdateMine : public IndicesUpdateShot
-{
-    typedef IndicesUpdateShot base;
+#define UPDATE_MINE_MSG(XX)                                                                                        \
+    XX(bool, active, NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Mine is active (can explode)"), IdxTransfer, \
+       ET_NOT_EQUAL, ERR_COEF_MODE)
 
-  public:
-    int active;
-
-    IndicesUpdateMine();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateMine; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateMine::IndicesUpdateMine()
-{
-    active = -1;
-}
-
-void IndicesUpdateMine::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-    SCAN(active)
-}
-
-NetworkMessageIndices* GetIndicesUpdateMine()
-{
-    return new IndicesUpdateMine();
-}
+DECLARE_NET_INDICES_EX_ERR(UpdateMine, UpdateShot, UPDATE_MINE_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdateMine, UpdateShot, UPDATE_MINE_MSG)
+DEFINE_GET_INDICES(UpdateMine)
 
 NetworkMessageFormat& Mine::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
@@ -546,8 +477,7 @@ NetworkMessageFormat& Mine::CreateFormat(NetworkMessageClass cls, NetworkMessage
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-            format.Add("active", NDTBool, NCTNone, DEFVALUE(bool, true), DOC_MSG("Mine is active (can explode)"),
-                       ET_ABS_DIF, ERR_COEF_MODE);
+            UPDATE_MINE_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);

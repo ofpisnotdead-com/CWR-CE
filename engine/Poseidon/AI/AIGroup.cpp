@@ -306,105 +306,28 @@ NetworkMessageType AIGroup::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesCreateAIGroup : public IndicesNetworkObject
-{
-    typedef IndicesNetworkObject base;
+#define CREATE_AI_GROUP_MSG(XX)                                                                                      \
+    XX(OLink<AICenter>, center, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Superior center"), IdxTransferRef)           \
+    XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unique identifier in center"), IdxTransfer) \
+    XX(AutoArray<WaypointInfo>, waypoints, NDTObjectArray, NCTNone, DEFVALUE_MSG(NMTWaypoint),                       \
+       DOC_MSG("List of waypoints"), IdxTransferArray)
 
-  public:
-    //@{
-    int center;
-    int id;
-    int waypoints;
-    //@}
-
-    IndicesCreateAIGroup();
-    NetworkMessageIndices* Clone() const override { return new IndicesCreateAIGroup; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesCreateAIGroup::IndicesCreateAIGroup()
-{
-    center = -1;
-    id = -1;
-    waypoints = -1;
-}
-
-void IndicesCreateAIGroup::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(center)
-    SCAN(id)
-    SCAN(waypoints)
-}
+DECLARE_NET_INDICES_EX(CreateAIGroup, NetworkObject, CREATE_AI_GROUP_MSG)
+DEFINE_NET_INDICES_EX(CreateAIGroup, NetworkObject, CREATE_AI_GROUP_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesCreateAIGroup()
-{
-    using namespace Poseidon;
-    return new IndicesCreateAIGroup();
-}
+
+DEFINE_GET_INDICES(CreateAIGroup)
+
 namespace Poseidon
 {
 
-IndicesUpdateAIGroup::IndicesUpdateAIGroup()
-{
-    mainSubgroup = -1;
-    leader = -1;
-    semaphore = -1;
-    combatModeMinor = -1;
-    // ??	_lastEnemyDetected
-    // ?? _nextCmdId
-    // ?? _locksWP
-    enemiesDetected = -1;
-    unknownsDetected = -1;
-    // ?? disclosed = -1;
-    // ?? _vehicles
-    // ?? _overlookTarget
-    // ?? _guardPosition
-    // ?? _maxStrength
-    forceCourage = -1;
-    courage = -1;
-    flee = -1;
-    // ?? _threshold
-    // ?? _thresholdValid
-
-    waypointIndex = -1;
-}
-
-void IndicesUpdateAIGroup::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(mainSubgroup)
-    SCAN(leader)
-    SCAN(semaphore)
-    SCAN(combatModeMinor)
-    // ??	_lastEnemyDetected
-    // ?? _nextCmdId
-    // ?? _locksWP
-    SCAN(enemiesDetected)
-    SCAN(unknownsDetected)
-    // ?? SCAN(disclosed)
-    // ?? _vehicles
-    // ?? _overlookTarget
-    // ?? _guardPosition
-    // ?? _maxStrength
-    SCAN(forceCourage)
-    SCAN(courage)
-    SCAN(flee)
-    // ?? _threshold
-    // ?? _thresholdValid
-
-    SCAN(waypointIndex)
-}
+DEFINE_NET_INDICES_EX_ERR(UpdateAIGroup, NetworkObject, UPDATE_AI_GROUP_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateAIGroup()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateAIGroup();
-}
+
+DEFINE_GET_INDICES(UpdateAIGroup)
+
 namespace Poseidon
 {
 
@@ -414,43 +337,11 @@ NetworkMessageFormat& AIGroup::CreateFormat(NetworkMessageClass cls, NetworkMess
     {
         case NMCCreate:
             NetworkObject::CreateFormat(cls, format);
-            format.Add("center", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Superior center"));
-            format.Add("id", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unique identifier in center"));
-            format.Add("waypoints", NDTObjectArray, NCTNone, DEFVALUE_MSG(NMTWaypoint), DOC_MSG("List of waypoints"));
+            CREATE_AI_GROUP_MSG(MSG_FORMAT)
             break;
         case NMCUpdateGeneric:
             NetworkObject::CreateFormat(cls, format);
-            format.Add("mainSubgroup", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Main subgroup"), ET_NOT_EQUAL,
-                       ERR_COEF_STRUCTURE);
-            format.Add("leader", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Leader unit"), ET_NOT_EQUAL,
-                       ERR_COEF_STRUCTURE);
-            format.Add("semaphore", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, SemaphoreYellow),
-                       DOC_MSG("Default combat mode"), ET_NOT_EQUAL, ERR_COEF_MODE);
-            format.Add("combatModeMinor", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, CMSafe),
-                       DOC_MSG("Default behaviour"), ET_NOT_EQUAL, ERR_COEF_MODE);
-            // ??	_lastEnemyDetected
-            // ?? _nextCmdId
-            // ?? _locksWP
-            format.Add("enemiesDetected", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0),
-                       DOC_MSG("Number of detected enemies"), ET_ABS_DIF, ERR_COEF_VALUE_MINOR);
-            format.Add("unknownsDetected", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0),
-                       DOC_MSG("Number of detected possible enemies"), ET_ABS_DIF, ERR_COEF_VALUE_MINOR);
-            // ?? format.Add("disclosed", NDTTime, NCTNone, DEFVALUE(Time, Time(0)));
-            // ?? _vehicles
-            // ?? _overlookTarget
-            // ?? _guardPosition
-            // ?? _maxStrength
-            format.Add("forceCourage", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, -1),
-                       DOC_MSG("Enforced (by designer) courage"), ET_ABS_DIF, ERR_COEF_MODE);
-            format.Add("courage", NDTFloat, NCTFloat0To1, DEFVALUE(float, 1), DOC_MSG("Calculated courage"), ET_ABS_DIF,
-                       ERR_COEF_MODE);
-            format.Add("flee", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Units are fleeing"), ET_NOT_EQUAL,
-                       ERR_COEF_MODE);
-            // ?? _threshold
-            // ?? _thresholdValid
-
-            format.Add("waypointIndex", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0),
-                       DOC_MSG("Index of currently processing waypoint"), ET_NOT_EQUAL, ERR_COEF_MODE);
+            UPDATE_AI_GROUP_MSG(MSG_FORMAT_ERR)
             break;
         default:
             NetworkObject::CreateFormat(cls, format);

@@ -1835,86 +1835,43 @@ NetworkMessageType ShipWithAI::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesUpdateShip : public IndicesUpdateTransport
-{
-    typedef IndicesUpdateTransport base;
+#define UPDATE_SHIP_MSG(XX)                                                                                          \
+    XX(bool, pilotBrake, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("State of brake, wanted by player"),       \
+       IdxTransfer, ET_NONE, 0)                                                                                      \
+    XX(bool, targetOutOfAim, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Target is out of aim"), IdxTransfer,  \
+       ET_NONE, 0)                                                                                                   \
+    XX(float, thrustLWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust of left engine"),  \
+       IdxTransfer, ET_NONE, 0)                                                                                      \
+    XX(float, thrustRWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust of right engine"), \
+       IdxTransfer, ET_NONE, 0)                                                                                      \
+    XX(Vector3, stopPosition, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Anchor position"), IdxTransfer, \
+       ET_NONE, 0)                                                                                                   \
+    XX(int, stopState, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, SSNone), DOC_MSG("Anchor state"), IdxTransfer,    \
+       ET_NONE, 0)                                                                                                   \
+    XX(float, sink, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Ship is sinked"), IdxTransfer, ET_ABS_DIF,       \
+       ERR_COEF_VALUE_MAJOR)
 
-  public:
-    int pilotBrake;
-    int targetOutOfAim;
-    int thrustLWanted;
-    int thrustRWanted;
-    int stopPosition;
-    int stopState;
-    int sink;
-
-    IndicesUpdateShip();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateShip; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateShip::IndicesUpdateShip()
-{
-    pilotBrake = -1;
-    targetOutOfAim = -1;
-    thrustLWanted = -1;
-    thrustRWanted = -1;
-    stopPosition = -1;
-    stopState = -1;
-    sink = -1;
-}
-
-void IndicesUpdateShip::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(pilotBrake)
-    SCAN(targetOutOfAim)
-    SCAN(thrustLWanted)
-    SCAN(thrustRWanted)
-    SCAN(stopPosition)
-    SCAN(stopState)
-    SCAN(sink)
-}
+DECLARE_NET_INDICES_EX_ERR(UpdateShip, UpdateTransport, UPDATE_SHIP_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdateShip, UpdateTransport, UPDATE_SHIP_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateShip()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateShip();
-}
+
+DEFINE_GET_INDICES(UpdateShip)
+
 namespace Poseidon
 {
 
-class IndicesUpdatePositionShip : public IndicesUpdatePositionVehicle
-{
-    typedef IndicesUpdatePositionVehicle base;
+#define UPDATE_POSITION_SHIP_MSG(XX)                                                                                   \
+    XX(Turret, turret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Turret object"), IdxTransferObject, \
+       ET_ABS_DIF, 1)
 
-  public:
-    int turret;
-
-    IndicesUpdatePositionShip();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdatePositionShip; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdatePositionShip::IndicesUpdatePositionShip()
-{
-    turret = -1;
-}
-
-void IndicesUpdatePositionShip::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-    SCAN(turret)
-}
+DECLARE_NET_INDICES_EX_ERR(UpdatePositionShip, UpdatePositionVehicle, UPDATE_POSITION_SHIP_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdatePositionShip, UpdatePositionVehicle, UPDATE_POSITION_SHIP_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdatePositionShip()
-{
-    using namespace Poseidon;
-    return new IndicesUpdatePositionShip();
-}
+
+DEFINE_GET_INDICES(UpdatePositionShip)
+
 namespace Poseidon
 {
 
@@ -1924,22 +1881,11 @@ NetworkMessageFormat& ShipWithAI::CreateFormat(NetworkMessageClass cls, NetworkM
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-            format.Add("pilotBrake", NDTBool, NCTNone, DEFVALUE(bool, false),
-                       DOC_MSG("State of brake, wanted by player"));
-            format.Add("targetOutOfAim", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Target is out of aim"));
-            format.Add("thrustLWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0),
-                       DOC_MSG("Wanted thrust of left engine"));
-            format.Add("thrustRWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0),
-                       DOC_MSG("Wanted thrust of right engine"));
-            format.Add("stopPosition", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Anchor position"));
-            format.Add("stopState", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, SSNone), DOC_MSG("Anchor state"));
-            format.Add("sink", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Ship is sinked"), ET_ABS_DIF,
-                       ERR_COEF_VALUE_MAJOR);
+            UPDATE_SHIP_MSG(MSG_FORMAT_ERR)
             break;
         case NMCUpdatePosition:
             base::CreateFormat(cls, format);
-            format.Add("turret", NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Turret object"),
-                       ET_ABS_DIF, 1);
+            UPDATE_POSITION_SHIP_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);

@@ -528,7 +528,13 @@ void NetworkClient::RegisterFormats()
 
 void NetworkClient::SelectPlayer(int player, Person* person, bool respawn)
 {
-    SelectPlayerMessage msg(player, person->GetNetworkId(), person->Position(), respawn);
+    SelectPlayerMessage msg;
+    NetworkId id = person->GetNetworkId();
+    msg._player = player;
+    msg._creator = id.creator;
+    msg._id = id.id;
+    msg._position = person->Position();
+    msg._respawn = respawn;
     SendMsg(&msg, NMFGuaranteed);
 
     if (person->IsLocal())
@@ -592,7 +598,9 @@ void NetworkClient::SelectPlayer(int player, Person* person, bool respawn)
 
 void NetworkClient::AttachPerson(Person* person)
 {
-    AttachPersonMessage msg(person);
+    AttachPersonMessage msg;
+    msg._person = person;
+    msg._unit = person->Brain();
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -605,13 +613,13 @@ void NetworkClient::PlaySound(RString name, Vector3Par position, Vector3Par spee
     }
 
     PlaySoundMessage msg;
-    msg.name = name;
-    msg.position = position;
-    msg.speed = speed;
-    msg.volume = volume;
-    msg.freq = freq;
-    msg.soundId = _soundId++;
-    msg.creator = _player;
+    msg._name = name;
+    msg._position = position;
+    msg._speed = speed;
+    msg._volume = volume;
+    msg._freq = freq;
+    msg._soundId = _soundId++;
+    msg._creator = _player;
     //  int id = _soundId++;
     SendMsg(&msg, NMFNone);
 
@@ -631,7 +639,7 @@ void NetworkClient::PlaySound(RString name, Vector3Par position, Vector3Par spee
 
     int index = _sentSounds.Add();
     _sentSounds[index].creator = _player;
-    _sentSounds[index].id = msg.soundId;
+    _sentSounds[index].id = msg._soundId;
     _sentSounds[index].wave = wave;
 }
 
@@ -665,9 +673,9 @@ void NetworkClient::SoundState(IWave* wave, SoundStateType state)
     }
 
     SoundStateMessage msg;
-    msg.state = state;
-    msg.creator = creator;
-    msg.soundId = id;
+    msg._state = state;
+    msg._creator = creator;
+    msg._soundId = id;
     SendMsg(&msg, NMFNone);
 }
 
@@ -871,7 +879,11 @@ void NetworkClient::DeleteCommand(AISubgroup* subgrp, int index, Command* cmd)
         return;
     }
 
-    DeleteCommandMessage msg(subgrp, index, id);
+    DeleteCommandMessage msg;
+    msg._creator = id.creator;
+    msg._id = id.id;
+    msg._subgrp = subgrp;
+    msg._index = index;
     SendMsg(&msg, NMFGuaranteed);
 
 #if CHECK_MSG
@@ -1113,32 +1125,32 @@ RString GetIdentityText(const PlayerIdentity& identity)
 void NetworkClient::SendKick(int player)
 {
     NetworkCommandMessage msg;
-    msg.type = NCMTKick;
-    msg.content.Write(&player, sizeof(int));
+    msg._type = NCMTKick;
+    msg._content.Write(&player, sizeof(int));
     SendMsg(&msg, NMFGuaranteed);
 }
 
 void NetworkClient::SendLockSession(bool lock)
 {
     NetworkCommandMessage msg;
-    msg.type = NCMTLockSession;
-    msg.content.Write(&lock, sizeof(bool));
+    msg._type = NCMTLockSession;
+    msg._content.Write(&lock, sizeof(bool));
     SendMsg(&msg, NMFGuaranteed);
 }
 
 void NetworkClient::SendBan(int player)
 {
     NetworkCommandMessage msg;
-    msg.type = NCMTBan;
-    msg.content.Write(&player, sizeof(int));
+    msg._type = NCMTBan;
+    msg._content.Write(&player, sizeof(int));
     SendMsg(&msg, NMFGuaranteed);
 }
 
 void NetworkClient::SendUnban(const char* idOrIp)
 {
     NetworkCommandMessage msg;
-    msg.type = NCMTUnban;
-    msg.content.WriteString(idOrIp);
+    msg._type = NCMTUnban;
+    msg._content.WriteString(idOrIp);
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1190,8 +1202,8 @@ bool NetworkClient::ProcessCommand(RString command)
         case CMDLogin:
         {
             NetworkCommandMessage msg;
-            msg.type = NCMTLogin;
-            msg.content.WriteString(beg);
+            msg._type = NCMTLogin;
+            msg._content.WriteString(beg);
             SendMsg(&msg, NMFGuaranteed);
         }
         break;
@@ -1199,7 +1211,7 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster)
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTLogout;
+                msg._type = NCMTLogout;
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1245,7 +1257,7 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster)
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTRestart;
+                msg._type = NCMTRestart;
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1253,10 +1265,10 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster)
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTMission;
-                msg.content.WriteString(beg);
+                msg._type = NCMTMission;
+                msg._content.WriteString(beg);
                 bool cadetMode = false;
-                msg.content.Write(&cadetMode, sizeof(bool));
+                msg._content.Write(&cadetMode, sizeof(bool));
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1264,7 +1276,7 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster)
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTMissions;
+                msg._type = NCMTMissions;
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1272,7 +1284,7 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster)
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTShutdown;
+                msg._type = NCMTShutdown;
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1280,7 +1292,7 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster)
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTReassign;
+                msg._type = NCMTReassign;
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1288,13 +1300,13 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster)
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTMonitorAsk;
+                msg._type = NCMTMonitorAsk;
                 float value = 10.0f;
                 if (*beg)
                 {
                     value = atof(beg);
                 }
-                msg.content.Write(&value, sizeof(value));
+                msg._content.Write(&value, sizeof(value));
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1312,7 +1324,7 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster)
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTInit;
+                msg._type = NCMTInit;
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1320,8 +1332,8 @@ bool NetworkClient::ProcessCommand(RString command)
             if (_gameMaster || GetNetworkManager().IsServer())
             {
                 NetworkCommandMessage msg;
-                msg.type = NCMTDebugAsk;
-                msg.content.WriteString(beg);
+                msg._type = NCMTDebugAsk;
+                msg._content.WriteString(beg);
                 SendMsg(&msg, NMFGuaranteed);
             }
             break;
@@ -1344,10 +1356,10 @@ bool NetworkClient::ProcessCommand(RString command)
                     if (id != AI_PLAYER)
                     {
                         NetworkCommandMessage msg;
-                        msg.type = NCMTVote;
+                        msg._type = NCMTVote;
                         int subtype = NCMTKick;
-                        msg.content.Write(&subtype, sizeof(int));
-                        msg.content.Write(&id, sizeof(int));
+                        msg._content.Write(&subtype, sizeof(int));
+                        msg._content.Write(&id, sizeof(int));
                         SendMsg(&msg, NMFGuaranteed);
                     }
                 }
@@ -1355,41 +1367,41 @@ bool NetworkClient::ProcessCommand(RString command)
                 case CMDRestart:
                 {
                     NetworkCommandMessage msg;
-                    msg.type = NCMTVote;
+                    msg._type = NCMTVote;
                     int subtype = NCMTRestart;
-                    msg.content.Write(&subtype, sizeof(int));
+                    msg._content.Write(&subtype, sizeof(int));
                     SendMsg(&msg, NMFGuaranteed);
                 }
                 break;
                 case CMDReassign:
                 {
                     NetworkCommandMessage msg;
-                    msg.type = NCMTVote;
+                    msg._type = NCMTVote;
                     int subtype = NCMTReassign;
-                    msg.content.Write(&subtype, sizeof(int));
+                    msg._content.Write(&subtype, sizeof(int));
                     SendMsg(&msg, NMFGuaranteed);
                 }
                 break;
                 case CMDMission:
                 {
                     NetworkCommandMessage msg;
-                    msg.type = NCMTVote;
+                    msg._type = NCMTVote;
                     int subtype = NCMTMission;
-                    msg.content.Write(&subtype, sizeof(int));
+                    msg._content.Write(&subtype, sizeof(int));
                     RString name = beg;
                     name.Lower();
-                    msg.content.WriteString(name);
+                    msg._content.WriteString(name);
                     bool cadetMode = false;
-                    msg.content.Write(&cadetMode, sizeof(bool));
+                    msg._content.Write(&cadetMode, sizeof(bool));
                     SendMsg(&msg, NMFGuaranteed);
                 }
                 break;
                 case CMDMissions:
                 {
                     NetworkCommandMessage msg;
-                    msg.type = NCMTVote;
+                    msg._type = NCMTVote;
                     int subtype = NCMTMissions;
-                    msg.content.Write(&subtype, sizeof(int));
+                    msg._content.Write(&subtype, sizeof(int));
                     SendMsg(&msg, NMFGuaranteed);
                 }
                 break;
@@ -1399,10 +1411,10 @@ bool NetworkClient::ProcessCommand(RString command)
                     if (id != AI_PLAYER)
                     {
                         NetworkCommandMessage msg;
-                        msg.type = NCMTVote;
+                        msg._type = NCMTVote;
                         int subtype = NCMTAdmin;
-                        msg.content.Write(&subtype, sizeof(int));
-                        msg.content.Write(&id, sizeof(int));
+                        msg._content.Write(&subtype, sizeof(int));
+                        msg._content.Write(&id, sizeof(int));
                         SendMsg(&msg, NMFGuaranteed);
                     }
                 }
@@ -1419,9 +1431,9 @@ void NetworkClient::SelectMission(RString mission, bool cadetMode)
     if (_gameMaster)
     {
         NetworkCommandMessage msg;
-        msg.type = NCMTMission;
-        msg.content.WriteString(mission);
-        msg.content.Write(&cadetMode, sizeof(bool));
+        msg._type = NCMTMission;
+        msg._content.WriteString(mission);
+        msg._content.Write(&cadetMode, sizeof(bool));
         SendMsg(&msg, NMFGuaranteed);
     }
     _selectMission = false;
@@ -1431,11 +1443,11 @@ void NetworkClient::SelectMission(RString mission, bool cadetMode)
 void NetworkClient::VoteMission(RString mission, bool cadetMode)
 {
     NetworkCommandMessage msg;
-    msg.type = NCMTVote;
+    msg._type = NCMTVote;
     int subtype = NCMTMission;
-    msg.content.Write(&subtype, sizeof(int));
-    msg.content.WriteString(mission);
-    msg.content.Write(&cadetMode, sizeof(bool));
+    msg._content.Write(&subtype, sizeof(int));
+    msg._content.WriteString(mission);
+    msg._content.Write(&cadetMode, sizeof(bool));
     SendMsg(&msg, NMFGuaranteed);
 
     _voteMission = false;
@@ -1551,12 +1563,12 @@ void NetworkClient::AskForDammage(Object* who, EntityAI* owner, Vector3Par model
     }
 
     AskForDammageMessage msg;
-    msg.who = who;
-    msg.owner = owner;
-    msg.modelPos = modelPos;
-    msg.val = val;
-    msg.valRange = valRange;
-    msg.ammo = ammo;
+    msg._who = who;
+    msg._owner = owner;
+    msg._modelPos = modelPos;
+    msg._val = val;
+    msg._valRange = valRange;
+    msg._ammo = ammo;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1568,8 +1580,8 @@ void NetworkClient::AskForSetDammage(Object* who, float dammage)
     }
 
     AskForSetDammageMessage msg;
-    msg.who = who;
-    msg.dammage = dammage;
+    msg._who = who;
+    msg._dammage = dammage;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1590,9 +1602,9 @@ void NetworkClient::AskForGetIn(Person* soldier, Transport* vehicle, GetInPositi
     );
     */
     AskForGetInMessage msg;
-    msg.soldier = soldier;
-    msg.vehicle = vehicle;
-    msg.position = position;
+    msg._soldier = soldier;
+    msg._vehicle = vehicle;
+    msg._position = position;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1614,9 +1626,9 @@ void NetworkClient::AskForGetOut(Person* soldier, Transport* vehicle, bool parac
     */
 
     AskForGetOutMessage msg;
-    msg.soldier = soldier;
-    msg.vehicle = vehicle;
-    msg.parachute = parachute;
+    msg._soldier = soldier;
+    msg._vehicle = vehicle;
+    msg._parachute = parachute;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1628,9 +1640,9 @@ void NetworkClient::AskForChangePosition(Person* soldier, Transport* vehicle, UI
     }
 
     AskForChangePositionMessage msg;
-    msg.soldier = soldier;
-    msg.vehicle = vehicle;
-    msg.type = type;
+    msg._soldier = soldier;
+    msg._vehicle = vehicle;
+    msg._type = type;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1642,9 +1654,9 @@ void NetworkClient::AskForAimWeapon(EntityAI* vehicle, int weapon, Vector3Par di
     }
 
     AskForAimWeaponMessage msg;
-    msg.vehicle = vehicle;
-    msg.weapon = weapon;
-    msg.dir = dir;
+    msg._vehicle = vehicle;
+    msg._weapon = weapon;
+    msg._dir = dir;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1656,8 +1668,8 @@ void NetworkClient::AskForAimObserver(EntityAI* vehicle, Vector3Par dir)
     }
 
     AskForAimObserverMessage msg;
-    msg.vehicle = vehicle;
-    msg.dir = dir;
+    msg._vehicle = vehicle;
+    msg._dir = dir;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1669,8 +1681,8 @@ void NetworkClient::AskForSelectWeapon(EntityAI* vehicle, int weapon)
     }
 
     AskForSelectWeaponMessage msg;
-    msg.vehicle = vehicle;
-    msg.weapon = weapon;
+    msg._vehicle = vehicle;
+    msg._weapon = weapon;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1682,9 +1694,9 @@ void NetworkClient::AskForAmmo(EntityAI* vehicle, int weapon, int burst)
     }
 
     AskForAmmoMessage msg;
-    msg.vehicle = vehicle;
-    msg.weapon = weapon;
-    msg.burst = burst;
+    msg._vehicle = vehicle;
+    msg._weapon = weapon;
+    msg._burst = burst;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1696,9 +1708,9 @@ void NetworkClient::AskForAddImpulse(Vehicle* vehicle, Vector3Par force, Vector3
     }
 
     AskForAddImpulseMessage msg;
-    msg.vehicle = vehicle;
-    msg.force = force;
-    msg.torque = torque;
+    msg._vehicle = vehicle;
+    msg._force = force;
+    msg._torque = torque;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1710,8 +1722,8 @@ void NetworkClient::AskForMove(Object* vehicle, Vector3Par pos)
     }
 
     AskForMoveVectorMessage msg;
-    msg.vehicle = vehicle;
-    msg.pos = pos;
+    msg._vehicle = vehicle;
+    msg._pos = pos;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1723,9 +1735,9 @@ void NetworkClient::AskForMove(Object* vehicle, Matrix4Par trans)
     }
 
     AskForMoveMatrixMessage msg;
-    msg.vehicle = vehicle;
-    msg.pos = trans.Position();
-    msg.orient = trans.Orientation();
+    msg._vehicle = vehicle;
+    msg._pos = trans.Position();
+    msg._orient = trans.Orientation();
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1737,8 +1749,8 @@ void NetworkClient::AskForJoin(AIGroup* join, AIGroup* group)
     }
 
     AskForJoinGroupMessage msg;
-    msg.join = join;
-    msg.group = group;
+    msg._join = join;
+    msg._group = group;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1750,8 +1762,8 @@ void NetworkClient::AskForJoin(AIGroup* join, OLinkArray<AIUnit>& units)
     }
 
     AskForJoinUnitsMessage msg;
-    msg.join = join;
-    msg.units = units;
+    msg._join = join;
+    msg._units = units;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1763,7 +1775,7 @@ void NetworkClient::AskForHideBody(Person* vehicle)
     }
 
     AskForHideBodyMessage msg;
-    msg.vehicle = vehicle;
+    msg._vehicle = vehicle;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1776,13 +1788,13 @@ void NetworkClient::ExplosionDammageEffects(EntityAI* owner, Shot* shot, Object*
     }
 
     ExplosionDammageEffectsMessage msg;
-    msg.owner = owner;
-    msg.shot = shot;
-    msg.directHit = directHit;
-    msg.pos = pos;
-    msg.dir = dir;
-    msg.type = type->GetName();
-    msg.enemyDammage = enemyDammage;
+    msg._owner = owner;
+    msg._shot = shot;
+    msg._directHit = directHit;
+    msg._pos = pos;
+    msg._dir = dir;
+    msg._type = type->GetName();
+    msg._enemyDammage = enemyDammage;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1799,11 +1811,11 @@ void NetworkClient::FireWeapon(EntityAI* vehicle, int weapon, const Magazine* ma
     }
 
     FireWeaponMessage msg;
-    msg.vehicle = vehicle;
-    msg.target = target;
-    msg.weapon = weapon;
-    msg.magazineCreator = magazine->_creator;
-    msg.magazineId = magazine->_id;
+    msg._vehicle = vehicle;
+    msg._target = target;
+    msg._weapon = weapon;
+    msg._magazineCreator = magazine->_creator;
+    msg._magazineId = magazine->_id;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1817,33 +1829,33 @@ void NetworkClient::UpdateWeapons(EntityAI* vehicle)
 void NetworkClient::AddWeaponCargo(VehicleSupply* vehicle, RString weapon)
 {
     AddWeaponCargoMessage msg;
-    msg.vehicle = vehicle;
-    msg.weapon = weapon;
+    msg._vehicle = vehicle;
+    msg._weapon = weapon;
     SendMsg(&msg, NMFGuaranteed);
 }
 
 void NetworkClient::RemoveWeaponCargo(VehicleSupply* vehicle, RString weapon)
 {
     RemoveWeaponCargoMessage msg;
-    msg.vehicle = vehicle;
-    msg.weapon = weapon;
+    msg._vehicle = vehicle;
+    msg._weapon = weapon;
     SendMsg(&msg, NMFGuaranteed);
 }
 
 void NetworkClient::AddMagazineCargo(VehicleSupply* vehicle, const Magazine* magazine)
 {
     AddMagazineCargoMessage msg;
-    msg.vehicle = vehicle;
-    msg.magazine = const_cast<Magazine*>(magazine);
+    msg._vehicle = vehicle;
+    msg._magazine = const_cast<Magazine*>(magazine);
     SendMsg(&msg, NMFGuaranteed);
 }
 
 void NetworkClient::RemoveMagazineCargo(VehicleSupply* vehicle, int creator, int id)
 {
     RemoveMagazineCargoMessage msg;
-    msg.vehicle = vehicle;
-    msg.creator = creator;
-    msg.id = id;
+    msg._vehicle = vehicle;
+    msg._creator = creator;
+    msg._id = id;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1860,8 +1872,8 @@ void NetworkClient::OnVehicleDestroyed(EntityAI* killed, EntityAI* killer)
     }
 
     VehicleDestroyedMessage msg;
-    msg.killed = killed;
-    msg.killer = killer;
+    msg._killed = killed;
+    msg._killer = killer;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1902,10 +1914,10 @@ void NetworkClient::MarkerCreate(int channel, AIUnit* sender, RefArray<NetworkOb
     }
 
     MarkerCreateMessage msg;
-    msg.marker = info;
-    msg.channel = channel;
-    msg.sender = sender;
-    msg.units = units;
+    msg._marker = info;
+    msg._channel = channel;
+    msg._sender = sender;
+    msg._units = units;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -1917,23 +1929,23 @@ void NetworkClient::MarkerDelete(RString name)
     }
 
     MarkerDeleteMessage msg;
-    msg.name = name;
+    msg._name = name;
     SendMsg(&msg, NMFGuaranteed);
 }
 
 void NetworkClient::SetFlagOwner(Person* owner, EntityAI* carrier)
 {
     SetFlagOwnerMessage msg;
-    msg.owner = owner;
-    msg.carrier = carrier;
+    msg._owner = owner;
+    msg._carrier = carrier;
     SendMsg(&msg, NMFGuaranteed);
 }
 
 void NetworkClient::SetFlagCarrier(Person* owner, EntityAI* carrier)
 {
     SetFlagCarrierMessage msg;
-    msg.owner = owner;
-    msg.carrier = carrier;
+    msg._owner = owner;
+    msg._carrier = carrier;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -2052,19 +2064,32 @@ void NetworkClient::CopyUnitInfo(Person* from, Person* to)
 
 void NetworkClient::Chat(int channel, RString text)
 {
-    ChatMessage msg(channel, GetLocalPlayerName(), text);
+    ChatMessage msg;
+    msg._channel = channel;
+    msg._name = GetLocalPlayerName();
+    msg._text = text;
     SendMsg(&msg, NMFGuaranteed | GetChatPriority());
 }
 
 void NetworkClient::Chat(int channel, AIUnit* sender, RefArray<NetworkObject>& units, RString text)
 {
-    ChatMessage msg(channel, sender, units, GetLocalPlayerName(), text);
+    ChatMessage msg;
+    msg._channel = channel;
+    msg._sender = sender;
+    msg._units = units;
+    msg._name = GetLocalPlayerName();
+    msg._text = text;
     SendMsg(&msg, NMFGuaranteed | GetChatPriority());
 }
 
 void NetworkClient::Chat(int channel, RString sender, RefArray<NetworkObject>& units, RString text)
 {
-    ChatMessage msg(channel, nullptr, units, sender, text);
+    ChatMessage msg;
+    msg._channel = channel;
+    msg._sender = nullptr;
+    msg._units = units;
+    msg._name = sender;
+    msg._text = text;
     SendMsg(&msg, NMFGuaranteed | GetChatPriority());
 }
 
@@ -2072,11 +2097,11 @@ void NetworkClient::RadioChat(int channel, AIUnit* sender, RefArray<NetworkObjec
                               RadioSentence& sentence)
 {
     RadioChatMessage msg;
-    msg.channel = channel;
-    msg.sender = sender;
-    msg.units = units;
-    msg.text = text;
-    msg.sentence = sentence;
+    msg._channel = channel;
+    msg._sender = sender;
+    msg._units = units;
+    msg._text = text;
+    msg._sentence = sentence;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -2084,17 +2109,18 @@ void NetworkClient::RadioChatWave(int channel, RefArray<NetworkObject>& units, R
                                   RString senderName)
 {
     RadioChatWaveMessage msg;
-    msg.channel = channel;
-    msg.units = units;
-    msg.wave = wave;
-    msg.sender = sender;
-    msg.senderName = senderName;
+    msg._channel = channel;
+    msg._units = units;
+    msg._wave = wave;
+    msg._sender = sender;
+    msg._senderName = senderName;
     SendMsg(&msg, NMFGuaranteed);
 }
 
 void NetworkClient::SetVoiceChannel(int channel)
 {
-    SetVoiceChannelMessage msg(channel);
+    SetVoiceChannelMessage msg;
+    msg._channel = channel;
     SendMsg(&msg, NMFGuaranteed);
     if (_client)
         _client->SetVoiceTransmit(channel != CCNone);
@@ -2102,7 +2128,9 @@ void NetworkClient::SetVoiceChannel(int channel)
 
 void NetworkClient::SetVoiceChannel(int channel, RefArray<NetworkObject>& units)
 {
-    SetVoiceChannelMessage msg(channel, units);
+    SetVoiceChannelMessage msg;
+    msg._channel = channel;
+    msg._units = units;
     SendMsg(&msg, NMFGuaranteed);
     if (_client)
         _client->SetVoiceTransmit(channel != CCNone);
@@ -2110,7 +2138,8 @@ void NetworkClient::SetVoiceChannel(int channel, RefArray<NetworkObject>& units)
 
 int NetworkClient::SendVoiceTestTone(int frames, int amplitude)
 {
-    SetVoiceChannelMessage msg(CCDirect);
+    SetVoiceChannelMessage msg;
+    msg._channel = CCDirect;
     SendMsg(&msg, NMFGuaranteed);
     return _client ? _client->SendVoiceTestTone(frames, amplitude) : 0;
 }
@@ -2129,18 +2158,18 @@ void NetworkClient::TransferFileToServer(RString dest, RString source)
     f.AutoOpen(source);
 
     TransferFileToServerMessage msg;
-    msg.path = dest;
-    msg.totSize = f.GetBuffer()->GetSize();
-    msg.totSegments = (msg.totSize + maxSegmentSize - 1) / maxSegmentSize;
-    msg.offset = 0;
-    for (int i = 0; i < msg.totSegments; i++)
+    msg._path = dest;
+    msg._totSize = f.GetBuffer()->GetSize();
+    msg._totSegments = (msg._totSize + maxSegmentSize - 1) / maxSegmentSize;
+    msg._offset = 0;
+    for (int i = 0; i < msg._totSegments; i++)
     {
-        msg.curSegment = i;
-        int size = std::min(maxSegmentSize, msg.totSize - msg.offset);
-        msg.data.Resize(size);
-        memcpy(msg.data.Data(), f.GetBuffer()->GetData() + msg.offset, size);
+        msg._curSegment = i;
+        int size = std::min(maxSegmentSize, msg._totSize - msg._offset);
+        msg._data.Resize(size);
+        memcpy(msg._data.Data(), f.GetBuffer()->GetData() + msg._offset, size);
         SendMsg(&msg, NMFGuaranteed);
-        msg.offset += size;
+        msg._offset += size;
     }
 }
 
@@ -2215,7 +2244,8 @@ void NetworkClient::DeleteObject(NetworkId& id)
     }
 
     DeleteObjectMessage msg;
-    msg.object = id;
+    msg._creator = id.creator;
+    msg._id = id.id;
     SendMsg(&msg, NMFGuaranteed);
 
 #if CHECK_MSG
@@ -2250,8 +2280,8 @@ void NetworkClient::ShowTarget(Person* vehicle, TargetType* target)
     }
 
     ShowTargetMessage msg;
-    msg.vehicle = vehicle;
-    msg.target = target;
+    msg._vehicle = vehicle;
+    msg._target = target;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -2263,8 +2293,8 @@ void NetworkClient::ShowGroupDir(Person* vehicle, Vector3Par dir)
     }
 
     ShowGroupDirMessage msg;
-    msg.vehicle = vehicle;
-    msg.dir = dir;
+    msg._vehicle = vehicle;
+    msg._dir = dir;
     SendMsg(&msg, NMFGuaranteed);
 }
 
@@ -2556,7 +2586,8 @@ void NetworkClient::SendMessages()
             if (!info.object)
             {
                 DeleteObjectMessage msg;
-                msg.object = info.id;
+                msg._creator = info.id.creator;
+                msg._id = info.id.id;
                 SendMsg(&msg, NMFGuaranteed);
                 if (DiagLevel >= 1)
                 {

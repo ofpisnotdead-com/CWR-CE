@@ -1517,82 +1517,30 @@ NetworkMessageType Entity::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-IndicesCreateVehicle::IndicesCreateVehicle()
-{
-    list = -1;
-    type = -1;
-    shape = -1;
-    position = -1;
-    name = -1;
-    idVehicle = -1;
-    hierParent = -1;
-}
-
-void IndicesCreateVehicle::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(list)
-    SCAN(type)
-    SCAN(shape)
-    SCAN(position)
-    SCAN(name)
-    SCAN(idVehicle)
-    SCAN(hierParent)
-}
+DEFINE_NET_INDICES_EX(CreateVehicle, NetworkObject, CREATE_VEHICLE_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesCreateVehicle()
-{
-    using namespace Poseidon;
-    return new IndicesCreateVehicle();
-}
+
+DEFINE_GET_INDICES(CreateVehicle)
+
 namespace Poseidon
 {
 
-IndicesUpdateVehicle::IndicesUpdateVehicle()
-{
-    targetSide = -1;
-    animations = -1;
-}
-
-void IndicesUpdateVehicle::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(targetSide)
-    SCAN(animations)
-}
+DEFINE_NET_INDICES_EX_ERR(UpdateVehicle, UpdateObject, UPDATE_VEHICLE_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateVehicle()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateVehicle();
-}
+
+DEFINE_GET_INDICES(UpdateVehicle)
+
 namespace Poseidon
 {
 
-IndicesUpdatePositionVehicle::IndicesUpdatePositionVehicle()
-{
-    entityUpdPos = -1;
-    prec = -1;
-}
-
-void IndicesUpdatePositionVehicle::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(entityUpdPos)
-    SCAN(prec)
-}
+DEFINE_NET_INDICES_EX_ERR(UpdatePositionVehicle, NetworkObject, UPDATE_POSITION_VEHICLE_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdatePositionVehicle()
-{
-    using namespace Poseidon;
-    return new IndicesUpdatePositionVehicle();
-}
+
+DEFINE_GET_INDICES(UpdatePositionVehicle)
+
 namespace Poseidon
 {
 
@@ -1603,29 +1551,15 @@ NetworkMessageFormat& Entity::CreateFormat(NetworkMessageClass cls, NetworkMessa
     {
         case NMCCreate:
             NetworkObject::CreateFormat(cls, format);
-            format.Add("list", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0),
-                       DOC_MSG("Container, which manage this entity"));
-            format.Add("type", NDTString, NCTDefault, DEFVALUE(RString, ""), DOC_MSG("Entity type"));
-            format.Add("shape", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Entity shape (model)"));
-            format.Add("position", NDTVector, NCTNone, DEFVALUE(Vector3, temp), DOC_MSG("Current position"));
-            format.Add("name", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Name of variable"));
-            format.Add("idVehicle", NDTInteger, NCTSmallSigned, DEFVALUE(int, -1),
-                       DOC_MSG("ID in map of vehicles (used in waypoints and triggers)"));
-            format.Add("hierParent", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Parent in hierarchy"), ET_NOT_EQUAL,
-                       ERR_COEF_STRUCTURE);
+            CREATE_VEHICLE_MSG(MSG_FORMAT)
             break;
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-            format.Add("targetSide", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, TWest), DOC_MSG("Side"));
-            format.Add("animations", NDTFloatArray, NCTNone, DEFVALUEFLOATARRAY,
-                       DOC_MSG("Current state of users defined animations"), ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
+            UPDATE_VEHICLE_MSG(MSG_FORMAT_ERR)
             break;
         case NMCUpdatePosition:
             base::CreateFormat(cls, format);
-            format.Add("entityUpdPos", NDTRawData, NCTNone, DEFVALUERAWDATA, DOC_MSG("Encoded position"),
-                       ET_UPD_ENTITY_POS, 1);
-            format.Add("prec", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, SimulateDefault),
-                       DOC_MSG("Simulation precision"), ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR);
+            UPDATE_POSITION_VEHICLE_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);
@@ -1838,51 +1772,48 @@ TMError Entity::TransferMsg(NetworkMessageContext& ctx)
                         static_cast<const IndicesUpdatePositionVehicle*>(ctx.GetIndices());
                 if (ctx.IsSending())
                 {
-                    NetworkUpdEntityPos pos;
-                    pos.orientation.Encode(Orientation());
-                    pos.position = Position();
-                    pos.speed = _speed;
-                    pos.angMomentum = _angMomentum;
-                    TMCHECK(ctx.IdxSendRaw(indices->entityUpdPos, &pos, sizeof(pos)));
+                    Matrix3 orientation = Orientation();
+                    TMCHECK(ctx.IdxTransfer(indices->orientation, orientation))
+                    Vector3 position = Position();
+                    TMCHECK(ctx.IdxTransfer(indices->position, position))
+                    ITRANSF(speed)
+                    ITRANSF(angMomentum)
                 }
                 else
                 {
-                    void* data;
-                    int size;
-                    TMCHECK(ctx.IdxGetRaw(indices->entityUpdPos, data, size));
-                    if (size == sizeof(NetworkUpdEntityPos))
+                    if (IsInLandscape())
                     {
-                        if (IsInLandscape())
-                        {
-                            // only entities that are really present in the lanscape
-                            // may receive updates
-                            const NetworkUpdEntityPos& pos = *(NetworkUpdEntityPos*)data;
-                            Matrix4 trans;
-                            pos.orientation.Decode(trans);
-                            trans.SetPosition(pos.position);
+                        // only entities that are really present in the lanscape
+                        // may receive updates
+                        Matrix3 orientation;
+                        TMCHECK(ctx.IdxTransfer(indices->orientation, orientation))
+                        Vector3 position;
+                        TMCHECK(ctx.IdxTransfer(indices->position, position))
+                        Matrix4 trans;
+                        trans.SetOrientation(orientation);
+                        trans.SetPosition(position);
+                        Vector3 speed;
+                        TMCHECK(ctx.IdxTransfer(indices->speed, speed))
+                        Vector3 angMomentum;
+                        TMCHECK(ctx.IdxTransfer(indices->position, position))
 
-                            // Ease a moving remote unit toward the update over
-                            // the next sim steps (ApplyRemoteState) instead of
-                            // snapping, which reads as a teleport under lag /
-                            // throttling. A stationary unit, or any unit with
-                            // smoothing disabled, snaps as the original engine did.
-                            if (GMPRemoteInterp && !IsLocal() && pos.speed.SquareSize() >= Square(0.1f))
-                            {
-                                _remoteInterp.SetTarget(pos.position, pos.speed, trans.Orientation());
-                                _angMomentum = pos.angMomentum;
-                            }
-                            else
-                            {
-                                Move(trans);
-                                _speed = pos.speed;
-                                _angMomentum = pos.angMomentum;
-                                _remoteInterp.Clear();
-                            }
+                        // Ease a moving remote unit toward the update over
+                        // the next sim steps (ApplyRemoteState) instead of
+                        // snapping, which reads as a teleport under lag /
+                        // throttling. A stationary unit, or any unit with
+                        // smoothing disabled, snaps as the original engine did.
+                        if (GMPRemoteInterp && !IsLocal() && speed.SquareSize() >= Square(0.1f))
+                        {
+                            _remoteInterp.SetTarget(position, speed, trans.Orientation());
+                            _angMomentum = angMomentum;
                         }
-                    }
-                    else
-                    {
-                        Fail("Bad size of NetworkUpdEntityPos field");
+                        else
+                        {
+                            Move(trans);
+                            _speed = speed;
+                            _angMomentum = angMomentum;
+                            _remoteInterp.Clear();
+                        }
                     }
                 }
                 ITRANSF_ENUM(prec)
@@ -1926,21 +1857,10 @@ float Entity::CalculateError(NetworkMessageContext& ctx)
                 PoseidonAssert(dynamic_cast<const IndicesUpdatePositionVehicle*>(ctx.GetIndices()))
                     const IndicesUpdatePositionVehicle* indices =
                         static_cast<const IndicesUpdatePositionVehicle*>(ctx.GetIndices());
-                {
-                    AutoArray<char> temp;
-                    if (ctx.IdxTransfer(indices->entityUpdPos, temp) == TMOK &&
-                        temp.Size() == sizeof(NetworkUpdEntityPos))
-                    {
-                        NetworkUpdEntityPos& d = *(NetworkUpdEntityPos*)temp.Data();
-                        error += d.position.Distance(Position());
-                        error += d.orientation.DirectionUp().Distance(Orientation().DirectionUp());
-                        error += d.orientation.Direction().Distance(Orientation().Direction());
-
-                        float dt = Glob.time - ctx.GetMsgTime();
-                        error += dt * d.speed.Distance(Speed());
-                        error += dt * d.angMomentum.Distance(AngMomentum());
-                    }
-                }
+                ICALCERRE_DIST(position, Position(), 1)
+                ICALCERRE_MATRIX(orientation, Orientation(), 1)
+                ICALCERRE_DIST(speed, Speed(), ERR_COEF_VALUE_NORMAL)
+                ICALCERRE_DIST(angMomentum, AngMomentum(), ERR_COEF_VALUE_NORMAL)
                 ICALCERR_NEQ(int, prec, ERR_COEF_VALUE_MAJOR)
             }
             break;

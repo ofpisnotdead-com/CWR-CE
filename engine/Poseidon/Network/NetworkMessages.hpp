@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Poseidon/Network/MessageFactory.hpp>
 #include <Poseidon/Network/Network.hpp>
 #include <Poseidon/Audio/Speaker.hpp>
 #include <Poseidon/AI/Path/ArcadeWaypoint.hpp>
@@ -159,27 +160,12 @@ class RefNetworkDataWithFormat: public RefNetworkData
 // Info about player sent by server to player itself
 // Sent to a player after the DPN_MSGID_CREATE_PLAYER system message arrives at the server.
 // Carries info the player itself does not know.
-struct PlayerMessage : public NetworkSimpleObject
-{
-	// DirectPlay ID of player
-	int player;
-	// name of player (some suffix can be added in case of duplicity of names)
-	RString name;
-//{ DEDICATED SERVER SUPPORT
-	// bot client on dedicated server
-	bool server;
+#define PLAYER_MSG(XX) \
+	XX(int, player, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Unique ID of client (player)"), IdxTransfer) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Player's name"), IdxTransfer) \
+	XX(bool, server, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Bot client (running in the same process as server)"), IdxTransfer)
 
-	PlayerMessage() {player = 0; server = false;}
-	PlayerMessage(int p, RString n, bool s) {player = p; name = n; server = s;}
-//}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTPlayer;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(Player, PLAYER_MSG)
 
 // Message sent by server whenever game state changes (see NetworkGameState)
 // Also sent by a client whenever the player is ready (confirms something in a dialog).
@@ -199,21 +185,10 @@ struct ChangeGameState : public NetworkSimpleObject
 };
 
 // Message sent to all players when some player logged out from game
-struct LogoutMessage : public NetworkSimpleObject
-{
-	// logged out player
-	int dpnid;
+#define LOGOUT_MSG(XX) \
+	XX(int, dpnid, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of client (player)"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTLogout;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
-
-#include <Poseidon/Network/MessageFactory.hpp>
+DECLARE_NET_MESSAGE(Logout,LOGOUT_MSG)
 
 #define PUB_VAR_MSG(XX) \
 	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Variable name"), IdxTransfer) \
@@ -337,644 +312,239 @@ DECLARE_NET_MESSAGE(PublicExec, PUBLICEXEC_MSG)
 
 DECLARE_NET_MESSAGE(RemoteExec, REMOTEEXEC_MSG)
 
-// Text chat message
-struct ChatMessage : public NetworkSimpleObject
-{
-	// chat channel
-	int channel;
-	// sender unit
-	AIUnit *sender;
-	// receiving units
-	RefArray<NetworkObject> units;
-	// sender name
-	RString name;
-	// chat text
-	RString text;
+#define CHAT_MSG(XX) \
+	XX(int, channel, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Radio channel"), IdxTransfer) \
+	XX(OLink<AIUnit>, sender, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Sender unit"), IdxTransferRef) \
+	XX(RefArray<NetworkObject>, units, NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("List of receiving units"), IdxTransferRefs) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Sender name"), IdxTransfer) \
+	XX(RString, text, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Message content"), IdxTransfer)
 
-	ChatMessage() {channel = 0; sender = nullptr;}
-	ChatMessage(int ch, RString n, RString txt)
-	{channel = ch; sender = nullptr; name = n; text = txt;}
-	ChatMessage(int ch, AIUnit *se, RefArray<NetworkObject> &u, RString n, RString txt)
-	{channel = ch; sender = se; units = u; name = n; text = txt;}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTChat;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(Chat, CHAT_MSG)
 
-// Radio chat message (radio message sent over network)
-struct RadioChatMessage : public NetworkSimpleObject
-{
-	// chat channel
-	int channel;
-	// sender unit
-	AIUnit *sender;
-	// receiving units
-	RefArray<NetworkObject> units;
-	// chat text
-	RString text;
-	// radio sentence (array of words) to say
-	RadioSentence sentence;
+#define RADIO_CHAT_MSG(XX) \
+	XX(int, channel, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Radio channel"), IdxTransfer) \
+	XX(OLink<AIUnit>, sender, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Sender unit"), IdxTransferRef) \
+	XX(RefArray<NetworkObject>, units, NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("List of receiving units"), IdxTransferRefs) \
+	XX(RString, text, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Content of message (text)"), IdxTransfer) \
+	XX(RadioSentence, sentence, NDTSentence, NCTNone, DEFVALUE(RadioSentence, RadioSentence()), DOC_MSG("Content of message (list of words to say)"), IdxTransfer)
 
-	RadioChatMessage() {channel = 0; sender = nullptr;}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTRadioChat;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(RadioChat, RADIO_CHAT_MSG)
 
-// Text (and sound) radio chat message
-struct RadioChatWaveMessage : public NetworkSimpleObject
-{
-	// chat channel
-	int channel;
-	// sender unit
-	AIUnit *sender;
-	// receiving units
-	RefArray<NetworkObject> units;
-	// sender name
-	RString senderName;
-	// name of class from CfgRadio containing sound and title
-	RString wave;
+#define RADIO_CHAT_WAVE_MSG(XX) \
+	XX(int, channel, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Radio channel"), IdxTransfer) \
+	XX(RefArray<NetworkObject>, units, NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("List of receiving units"), IdxTransferRefs) \
+	XX(RString, wave, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Sound identifier"), IdxTransfer) \
+	XX(OLink<AIUnit>, sender, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Sender unit"), IdxTransferRef) \
+	XX(RString, senderName, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Sender name"), IdxTransfer)
 
-	RadioChatWaveMessage() {channel = 0; sender = nullptr;}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTRadioChatWave;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(RadioChatWave, RADIO_CHAT_WAVE_MSG)
 
-// Set Voice Over Net channel message
-struct SetVoiceChannelMessage : public NetworkSimpleObject
-{
-	// chat channel
-	int channel;
-	// receiving units
-	RefArray<NetworkObject> units;
+#define SET_VOICE_CHANNEL_MSG(XX) \
+	XX(int, channel, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Radio channel"), IdxTransfer) \
+	XX(RefArray<NetworkObject>, units, NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("List of receiving units"), IdxTransferRefs)
 
-	SetVoiceChannelMessage(int ch) {channel = ch;}
-	SetVoiceChannelMessage(int ch, RefArray<NetworkObject> &u)
-	{channel = ch; units = u;}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTSetVoiceChannel;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(SetVoiceChannel, SET_VOICE_CHANNEL_MSG)
 
-// Assign player speaking on Direct channel to sound source object
-struct SetSpeakerMessage : public NetworkSimpleObject
-{
-	// DirectPlay ID of speaking player
-	int player;
-	// is player currently speaking
-	bool on;
-	// sound source object
-	NetworkId object;
+#define SET_SPEAKER_MSG(XX) \
+	XX(int, player, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Client (player) ID of speaking player"), IdxTransfer) \
+	XX(bool, on, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Turn on / off direct speaking"), IdxTransfer) \
+	XX(int, creator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of speaking unit"), IdxTransfer) \
+	XX(int, id, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of speaking unit"), IdxTransfer)
 
-	SetSpeakerMessage() {player = 0; on = false;}
-	SetSpeakerMessage(int pl, bool o, NetworkId &obj) {player = pl; on = o; object = obj;}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTSetSpeaker;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(SetSpeaker, SET_SPEAKER_MSG)
 
-// Select person as player message
-struct SelectPlayerMessage : public NetworkSimpleObject
-{
-	// DirectX player id
-	int player;
-	// player's person
-	NetworkId person;
-	// player's position
-	Vector3 position;
-	// play "ressurect" cutscene
-	bool respawn;
+#define SELECT_PLAYER_MSG(XX) \
+	XX(int, player, NDTInteger, NCTNone, DEFVALUE(int, AI_PLAYER), DOC_MSG("Client (player) ID of player"), IdxTransfer) \
+	XX(int, creator, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID of player's unit"), IdxTransfer) \
+	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID of player's unit"), IdxTransfer) \
+	XX(Vector3, position, NDTVector, NCTNone, DEFVALUE(Vector3, Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX)), DOC_MSG("Player's unit position"), IdxTransfer) \
+	XX(bool, respawn, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Selection of player's unit after respawn"), IdxTransfer)
 
-	SelectPlayerMessage() {player = AI_PLAYER; position = Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX); respawn = false;}
-	SelectPlayerMessage(int pl, NetworkId pe, Vector3Par pos, bool resp) {player = pl; person = pe; position = pos, respawn = resp;}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTSelectPlayer;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(SelectPlayer, SELECT_PLAYER_MSG)
 
-// Message is sent when owner of some object changes
-struct ChangeOwnerMessage : public NetworkSimpleObject
-{
-	// object which owner changes
-	NetworkId object;
-	// DirectX ID of new owner
-	int owner;
+#define CHANGE_OWNER_MSG(XX) \
+	XX(int, creator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of object, which owner is changing"), IdxTransfer) \
+	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID of object, which owner is changing"), IdxTransfer) \
+	XX(int, owner, NDTInteger, NCTNone, DEFVALUE(int, AI_PLAYER), DOC_MSG("Client ID of new owner"), IdxTransfer)
 
-	ChangeOwnerMessage() {owner = AI_PLAYER;}
-	ChangeOwnerMessage(NetworkId obj, int ow) {object = obj; owner = ow;}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTChangeOwner;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(ChangeOwner, CHANGE_OWNER_MSG)
 
-// Message sent to clients to play sound
-struct PlaySoundMessage : public NetworkSimpleObject
-{
-	// name of sound file
-	RString name;
-	// position source position
-	Vector3 position;
-	// speed source speed
-	Vector3 speed;
-	// volume sound volume
-	float volume;
-	// freq sound frequency
-	float freq;
-	// unique id of client where sound originate
-	int creator;
-	// unique id of sound on client where sound originate
-	int soundId;
-	
-	PlaySoundMessage() {}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTPlaySound;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define PLAY_SOUND_MSG(XX) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Sound identifier"), IdxTransfer) \
+	XX(Vector3, position, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Sound source position"), IdxTransfer) \
+	XX(Vector3, speed, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Sound source speed"), IdxTransfer) \
+	XX(float, volume, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Sound volume"), IdxTransfer) \
+	XX(float, freq, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Sound pitch"), IdxTransfer) \
+	XX(int, creator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Unique network ID of sound"), IdxTransfer) \
+	XX(int, soundId, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unique network ID of sound"), IdxTransfer)
 
-// Message sent to clients to change state of played sound
-struct SoundStateMessage : public NetworkSimpleObject
-{
-	// new state of sound
-	SoundStateType state;
-	// unique id of client where sound originate
-	int creator;
-	// unique id of sound on client where sound originate
-	int soundId;
+DECLARE_NET_MESSAGE(PlaySound, PLAY_SOUND_MSG)
 
-	SoundStateMessage() {}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTSoundState;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define SOUND_STATE_MSG(XX) \
+	XX(int, state, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("New state of sound"), IdxTransfer) \
+	XX(int, creator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Network ID of sound"), IdxTransfer) \
+	XX(int, soundId, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Network ID of sound"), IdxTransfer)
 
-// Message announcing destroying of network object
-struct DeleteObjectMessage : public NetworkSimpleObject
-{
-	// object to destroy
-	NetworkId object;
+DECLARE_NET_MESSAGE(SoundState, SOUND_STATE_MSG)
 
-	DeleteObjectMessage() {}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTDeleteObject;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define DELETE_OBJECT_MSG(XX) \
+	XX(int, creator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Id of object to destroy"), IdxTransfer) \
+	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Id of object to destroy"), IdxTransfer)
 
-// Message announcing destroying of command
-struct DeleteCommandMessage : public NetworkSimpleObject
-{
-	// command to destroy
-	NetworkId object;
-	// subgroup that owns command
-	AISubgroup *subgrp;
-	// index of command in subgroup
-	int index;
+DECLARE_NET_MESSAGE(DeleteObject, DELETE_OBJECT_MSG)
 
-	DeleteCommandMessage() {subgrp = nullptr; index = -1;}
-	DeleteCommandMessage(AISubgroup *s, int i, NetworkId obj) {subgrp = s; index = i; object = obj;}
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTDeleteCommand;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define DELETE_COMMAND_MSG(XX) \
+	XX(int, creator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Id of command to destroy"), IdxTransfer) \
+	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Id of command to destroy"), IdxTransfer) \
+	XX(OLink<AISubgroup>, subgrp, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Subgroup that owns command"), IdxTransferRef) \
+	XX(int, index, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Index of command in subgroup"), IdxTransfer)
 
-// Message for ask object owner for damage of object
-struct AskForDammageMessage : public NetworkSimpleObject
-{
-	// damaged object
-	Object *who;
-	// who is responsible for damage
-	EntityAI *owner;
-	// position of damage
-	Vector3 modelPos;
-	// amount of damage
-	float val;
-	// range of damage
-	float valRange;
-	// ammunition type
-	RString ammo;
+DECLARE_NET_MESSAGE(DeleteCommand, DELETE_COMMAND_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForDammage;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ASK_FOR_DAMMAGE_MSG(XX) \
+	XX(OLink<Object>, who, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Damaged object"), IdxTransferRef) \
+	XX(OLink<EntityAI>, owner, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is responsible for damage"), IdxTransferRef) \
+	XX(Vector3, modelPos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Position of damage"), IdxTransfer) \
+	XX(float, val, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Amount of damage"), IdxTransfer) \
+	XX(float, valRange, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Range of damage"), IdxTransfer) \
+	XX(RString, ammo, NDTString, NCTNone, DEFVALUE(RString, RString()), DOC_MSG("Ammunition type"), IdxTransfer)
 
-// Message for ask object owner for set of total damage of object
-struct AskForSetDammageMessage : public NetworkSimpleObject
-{
-	// damaged object
-	Object *who;
-	// new value of total damage
-	float dammage;
+DECLARE_NET_MESSAGE(AskForDammage, ASK_FOR_DAMMAGE_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForSetDammage;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ASK_FOR_SET_DAMMAGE_MSG(XX) \
+	XX(OLink<Object>, who, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Damaged object"), IdxTransferRef) \
+	XX(float, dammage, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("New value of total damage"), IdxTransfer)
 
-// Message for ask vehicle owner for get in person
-struct AskForGetInMessage : public NetworkSimpleObject
-{
-	// who is getting in
-	Person *soldier;
-	// vehicle to get in
-	Transport *vehicle;
-	// position in vehicle to get in
-	GetInPosition position;
+DECLARE_NET_MESSAGE(AskForSetDammage, ASK_FOR_SET_DAMMAGE_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForGetIn;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ASK_FOR_GET_IN_MSG(XX) \
+	XX(OLink<Person>, soldier, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is getting in"), IdxTransferRef) \
+	XX(OLink<Transport>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle to get in"), IdxTransferRef) \
+	XX(int, position, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Position in vehicle to get in"), IdxTransfer)
 
-// Message for ask vehicle owner for get out person
-struct AskForGetOutMessage : public NetworkSimpleObject
-{
-	// who is getting out
-	Person *soldier;
-	// vehicle to get out
-	Transport *vehicle;
-	// parachute or plain ejection
-	bool parachute;
+DECLARE_NET_MESSAGE(AskForGetIn, ASK_FOR_GET_IN_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForGetOut;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ASK_FOR_GET_OUT_MSG(XX) \
+	XX(OLink<Person>, soldier, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is getting out"), IdxTransferRef) \
+	XX(OLink<Transport>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle to get out"), IdxTransferRef) \
+	XX(bool, parachute, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Parachute or plain ejection"), IdxTransfer)
 
-// Message for ask vehicle owner for change person position
-struct AskForChangePositionMessage : public NetworkSimpleObject
-{
-	// who is changing position
-	Person *soldier;
-	// vehicle where position is changed
-	Transport *vehicle;
-	// performed action
-	UIActionType type;
+DECLARE_NET_MESSAGE(AskForGetOut, ASK_FOR_GET_OUT_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForChangePosition;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ASK_FOR_CHANGE_POSITION_MSG(XX) \
+	XX(OLink<Person>, soldier, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is changing position"), IdxTransferRef) \
+	XX(OLink<Transport>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle where position is changed"), IdxTransferRef) \
+	XX(int, type, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ATMoveToDriver), DOC_MSG("Performed action"), IdxTransfer)
 
-// Message for ask vehicle owner for aim weapon
-struct AskForAimWeaponMessage : public NetworkSimpleObject
-{
-	// vehicle which weapon is aiming
-	EntityAI *vehicle;
-	// aiming weapon index
-	int weapon;
-	// direction to aim
-	Vector3 dir;
+DECLARE_NET_MESSAGE(AskForChangePosition, ASK_FOR_CHANGE_POSITION_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForAimWeapon;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ASK_FOR_AIM_WEAPON_MSG(XX) \
+	XX(OLink<EntityAI>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which weapon is aiming"), IdxTransferRef) \
+	XX(int, weapon, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Aiming weapon index"), IdxTransfer) \
+	XX(Vector3, dir, NDTVector, NCTNone, DEFVALUE(Vector3, VForward), DOC_MSG("Direction to aim"), IdxTransfer)
 
-// Message for ask vehicle owner for aim observer turret
-struct AskForAimObserverMessage : public NetworkSimpleObject
-{
-	// vehicle which turret is aiming
-	EntityAI *vehicle;
-	// direction to aim
-	Vector3 dir;
+DECLARE_NET_MESSAGE(AskForAimWeapon, ASK_FOR_AIM_WEAPON_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForAimObserver;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ASK_FOR_AIM_OBSERVER_MSG(XX) \
+	XX(OLink<EntityAI>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which turret is aiming"), IdxTransferRef) \
+	XX(Vector3, dir, NDTVector, NCTNone, DEFVALUE(Vector3, VForward), DOC_MSG("Direction to aim"), IdxTransfer)
 
-// Message for ask vehicle owner for select weapon
-struct AskForSelectWeaponMessage : public NetworkSimpleObject
-{
-	// vehicle which weapon is selecting
-	EntityAI *vehicle;
-	// selected weapon index
-	int weapon;
+DECLARE_NET_MESSAGE(AskForAimObserver, ASK_FOR_AIM_OBSERVER_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForSelectWeapon;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ASK_FOR_SELECT_WEAPON_MSG(XX) \
+	XX(OLink<EntityAI>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which weapon is selecting"), IdxTransferRef) \
+	XX(int, weapon, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Selected weapon index"), IdxTransfer)
 
-// Message for ask vehicle owner for change ammo state
-struct AskForAmmoMessage : public NetworkSimpleObject
-{
-	// vehicle which ammo is changing
-	EntityAI *vehicle;
-	// weapon index
-	int weapon;
-	// amount of ammo to decrease
-	int burst;
+DECLARE_NET_MESSAGE(AskForSelectWeapon, ASK_FOR_SELECT_WEAPON_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForAmmo;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ASK_FOR_AMMO_MSG(XX) \
+	XX(OLink<EntityAI>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle which ammo is changing"), IdxTransferRef) \
+	XX(int, weapon, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Weapon index"), IdxTransfer) \
+	XX(int, burst, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 1), DOC_MSG("Amount of ammo to decrease"), IdxTransfer)
 
-// Message for ask vehicle owner for add impulse
-struct AskForAddImpulseMessage : public NetworkSimpleObject
-{
-	// vehicle impulse is applied to
-	Vehicle *vehicle;
-	// applied force
-	Vector3 force;
-	// applied torque
-	Vector3 torque;
+DECLARE_NET_MESSAGE(AskForAmmo, ASK_FOR_AMMO_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForAddImpulse;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ASK_FOR_ADD_IMPULSE_MSG(XX) \
+	XX(OLink<Vehicle>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle impulse is applied to"), IdxTransferRef) \
+	XX(Vector3, force, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Applied force"), IdxTransfer) \
+	XX(Vector3, torque, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Applied torque"), IdxTransfer)
 
-// Message for ask object owner for move object
-struct AskForMoveVectorMessage : public NetworkSimpleObject
-{
-	// moving object
-	Object *vehicle;
-	// new position
-	Vector3 pos;
+DECLARE_NET_MESSAGE(AskForAddImpulse, ASK_FOR_ADD_IMPULSE_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForMoveVector;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ASK_FOR_MOVE_VECTOR_MSG(XX) \
+	XX(OLink<Object>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Moving object"), IdxTransferRef) \
+	XX(Vector3, pos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("New position"), IdxTransfer)
 
-// Message for ask object owner for move object
-struct AskForMoveMatrixMessage : public NetworkSimpleObject
-{
-	// moving object
-	Object *vehicle;
-	// new position
-	Vector3 pos;
-	// new orientation
-	Matrix3 orient;
+DECLARE_NET_MESSAGE(AskForMoveVector, ASK_FOR_MOVE_VECTOR_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForMoveMatrix;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ASK_FOR_MOVE_MATRIX_MSG(XX) \
+	XX(OLink<Object>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Moving object"), IdxTransferRef) \
+	XX(Vector3, pos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("New position"), IdxTransfer) \
+	XX(Matrix3, orient, NDTMatrix, NCTNone, DEFVALUE(Matrix3, M3Identity), DOC_MSG("New orientation"), IdxTransfer)
 
-// Message for ask group owner for join other group
-struct AskForJoinGroupMessage : public NetworkSimpleObject
-{
-	// joined group
-	AIGroup *join;
-	// joining group
-	AIGroup *group;
+DECLARE_NET_MESSAGE(AskForMoveMatrix, ASK_FOR_MOVE_MATRIX_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForJoinGroup;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ASK_FOR_JOIN_GROUP_MSG(XX) \
+	XX(OLink<AIGroup>, join, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Joined group"), IdxTransferRef) \
+	XX(OLink<AIGroup>, group, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Joining group"), IdxTransferRef)
 
-// Message for ask group owner for join other units
-struct AskForJoinUnitsMessage : public NetworkSimpleObject
-{
-	// joined group
-	AIGroup *join;
-	// joining units
-	OLinkArray<AIUnit> units;
+DECLARE_NET_MESSAGE(AskForJoinGroup, ASK_FOR_JOIN_GROUP_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForJoinUnits;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ASK_FOR_JOIN_UNITS_MSG(XX) \
+	XX(OLink<AIGroup>, join, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Joined group"), IdxTransferRef) \
+	XX(OLinkArray<AIUnit>, units, NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("Joining units"), IdxTransferRefs)
 
-// Message for ask person owner for hide body
-struct AskForHideBodyMessage : public NetworkSimpleObject
-{
-	// body to hide
-	Person *vehicle;
+DECLARE_NET_MESSAGE(AskForJoinUnits, ASK_FOR_JOIN_UNITS_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskForHideBody;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ASK_FOR_HIDE_BODY_MSG(XX) \
+	XX(OLink<Person>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Body to hide"), IdxTransferRef)
 
-// Message for transfer explosion effects (explosion, smoke, etc.) to other clients
-struct ExplosionDammageEffectsMessage : public NetworkSimpleObject
-{
-	// shot owner (who is responsible for explosion)
-	EntityAI *owner;
-	// shot
-	Shot *shot;
-	// hitted object
-	Object *directHit;
-	// explosion position
-	Vector3 pos;
-	// explosion direction
-	Vector3 dir;
-	// ammunition
-	RString type;
-	// some enemy was damaged
-	bool enemyDammage;
+DECLARE_NET_MESSAGE(AskForHideBody, ASK_FOR_HIDE_BODY_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTExplosionDammageEffects;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define EXPLOSION_DAMMAGE_EFFECTS_MSG(XX) \
+	XX(OLink<EntityAI>, owner, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Shot owner (who is responsible for explosion"), IdxTransferRef) \
+	XX(OLink<Shot>, shot, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Shot"), IdxTransferRef) \
+	XX(OLink<Object>, directHit, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Hitted object"), IdxTransferRef) \
+	XX(Vector3, pos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Explosion position"), IdxTransfer) \
+	XX(Vector3, dir, NDTVector, NCTNone, DEFVALUE(Vector3, VForward), DOC_MSG("Explosion direction"), IdxTransfer) \
+	XX(RString, type, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Ammunition type"), IdxTransfer) \
+	XX(bool, enemyDammage, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Some enemy was damaged"), IdxTransfer)
 
-// Message for transfer fire effects (sound, fire, smoke, recoil effect, etc.) to other clients
-struct FireWeaponMessage : public NetworkSimpleObject
-{
-	// firing vehicle
-	EntityAI *vehicle;
-	// aimed target
-	EntityAI *target;
-	// firing weapon index
-	int weapon;
-	// fired magazine id
-	int magazineCreator;
-	// fired magazine id
-	int magazineId;
+DECLARE_NET_MESSAGE(ExplosionDammageEffects, EXPLOSION_DAMMAGE_EFFECTS_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTFireWeapon;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define FIRE_WEAPON_MSG(XX) \
+	XX(OLink<EntityAI>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Firing vehicle"), IdxTransferRef) \
+	XX(OLink<EntityAI>, target, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Aimed target"), IdxTransferRef) \
+	XX(int, weapon, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Firing weapon index"), IdxTransfer) \
+	XX(int, magazineCreator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Fired magazine id"), IdxTransfer) \
+	XX(int, magazineId, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Fired magazine id"), IdxTransfer)
 
-// Message for ask vehicle to add weapon into cargo
-struct AddWeaponCargoMessage : public NetworkSimpleObject
-{
-	// asked vehicle
-	VehicleSupply *vehicle;
-	// name of weapon type to add
-	RString weapon;
+DECLARE_NET_MESSAGE(FireWeapon, FIRE_WEAPON_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAddWeaponCargo;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ADD_WEAPON_CARGO_MSG(XX) \
+	XX(OLink<VehicleSupply>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Asked vehicle"), IdxTransferRef) \
+	XX(RString, weapon, NDTString, NCTDefault, DEFVALUE(RString, ""), DOC_MSG("Name of weapon type to add"), IdxTransfer)
 
-// Message for ask vehicle to remove weapon from cargo
-struct RemoveWeaponCargoMessage : public NetworkSimpleObject
-{
-	// asked vehicle
-	VehicleSupply *vehicle;
-	// name of weapon type to remove
-	RString weapon;
+DECLARE_NET_MESSAGE(AddWeaponCargo, ADD_WEAPON_CARGO_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTRemoveWeaponCargo;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define REMOVE_WEAPON_CARGO_MSG(XX) \
+	XX(OLink<VehicleSupply>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Asked vehicle"), IdxTransferRef) \
+	XX(RString, weapon, NDTString, NCTDefault, DEFVALUE(RString, ""), DOC_MSG("Name of weapon type to remove"), IdxTransfer)
 
-// Message for ask vehicle to add magazine into cargo
-struct AddMagazineCargoMessage : public NetworkSimpleObject
-{
-	// asked vehicle
-	VehicleSupply *vehicle;
-	// magazine to add
-	Ref<Magazine> magazine;
+DECLARE_NET_MESSAGE(RemoveWeaponCargo, REMOVE_WEAPON_CARGO_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAddMagazineCargo;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define ADD_MAGAZINE_CARGO_MSG(XX) \
+	XX(OLink<VehicleSupply>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Asked vehicle"), IdxTransferRef) \
+	XX(Ref<Magazine>, magazine, NDTObject, NCTNone, DEFVALUE_MSG(NMTMagazine), DOC_MSG("Magazine to add"), IdxTransferContent)
 
-// Message for ask vehicle to remove magazine from cargo
-struct RemoveMagazineCargoMessage : public NetworkSimpleObject
-{
-	// asked vehicle
-	VehicleSupply *vehicle;
-	// id of magazine to remove
-	int creator;
-	// id of magazine to remove
-	int id;
+DECLARE_NET_MESSAGE(AddMagazineCargo, ADD_MAGAZINE_CARGO_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTRemoveMagazineCargo;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define REMOVE_MAGAZINE_CARGO_MSG(XX) \
+	XX(OLink<VehicleSupply>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Asked vehicle"), IdxTransferRef) \
+	XX(int, creator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of magazine to remove"), IdxTransfer) \
+	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID of magazine to remove"), IdxTransfer)
+
+DECLARE_NET_MESSAGE(RemoveMagazineCargo, REMOVE_MAGAZINE_CARGO_MSG)
 
 // Message is sent to update of weapons to vehicle owner
 struct UpdateWeaponsMessage : public NetworkSimpleObject
@@ -991,178 +561,87 @@ struct UpdateWeaponsMessage : public NetworkSimpleObject
 	TMError TransferMsg(NetworkMessageContext &ctx) override;
 };
 
-// Message for transfer message who is responsible to destroy vehicle to other clients
-struct VehicleDestroyedMessage : public NetworkSimpleObject
-{
-	// destroyed vehicle
-	EntityAI *killed;
-	// who is responsible for destroying
-	EntityAI *killer;
+#define VEHICLE_DESTROYED_MSG(XX) \
+	XX(OLink<EntityAI>, killed, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Destroyed vehicle"), IdxTransferRef) \
+	XX(OLink<EntityAI>, killer, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Who is responsible for destroying"), IdxTransferRef)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTVehicleDestroyed;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(VehicleDestroyed, VEHICLE_DESTROYED_MSG)
 
-// Message for transfer info about (user made) marker was deleted to other clients
-struct MarkerDeleteMessage : public NetworkSimpleObject
-{
-	// name of marker
-	RString name;
+#define MARKER_DELETE_MSG(XX) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Name of marker"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTMarkerDelete;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(MarkerDelete, MARKER_DELETE_MSG)
 
-// Message for transfer info about (user made) marker creation to other clients
-struct MarkerCreateMessage : public NetworkSimpleObject
-{
-	// chat channel (who will see the marker)
-	int channel;
-	// sender unit
-	AIUnit *sender;
-	// receiving units
-	RefArray<NetworkObject> units;
-	// marker itself
-	ArcadeMarkerInfo marker;
+#define MARKER_CREATE_MSG(XX) \
+	XX(int, channel, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Chat channel (who will see the marker)"), IdxTransfer) \
+	XX(OLink<AIUnit>, sender, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Sender unit"), IdxTransferRef) \
+	XX(RefArray<NetworkObject>, units, NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("List of receiving units"), IdxTransferRefs) \
+	XX(ArcadeMarkerInfo, marker, NDTObject, NCTNone, DEFVALUE_MSG(NMTMarker), DOC_MSG("Marker object to create"), IdxTransferObject)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTMarkerCreate;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(MarkerCreate, MARKER_CREATE_MSG)
 
-// Message for transfer file to other clients
-struct TransferFileMessage : public NetworkSimpleObject
-{
-	// destination file path
-	RString path;
-	// segment of file content
-	AutoArray<char> data;
+#define TRANSFER_FILE_MSG(XX) \
+	XX(RString, path, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Path of transferred file"), IdxTransfer) \
+	XX(AutoArray<char>, data, NDTRawData, NCTNone, DEFVALUERAWDATA, DOC_MSG("Content of file (single segment)"), IdxTransfer) \
+	XX(int, totSize, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Total size of file"), IdxTransfer) \
+	XX(int, offset, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Offset of this segment"), IdxTransfer) \
+	XX(int, totSegments, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 1), DOC_MSG("Total number of segments"), IdxTransfer) \
+	XX(int, curSegment, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Index of this segment"), IdxTransfer)
 
-	// total size of file
-	int totSize;
-	// offset of segment in file
-	int offset;
+DECLARE_NET_MESSAGE(TransferFile, TRANSFER_FILE_MSG)
 
-	// total count of segments
-	int totSegments;
-	// index of segment
-	int curSegment;
-
-/*
-	// date and time of last file modification
-	int timeL;
-	int timeH;
-*/
-
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTTransferFile;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define TRANSFER_MISSION_FILE_MSG(XX)
 
 // Message for transfer mission pbo file to other clients
 struct TransferMissionFileMessage : public TransferFileMessage
 {
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTTransferMissionFile;}
+	DECLARE_DEFINE_NETWORK_OBJECT_SIMPLE(TransferMissionFile)
 };
+
+DECLARE_NET_INDICES_EX(TransferMissionFile, TransferFile, TRANSFER_MISSION_FILE_MSG)
+
+#define TRANSFER_FILE_TO_SERVER_MSG(XX)
 
 // Message for transfer file to server
 struct TransferFileToServerMessage : public TransferFileMessage
 {
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTTransferFileToServer;}
+	DECLARE_DEFINE_NETWORK_OBJECT_SIMPLE(TransferFileToServer)
 };
 
-// Message sent to server to answer if mission pbo file on client is actual (valid)
-struct AskMissionFileMessage : public NetworkSimpleObject
-{
-	// if mission file is actual (valid)
-	bool valid;
+DECLARE_NET_INDICES_EX(TransferFileToServer, TransferFile, TRANSFER_MISSION_FILE_MSG)
 
-	AskMissionFileMessage() {valid = false;}
-	AskMissionFileMessage(bool v) {valid = v;}
+#define ASK_MISSION_FILE_MSG(XX) \
+	XX(bool, valid, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Mission file is valid (present on client computer)"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTAskMissionFile;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(AskMissionFile, ASK_MISSION_FILE_MSG)
 
-// Message for ask flag (carrier) owner for assign new owner
-struct SetFlagOwnerMessage : public NetworkSimpleObject
-{
-	// new owner
-	Person *owner;
-	// flag carrier
-	EntityAI *carrier;
+#define SET_FLAG_OWNER_MSG(XX) \
+	XX(OLink<Person>, owner, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Flag owner"), IdxTransferRef) \
+	XX(OLink<EntityAI>, carrier, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Flag carrier"), IdxTransferRef)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTSetFlagOwner;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(SetFlagOwner, SET_FLAG_OWNER_MSG)
+
+#define SET_FLAG_CARRIER_MSG(XX)
 
 // Message for ask client owns flag owner for change of flag ownership
 struct SetFlagCarrierMessage : public SetFlagOwnerMessage
 {
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTSetFlagCarrier;}
+	DECLARE_DEFINE_NETWORK_OBJECT_SIMPLE(SetFlagCarrier)
 };
 
-// Message for ask person owner for show target
-struct ShowTargetMessage : public NetworkSimpleObject
-{
-	// player person
-	Person *vehicle;
-	// target to show
-	TargetType *target;
+DECLARE_NET_INDICES_EX(SetFlagCarrier, SetFlagOwner, SET_FLAG_CARRIER_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTShowTarget;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define SHOW_TARGET_MSG(XX) \
+	XX(OLink<Person>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Player person"), IdxTransferRef) \
+	XX(OLink<TargetType>, target, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Target to show"), IdxTransferRef)
 
-// Message for ask person owner for show group direction
-struct ShowGroupDirMessage : public NetworkSimpleObject
-{
-	// player person
-	Person *vehicle;
-	// direction to show
-	Vector3 dir;
+DECLARE_NET_MESSAGE(ShowTarget, SHOW_TARGET_MSG)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTShowGroupDir;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+#define SHOW_GROUP_DIR_MSG(XX) \
+	XX(OLink<Person>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Player person"), IdxTransferRef) \
+	XX(Vector3, dir, NDTVector, NCTNone, DEFVALUE(Vector3, VForward), DOC_MSG("Direction to show"), IdxTransfer)
+
+DECLARE_NET_MESSAGE(ShowGroupDir, SHOW_GROUP_DIR_MSG)
 
 // Single message in agregated message
 struct NetworkMessageQueueItem
