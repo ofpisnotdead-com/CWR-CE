@@ -575,6 +575,7 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
             }
             else
             {
+                LOG_WARN(Network, "[squad] logo missing for transfer '{}'", (const char*)src);
                 src = "";
             }
         }

@@ -698,6 +698,8 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             TransferFileMessage transfer;
             transfer.TransferMsg(ctx);
+            const size_t maxTransferSize =
+                Poseidon::NetworkTransferredAssetMaxSize(transfer.path, static_cast<size_t>(MaxCustomFileSize));
             if (!Poseidon::ShouldAcceptNetworkTransferredAsset(transfer.path, static_cast<size_t>(transfer.totSize),
                                                                static_cast<size_t>(MaxCustomFileSize)))
             {
@@ -708,7 +710,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 else
                 {
                     LOG_WARN(Network, "[NMTTransferFile] rejected oversized custom asset '{}' ({} B > {} B)",
-                             (const char*)transfer.path, transfer.totSize, MaxCustomFileSize);
+                             (const char*)transfer.path, transfer.totSize, maxTransferSize);
                 }
                 break;
             }

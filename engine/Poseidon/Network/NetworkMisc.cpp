@@ -250,6 +250,7 @@ static DWORD WINAPI DownloadToMemThread(void* context)
 {
     DownloadToMemContext* c = (DownloadToMemContext*)context;
     c->result = DownloadFile(c->url, *c->size, c->proxy, c->maxSize);
+    c->done.store(true, std::memory_order_release);
     c->event->Set();
     return 0;
 }
@@ -259,6 +260,7 @@ static DWORD WINAPI DownloadToFileThread(void* context)
 {
     DownloadToFileContext* c = (DownloadToFileContext*)context;
     c->result = DownloadFile(c->url, c->file, c->proxy, c->maxSize);
+    c->done.store(true, std::memory_order_release);
     c->event->Set();
     return 0;
 }
@@ -347,6 +349,7 @@ void CheckSquadObject::StartDownloadingXMLSource()
     _squadContext.proxy = _proxy.GetLength() > 0 ? (const char*)_proxy : nullptr;
     _squadContext.maxSize = Poseidon::NetworkSquadFileMaxSize;
     _squadContext.result.Free();
+    _squadContext.done.store(false, std::memory_order_release);
     DownloadToMemOverlapped(&_squadContext);
 }
 
@@ -372,6 +375,7 @@ void CheckSquadObject::StartDownloadingLogo()
         _logoContext.event = &_stateDone;
         _logoContext.proxy = _proxy.GetLength() > 0 ? (const char*)_proxy : nullptr;
         _logoContext.maxSize = Poseidon::NetworkSquadFileMaxSize;
+        _logoContext.done.store(false, std::memory_order_release);
         DownloadToFileOverlapped(&_logoContext);
         // download result ignored?
     }
@@ -384,7 +388,12 @@ void CheckSquadObject::StartDownloadingLogo()
 
 bool CheckSquadObject::IsDone()
 {
+#ifdef _WIN32
     if (!_stateDone.TryWait())
+#else
+    if ((_state == DownloadingSquad && !_squadContext.done.load(std::memory_order_acquire)) ||
+        (_state == DownloadingLogo && !_logoContext.done.load(std::memory_order_acquire)))
+#endif
     {
         return false;
     }
@@ -424,6 +433,7 @@ bool CheckSquadObject::DoProcessXML()
 
     if (!_squadXMLData || _squadXMLSize <= 0)
     {
+        LOG_WARN(Network, "[squad] XML empty for '{}'", (const char*)_identity.squadId);
         return false;
     }
 
@@ -432,12 +442,15 @@ bool CheckSquadObject::DoProcessXML()
 
     if (!parser.Parse(in))
     {
+        LOG_WARN(Network, "[squad] XML parse failed for '{}'", (const char*)_identity.squadId);
         return false;
     }
     _squadXMLData.Free();
 
     if (!parser.Found())
     {
+        LOG_WARN(Network, "[squad] XML has no matching member for '{}' id={}", (const char*)_identity.name,
+                 (const char*)_identity.id);
         return false;
     }
 
@@ -453,6 +466,8 @@ bool CheckSquadObject::DoProcessXML()
         _logoUrl = Poseidon::BuildNetworkSquadPictureDownloadUrl(_squad->id, _squad->picture);
         if (_logoUrl.GetLength() == 0)
         {
+            LOG_WARN(Network, "[squad] rejected logo URL for squad='{}' picture='{}'", (const char*)_squad->nick,
+                     (const char*)_squad->picture);
             _squad->picture = RString();
             return true;
         }

@@ -4,6 +4,8 @@
 #include <Poseidon/Network/IpBan.hpp>
 #include <Poseidon/Network/NetworkServerAuth.hpp>
 
+#include <atomic>
+
 // Info about single type of update of network object
 struct NetworkCurrentInfo
 {
@@ -289,6 +291,7 @@ struct DownloadToFileContext
     Poseidon::Foundation::Event* event; // in: event that should be signalled when download terminated
     const char* proxy;                  // in: address of proxy server
     size_t maxSize;                     // in: optional maximum downloaded bytes, 0 means unlimited
+    std::atomic_bool done{false};       // out: true when download terminated
 };
 
 // context structure for DownloadToMem function
@@ -301,6 +304,7 @@ struct DownloadToMemContext
     Poseidon::Foundation::Event* event; // in: event that should be signalled when download terminated
     const char* proxy;                  // in: address of proxy server
     size_t maxSize;                     // in: optional maximum downloaded bytes, 0 means unlimited
+    std::atomic_bool done{false};       // out: true when download terminated
 };
 
 // Single vote in votings

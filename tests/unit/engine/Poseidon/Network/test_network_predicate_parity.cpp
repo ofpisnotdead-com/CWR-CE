@@ -241,6 +241,12 @@ TEST_CASE("Transferred custom asset paths are confined to expected temp namespac
     REQUIRE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/players/42/face.jpg"), 128 * 1024, 128 * 1024));
     REQUIRE_FALSE(
         Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/players/42/face.jpg"), 128 * 1024 + 1, 128 * 1024));
+    REQUIRE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/squads/SQTAG/logo.paa"), 128 * 1024 + 1,
+                                                          128 * 1024));
+    REQUIRE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/squads/SQTAG/logo.paa"),
+                                                          Poseidon::NetworkSquadFileMaxSize, 128 * 1024));
+    REQUIRE_FALSE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/squads/SQTAG/logo.paa"),
+                                                                Poseidon::NetworkSquadFileMaxSize + 1, 128 * 1024));
     REQUIRE_FALSE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("../outside.bin"), 1, 128 * 1024));
 
     REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/face.jpg")));

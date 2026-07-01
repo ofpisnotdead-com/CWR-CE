@@ -454,9 +454,23 @@ inline bool IsSafeNetworkTransferredAssetPath(const RString& path)
     return false;
 }
 
+inline bool IsNetworkSquadTransferredAssetPath(const RString& path)
+{
+    const char* data = path;
+    const char squadPrefix[] = "tmp/squads/";
+    const int squadPrefixLen = static_cast<int>(sizeof(squadPrefix) - 1);
+    return strncmp(data, squadPrefix, squadPrefixLen) == 0 && IsSafeNetworkTransferredAssetPath(path);
+}
+
+inline size_t NetworkTransferredAssetMaxSize(const RString& path, size_t maxCustomFileSize)
+{
+    return IsNetworkSquadTransferredAssetPath(path) ? NetworkSquadFileMaxSize : maxCustomFileSize;
+}
+
 inline bool ShouldAcceptNetworkTransferredAsset(const RString& path, size_t size, size_t maxSize)
 {
-    return IsSafeNetworkTransferredAssetPath(path) && IsNetworkTransferredAssetSizeAllowed(size, maxSize);
+    return IsSafeNetworkTransferredAssetPath(path) &&
+           IsNetworkTransferredAssetSizeAllowed(size, NetworkTransferredAssetMaxSize(path, maxSize));
 }
 
 inline bool IsSafeNetworkServerPlayerUploadPath(const RString& path, const RString& serverTmpDir, int playerId)
