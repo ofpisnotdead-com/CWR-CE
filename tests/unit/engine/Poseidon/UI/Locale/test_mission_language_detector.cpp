@@ -2,6 +2,7 @@
 #include <Poseidon/UI/Locale/MissionHtmlLocalization.hpp>
 #include <Poseidon/UI/Locale/MissionLanguageDetector.hpp>
 #include <Poseidon/UI/Locale/SupportedLanguages.hpp>
+#include <Poseidon/Game/Mission/MissionTemplateCatalog.hpp>
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
 #include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -23,6 +24,9 @@ using Poseidon::LocalizeString;
 using Poseidon::FindLocalizedMissionHtmlFile;
 using Poseidon::GetLanguage;
 using Poseidon::GetMissionStringtableFileForHtml;
+using Poseidon::ListMissionTemplates;
+using Poseidon::MissionTemplateEntry;
+using Poseidon::ResolveMissionTemplateDisplayName;
 using Poseidon::LoadLocalizedMissionHtmlUtf8;
 using Poseidon::LoadStringtable;
 using Poseidon::SetLanguage;
@@ -312,6 +316,49 @@ TEST_CASE("mission briefing name reload uses raw sqm token after language switch
 
     SetLanguage("Czech");
     CHECK(LoadLocalizedMissionBriefingName(root.string().c_str(), "fallback") == RString("Přepadení (Demo)"));
+}
+
+TEST_CASE("mission template display name follows mission-local stringtable language",
+          "[ui][missions][languages][templates]")
+{
+    const std::filesystem::path root = HtmlStringtableFixtureMissionPath();
+    LoadFixtureMissionStringtable(root);
+
+    SetLanguage("English");
+    CHECK(ResolveMissionTemplateDisplayName(root.string().c_str(), "HtmlStringtable") == RString("Ambush (Demo)"));
+
+    SetLanguage("Czech");
+    CHECK(ResolveMissionTemplateDisplayName(root.string().c_str(), "HtmlStringtable") == RString("Přepadení (Demo)"));
+
+    SetLanguage("English");
+}
+
+TEST_CASE("mission template catalog lists matching directories before banks", "[ui][missions][templates]")
+{
+    const auto uniqueId = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / ("ofpr-template-catalog-" + uniqueId);
+    std::filesystem::create_directories(root / "Templates" / "DirectoryMission.Eden");
+    std::filesystem::create_directories(root / "Templates" / "WrongWorld.Noe");
+    std::ofstream(root / "Templates" / "BankMission.Eden.pbo").put('x');
+    std::ofstream(root / "Templates" / "TextFile.Eden.txt").put('x');
+
+    const std::filesystem::path originalPath = std::filesystem::current_path();
+    std::filesystem::current_path(root);
+
+    AutoArray<MissionTemplateEntry> templates;
+    ListMissionTemplates(templates, true, "Eden");
+
+    std::filesystem::current_path(originalPath);
+    std::filesystem::remove_all(root);
+
+    REQUIRE(templates.Size() == 2);
+    CHECK(templates[0].name == RString("DirectoryMission"));
+    CHECK(templates[0].basePath == RString("Templates\\DirectoryMission.Eden"));
+    CHECK_FALSE(templates[0].bank);
+    CHECK(templates[1].name == RString("BankMission"));
+    CHECK(templates[1].basePath == RString("Templates\\BankMission.Eden"));
+    CHECK(templates[1].bank);
 }
 
 // The campaign-load screen lists missions by their briefingName, but it

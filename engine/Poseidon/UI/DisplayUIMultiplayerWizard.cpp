@@ -14,6 +14,7 @@
 #include <Poseidon/Network/Network.hpp>
 #include <Poseidon/Game/Chat.hpp>
 #include <Poseidon/Audio/DynSound.hpp>
+#include <Poseidon/Game/Mission/MissionTemplateCatalog.hpp>
 #include <Poseidon/UI/Locale/MissionHtmlLocalization.hpp>
 #include <Poseidon/UI/DisplayUI.hpp>
 #include <Poseidon/UI/DisplayUICommon.hpp>
@@ -43,7 +44,6 @@
 #include <Poseidon/Foundation/Types/Pointers.hpp>
 #include <Poseidon/Foundation/platform.hpp>
 #ifdef _WIN32
-#include <io.h>
 #include <direct.h>
 #endif
 #include <sys/stat.h>
@@ -52,6 +52,34 @@ namespace Poseidon
 {
 
 // Multiplayer wizard displays
+
+RString CreateSingleMissionBank(RString filename);
+
+namespace
+{
+
+void AddWizardTemplate(C3DListBox* lbox, const MissionTemplateEntry& templ)
+{
+    RString missionDirectory;
+    if (templ.bank)
+        missionDirectory = CreateSingleMissionBank(templ.basePath);
+    else
+        missionDirectory = templ.basePath + RString("\\");
+
+    int index = lbox->AddString(ResolveMissionTemplateDisplayName(missionDirectory, templ.name));
+    lbox->SetData(index, templ.name);
+    lbox->SetValue(index, templ.bank ? 1 : 0);
+}
+
+void PopulateWizardTemplateList(C3DListBox* lbox, bool multiplayer, RString world)
+{
+    AutoArray<MissionTemplateEntry> templates;
+    ListMissionTemplates(templates, multiplayer, world);
+    for (int i = 0; i < templates.Size(); ++i)
+        AddWizardTemplate(lbox, templates[i]);
+}
+
+} // namespace
 
 DisplayWizardTemplate::DisplayWizardTemplate(ControlsContainer* parent, RString world, bool multiplayer)
     : Display(parent)
@@ -80,77 +108,7 @@ Control* DisplayWizardTemplate::OnCreateCtrl(int type, int idc, const ParamEntry
         case IDC_WIZT_TEMPLATES:
         {
             C3DListBox* lbox = new C3DListBox(this, idc, cls);
-
-            char buffer[256];
-            _finddata_t info;
-
-            // directories
-            if (_multiplayer)
-            {
-                ::sprintf(buffer, "Templates\\*.%s", (const char*)_world);
-            }
-            else
-            {
-                ::sprintf(buffer, "SPTemplates\\*.%s", (const char*)_world);
-            }
-            intptr_t h = _findfirst(buffer, &info);
-            if (h != -1)
-            {
-                do
-                {
-                    if ((info.attrib & _A_SUBDIR) != 0 && info.name[0] != '.')
-                    {
-                        char name[256];
-                        snprintf(name, sizeof(name), "%s", (const char*)info.name);
-                        char* ext = strrchr(name, '.');
-                        if (ext)
-                        {
-                            *ext = 0;
-                        }
-                        int index = lbox->AddString(name);
-                        lbox->SetData(index, name);
-                        lbox->SetValue(index, 0); // directory
-                    }
-                } while (_findnext(h, &info) == 0);
-                _findclose(h);
-            }
-
-            // banks
-            if (_multiplayer)
-            {
-                ::sprintf(buffer, "Templates\\*.%s.pbo", (const char*)_world);
-            }
-            else
-            {
-                ::sprintf(buffer, "SPTemplates\\*.%s.pbo", (const char*)_world);
-            }
-            h = _findfirst(buffer, &info);
-            if (h != -1)
-            {
-                do
-                {
-                    if ((info.attrib & _A_SUBDIR) == 0)
-                    {
-                        char name[256];
-                        snprintf(name, sizeof(name), "%s", (const char*)info.name);
-                        char* ext = strrchr(name, '.');
-                        if (ext)
-                        {
-                            *ext = 0; // pbo
-                        }
-                        ext = strrchr(name, '.');
-                        if (ext)
-                        {
-                            *ext = 0; // world
-                        }
-                        int index = lbox->AddString(name);
-                        lbox->SetData(index, name);
-                        lbox->SetValue(index, 1); // bank
-                    }
-                } while (_findnext(h, &info) == 0);
-                _findclose(h);
-            }
-
+            PopulateWizardTemplateList(lbox, _multiplayer, _world);
             lbox->SetCurSel(0);
             return lbox;
         }
@@ -235,8 +193,6 @@ void DisplayWizardTemplate::OnChildDestroyed(int idd, int exit)
     }
 }
 
-RString CreateSingleMissionBank(RString filename);
-
 void DisplayWizardTemplate::OnTemplateChanged()
 {
     C3DListBox* lbox = dynamic_cast<C3DListBox*>(GetCtrl(IDC_WIZT_TEMPLATES));
@@ -263,27 +219,11 @@ void DisplayWizardTemplate::OnTemplateChanged()
     RString dir;
     if (bank)
     {
-        RString filename;
-        if (_multiplayer)
-        {
-            filename = RString("Templates\\") + t + RString(".") + _world;
-        }
-        else
-        {
-            filename = RString("SPTemplates\\") + t + RString(".") + _world;
-        }
-        dir = CreateSingleMissionBank(filename);
+        dir = CreateSingleMissionBank(GetMissionTemplateBasePath(_multiplayer, t, _world));
     }
     else
     {
-        if (_multiplayer)
-        {
-            dir = RString("Templates\\") + t + RString(".") + _world + RString("\\");
-        }
-        else
-        {
-            dir = RString("SPTemplates\\") + t + RString(".") + _world + RString("\\");
-        }
+        dir = GetMissionTemplateBasePath(_multiplayer, t, _world) + RString("\\");
     }
 
     RString GetOverviewFile(RString dir);
@@ -293,6 +233,25 @@ void DisplayWizardTemplate::OnTemplateChanged()
 
 void DisplayWizardTemplate::RefreshLanguage()
 {
+    C3DListBox* lbox = dynamic_cast<C3DListBox*>(GetCtrl(IDC_WIZT_TEMPLATES));
+    if (lbox)
+    {
+        RString selected;
+        int selection = lbox->GetCurSel();
+        if (selection >= 0)
+            selected = lbox->GetData(selection);
+
+        lbox->ClearStrings();
+        PopulateWizardTemplateList(lbox, _multiplayer, _world);
+        for (int i = 0; i < lbox->GetSize(); ++i)
+        {
+            if (lbox->GetData(i) == selected)
+            {
+                lbox->SetCurSel(i);
+                break;
+            }
+        }
+    }
     OnTemplateChanged();
 }
 
