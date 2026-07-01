@@ -574,6 +574,7 @@ class Object: public NetworkObject, public FrameBase, public IAnimator
 	Vehicle *GetSmoke() const;
 	void SetSmoke( Vehicle *smoke );
 	bool CanSmoke() const {return _canSmoke;}
+	void AddSmokeSource();
 
 	// Check if object geometry should be used for collision testing
 	virtual bool HasGeometry() const;

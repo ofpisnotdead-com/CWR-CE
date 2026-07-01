@@ -2363,6 +2363,30 @@ void NetworkManager::AskForAnimationPhase(Entity* vehicle, RString animation, fl
     }
 }
 
+void NetworkManager::AddSmokeSource(Object* obj)
+{
+    if (_client)
+    {
+        _client->AddSmokeSource(obj);
+    }
+}
+
+void NetworkManager::AskForGunnerHidden(Transport* vehicle, float hidden)
+{
+    if (_client)
+    {
+        _client->AskForGunnerHidden(vehicle, hidden);
+    }
+}
+
+void NetworkManager::AskForCommanderHidden(Transport* vehicle, float hidden)
+{
+    if (_client)
+    {
+        _client->AskForCommanderHidden(vehicle, hidden);
+    }
+}
+
 void NetworkManager::CopyUnitInfo(Person* from, Person* to)
 {
     if (_client)
