@@ -46,19 +46,18 @@ Trident integration, screenshot, and other game-data-backed tests need a local
 and set `OFPR_DATA_DIR` to the Demo game data. The recommended local layout is
 `packages/Demo`; the whole `packages/` tree is ignored by Git.
 
-Build the Trident CLI before running integration tests:
+Build the Rust workspace before running integration tests:
 
 ```sh
-cargo build --manifest-path engine/Trident/Cargo.toml
+cargo build
 ```
 
-The binary is `tri` and lives under `engine/Trident/target/debug/` for the
-default Cargo build. Put that directory on `PATH`, or call the binary by relative
-path:
+The binary is `tri` and lives under `target/debug/` for the default Cargo build.
+Put that directory on `PATH`, or call the binary by relative path:
 
 ```sh
 tri test  -j6 --retries 2 tests/integration
-./engine/Trident/target/debug/tri test -j6 --retries 2 tests/integration
+./target/debug/tri test -j6 --retries 2 tests/integration
 ```
 
-On Windows, use `engine\Trident\target\debug\tri.exe` when calling it directly.
+On Windows, use `target\debug\tri.exe` when calling it directly.

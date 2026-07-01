@@ -361,6 +361,9 @@ fn resolve_master_service_binary(config: &ServiceConfig) -> Result<PathBuf> {
     let root = repo_root();
     let binary_name = format!("papa-bear-master-service{}", std::env::consts::EXE_SUFFIX);
     let candidates = [
+        root.join("target/rwdi").join(&binary_name),
+        root.join("target/debug").join(&binary_name),
+        root.join("target/release").join(&binary_name),
         root.join("mserver/MasterService/target/debug")
             .join(&binary_name),
         root.join("mserver/MasterService/target/release")
@@ -371,7 +374,7 @@ fn resolve_master_service_binary(config: &ServiceConfig) -> Result<PathBuf> {
         .find(|path| path.exists())
         .with_context(|| {
             "papa-bear-master-service was not found; build it with \
-             `cargo build --manifest-path mserver/MasterService/Cargo.toml`"
+             `cargo build --workspace --profile rwdi`"
         })
 }
 

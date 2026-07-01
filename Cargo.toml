@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = [
+    "engine/Trident",
+    "mserver/Archive",
+    "mserver/Client",
+    "mserver/CLI",
+    "mserver/MasterService",
+]
+
+[profile.dbg]
+inherits = "dev"
+
+[profile.rwdi]
+inherits = "release"
+debug = true
+
+[profile.rel]
+inherits = "release"

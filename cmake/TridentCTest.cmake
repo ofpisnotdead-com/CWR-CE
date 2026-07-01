@@ -22,8 +22,9 @@ function(register_trident_integration_ctests)
     elseif(PRESET_NAME MATCHES "(^|-)dbg($|-)" OR PRESET_NAME MATCHES "(^|-)clang($|-)")
         set(_cargo_profile "debug")
     endif()
-    set(_tri_cargo "${CMAKE_SOURCE_DIR}/engine/Trident/target/${_cargo_profile}/${_tri_name}")
-    set(_tri_executables "${_tri_dist};${_tri_cargo}")
+    set(_tri_cargo "${CMAKE_SOURCE_DIR}/target/${_cargo_profile}/${_tri_name}")
+    set(_tri_cargo_legacy "${CMAKE_SOURCE_DIR}/engine/Trident/target/${_cargo_profile}/${_tri_name}")
+    set(_tri_executables "${_tri_dist};${_tri_cargo};${_tri_cargo_legacy}")
 
     set(_integration_roots
         flows

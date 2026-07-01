@@ -29,16 +29,6 @@ tempfile = "3"
 assert_cmd = "2"
 predicates = "3"
 
-[profile.dbg]
-inherits = "dev"
-
-[profile.rwdi]
-inherits = "release"
-debug = true
-
-[profile.rel]
-inherits = "release"
-
 [lints.rust]
 unsafe_code = "deny"
 

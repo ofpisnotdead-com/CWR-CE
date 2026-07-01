@@ -126,9 +126,15 @@ if [ "$SKIP_CARGO" != "1" ] && [ -f "$TRIDENT_DIR/Cargo.toml" ]; then
         echo "error: cargo requested but not available in container" >&2
         exit 1
     fi
-    cargo build --manifest-path "$TRIDENT_DIR/Cargo.toml"
-    if [ -f "$TRIDENT_DIR/target/debug/tri" ]; then
+    if [ -f "$REPO_DIR/Cargo.toml" ]; then
+        cargo build --manifest-path "$REPO_DIR/Cargo.toml"
+        tri_binary="$REPO_DIR/target/debug/tri"
+    else
+        cargo build --manifest-path "$TRIDENT_DIR/Cargo.toml"
+        tri_binary="$TRIDENT_DIR/target/debug/tri"
+    fi
+    if [ -f "$tri_binary" ]; then
         mkdir -p "$DIST_DIR"
-        cp "$TRIDENT_DIR/target/debug/tri" "$DIST_DIR/tri"
+        cp "$tri_binary" "$DIST_DIR/tri"
     fi
 fi

@@ -154,22 +154,16 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            engine/Trident -> target
+            . -> target
 
       - name: Check formatting
-        working-directory: engine/Trident
-        run: cargo fmt -- --check
+        run: cargo fmt --all -- --check
 
       - name: Check clippy
-        working-directory: engine/Trident
-        run: cargo clippy --locked --all-targets
+        run: cargo clippy --locked --workspace --all-targets
 
       - name: Build
-        working-directory: engine/Trident
         run: cargo build --locked
-
-      - name: Build MasterService
-        run: cargo build --locked --manifest-path mserver/MasterService/Cargo.toml
 
       - name: Build metadata
         id: build_metadata
@@ -180,18 +174,17 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.CWR_ARTIFACT_PREFIX }}-Trident-${{ steps.build_metadata.outputs.sha_short }}
-          path: engine/Trident/target/debug/tri
+          path: target/debug/tri
           if-no-files-found: error
 
       - name: Upload MasterService
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.CWR_ARTIFACT_PREFIX }}-MasterService-${{ steps.build_metadata.outputs.sha_short }}
-          path: mserver/MasterService/target/debug/papa-bear-master-service
+          path: target/debug/papa-bear-master-service
           if-no-files-found: error
 
       - name: Test
-        working-directory: engine/Trident
         run: cargo test --locked
 
   trident-test:
