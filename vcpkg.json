@@ -16,6 +16,7 @@
     "libogg",
     "libvorbis",
     "enkits",
+    "sse2neon",
     {
       "name": "imgui",
       "features": ["sdl3-binding", "sdl3-renderer-binding", "opengl3-binding", "freetype"]
