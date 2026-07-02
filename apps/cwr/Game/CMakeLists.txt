@@ -112,6 +112,15 @@ if(POSEIDON_TARGET_IOS)
         MACOSX_PACKAGE_LOCATION "Resources"
     )
 
+    # Settings.bundle: adds the "Reset Game Data on Next Launch" toggle to the
+    # system Settings app. Bundled unconditionally (not gated on
+    # POSEIDON_IOS_BUNDLE_GAME_DATA below) so Clear-Data-via-Settings works in
+    # dev/simulator builds too, not just the distributable configuration.
+    set(POSEIDON_IOS_SETTINGS_BUNDLE "${CMAKE_CURRENT_SOURCE_DIR}/Settings.bundle")
+    set_source_files_properties("${POSEIDON_IOS_SETTINGS_BUNDLE}" PROPERTIES
+        MACOSX_PACKAGE_LOCATION "."
+    )
+
     # iOS executables are always app bundles -- give it a real bundle ID
     # and name so it's installable (CMake leaves these blank by default).
     # Custom Info.plist (vs. CMake's built-in default template) so we can
@@ -129,6 +138,7 @@ if(POSEIDON_TARGET_IOS)
     )
     target_sources(PoseidonGame PRIVATE
         "${POSEIDON_IOS_ASSET_CATALOG}"
+        "${POSEIDON_IOS_SETTINGS_BUNDLE}"
     )
 endif()
 
