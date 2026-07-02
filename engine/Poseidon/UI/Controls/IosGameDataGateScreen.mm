@@ -23,12 +23,13 @@ NSString* FromStdString(const std::string& s)
 }
 } // namespace
 
-@interface PoseidonGameDataGateViewController : UIViewController <UIDocumentPickerDelegate>
+@interface PoseidonGameDataGateViewController : UIViewController <UIDocumentPickerDelegate, UITextFieldDelegate>
 @property(nonatomic, copy) void (^onDataReady)(void);
 @end
 
 @implementation PoseidonGameDataGateViewController
 {
+    UIScrollView* _scrollView;
     UILabel* _titleLabel;
     UILabel* _messageLabel;
     UITextField* _urlField;
@@ -36,7 +37,17 @@ NSString* FromStdString(const std::string& s)
     UIButton* _importButton;
     UILabel* _statusLabel;
     UIProgressView* _progressView;
+    UIButton* _cancelButton;
+    UIButton* _advancedToggleButton;
+    UIView* _advancedPanel;
+    UILabel* _pathLabel;
+    UILabel* _freeSpaceLabel;
+    UIButton* _clearDataButton;
+    BOOL _advancedExpanded;
     NSTimer* _progressTimer;
+    NSTimer* _importElapsedTimer;
+    NSDate* _importStartDate;
+    NSString* _importPhaseText;
     std::unique_ptr<Poseidon::DownloadWorker> _worker;
 }
 
@@ -48,38 +59,55 @@ NSString* FromStdString(const std::string& s)
     const CGRect bounds = self.view.bounds;
     const CGFloat columnWidth = MIN(bounds.size.width - 80.0, 520.0);
     const CGFloat columnX = (bounds.size.width - columnWidth) / 2.0;
-    CGFloat y = bounds.size.height * 0.18;
+
+    // A scroll view (not fixed frames straight on self.view) because this has
+    // to work on the smallest landscape height in the device matrix -- e.g.
+    // ~440pt on this phone -- where the full column (title through the
+    // Advanced panel) doesn't fit; content below the fold must be reachable
+    // by scrolling rather than silently clipped off the bottom edge.
+    _scrollView = [[UIScrollView alloc] initWithFrame:bounds];
+    _scrollView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    _scrollView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
+    [self.view addSubview:_scrollView];
+
+    UITapGestureRecognizer* tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(backgroundTapped)];
+    tap.cancelsTouchesInView = NO; // let button/field taps underneath still register
+    [_scrollView addGestureRecognizer:tap];
+
+    CGFloat y = 24.0;
 
     _titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(columnX, y, columnWidth, 32)];
     _titleLabel.textColor = [UIColor whiteColor];
     _titleLabel.font = [UIFont boldSystemFontOfSize:22];
     _titleLabel.text = @"Game Data Required";
-    [self.view addSubview:_titleLabel];
-    y += 44;
+    [_scrollView addSubview:_titleLabel];
+    y += 40;
 
-    _messageLabel = [[UILabel alloc] initWithFrame:CGRectMake(columnX, y, columnWidth, 60)];
+    _messageLabel = [[UILabel alloc] initWithFrame:CGRectMake(columnX, y, columnWidth, 44)];
     _messageLabel.textColor = [UIColor lightGrayColor];
-    _messageLabel.font = [UIFont systemFontOfSize:15];
+    _messageLabel.font = [UIFont systemFontOfSize:14];
     _messageLabel.numberOfLines = 0;
     _messageLabel.text = Poseidon::DetectGameDataStatus(Poseidon::GameDataDir()) == Poseidon::GameDataStatus::Partial
                              ? @"A previous import didn't finish. Paste a download link, or import an archive "
                                @"you already have."
                              : @"This app needs its game-data package before it can start. Paste a download "
                                @"link, or import an archive you already have.";
-    [self.view addSubview:_messageLabel];
-    y += 74;
+    [_scrollView addSubview:_messageLabel];
+    y += 54;
 
-    _urlField = [[UITextField alloc] initWithFrame:CGRectMake(columnX, y, columnWidth, 40)];
+    _urlField = [[UITextField alloc] initWithFrame:CGRectMake(columnX, y, columnWidth, 38)];
     _urlField.borderStyle = UITextBorderStyleRoundedRect;
     _urlField.placeholder = @"https://example.com/gamedata.zip";
     _urlField.keyboardType = UIKeyboardTypeURL;
     _urlField.autocapitalizationType = UITextAutocapitalizationTypeNone;
     _urlField.autocorrectionType = UITextAutocorrectionTypeNo;
-    [self.view addSubview:_urlField];
-    y += 52;
+    _urlField.returnKeyType = UIReturnKeyDone;
+    _urlField.delegate = self;
+    [_scrollView addSubview:_urlField];
+    y += 46;
 
     _downloadButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    _downloadButton.frame = CGRectMake(columnX, y, columnWidth, 44);
+    _downloadButton.frame = CGRectMake(columnX, y, columnWidth, 40);
     [_downloadButton setTitle:@"Download" forState:UIControlStateNormal];
     _downloadButton.backgroundColor = [UIColor colorWithWhite:0.2 alpha:1.0];
     [_downloadButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
@@ -87,29 +115,127 @@ NSString* FromStdString(const std::string& s)
     [_downloadButton addTarget:self
                         action:@selector(downloadTapped)
               forControlEvents:UIControlEventTouchUpInside];
-    [self.view addSubview:_downloadButton];
-    y += 56;
+    [_scrollView addSubview:_downloadButton];
+    y += 48;
 
     _importButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    _importButton.frame = CGRectMake(columnX, y, columnWidth, 44);
+    _importButton.frame = CGRectMake(columnX, y, columnWidth, 40);
     [_importButton setTitle:@"Import from Files…" forState:UIControlStateNormal];
     _importButton.backgroundColor = [UIColor colorWithWhite:0.2 alpha:1.0];
     [_importButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     _importButton.layer.cornerRadius = 8;
     [_importButton addTarget:self action:@selector(importTapped) forControlEvents:UIControlEventTouchUpInside];
-    [self.view addSubview:_importButton];
-    y += 56;
+    [_scrollView addSubview:_importButton];
+    y += 48;
 
     _progressView = [[UIProgressView alloc] initWithFrame:CGRectMake(columnX, y, columnWidth, 4)];
     _progressView.hidden = YES;
-    [self.view addSubview:_progressView];
-    y += 20;
+    [_scrollView addSubview:_progressView];
+    y += 16;
 
-    _statusLabel = [[UILabel alloc] initWithFrame:CGRectMake(columnX, y, columnWidth, 60)];
+    _statusLabel = [[UILabel alloc] initWithFrame:CGRectMake(columnX, y, columnWidth, 36)];
     _statusLabel.textColor = [UIColor systemOrangeColor];
     _statusLabel.font = [UIFont systemFontOfSize:13];
     _statusLabel.numberOfLines = 0;
-    [self.view addSubview:_statusLabel];
+    [_scrollView addSubview:_statusLabel];
+    y += 40;
+
+    _cancelButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    _cancelButton.frame = CGRectMake(columnX, y, columnWidth, 32);
+    [_cancelButton setTitle:@"Cancel" forState:UIControlStateNormal];
+    [_cancelButton setTitleColor:[UIColor systemRedColor] forState:UIControlStateNormal];
+    [_cancelButton addTarget:self action:@selector(cancelTapped) forControlEvents:UIControlEventTouchUpInside];
+    _cancelButton.hidden = YES;
+    [_scrollView addSubview:_cancelButton];
+    y += 36;
+
+    _advancedToggleButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    _advancedToggleButton.frame = CGRectMake(columnX, y, columnWidth, 30);
+    _advancedToggleButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+    [_advancedToggleButton setTitle:@"Advanced ▾" forState:UIControlStateNormal];
+    [_advancedToggleButton setTitleColor:[UIColor lightGrayColor] forState:UIControlStateNormal];
+    _advancedToggleButton.titleLabel.font = [UIFont systemFontOfSize:13];
+    [_advancedToggleButton addTarget:self
+                              action:@selector(advancedToggleTapped)
+                    forControlEvents:UIControlEventTouchUpInside];
+    [_scrollView addSubview:_advancedToggleButton];
+    y += 34;
+
+    _advancedPanel = [[UIView alloc] initWithFrame:CGRectMake(columnX, y, columnWidth, 124)];
+    _advancedPanel.hidden = YES;
+    [_scrollView addSubview:_advancedPanel];
+
+    _pathLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, columnWidth, 34)];
+    _pathLabel.textColor = [UIColor lightGrayColor];
+    _pathLabel.font = [UIFont systemFontOfSize:11];
+    _pathLabel.numberOfLines = 2;
+    _pathLabel.text = FromStdString("Location: " + Poseidon::GameDataDir());
+    [_advancedPanel addSubview:_pathLabel];
+
+    _freeSpaceLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 38, columnWidth, 18)];
+    _freeSpaceLabel.textColor = [UIColor lightGrayColor];
+    _freeSpaceLabel.font = [UIFont systemFontOfSize:11];
+    [_advancedPanel addSubview:_freeSpaceLabel];
+    [self updateFreeSpaceLabel];
+
+    _clearDataButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    _clearDataButton.frame = CGRectMake(0, 64, columnWidth, 36);
+    [_clearDataButton setTitle:@"Clear Data" forState:UIControlStateNormal];
+    [_clearDataButton setTitleColor:[UIColor systemRedColor] forState:UIControlStateNormal];
+    _clearDataButton.layer.borderColor = [UIColor systemRedColor].CGColor;
+    _clearDataButton.layer.borderWidth = 1;
+    _clearDataButton.layer.cornerRadius = 8;
+    [_clearDataButton addTarget:self action:@selector(clearDataTapped) forControlEvents:UIControlEventTouchUpInside];
+    [_advancedPanel addSubview:_clearDataButton];
+    y += 124;
+
+    _scrollView.contentSize = CGSizeMake(bounds.size.width, y + 24.0);
+
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                              selector:@selector(keyboardWillChangeFrame:)
+                                                  name:UIKeyboardWillChangeFrameNotification
+                                                object:nil];
+}
+
+- (void)dealloc
+{
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)backgroundTapped
+{
+    [_urlField resignFirstResponder];
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField*)textField
+{
+    [textField resignFirstResponder];
+    return YES;
+}
+
+- (void)keyboardWillChangeFrame:(NSNotification*)notification
+{
+    // Keep whatever's below the URL field (Download/Import/Advanced/Clear
+    // Data) reachable by scrolling once the keyboard covers part of the
+    // screen, rather than leaving those buttons permanently hidden behind it
+    // with no way to dismiss and get back to them.
+    const CGRect screenFrame = [(NSValue*)notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
+    const CGRect localFrame = [self.view convertRect:screenFrame fromView:nil];
+    const CGFloat overlap = MAX(0.0, self.view.bounds.size.height - localFrame.origin.y);
+    _scrollView.contentInset = UIEdgeInsetsMake(0, 0, overlap, 0);
+    _scrollView.scrollIndicatorInsets = _scrollView.contentInset;
+}
+
+- (void)updateFreeSpaceLabel
+{
+    NSError* error = nil;
+    NSDictionary* attrs = [[NSFileManager defaultManager] attributesOfFileSystemForPath:NSHomeDirectory() error:&error];
+    NSNumber* freeBytes = attrs[NSFileSystemFreeSize];
+    if (freeBytes != nil)
+    {
+        _freeSpaceLabel.text =
+            FromStdString("Free space: " + Poseidon::DownloadProgress::FormatBytes(freeBytes.longLongValue));
+    }
 }
 
 - (void)setButtonsEnabled:(BOOL)enabled
@@ -117,6 +243,42 @@ NSString* FromStdString(const std::string& s)
     _downloadButton.enabled = enabled;
     _importButton.enabled = enabled;
     _urlField.enabled = enabled;
+}
+
+- (void)advancedToggleTapped
+{
+    _advancedExpanded = !_advancedExpanded;
+    [_advancedToggleButton setTitle:(_advancedExpanded ? @"Advanced ▴" : @"Advanced ▾") forState:UIControlStateNormal];
+    if (_advancedExpanded)
+    {
+        [self updateFreeSpaceLabel]; // refresh in case an earlier attempt changed it
+    }
+    _advancedPanel.hidden = !_advancedExpanded;
+}
+
+- (void)clearDataTapped
+{
+    std::string error;
+    Poseidon::DeleteGameData(Poseidon::GameDataDir(), &error);
+    _statusLabel.textColor = [UIColor lightGrayColor];
+    _statusLabel.text = @"Game data cleared.";
+    _messageLabel.text = @"This app needs its game-data package before it can start. Paste a download "
+                          @"link, or import an archive you already have.";
+    [self updateFreeSpaceLabel];
+}
+
+- (void)cancelTapped
+{
+    if (_worker)
+    {
+        _worker->Cancel();
+    }
+}
+
+- (void)tickImportElapsed
+{
+    const NSTimeInterval elapsed = -[_importStartDate timeIntervalSinceNow];
+    _statusLabel.text = [NSString stringWithFormat:@"%@ (%lds)", _importPhaseText ?: @"Importing…", (long)elapsed];
 }
 
 - (void)downloadTapped
@@ -130,6 +292,7 @@ NSString* FromStdString(const std::string& s)
     [self setButtonsEnabled:NO];
     _progressView.hidden = NO;
     _progressView.progress = 0.0;
+    _cancelButton.hidden = NO;
     _statusLabel.textColor = [UIColor lightGrayColor];
     _statusLabel.text = @"Starting download…";
 
@@ -153,6 +316,22 @@ NSString* FromStdString(const std::string& s)
     }
     const Poseidon::DownloadSnapshot snap = _worker->Poll();
     _progressView.progress = snap.overallFraction;
+
+    // Per DownloadWorker.cpp/RunDownloadJobs: a cancelled job is left neither
+    // done nor failed, so it must be checked as its own terminal state or
+    // polling would continue showing stale progress text forever.
+    if (snap.cancelled)
+    {
+        [_progressTimer invalidate];
+        _progressTimer = nil;
+        _worker.reset();
+        _cancelButton.hidden = YES;
+        _statusLabel.textColor = [UIColor lightGrayColor];
+        _statusLabel.text = @"Cancelled.";
+        [self setButtonsEnabled:YES];
+        return;
+    }
+
     if (!snap.done)
     {
         // overallFraction is 0 for the whole transfer when the server's size
@@ -173,6 +352,7 @@ NSString* FromStdString(const std::string& s)
     [_progressTimer invalidate];
     _progressTimer = nil;
     _worker.reset();
+    _cancelButton.hidden = YES;
 
     if (snap.failed)
     {
@@ -213,6 +393,18 @@ NSString* FromStdString(const std::string& s)
     _statusLabel.textColor = [UIColor lightGrayColor];
     _statusLabel.text = @"Importing…";
 
+    // GameDataArchive::Unpack's progress callback isn't threaded through
+    // MakeGameDataDownloadTask's opaque postStep, so (unlike the download
+    // path) there's no byte-level signal available here -- a ticking elapsed
+    // time is enough to show a large copy+unpack (500+MB) hasn't frozen.
+    _importPhaseText = @"Importing…";
+    _importStartDate = [NSDate date];
+    _importElapsedTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
+                                                            target:self
+                                                          selector:@selector(tickImportElapsed)
+                                                          userInfo:nil
+                                                           repeats:YES];
+
     const std::string gameDataDir = Poseidon::GameDataDir();
     // Empty sourceUrl: MakeGameDataDownloadTask's postStep records it in the
     // manifest only when non-empty (WriteGameDataManifest), and an
@@ -246,6 +438,13 @@ NSString* FromStdString(const std::string& s)
             [pickedUrl stopAccessingSecurityScopedResource];
         }
 
+        if (copied)
+        {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                self->_importPhaseText = @"Unpacking…";
+            });
+        }
+
         std::string error;
         const bool ok = copied && task.postStep(task, error);
         if (!ok && error.empty())
@@ -258,6 +457,8 @@ NSString* FromStdString(const std::string& s)
         }
 
         dispatch_async(dispatch_get_main_queue(), ^{
+            [self->_importElapsedTimer invalidate];
+            self->_importElapsedTimer = nil;
             if (!ok)
             {
                 self->_statusLabel.textColor = [UIColor systemRedColor];
