@@ -323,6 +323,39 @@ Applies to the Khronos-derived API definitions in glad (see [§1.1](#11-glad--op
    limitations under the License.
 ```
 
+## 1.5 sse2neon — x86 SSE intrinsics on ARM NEON
+
+`thirdparty/sse2neon/sse2neon.h` — from [DLTcollab/sse2neon](https://github.com/DLTcollab/sse2neon).
+Implements the x86 SSE/SSE2/SSE3/SSE4.1 intrinsic API on top of ARM NEON, letting
+the engine's legacy x86 SIMD math/shape code (`V3QuadsP3.cpp`, `Math3DK.hpp`,
+`ColorsK.hpp`, `Quatrix.hpp`, etc.) compile unchanged on Apple Silicon macOS and
+iOS. See `engine/Poseidon/Foundation/Common/X86IntrinsicsCompat.hpp` for the
+platform dispatch and the handful of legacy MMX intrinsics sse2neon doesn't cover.
+
+```
+sse2neon is freely redistributable under the MIT License.
+
+Copyright (c) 2015-2026 SSE2NEON Contributors.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ---
 
 # 2. Dependencies resolved via vcpkg
