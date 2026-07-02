@@ -10,6 +10,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_metal.h>
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <vector>
 
@@ -466,6 +468,58 @@ int SamplerIndex(Poseidon::render::SamplerMode mode)
 }
 
 constexpr size_t kMaxQueued2DVertices = 65535;
+
+struct DrawableSizeChoice
+{
+    int width = 0;
+    int height = 0;
+    bool safeAreaAdjusted = false;
+    SDL_Rect safeArea{};
+    int logicalWidth = 0;
+    int logicalHeight = 0;
+};
+
+DrawableSizeChoice ResolveDrawableSize(SDL_Window* window, int fallbackWidth, int fallbackHeight)
+{
+    DrawableSizeChoice choice;
+    choice.width = std::max(fallbackWidth, 1);
+    choice.height = std::max(fallbackHeight, 1);
+
+#if !defined(POSEIDON_TARGET_IOS)
+    if (window == nullptr || (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) == 0)
+        return choice;
+
+    SDL_Rect safe{};
+    int logicalW = 0;
+    int logicalH = 0;
+    if (!SDL_GetWindowSize(window, &logicalW, &logicalH) || !SDL_GetWindowSafeArea(window, &safe) || logicalW <= 0 ||
+        logicalH <= 0 || safe.w <= 0 || safe.h <= 0)
+        return choice;
+
+    if (safe.x == 0 && safe.y == 0 && safe.w == logicalW && safe.h == logicalH)
+        return choice;
+
+    const double scaleX = static_cast<double>(choice.width) / static_cast<double>(logicalW);
+    const double scaleY = static_cast<double>(choice.height) / static_cast<double>(logicalH);
+    const int safePixelW = std::clamp(static_cast<int>(std::lround(static_cast<double>(safe.w) * scaleX)), 1,
+                                      choice.width);
+    const int safePixelH = std::clamp(static_cast<int>(std::lround(static_cast<double>(safe.h) * scaleY)), 1,
+                                      choice.height);
+    if (safePixelW <= 0 || safePixelH <= 0)
+        return choice;
+
+    choice.width = safePixelW;
+    choice.height = safePixelH;
+    choice.safeAreaAdjusted = true;
+    choice.safeArea = safe;
+    choice.logicalWidth = logicalW;
+    choice.logicalHeight = logicalH;
+#else
+    (void)window;
+#endif
+
+    return choice;
+}
 } // namespace
 
 struct EngineMTLBootstrap::Impl
@@ -713,10 +767,7 @@ bool EngineMTLBootstrap::SetupDevice()
 
     int pxWidth = 0, pxHeight = 0;
     SDL_GetWindowSizeInPixels(_window, &pxWidth, &pxHeight);
-    _impl->layer->setDrawableSize(CGSizeMake(static_cast<CGFloat>(pxWidth), static_cast<CGFloat>(pxHeight)));
-    _impl->drawableWidth = pxWidth;
-    _impl->drawableHeight = pxHeight;
-    EnsureDepthTarget(pxWidth, pxHeight);
+    ApplyDrawableSize(pxWidth, pxHeight, "setup");
 
     _impl->commandQueue = _impl->device->newCommandQueue();
     if (_impl->commandQueue == nullptr)
@@ -764,10 +815,38 @@ void EngineMTLBootstrap::OnWindowResized(int width, int height)
 {
     if (_impl->layer == nullptr)
         return;
-    _impl->drawableWidth = width;
-    _impl->drawableHeight = height;
-    _impl->layer->setDrawableSize(CGSizeMake(static_cast<CGFloat>(width), static_cast<CGFloat>(height)));
-    EnsureDepthTarget(width, height);
+    ApplyDrawableSize(width, height, "window resize");
+}
+
+int EngineMTLBootstrap::DrawableWidth() const
+{
+    return _impl ? _impl->drawableWidth : 0;
+}
+
+int EngineMTLBootstrap::DrawableHeight() const
+{
+    return _impl ? _impl->drawableHeight : 0;
+}
+
+void EngineMTLBootstrap::ApplyDrawableSize(int fallbackWidth, int fallbackHeight, const char* reason)
+{
+    if (_impl->layer == nullptr)
+        return;
+
+    const DrawableSizeChoice size = ResolveDrawableSize(_window, fallbackWidth, fallbackHeight);
+    _impl->drawableWidth = size.width;
+    _impl->drawableHeight = size.height;
+    _impl->layer->setDrawableSize(CGSizeMake(static_cast<CGFloat>(size.width), static_cast<CGFloat>(size.height)));
+    EnsureDepthTarget(size.width, size.height);
+
+    if (size.safeAreaAdjusted)
+    {
+        LOG_INFO(Graphics,
+                 "MTL: {} drawable adjusted for fullscreen safe area: raw={}x{} safe={}x{}+{},{} logical={}x{} -> "
+                 "{}x{}",
+                 reason ? reason : "window", fallbackWidth, fallbackHeight, size.safeArea.w, size.safeArea.h,
+                 size.safeArea.x, size.safeArea.y, size.logicalWidth, size.logicalHeight, size.width, size.height);
+    }
 }
 
 void EngineMTLBootstrap::EnsureDepthTarget(int width, int height)

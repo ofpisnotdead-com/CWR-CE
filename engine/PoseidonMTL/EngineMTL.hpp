@@ -78,6 +78,9 @@ class EngineMTL : public Engine
     bool SwitchRes(int w, int h, int bpp) override;
     bool SwitchRefreshRate(int refresh) override;
     bool SetWindowMode(WindowMode mode) override;
+    void OnWindowResized(int w, int h) override;
+    void OnWindowSafeAreaChanged() override;
+    void OnFullscreenChanged(bool windowed) override;
 
     void HandleEvents() override { _eventWindow.HandleEvents(); }
     bool IsOpen() const override { return _eventWindow.IsOpen(); }

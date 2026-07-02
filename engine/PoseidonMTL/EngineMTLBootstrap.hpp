@@ -169,6 +169,8 @@ class EngineMTLBootstrap
     void RenderClearAndPresent(float r, float g, float b, float a, bool clear = true);
 
     void OnWindowResized(int width, int height);
+    int DrawableWidth() const;
+    int DrawableHeight() const;
 
     void Shutdown();
 
@@ -413,6 +415,7 @@ class EngineMTLBootstrap
 
   private:
     bool SetupDevice(); // shared by Init() and AttachToWindow()
+    void ApplyDrawableSize(int fallbackWidth, int fallbackHeight, const char* reason);
     void EnsurePipeline();         // lazy: compiles the embedded 2D MSL shader + pipeline state + depth states
     void EnsureTLPipeline();       // lazy: compiles the embedded mesh MSL shader + pipeline state
     void EnsureFallbackResources(); // lazy: 1x1 opaque white texture + sampler
