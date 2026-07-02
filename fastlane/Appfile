@@ -1,0 +1,2 @@
+app_identifier "io.mcardle.cwr"
+team_id ENV["DEVELOPMENT_TEAM"]

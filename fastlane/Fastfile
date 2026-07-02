@@ -1,0 +1,59 @@
+APP_IDENTIFIER = "io.mcardle.cwr"
+PRESET = "ios-arm64-device-appstore"
+REPO_ROOT = File.expand_path("..", __dir__)
+BUILD_DIR = "build/#{PRESET}"
+
+default_platform :ios
+
+platform :ios do
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    api_key = app_store_connect_api_key(
+      key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
+      issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
+      key_content: ENV["APP_STORE_CONNECT_API_KEY_BASE64"],
+      is_key_content_base64: true
+    )
+
+    latest = latest_testflight_build_number(
+      api_key: api_key,
+      app_identifier: APP_IDENTIFIER,
+      version: "1.0",
+      initial_build_number: 0
+    )
+    UI.message("Latest TestFlight build number: #{latest}")
+    next_build = latest + 1
+    UI.message("Next build number: #{next_build}")
+
+    # Unlike a hand-maintained Info.plist, CFBundleVersion here comes from
+    # MACOSX_BUNDLE_BUNDLE_VERSION, substituted by CMake at *configure* time
+    # (apps/cwr/Game/CMakeLists.txt) -- so the build number has to be baked
+    # in by reconfiguring, not by patching a plist file or passing
+    # CURRENT_PROJECT_VERSION as an xcarg (nothing in this project's
+    # Info.plist template references that Xcode build setting).
+    sh("cmake", "-S", REPO_ROOT, "--preset", PRESET, "-DPOSEIDON_IOS_BUILD_NUMBER=#{next_build}")
+
+    build_app(
+      project: "#{REPO_ROOT}/#{BUILD_DIR}/CWR.xcodeproj",
+      scheme: "PoseidonGame",
+      configuration: "Release",
+      sdk: "iphoneos",
+      destination: "generic/platform=iOS",
+      export_method: "app-store",
+      xcargs: "CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY='iPhone Distribution' PROVISIONING_PROFILE_SPECIFIER='Github Actions profile' OTHER_CODE_SIGN_FLAGS='--keychain #{ENV["RUNNER_TEMP"]}/app-signing.keychain-db'",
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: {
+          APP_IDENTIFIER => "Github Actions profile"
+        }
+      }
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      app_identifier: APP_IDENTIFIER,
+      distribute_external: false,
+      notify_external_testers: false
+    )
+  end
+end

@@ -67,6 +67,17 @@
         "CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM": "G75D5FBNYR",
         "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE": "Automatic"
       }
+    },
+    {
+      "name": "ios-arm64-device-appstore",
+      "displayName": "iOS Device arm64 Xcode (App Store / TestFlight distribution)",
+      "inherits": "ios-arm64-device",
+      "binaryDir": "${sourceDir}/build/ios-arm64-device-appstore",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "POSEIDON_IOS_BUNDLE_GAME_DATA": "OFF",
+        "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE": "Manual"
+      }
     }
   ]
 }

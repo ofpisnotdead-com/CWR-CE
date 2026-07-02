@@ -126,12 +126,23 @@ if(POSEIDON_TARGET_IOS)
     # Custom Info.plist (vs. CMake's built-in default template) so we can
     # lock orientation to landscape -- this engine has no portrait UI at
     # all (desktop-style HUD/menus laid out for landscape).
+    #
+    # CFBundleVersion comes from MACOSX_BUNDLE_BUNDLE_VERSION, substituted by
+    # CMake at *configure* time (not an Xcode build-setting substitution like
+    # a hand-maintained Info.plist would use) -- so a TestFlight upload's
+    # unique build number has to be injected via -DPOSEIDON_IOS_BUILD_NUMBER=
+    # at configure time (see fastlane/Fastfile), not via xcodebuild xcargs.
+    if(DEFINED POSEIDON_IOS_BUILD_NUMBER AND NOT POSEIDON_IOS_BUILD_NUMBER STREQUAL "")
+        set(POSEIDON_IOS_BUNDLE_VERSION "${POSEIDON_IOS_BUILD_NUMBER}")
+    else()
+        set(POSEIDON_IOS_BUNDLE_VERSION "1.0")
+    endif()
     set_target_properties(PoseidonGame PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info-iOS.plist.in"
         MACOSX_BUNDLE_GUI_IDENTIFIER "io.mcardle.cwr"
         MACOSX_BUNDLE_BUNDLE_NAME "PoseidonGame"
-        MACOSX_BUNDLE_BUNDLE_VERSION "1.0"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${POSEIDON_IOS_BUNDLE_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
         XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
         XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.mcardle.cwr"

@@ -9,6 +9,12 @@
 **/vcpkg_installed/
 CMakeUserPresets.json
 
+# fastlane-generated (fastlane/Fastfile and fastlane/Appfile are checked in)
+/fastlane/report.xml
+/fastlane/Preview.html
+/fastlane/screenshots/
+/fastlane/test_output/
+
 # Local/runtime output
 /tmp/
 /logs/
