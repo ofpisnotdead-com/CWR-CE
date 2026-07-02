@@ -112,27 +112,48 @@ if(POSEIDON_TARGET_IOS)
         MACOSX_PACKAGE_LOCATION "Resources"
     )
 
+    # Settings.bundle: adds the "Reset Game Data on Next Launch" toggle to the
+    # system Settings app. Bundled unconditionally (not gated on
+    # POSEIDON_IOS_BUNDLE_GAME_DATA below) so Clear-Data-via-Settings works in
+    # dev/simulator builds too, not just the distributable configuration.
+    set(POSEIDON_IOS_SETTINGS_BUNDLE "${CMAKE_CURRENT_SOURCE_DIR}/Settings.bundle")
+    set_source_files_properties("${POSEIDON_IOS_SETTINGS_BUNDLE}" PROPERTIES
+        MACOSX_PACKAGE_LOCATION "."
+    )
+
     # iOS executables are always app bundles -- give it a real bundle ID
     # and name so it's installable (CMake leaves these blank by default).
     # Custom Info.plist (vs. CMake's built-in default template) so we can
     # lock orientation to landscape -- this engine has no portrait UI at
     # all (desktop-style HUD/menus laid out for landscape).
+    #
+    # CFBundleVersion comes from MACOSX_BUNDLE_BUNDLE_VERSION, substituted by
+    # CMake at *configure* time (not an Xcode build-setting substitution like
+    # a hand-maintained Info.plist would use) -- so a TestFlight upload's
+    # unique build number has to be injected via -DPOSEIDON_IOS_BUILD_NUMBER=
+    # at configure time (see fastlane/Fastfile), not via xcodebuild xcargs.
+    if(DEFINED POSEIDON_IOS_BUILD_NUMBER AND NOT POSEIDON_IOS_BUILD_NUMBER STREQUAL "")
+        set(POSEIDON_IOS_BUNDLE_VERSION "${POSEIDON_IOS_BUILD_NUMBER}")
+    else()
+        set(POSEIDON_IOS_BUNDLE_VERSION "1.0")
+    endif()
     set_target_properties(PoseidonGame PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info-iOS.plist.in"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "io.mcardle.cwr.poseidongame"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "io.mcardle.cwr"
         MACOSX_BUNDLE_BUNDLE_NAME "PoseidonGame"
-        MACOSX_BUNDLE_BUNDLE_VERSION "1.0"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${POSEIDON_IOS_BUNDLE_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
         XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
-        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.mcardle.cwr.poseidongame"
+        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.mcardle.cwr"
     )
     target_sources(PoseidonGame PRIVATE
         "${POSEIDON_IOS_ASSET_CATALOG}"
+        "${POSEIDON_IOS_SETTINGS_BUNDLE}"
     )
 endif()
 
-if(POSEIDON_TARGET_IOS)
+if(POSEIDON_TARGET_IOS AND POSEIDON_IOS_BUNDLE_GAME_DATA)
     # Bundle the game's data files (DTA/AddOns/fonts/etc.) straight into the
     # .app, preserving their relative directory layout, so the app is
     # self-contained on install -- no manual `devicectl device copy` step
@@ -142,6 +163,10 @@ if(POSEIDON_TARGET_IOS)
     # bundle root -- so these land exactly where the runtime expects them,
     # with no extra path segment to account for (see WinMain.cpp's iOS
     # branch, which chdir()s there when no explicit -C is given).
+    #
+    # OFF (POSEIDON_IOS_BUNDLE_GAME_DATA=OFF) is the distributable/App Store
+    # configuration -- this licensed data can't ship in the bundle there, so
+    # WinMain.cpp runs the on-device acquisition gate instead.
     file(GLOB_RECURSE POSEIDON_GAME_ASSET_FILES
         RELATIVE "${CMAKE_SOURCE_DIR}/packages/Combined"
         "${CMAKE_SOURCE_DIR}/packages/Combined/*"

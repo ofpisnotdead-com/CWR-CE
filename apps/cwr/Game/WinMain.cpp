@@ -30,6 +30,8 @@ int PASCAL WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR szCmdLine, int sw)
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_hints.h>
+#include <Poseidon/Core/GameDataInstall.hpp>          // GameDataDir
+#include <Poseidon/UI/Controls/IosGameDataGateScreen.hpp> // RunIosGameDataGate
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -97,6 +99,7 @@ int main(int argc, char* argv[])
         SDL_free(prefPath);
         RedirectStdIOToFile(iosPrefPath);
     }
+
     if (!hasSplashArg)
         iosArgv.push_back(const_cast<char*>("--no-splash"));
     if (!hasFpsArg)
@@ -107,13 +110,30 @@ int main(int argc, char* argv[])
         iosArgv.push_back(const_cast<char*>("--log-file"));
         iosArgv.push_back(iosLogPath.data());
     }
+
+    std::string iosGameDataDir;
     if (!hasWorkDirArg)
     {
+#if POSEIDON_IOS_BUNDLE_GAME_DATA
+        // Dev/simulator convenience build: game data is baked straight into
+        // the .app bundle (apps/cwr/Game/CMakeLists.txt), and
+        // SDL_GetBasePath() returns that bundle's root on iOS.
         if (const char* basePath = SDL_GetBasePath())
         {
             iosArgv.push_back(const_cast<char*>("-C"));
             iosArgv.push_back(const_cast<char*>(basePath));
         }
+#else
+        // Distributable/App Store build: the licensed game data isn't in the
+        // bundle at all -- block here (real UIKit, safe from inside SDL's
+        // iOS main() call stack via a nested run-loop pump; see
+        // IosGameDataGateScreen.mm) until the on-device import/download gate
+        // reports the data is Ready, then point -C at where it landed.
+        Poseidon::RunIosGameDataGate();
+        iosGameDataDir = Poseidon::GameDataDir();
+        iosArgv.push_back(const_cast<char*>("-C"));
+        iosArgv.push_back(const_cast<char*>(iosGameDataDir.c_str()));
+#endif
     }
     return app.Run(static_cast<int>(iosArgv.size()), iosArgv.data());
 #else

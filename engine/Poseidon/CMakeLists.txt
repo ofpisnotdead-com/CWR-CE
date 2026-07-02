@@ -69,6 +69,13 @@ if(POSEIDON_TARGET_IOS)
         ${CMAKE_CURRENT_SOURCE_DIR}/UI/Controls/IosKeyboardAccessory.mm
         PROPERTIES SKIP_PRECOMPILE_HEADERS ON
     )
+
+    list(FILTER ALL_SOURCES EXCLUDE REGEX "UI/Controls/IosGameDataGateScreen\.cpp$")
+    list(APPEND ALL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/UI/Controls/IosGameDataGateScreen.mm)
+    set_source_files_properties(
+        ${CMAKE_CURRENT_SOURCE_DIR}/UI/Controls/IosGameDataGateScreen.mm
+        PROPERTIES SKIP_PRECOMPILE_HEADERS ON
+    )
 endif()
 
 # Global exclusions
@@ -280,6 +287,14 @@ if(WIN32)
     target_link_libraries(Poseidon PUBLIC ws2_32 wininet dbghelp)
 endif()
 
+if(POSEIDON_TARGET_IOS)
+    # UTTypeZIP (UIDocumentPickerViewController's "pick a zip" filter in
+    # IosGameDataGateScreen.mm) -- PUBLIC so it propagates to PoseidonGame's
+    # final link, same pattern PoseidonMTL uses for Metal/QuartzCore/Foundation.
+    find_library(UNIFORMTYPEIDENTIFIERS_FRAMEWORK UniformTypeIdentifiers REQUIRED)
+    target_link_libraries(Poseidon PUBLIC ${UNIFORMTYPEIDENTIFIERS_FRAMEWORK})
+endif()
+
 find_package(cJSON CONFIG REQUIRED)
 target_link_libraries(Poseidon PUBLIC cjson)
 
@@ -292,6 +307,12 @@ target_link_libraries(Poseidon PRIVATE zstd::libzstd)
 # (Schannel on Windows, OpenSSL elsewhere — see vcpkg.json).
 find_package(CURL CONFIG REQUIRED)
 target_link_libraries(Poseidon PRIVATE CURL::libcurl)
+
+# libzip: unpacks the user-supplied game-data archive for the iOS acquisition
+# gate (GameDataArchive) -- a general zip container, unlike ModArchive's
+# zstd-wrapped single-PBO format. BSD-3-Clause.
+find_package(libzip CONFIG REQUIRED)
+target_link_libraries(Poseidon PRIVATE libzip::zip)
 
 find_package(Opus CONFIG REQUIRED)
 target_link_libraries(Poseidon PUBLIC Opus::opus)

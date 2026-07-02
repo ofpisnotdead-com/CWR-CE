@@ -10,6 +10,7 @@
     "stb",
     "mimalloc",
     "zstd",
+    "libzip",
     "sdl3",
     "openal-soft",
     "opus",

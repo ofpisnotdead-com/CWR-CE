@@ -227,6 +227,22 @@ option(POSEIDON_DISABLE_PCH "Disable precompiled headers (include self-containme
 # preset turns it on. Requires a clang toolchain built with -fsanitize=fuzzer.
 option(POSEIDON_BUILD_FUZZERS "Build libFuzzer network harnesses" OFF)
 
+# Bundle packages/Combined straight into the iOS .app (apps/cwr/Game/CMakeLists.txt).
+# OFF (default) is the distributable/App Store (and now TestFlight)
+# configuration -- the licensed game data can't ship in the bundle, so it's
+# acquired on-device instead (see the iOS game-data acquisition gate,
+# WinMain.cpp). Opt into ON explicitly for local dev/simulator convenience
+# (e.g. a build-and-run.sh-style flow) -- defaulting OFF means a build that
+# forgets to pass the flag fails safe (no data) rather than accidentally
+# shipping ~700MB of licensed content. No effect on non-iOS platforms.
+option(POSEIDON_IOS_BUNDLE_GAME_DATA "Bundle packages/Combined into the iOS .app" OFF)
+if(POSEIDON_TARGET_IOS)
+    # WinMain.cpp's iOS branch reads this to decide whether to auto-inject -C
+    # at the bundled data path (ON) or run the on-device acquisition gate
+    # instead (OFF, see IosGameDataGateScreen.mm once that lands).
+    add_compile_definitions(POSEIDON_IOS_BUNDLE_GAME_DATA=$<BOOL:${POSEIDON_IOS_BUNDLE_GAME_DATA}>)
+endif()
+
 configure_file(
     ${CMAKE_SOURCE_DIR}/cmake/BuildConfig.h.in
     ${CMAKE_BINARY_DIR}/generated/BuildConfig.h

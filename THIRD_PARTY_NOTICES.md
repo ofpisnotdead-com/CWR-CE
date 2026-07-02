@@ -349,6 +349,7 @@ noted where pinned by an `overrides` entry in the manifest.
 | spdlog *(1.15.1)* | MIT (bundles fmt, MIT) | © 2016 Gabi Melman | <https://github.com/gabime/spdlog> |
 | FreeType | FTL **OR** GPL-2.0 (dual) | © 1996–2024 David Turner, Robert Wilhelm, Werner Lemberg & the FreeType Project | <https://freetype.org> |
 | zstd | BSD-3-Clause | © Meta Platforms, Inc. and affiliates | <https://github.com/facebook/zstd> |
+| libzip | BSD-3-Clause | © 1999–2024 Dieter Baron and Thomas Klausner | <https://libzip.org> |
 
 ## 2.1 MIT License
 
@@ -381,7 +382,7 @@ SOFTWARE.
 
 ## 2.2 BSD 3-Clause License
 
-Applies to **CLI11, Opus, libogg, libvorbis, zstd**, each with its own copyright holder as
+Applies to **CLI11, Opus, libogg, libvorbis, zstd, libzip**, each with its own copyright holder as
 listed in the table above.
 
 ```

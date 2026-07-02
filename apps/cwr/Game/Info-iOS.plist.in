@@ -22,6 +22,14 @@
 	<string>${MACOSX_BUNDLE_BUNDLE_VERSION}</string>
 	<key>CSResourcesFileMapped</key>
 	<true/>
+	<!-- Makes Documents/ (where GameData/, Mods/, Workshop/, missions/ all
+	     live -- see Foundation::GamePaths) reachable from the Files app and
+	     over a USB Finder connection, so a large game-data archive can be
+	     copied in manually instead of only via the in-app importer/download. -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
