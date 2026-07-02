@@ -40,11 +40,11 @@ platform :ios do
       sdk: "iphoneos",
       destination: "generic/platform=iOS",
       export_method: "app-store",
-      xcargs: "CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY='iPhone Distribution' PROVISIONING_PROFILE_SPECIFIER='Github Actions profile' OTHER_CODE_SIGN_FLAGS='--keychain #{ENV["RUNNER_TEMP"]}/app-signing.keychain-db'",
+      xcargs: "CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY='iPhone Distribution' PROVISIONING_PROFILE_SPECIFIER='Github Actions profile (CWR)' OTHER_CODE_SIGN_FLAGS='--keychain #{ENV["RUNNER_TEMP"]}/app-signing.keychain-db'",
       export_options: {
         signingStyle: "manual",
         provisioningProfiles: {
-          APP_IDENTIFIER => "Github Actions profile"
+          APP_IDENTIFIER => "Github Actions profile (CWR)"
         }
       }
     )

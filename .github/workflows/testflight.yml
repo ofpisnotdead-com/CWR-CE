@@ -5,7 +5,9 @@ name: TestFlight
 # app/team (the certificate and API key MAY be reused across apps under the
 # same Apple Developer Team, but the provisioning profile is bundle-ID
 # specific and must be created fresh for io.mcardle.cwr, named exactly
-# "Github Actions profile" to match fastlane/Fastfile):
+# "Github Actions profile (CWR)" to match fastlane/Fastfile -- Apple
+# requires provisioning profile names to be unique account-wide, so it can't
+# reuse Chanology's exact "Github Actions profile" name):
 #   BUILD_CERTIFICATE_BASE64         — Apple Distribution cert as base64 P12
 #   P12_PASSWORD                     — P12 export password
 #   BUILD_PROVISION_PROFILE_BASE64   — App Store provisioning profile as base64
