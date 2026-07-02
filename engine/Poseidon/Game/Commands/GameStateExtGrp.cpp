@@ -1842,7 +1842,7 @@ GameValue ObjGetTurretDirAndElev(const GameState* state, GameValuePar oper1)
     Vector3P dirTurret = pTank->GetTurretAbsDirection();
     array.Resize(2);
     array[0] = (float)atan2(dirTurret.X(), dirTurret.Z()) * (180 / H_PI);
-    array[1] = (float)atan2(dirTurret.Y(), abs(dirTurret.X())) * (180 / H_PI);
+    array[1] = (float)atan2(dirTurret.Y(), sqrt(1 - dirTurret.Y() * dirTurret.Y())) * (180 / H_PI);
     return array;
 }
 
