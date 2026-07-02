@@ -5,8 +5,8 @@
 > the engine build and run natively on Apple Silicon macOS and iOS, with the
 > original-style GL33 renderer still available on desktop and a native Metal
 > renderer (`--render mtl`, `engine/PoseidonMTL/`) used for Apple platforms.
-> iOS builds use Metal only. See [`METAL_PORT_PROGRESS.md`](METAL_PORT_PROGRESS.md)
-> for current renderer status and known issues.
+> iOS builds use Metal only; the Metal backend has reached full parity with
+> the GL33 renderer.
 >
 > No rights to "ARMA", "Operation Flashpoint", or any other Bohemia
 > Interactive trademark are claimed or implied — see the Additional Terms in
@@ -106,18 +106,27 @@ To debug under lldb, wrap the same invocation:
 lldb -o "run -C packages/Remaster --render mtl --window" -- build/macos-arm64-clang-rwdi/apps/cwr/Game/PoseidonGame
 ```
 
-See [`METAL_PORT_PROGRESS.md`](METAL_PORT_PROGRESS.md) for the Metal
-backend's current status and known issues.
-
 ## How to Build and Run (iOS / arm64)
 
 iOS uses Metal only. `PoseidonGame` builds the app bundle and its `PoseidonMTL`
-dependency; put game data in `packages/Combined/` so it is copied into the app.
+dependency.
+
+Game data can't be redistributed (see the [Licensing](#license) section below),
+so **by default the iOS app ships with no game data at all**. On first
+launch, a native pre-boot screen prompts the user to either paste a download
+link or import a local `.zip` archive (via the Files app) — the app unpacks it
+into its own sandboxed storage and boots from there. A Settings.app toggle
+("Reset Game Data on Next Launch") clears the imported data and re-triggers
+this screen.
+
+For local development, you can instead bundle `packages/Combined/` straight
+into the `.app` (skipping the on-device import screen entirely) by passing
+`-DPOSEIDON_IOS_BUNDLE_GAME_DATA=ON` at configure time:
 
 Simulator:
 
 ```sh
-cmake --preset ios-arm64-simulator-xcode
+cmake --preset ios-arm64-simulator-xcode -DPOSEIDON_IOS_BUNDLE_GAME_DATA=ON
 cmake --build build/ios-arm64-simulator-xcode --target PoseidonGame -j8
 open build/ios-arm64-simulator-xcode/CWR.xcodeproj
 ```
@@ -125,13 +134,18 @@ open build/ios-arm64-simulator-xcode/CWR.xcodeproj
 Device:
 
 ```sh
-cmake --preset ios-arm64-device
+cmake --preset ios-arm64-device -DPOSEIDON_IOS_BUNDLE_GAME_DATA=ON
 cmake --build build/ios-arm64-device --target PoseidonGame -j8
 open build/ios-arm64-device/CWR.xcodeproj
 ```
 
 The device preset uses automatic Xcode signing; override
 `CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM` locally if needed.
+
+For a distributable build (App Store / TestFlight — no bundled game data,
+manual release signing), use the `ios-arm64-device-appstore` preset instead;
+see `.github/workflows/testflight.yml` for the full archive/sign/upload
+pipeline used for automated TestFlight releases.
 
 ### iOS touch controls status
 
@@ -183,9 +197,10 @@ the app preferences directory. To launch from Xcode without the FPS overlay, add
 - [Apps](apps/README.md) - executable targets
 - [Engine](engine/README.md) - engine libraries and Rust Trident tooling
 - [Master server tools](mserver/README.md) - Rust service and CLI crates
-- [Tests](tests/README.md) - test source trees; CI currently compiles them only
+- [Tests](tests/README.md) - test source trees; CI builds and runs them via `ctest` on every push/PR (Linux, macOS, Windows — the iOS device build is compile-only, no simulator/device run in CI)
 - `cmake/` - presets, toolchains, vcpkg triplets, and overlay ports
 - `docker/` - container support for service and runtime environments
+- `fastlane/` - build/upload lane for automated iOS TestFlight releases (`.github/workflows/testflight.yml`)
 - `packages/` - ignored local game data staging area
 - `resources/` - application icon resources
 - `thirdparty/` - vendored third-party headers and sources
@@ -236,8 +251,7 @@ the GPL with additional terms per Section 7 in [`LICENSE`](LICENSE).
 
 ## Contributing
 
-This is a **locked** repository: pull requests are not accepted here, and this
-repository will not be continuously updated.
-Issues are only for bugs in official Bohemia Interactive builds distributed on
-Steam. For ideas, development builds, ports, and community work, fork the code or
-join the community continuation. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for more information.
+Unlike the original upstream release, **this fork is open to contributions**:
+fork the repo, branch, and open a pull request. This is a small community
+project rather than a formal one, so response times and review turnaround
+aren't guaranteed. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for more information.
