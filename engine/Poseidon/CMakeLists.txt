@@ -76,6 +76,13 @@ if(POSEIDON_TARGET_IOS)
         ${CMAKE_CURRENT_SOURCE_DIR}/UI/Controls/IosBootModalSpike.mm
         PROPERTIES SKIP_PRECOMPILE_HEADERS ON
     )
+
+    list(FILTER ALL_SOURCES EXCLUDE REGEX "UI/Controls/IosGameDataGateScreen\.cpp$")
+    list(APPEND ALL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/UI/Controls/IosGameDataGateScreen.mm)
+    set_source_files_properties(
+        ${CMAKE_CURRENT_SOURCE_DIR}/UI/Controls/IosGameDataGateScreen.mm
+        PROPERTIES SKIP_PRECOMPILE_HEADERS ON
+    )
 endif()
 
 # Global exclusions
@@ -285,6 +292,14 @@ if(WIN32)
     # consumer of Poseidon picks them up automatically. CrashHandler uses
     # DbgHelp for shared Windows minidump + stack reporting.
     target_link_libraries(Poseidon PUBLIC ws2_32 wininet dbghelp)
+endif()
+
+if(POSEIDON_TARGET_IOS)
+    # UTTypeZIP (UIDocumentPickerViewController's "pick a zip" filter in
+    # IosGameDataGateScreen.mm) -- PUBLIC so it propagates to PoseidonGame's
+    # final link, same pattern PoseidonMTL uses for Metal/QuartzCore/Foundation.
+    find_library(UNIFORMTYPEIDENTIFIERS_FRAMEWORK UniformTypeIdentifiers REQUIRED)
+    target_link_libraries(Poseidon PUBLIC ${UNIFORMTYPEIDENTIFIERS_FRAMEWORK})
 endif()
 
 find_package(cJSON CONFIG REQUIRED)
