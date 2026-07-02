@@ -137,6 +137,8 @@ class SDLEventWindow
             else if (event.type == SDL_EVENT_WINDOW_SAFE_AREA_CHANGED)
             {
                 Poseidon::TouchInput_UpdateSafeAreaFromWindow(_sdlWindow);
+                if (::Poseidon::GEngine)
+                    ::Poseidon::GEngine->OnWindowSafeAreaChanged();
             }
             else if (event.type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN)
             {

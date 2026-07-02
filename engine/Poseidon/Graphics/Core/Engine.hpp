@@ -854,6 +854,12 @@ class Engine : public IGraphicsEngine
     /// swap chain should override this.
     virtual void OnWindowResized(int /*w*/, int /*h*/) {}
 
+    /// Called when the platform's safe area changes without a pixel-size
+    /// resize (for example, macOS fullscreen display cutouts / menu-bar
+    /// reservations). Backends that derive their renderable surface from the
+    /// safe area can refresh it here.
+    virtual void OnWindowSafeAreaChanged() {}
+
     /// Post-resize hook — fires after OnWindowResized has finished updating
     /// _w/_h.  Apps register a function pointer here at boot to re-run the
     /// aspect policy when the viewport changes (e.g. async fullscreen

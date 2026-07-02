@@ -149,8 +149,8 @@ void EngineMTL::CreateWindowAndDevice()
 
     int cw = 0, ch = 0;
     SDL_GetWindowSizeInPixels(_sdlWindow, &cw, &ch);
-    _w = cw;
-    _h = ch;
+    _w = _bootstrap.DrawableWidth() > 0 ? _bootstrap.DrawableWidth() : cw;
+    _h = _bootstrap.DrawableHeight() > 0 ? _bootstrap.DrawableHeight() : ch;
 
     LOG_INFO(Graphics, "MTL: Metal device — {}", _bootstrap.GetRendererName().c_str());
     LOG_INFO(Graphics, "MTL: surface resolved to {}x{} {}", _w, _h, _windowed ? "windowed" : "fullscreen");
@@ -945,9 +945,11 @@ bool EngineMTL::SwitchRes(int w, int h, int bpp)
     int cw = 0, ch = 0;
     if (_sdlWindow)
         SDL_GetWindowSizeInPixels(_sdlWindow, &cw, &ch);
-    _w = cw > 0 ? cw : w;
-    _h = ch > 0 ? ch : h;
-    _bootstrap.OnWindowResized(_w, _h);
+    const int rawW = cw > 0 ? cw : w;
+    const int rawH = ch > 0 ? ch : h;
+    _bootstrap.OnWindowResized(rawW, rawH);
+    _w = _bootstrap.DrawableWidth() > 0 ? _bootstrap.DrawableWidth() : rawW;
+    _h = _bootstrap.DrawableHeight() > 0 ? _bootstrap.DrawableHeight() : rawH;
     return true;
 }
 
@@ -981,12 +983,49 @@ bool EngineMTL::SetWindowMode(WindowMode mode)
 
     int cw = 0, ch = 0;
     SDL_GetWindowSizeInPixels(_sdlWindow, &cw, &ch);
-    _w = cw;
-    _h = ch;
-    _bootstrap.OnWindowResized(_w, _h);
+    _bootstrap.OnWindowResized(cw, ch);
+    _w = _bootstrap.DrawableWidth() > 0 ? _bootstrap.DrawableWidth() : cw;
+    _h = _bootstrap.DrawableHeight() > 0 ? _bootstrap.DrawableHeight() : ch;
 
     OnFullscreenChanged(_windowed);
     return true;
+}
+
+void EngineMTL::OnWindowResized(int w, int h)
+{
+    if (w <= 0 || h <= 0)
+        return;
+
+    _bootstrap.OnWindowResized(w, h);
+    const int drawableW = _bootstrap.DrawableWidth();
+    const int drawableH = _bootstrap.DrawableHeight();
+    _w = drawableW > 0 ? drawableW : w;
+    _h = drawableH > 0 ? drawableH : h;
+    if (_windowed)
+    {
+        _windowedRestoreW = w;
+        _windowedRestoreH = h;
+    }
+
+    LOG_DEBUG(Graphics, "MTL: OnWindowResized raw={}x{} drawable={}x{}", w, h, _w, _h);
+    FireResizePostHook(_w, _h);
+}
+
+void EngineMTL::OnWindowSafeAreaChanged()
+{
+    if (!_sdlWindow)
+        return;
+
+    int cw = 0;
+    int ch = 0;
+    SDL_GetWindowSizeInPixels(_sdlWindow, &cw, &ch);
+    OnWindowResized(cw, ch);
+}
+
+void EngineMTL::OnFullscreenChanged(bool windowed)
+{
+    _windowed = windowed;
+    OnWindowSafeAreaChanged();
 }
 
 RString EngineMTL::GetDebugName() const
