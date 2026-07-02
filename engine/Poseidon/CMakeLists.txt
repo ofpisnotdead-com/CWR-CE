@@ -300,6 +300,12 @@ target_link_libraries(Poseidon PRIVATE zstd::libzstd)
 find_package(CURL CONFIG REQUIRED)
 target_link_libraries(Poseidon PRIVATE CURL::libcurl)
 
+# libzip: unpacks the user-supplied game-data archive for the iOS acquisition
+# gate (GameDataArchive) -- a general zip container, unlike ModArchive's
+# zstd-wrapped single-PBO format. BSD-3-Clause.
+find_package(libzip CONFIG REQUIRED)
+target_link_libraries(Poseidon PRIVATE libzip::zip)
+
 find_package(Opus CONFIG REQUIRED)
 target_link_libraries(Poseidon PUBLIC Opus::opus)
 
