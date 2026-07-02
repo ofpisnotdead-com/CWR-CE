@@ -332,6 +332,24 @@ NSString* FromStdString(const std::string& s)
         return;
     }
 
+    // IsDone() only ever reflects success -- DownloadProgress::Finish() (the
+    // only thing that sets it) is never called on the failure path, so a
+    // failed job is *also* left with done=false forever, same as cancelled.
+    // Must be checked ahead of the "!done -> still in progress" branch below,
+    // or a failure just looks like a permanently stuck transfer (0B, stale
+    // text, buttons and Cancel never freed) instead of ever surfacing.
+    if (snap.failed)
+    {
+        [_progressTimer invalidate];
+        _progressTimer = nil;
+        _worker.reset();
+        _cancelButton.hidden = YES;
+        _statusLabel.textColor = [UIColor systemRedColor];
+        _statusLabel.text = FromStdString(snap.error.empty() ? "Download failed." : snap.error);
+        [self setButtonsEnabled:YES];
+        return;
+    }
+
     if (!snap.done)
     {
         // overallFraction is 0 for the whole transfer when the server's size
@@ -353,15 +371,6 @@ NSString* FromStdString(const std::string& s)
     _progressTimer = nil;
     _worker.reset();
     _cancelButton.hidden = YES;
-
-    if (snap.failed)
-    {
-        _statusLabel.textColor = [UIColor systemRedColor];
-        _statusLabel.text = FromStdString(snap.error.empty() ? "Download failed." : snap.error);
-        [self setButtonsEnabled:YES];
-        return;
-    }
-
     [self finishIfReady];
 }
 
