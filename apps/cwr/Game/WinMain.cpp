@@ -30,7 +30,8 @@ int PASCAL WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR szCmdLine, int sw)
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_hints.h>
-#include <Poseidon/UI/Controls/IosBootModalSpike.hpp>
+#include <Poseidon/Core/GameDataInstall.hpp>          // GameDataDir
+#include <Poseidon/UI/Controls/IosGameDataGateScreen.hpp> // RunIosGameDataGate
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -99,14 +100,6 @@ int main(int argc, char* argv[])
         RedirectStdIOToFile(iosPrefPath);
     }
 
-    // M0 de-risking spike for the iOS game-data acquisition gate (see
-    // engine/Poseidon/UI/Controls/IosBootModalSpike.hpp): proves a blocking
-    // UIKit modal can be shown and pumped to completion here, before SDL
-    // creates any window, so the real gate (RunIosGameDataGate, landing in a
-    // later milestone) can safely do the same thing for real. No-op today --
-    // data bundling and the -C injection below are unchanged.
-    Poseidon::RunIosBootModalSpike();
-
     if (!hasSplashArg)
         iosArgv.push_back(const_cast<char*>("--no-splash"));
     if (!hasFpsArg)
@@ -117,13 +110,30 @@ int main(int argc, char* argv[])
         iosArgv.push_back(const_cast<char*>("--log-file"));
         iosArgv.push_back(iosLogPath.data());
     }
+
+    std::string iosGameDataDir;
     if (!hasWorkDirArg)
     {
+#if POSEIDON_IOS_BUNDLE_GAME_DATA
+        // Dev/simulator convenience build: game data is baked straight into
+        // the .app bundle (apps/cwr/Game/CMakeLists.txt), and
+        // SDL_GetBasePath() returns that bundle's root on iOS.
         if (const char* basePath = SDL_GetBasePath())
         {
             iosArgv.push_back(const_cast<char*>("-C"));
             iosArgv.push_back(const_cast<char*>(basePath));
         }
+#else
+        // Distributable/App Store build: the licensed game data isn't in the
+        // bundle at all -- block here (real UIKit, safe from inside SDL's
+        // iOS main() call stack via a nested run-loop pump; see
+        // IosGameDataGateScreen.mm) until the on-device import/download gate
+        // reports the data is Ready, then point -C at where it landed.
+        Poseidon::RunIosGameDataGate();
+        iosGameDataDir = Poseidon::GameDataDir();
+        iosArgv.push_back(const_cast<char*>("-C"));
+        iosArgv.push_back(const_cast<char*>(iosGameDataDir.c_str()));
+#endif
     }
     return app.Run(static_cast<int>(iosArgv.size()), iosArgv.data());
 #else

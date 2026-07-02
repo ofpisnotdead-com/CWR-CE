@@ -70,13 +70,6 @@ if(POSEIDON_TARGET_IOS)
         PROPERTIES SKIP_PRECOMPILE_HEADERS ON
     )
 
-    list(FILTER ALL_SOURCES EXCLUDE REGEX "UI/Controls/IosBootModalSpike\.cpp$")
-    list(APPEND ALL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/UI/Controls/IosBootModalSpike.mm)
-    set_source_files_properties(
-        ${CMAKE_CURRENT_SOURCE_DIR}/UI/Controls/IosBootModalSpike.mm
-        PROPERTIES SKIP_PRECOMPILE_HEADERS ON
-    )
-
     list(FILTER ALL_SOURCES EXCLUDE REGEX "UI/Controls/IosGameDataGateScreen\.cpp$")
     list(APPEND ALL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/UI/Controls/IosGameDataGateScreen.mm)
     set_source_files_properties(
