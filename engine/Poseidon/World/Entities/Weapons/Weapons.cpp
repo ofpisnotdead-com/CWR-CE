@@ -656,6 +656,24 @@ RStringB WeaponType::GetPictureName() const
     return _picName.GetLength() > 0 ? _picName : GetName();
 }
 
+bool WeaponType::IsBinocular() const
+{
+    return (_weaponType & MaskSlotBinocular) != 0 && stricmp(GetName(), "binocular") == 0;
+}
+
+const WeaponType* Poseidon::FindBinocularWeapon(const RefArray<WeaponType>& weapons)
+{
+    for (int i = 0; i < weapons.Size(); i++)
+    {
+        const WeaponType* weapon = weapons[i];
+        if (weapon && weapon->IsBinocular())
+        {
+            return weapon;
+        }
+    }
+    return nullptr;
+}
+
 void WeaponType::Init(const char* name)
 {
     const ParamEntry& cls = Pars >> "CfgWeapons" >> name;
