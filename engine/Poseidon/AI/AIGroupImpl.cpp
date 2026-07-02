@@ -88,7 +88,10 @@ bool AIGroup::CommandSent(bool channelCenter)
         AI_ERROR(dynamic_cast<RadioMessageCommand*>(msg));
         RadioMessageCommand* msgCmd = static_cast<RadioMessageCommand*>(msg);
         AI_ERROR(msgCmd);
-        CheckMsgCmdFrom(this, msgCmd, "CommandSent(bool)/FindPrevMessage");
+        if (!channelCenter)
+        {
+            CheckMsgCmdFrom(this, msgCmd, "CommandSent(bool)/FindPrevMessage");
+        }
         if (msgCmd->IsToMainSubgroup())
         {
             return true;
@@ -102,7 +105,10 @@ bool AIGroup::CommandSent(bool channelCenter)
         AI_ERROR(dynamic_cast<RadioMessageCommand*>(msg));
         RadioMessageCommand* msgCmd = static_cast<RadioMessageCommand*>(msg);
         AI_ERROR(msgCmd);
-        CheckMsgCmdFrom(this, msgCmd, "CommandSent(bool)/GetActualMessage");
+        if (!channelCenter)
+        {
+            CheckMsgCmdFrom(this, msgCmd, "CommandSent(bool)/GetActualMessage");
+        }
         if (msgCmd->IsToMainSubgroup())
         {
             return true;
@@ -155,7 +161,10 @@ bool AIGroup::CommandSent(Command::Message message, bool channelCenter)
         AI_ERROR(dynamic_cast<RadioMessageCommand*>(msg));
         RadioMessageCommand* msgCmd = static_cast<RadioMessageCommand*>(msg);
         AI_ERROR(msgCmd);
-        CheckMsgCmdFrom(this, msgCmd, "CommandSent(msg,bool)/FindPrevMessage");
+        if (!channelCenter)
+        {
+            CheckMsgCmdFrom(this, msgCmd, "CommandSent(msg,bool)/FindPrevMessage");
+        }
         if (msgCmd->GetCmdMessage() == message)
         {
             return true;
@@ -168,7 +177,10 @@ bool AIGroup::CommandSent(Command::Message message, bool channelCenter)
         AI_ERROR(dynamic_cast<RadioMessageCommand*>(msg));
         RadioMessageCommand* msgCmd = static_cast<RadioMessageCommand*>(msg);
         AI_ERROR(msgCmd);
-        CheckMsgCmdFrom(this, msgCmd, "CommandSent(msg,bool)/GetActualMessage");
+        if (!channelCenter)
+        {
+            CheckMsgCmdFrom(this, msgCmd, "CommandSent(msg,bool)/GetActualMessage");
+        }
         if (msgCmd->GetCmdMessage() == message)
         {
             return true;
@@ -216,7 +228,10 @@ bool AIGroup::CommandSent(AIUnit* to, Command::Message message, bool channelCent
         AI_ERROR(dynamic_cast<RadioMessageCommand*>(msg));
         RadioMessageCommand* msgCmd = static_cast<RadioMessageCommand*>(msg);
         AI_ERROR(msgCmd);
-        CheckMsgCmdFrom(this, msgCmd, "CommandSent(to,msg,bool)/FindPrevMessage");
+        if (!channelCenter)
+        {
+            CheckMsgCmdFrom(this, msgCmd, "CommandSent(to,msg,bool)/FindPrevMessage");
+        }
         if (msgCmd->IsTo(to) && msgCmd->GetCmdMessage() == message)
         {
             return true;
@@ -229,7 +244,10 @@ bool AIGroup::CommandSent(AIUnit* to, Command::Message message, bool channelCent
         AI_ERROR(dynamic_cast<RadioMessageCommand*>(msg));
         RadioMessageCommand* msgCmd = static_cast<RadioMessageCommand*>(msg);
         AI_ERROR(msgCmd);
-        CheckMsgCmdFrom(this, msgCmd, "CommandSent(to,msg,bool)/GetActualMessage");
+        if (!channelCenter)
+        {
+            CheckMsgCmdFrom(this, msgCmd, "CommandSent(to,msg,bool)/GetActualMessage");
+        }
         if (msgCmd->IsTo(to) && msgCmd->GetCmdMessage() == message)
         {
             return true;
