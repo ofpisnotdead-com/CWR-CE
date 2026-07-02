@@ -598,6 +598,7 @@ GameValue PublicVariable(const GameState* state, GameValuePar oper1);
 GameValue RequiredVersion(const GameState* state, GameValuePar oper1);
 GameValue SaveVar(const GameState* state, GameValuePar oper1);
 GameValue ScriptGoto(const GameState* state, GameValuePar oper1);
+GameValue SelectPlayer(const GameState* state, GameValuePar oper1);
 GameValue SetAcceleratedTime(const GameState* state, GameValuePar oper1);
 GameValue SetDate(const GameState* state, GameValuePar oper1);
 GameValue SetTerrainGrid(const GameState* state, GameValuePar oper1);
@@ -1209,6 +1210,8 @@ static const GameFunction* GetExtUnary(int& count)
         GameFunction(GameArray, "magazinesArray", ObjMagazinesArray, GameObject),
         GameFunction(GameArray, "GetHitpointsNames", ObjGetHitpointsNames, GameObject),
         GameFunction(GameNothing, "showDebug", DebugShow, GameArray),
+
+        GameFunction(GameNothing, "selectPlayer", SelectPlayer, GameObject),
     };
     count = sizeof(ExtUnary) / sizeof(*ExtUnary);
     return ExtUnary;
