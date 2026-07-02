@@ -129,12 +129,12 @@ if(POSEIDON_TARGET_IOS)
     set_target_properties(PoseidonGame PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info-iOS.plist.in"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "io.mcardle.cwr.poseidongame"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "io.mcardle.cwr"
         MACOSX_BUNDLE_BUNDLE_NAME "PoseidonGame"
         MACOSX_BUNDLE_BUNDLE_VERSION "1.0"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
         XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
-        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.mcardle.cwr.poseidongame"
+        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.mcardle.cwr"
     )
     target_sources(PoseidonGame PRIVATE
         "${POSEIDON_IOS_ASSET_CATALOG}"
