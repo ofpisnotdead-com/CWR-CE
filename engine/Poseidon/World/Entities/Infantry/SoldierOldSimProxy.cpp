@@ -458,7 +458,8 @@ void Man::DrawNVOptics()
 {
     if (IsNVEnabled())
     {
-        Ref<WeaponType> goggles = WeaponTypes.New("NVGoggles");
+        const int nvgIdx = getNvgIdx();
+        Ref<WeaponType> goggles = WeaponTypes.New(nvgIdx >= 0 ? GetWeaponSystem(nvgIdx)->GetName() : "NVGoggles");
         const MuzzleType* muzzle = goggles->_muzzles[0];
         LODShapeWithShadow* oShape = muzzle->_opticsModel;
         if (oShape)

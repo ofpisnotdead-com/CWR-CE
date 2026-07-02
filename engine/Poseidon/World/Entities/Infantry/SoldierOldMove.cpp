@@ -1334,6 +1334,19 @@ void Man::ReactToDammage()
     }
 }
 
+namespace
+{
+bool isBinocular(const WeaponType& type)
+{
+    const ParamEntry* param = type._parClass->FindEntry("isBinocular");
+    if (param && (param->IsFloatValue() || param->IsIntValue()) && 1.0f == (float)*param)
+        return true;
+    if (!strcmpi(type.GetName(),"binocular"))
+        return true;
+    return false;
+}
+} // anonymous
+
 bool Man::BinocularSelected() const
 {
     if (_currentWeapon < 0 || _currentWeapon >= NMagazineSlots())
@@ -1342,7 +1355,9 @@ bool Man::BinocularSelected() const
     }
     const MagazineSlot& slot = GetMagazineSlot(_currentWeapon);
     const WeaponType* type = slot._weapon;
-    return stricmp(type->GetName(), "binocular") == 0;
+    if (!isBinocular(*type))
+        return false;
+    return true;
 }
 
 bool Man::IsHandGunInMove() const
