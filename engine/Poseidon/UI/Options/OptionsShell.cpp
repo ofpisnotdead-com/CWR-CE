@@ -232,7 +232,12 @@ void OptionsShell::ApplyNotebookTheme(OptionsPage* page)
         if (auto* active = dynamic_cast<C3DActiveText*>(c))
         {
             if (hasButtonColor)
+            {
                 active->SetColor(buttonColor);
+                PackedColor focusBg = active->GetFocusBgColor();
+                if (focusBg.A8() > 0)
+                    active->SetFocusBgColor(NotebookTheme::ApplyRgbKeepingAlpha(focusBg, buttonColor));
+            }
             if (hasButtonActiveColor)
                 active->SetActiveColor(buttonActiveColor);
         }

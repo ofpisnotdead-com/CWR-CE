@@ -204,6 +204,8 @@ public:
 	PackedColor GetColor() const { return _color; }
 	void SetActiveColor(PackedColor color) {_colorActive = color;}
 	PackedColor GetActiveColor() const { return _colorActive; }
+	void SetFocusBgColor(PackedColor color) { _colorFocusBg = color; }
+	PackedColor GetFocusBgColor() const { return _colorFocusBg; }
 
 	bool IsActive() const {return _active;}
 
@@ -948,6 +950,8 @@ public:
 	PackedColor GetColor() const { return _color; }
 	void SetActiveColor(PackedColor color) {_colorActive = color;}
 	PackedColor GetActiveColor() const { return _colorActive; }
+	void SetFocusBgColor(PackedColor color) { _colorFocusBg = color; }
+	PackedColor GetFocusBgColor() const { return _colorFocusBg; }
 
 	bool IsActive() const {return _active;}
 
