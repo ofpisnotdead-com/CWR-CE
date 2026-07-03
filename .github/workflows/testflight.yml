@@ -28,6 +28,11 @@ concurrency:
   group: testflight-main
   cancel-in-progress: true
 
+env:
+  CCACHE_BASEDIR: ${{ github.workspace }}
+  CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+  CCACHE_NOHASHDIR: true
+
 jobs:
   deploy:
     runs-on: [self-hosted, macOS, arm64]
@@ -36,6 +41,22 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Configure self-hosted compiler cache
+        run: |
+          CCACHE_DIR="$HOME/.cache/ccache/ios-arm64-device-appstore"
+          mkdir -p "$CCACHE_DIR"
+          current_clang="$(xcrun clang --version | head -n 1)"
+          clang_stamp="$CCACHE_DIR/.xcode-clang-version"
+          echo "CCACHE_COMPILERCHECK=string:$current_clang" >> "$GITHUB_ENV"
+          if [ ! -f "$clang_stamp" ] || [ "$(cat "$clang_stamp")" != "$current_clang" ]; then
+            echo "Xcode/clang changed; clearing ccache for ios-arm64-device-appstore"
+            ccache --clear
+            printf '%s\n' "$current_clang" > "$clang_stamp"
+          fi
+          ccache --set-config=max_size=1G
+          ccache --zero-stats
+          echo "CCACHE_DIR=$CCACHE_DIR" >> "$GITHUB_ENV"
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
@@ -88,6 +109,10 @@ jobs:
           APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
           OTHER_CODE_SIGN_FLAGS: "--keychain ${{ runner.temp }}/app-signing.keychain-db"
         run: /opt/homebrew/bin/fastlane beta
+
+      - name: Show compiler cache stats
+        if: always()
+        run: ccache --show-stats
 
       - name: Clean up keychain
         if: always()
