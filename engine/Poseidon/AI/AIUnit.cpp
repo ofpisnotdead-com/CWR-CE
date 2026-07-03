@@ -379,7 +379,6 @@ AIUnit::AIUnit(Person* vehicle) : _planner(CreateAIPathPlanner(AIUnitGetFieldCos
     _playable = false;
     _lifeState = LSAlive;
     _disabledAI = 0;
-    _customState = 0;
 
     _path.SetOperIndex(1);
     _path.SetMaxIndex(1);
@@ -615,7 +614,6 @@ LSError AIUnit::Serialize(ParamArchive& ar)
 
     PARAM_CHECK(ar.SerializeEnum("lifeState", _lifeState, 1, LSAlive))
     PARAM_CHECK(ar.Serialize("disabledAI", _disabledAI, 1, 0))
-    PARAM_CHECK(ar.Serialize("customState", _customState, 1, 0))
 
     PARAM_CHECK(ar.SerializeRef("TargetAssigned", _targetAssigned, 1))
     PARAM_CHECK(ar.SerializeRef("TargetEngage", _targetEngage, 1))
@@ -1309,31 +1307,6 @@ CombatMode AIUnit::GetCombatMode() const
         }
     }
     return mode;
-}
-
-bool AIUnit::GetCustomState(int bit) const
-{
-    if (bit < 0 || bit >= std::numeric_limits<decltype(_customState)>::digits)
-    {
-        return false;
-    }
-    return (1 << bit) & _customState;
-}
-
-void AIUnit::SetCustomState(int bit, bool set)
-{
-    if (bit < 0 || bit >= std::numeric_limits<decltype(_customState)>::digits)
-    {
-        return;
-    }
-    if (set)
-    {
-        _customState |= (1 << bit);
-    }
-    else
-    {
-        _customState &= ~(1 << bit);
-    }
 }
 
 bool AIUnit::HasAI() const

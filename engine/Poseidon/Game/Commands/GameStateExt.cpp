@@ -723,6 +723,7 @@ GameValue ObjFire(const GameState* state, GameValuePar oper1, GameValuePar oper2
 GameValue ObjFireEx(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjGetBuildingPos(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjGetSelectionDammage(const GameState* state, GameValuePar oper1, GameValuePar oper2);
+GameValue ObjGetVariable(const GameState* state, GameValuePar lhs, GameValuePar rhs);
 GameValue ObjGlobalChat(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjGlobalRadio(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjGroupChat(const GameState* state, GameValuePar oper1, GameValuePar oper2);
@@ -765,11 +766,10 @@ GameValue ObjSetPos(const GameState* state, GameValuePar oper1, GameValuePar ope
 GameValue ObjSetPosASL(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjSetRepairCargo(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjSetSelectionDammage(const GameState* state, GameValuePar oper1, GameValuePar oper2);
-GameValue ObjGetCustomState(const GameState *state, GameValuePar oper1, GameValuePar oper2);
-GameValue ObjSetCustomState(const GameState *state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjSetSkill(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjSetTexture(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjSetUnitPos(const GameState* state, GameValuePar oper1, GameValuePar oper2);
+GameValue ObjSetVariable(const GameState* state, GameValuePar lhs, GameValuePar rhs);
 GameValue ObjSetVectorDir(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjSetVectorDirectionAndUp(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjSetVectorUp(const GameState* state, GameValuePar oper1, GameValuePar oper2);
@@ -1463,9 +1463,8 @@ static const GameOperator* GetExtBinary(int& count)
         GameOperator(GameNothing, "setSelectionDamage", function, ObjSetSelectionDammage, GameObject,
                      GameArray), // one-M alias
 
-        // custom state for scriptors. Each unit can have 32 states
-        GameOperator(GameBool,"getCustomState",function,ObjGetCustomState,GameObject,GameScalar),
-        GameOperator(GameNothing,"setCustomState",function,ObjSetCustomState,GameObject,GameArray),
+        GameOperator(GameVoid, "getVariable", function, ObjGetVariable, GameObject, GameString),
+        GameOperator(GameNothing, "setVariable", function, ObjSetVariable, GameObject, GameArray),
     };
     count = sizeof(ExtBinary) / sizeof(*ExtBinary);
     return ExtBinary;

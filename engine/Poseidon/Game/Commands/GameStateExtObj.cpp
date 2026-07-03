@@ -1165,63 +1165,30 @@ GameValue ObjSetSelectionDammage(const GameState* state, GameValuePar oper1, Gam
     return NOTHING;
 }
 
-GameValue ObjGetCustomState(const GameState* state, GameValuePar oper1, GameValuePar oper2)
+GameValue ObjGetVariable(const GameState* state, GameValuePar oper1, GameValuePar oper2)
 {
     Object* obj = GetObject(oper1);
     if (!obj)
     {
         return NOTHING;
     }
-    EntityAI* veh = dyn_cast<EntityAI>(obj);
-    if (!veh)
-    {
-        return NOTHING;
-    }
-    AIUnit* unit = veh->CommanderUnit();
-    if (!unit)
-    {
-        return NOTHING;
-    }
-
-    return unit->GetCustomState(toInt((float)oper2));
+    RString name = oper2;
+    auto it = obj->GetVariables().find((const char*)name);
+    return it != obj->GetVariables().end() ? *(it->second) : NOTHING;
 }
 
-GameValue ObjSetCustomState(const GameState* state, GameValuePar oper1, GameValuePar oper2)
+GameValue ObjSetVariable(const GameState* state, GameValuePar oper1, GameValuePar oper2)
 {
     Object* obj = GetObject(oper1);
     if (!obj)
     {
         return NOTHING;
     }
-    EntityAI* veh = dyn_cast<EntityAI>(obj);
-    if (!veh)
-    {
+    const GameArrayType& arr = oper2;
+    if (arr.Size() < 2)
         return NOTHING;
-    }
-    AIUnit* unit = veh->CommanderUnit();
-    if (!unit)
-    {
-        return NOTHING;
-    }
-
-    const GameArrayType &array = oper2;
-    if(array.Size() != 2)
-    {
-        state->SetError(EvalDim,array.Size(),2);
-        return NOTHING;
-    }
-    if (array[0].GetType() != GameScalar)
-    {
-        state->TypeError(GameScalar,array[0].GetType());
-        return NOTHING;
-    }
-    if (array[1].GetType() != GameBool)
-    {
-        state->TypeError(GameBool,array[1].GetType());
-        return NOTHING;
-    }
-
-    unit->SetCustomState(toInt((float)array[0]), array[1]);
+    RString name = arr[0];
+    obj->GetVariables()[(const char*)name].reset(new GameValue(arr[1]));
     return NOTHING;
 }
 
