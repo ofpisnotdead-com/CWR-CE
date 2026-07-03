@@ -36,6 +36,15 @@ platform :ios do
        "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
        "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache")
 
+    # DIAGNOSTIC: verify SKIP_INSTALL actually landed in the generated
+    # project as intended (PRs #70/#71) before trusting it as a fix.
+    sh("xcodebuild", "-showBuildSettings",
+       "-project", "#{REPO_ROOT}/#{BUILD_DIR}/CWR.xcodeproj",
+       "-scheme", "PoseidonGame",
+       "-configuration", "Release") { |status, result, cmd|
+      (result || "").each_line { |l| puts l if l =~ /SKIP_INSTALL/i }
+    }
+
     build_app(
       project: "#{REPO_ROOT}/#{BUILD_DIR}/CWR.xcodeproj",
       scheme: "PoseidonGame",
