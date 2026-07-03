@@ -24,6 +24,10 @@ on:
     types: [completed]
   workflow_dispatch:
 
+concurrency:
+  group: testflight-main
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: [self-hosted, macOS, arm64]
