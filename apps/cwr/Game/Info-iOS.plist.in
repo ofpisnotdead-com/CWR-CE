@@ -55,5 +55,14 @@
 	</array>
 	<key>UIRequiresFullScreen</key>
 	<true/>
+	<!-- Not actual gameplay features -- SDL3 links AVFoundation/CoreBluetooth
+	     symbols regardless of whether the game calls into them (camera via
+	     SDL3's camera subsystem, Bluetooth via its game-controller support),
+	     which is enough for Apple's binary processing to require these keys
+	     even though only Bluetooth controller pairing is genuinely used. -->
+	<key>NSCameraUsageDescription</key>
+	<string>This app does not use the camera.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Bluetooth is used to connect MFi game controllers.</string>
 </dict>
 </plist>
