@@ -972,6 +972,15 @@ void Landscape::ExplosionDammageEffects(EntityAI* owner, Shot* shot, Object* dir
         else
         {
             LODShapeWithShadow* shape = GLOB_SCENE->Preloaded(CraterShell);
+            // Preload contract (ScenePreloader.cpp:59-69): shape may be null
+            // under --no-strict when CfgScenePreload.CraterShell.model is
+            // missing or fails to load (broken base data or a mod that
+            // overrides the slot with an invalid path). Skip the crater FX
+            // rather than crash on the first explosion.
+            if (!shape)
+            {
+                return;
+            }
             float azimut = GRandGen.RandomValue() * H_PI * 2;
 
             Matrix4 transform(MIdentity);
@@ -1010,48 +1019,52 @@ void Landscape::ExplosionDammageEffects(EntityAI* owner, Shot* shot, Object* dir
                 transform.SetOrientation(Matrix3(MRotationY, azimut));
                 transform.SetScale(scale * 0.5);
                 LODShapeWithShadow* shape = GLOB_SCENE->Preloaded(CraterShell);
-                // small/big explosion
+                // See preload-contract note above (CraterShell branch, ~line 976).
+                // Skip crater FX (no visible crater, no ground debris) but still let
+                // the outer function fall through to the Disclose() call below.
+                if (shape)
+                {
+                    Vector3 offset = transform.Rotate(shape->BoundingCenter());
+                    transform.SetPosition(Vector3(pos[0], surfY, pos[2]) + offset);
 
-                Vector3 offset = transform.Rotate(shape->BoundingCenter());
-                transform.SetPosition(Vector3(pos[0], surfY, pos[2]) + offset);
+                    float timeToLive = scale * 60;
+                    timeToLive *= craterTimeCoef;
+                    saturateMin(timeToLive, 120);
 
-                float timeToLive = scale * 60;
-                timeToLive *= craterTimeCoef;
-                saturateMin(timeToLive, 120);
-
-                // create vehicle
-                Crater* crater =
-                    new Crater(shape, VehicleTypes.New("crater"), timeToLive, scale * 0.5, true, false, water);
-                crater->SetTransform(transform);
-                crater->SetAlpha(alpha);
-                GLOB_WORLD->AddAnimal(crater);
+                    // create vehicle
+                    Crater* crater =
+                        new Crater(shape, VehicleTypes.New("crater"), timeToLive, scale * 0.5, true, false, water);
+                    crater->SetTransform(transform);
+                    crater->SetAlpha(alpha);
+                    GLOB_WORLD->AddAnimal(crater);
 
 #if 1
-                float distance2ToCamera = GScene->GetCamera()->Position().Distance2(transform.Position());
-                if (distance2ToCamera < Square(500))
-                {
-                    int count = toIntFloor(landAlpha * 10);
-                    while (--count >= 0)
+                    float distance2ToCamera = GScene->GetCamera()->Position().Distance2(transform.Position());
+                    if (distance2ToCamera < Square(500))
                     {
-                        // some ground effects flying out
-                        Vector3 vel((GRandGen.RandomValue() * 15 - 7.5) * landAlpha,
-                                    (GRandGen.RandomValue() * 10) * landAlpha,
-                                    (GRandGen.RandomValue() * 15 - 7.5) * landAlpha);
-                        Vector3 posOffset((GRandGen.RandomValue() * 2 - 1) * scale,
-                                          (GRandGen.RandomValue() * 1) * scale,
-                                          (GRandGen.RandomValue() * 2 - 1) * scale);
-                        Matrix4 fxTrans = transform;
-                        // random orientation
-                        fxTrans.SetOrientation(Matrix3(MRotationX, GRandGen.RandomValue() * (2 * H_PI)) *
-                                               Matrix3(MRotationY, GRandGen.RandomValue() * (2 * H_PI)));
-                        fxTrans.SetPosition(transform.Position() + posOffset);
+                        int count = toIntFloor(landAlpha * 10);
+                        while (--count >= 0)
+                        {
+                            // some ground effects flying out
+                            Vector3 vel((GRandGen.RandomValue() * 15 - 7.5) * landAlpha,
+                                        (GRandGen.RandomValue() * 10) * landAlpha,
+                                        (GRandGen.RandomValue() * 15 - 7.5) * landAlpha);
+                            Vector3 posOffset((GRandGen.RandomValue() * 2 - 1) * scale,
+                                              (GRandGen.RandomValue() * 1) * scale,
+                                              (GRandGen.RandomValue() * 2 - 1) * scale);
+                            Matrix4 fxTrans = transform;
+                            // random orientation
+                            fxTrans.SetOrientation(Matrix3(MRotationX, GRandGen.RandomValue() * (2 * H_PI)) *
+                                                   Matrix3(MRotationY, GRandGen.RandomValue() * (2 * H_PI)));
+                            fxTrans.SetPosition(transform.Position() + posOffset);
 
-                        ThingEffectKind kind = dyn_cast<Transport>(directHit) ? TEArmor : TEGround;
-                        Entity* fx = CreateThingEffect(kind, fxTrans, vel);
-                        (void)fx;
+                            ThingEffectKind kind = dyn_cast<Transport>(directHit) ? TEArmor : TEGround;
+                            Entity* fx = CreateThingEffect(kind, fxTrans, vel);
+                            (void)fx;
+                        }
                     }
-                }
 #endif
+                }
             }
         }
     }
