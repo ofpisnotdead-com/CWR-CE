@@ -1,4 +1,4 @@
-[![C++ / Build](https://github.com/McArdle-Systems/CWR-arm64/actions/workflows/build.yml/badge.svg)](https://github.com/McArdle-Systems/CWR-arm64/actions/workflows/build.yml)
+[![Build](https://github.com/McArdle-Systems/CWR-arm64/actions/workflows/build.yml/badge.svg)](https://github.com/McArdle-Systems/CWR-arm64/actions/workflows/build.yml)
 
 # CWR-arm64 — a community fork with Apple Silicon, Metal, and iOS support
 
