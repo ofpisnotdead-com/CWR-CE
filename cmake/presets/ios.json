@@ -76,7 +76,8 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "POSEIDON_IOS_BUNDLE_GAME_DATA": "OFF",
-        "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE": "Manual"
+        "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE": "Manual",
+        "CMAKE_XCODE_GENERATE_SCHEME": "ON"
       }
     }
   ]
