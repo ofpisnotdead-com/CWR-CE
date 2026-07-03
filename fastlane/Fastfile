@@ -43,18 +43,7 @@ platform :ios do
       sdk: "iphoneos",
       destination: "generic/platform=iOS",
       export_method: "app-store",
-      # SKIP_INSTALL=NO here (not via CMake's XCODE_ATTRIBUTE_SKIP_INSTALL
-      # target property, which this CMake/Xcode-generator combo silently
-      # never writes into project.pbxproj -- confirmed by grepping the
-      # generated file for zero SKIP_INSTALL occurrences) -- without it,
-      # `xcodebuild archive` produces a Generic Xcode Archive (no
-      # ApplicationProperties in the .xcarchive's Info.plist), which
-      # -exportArchive then rejects. Applying it as a blanket xcodebuild
-      # override is safe here since every PoseidonGame dependency is a
-      # static library (.a); those get linked into the binary rather than
-      # separately "installed", so they can't trigger the multiple-
-      # installable-products variant of the same Generic Archive problem.
-      xcargs: "SKIP_INSTALL=NO CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY='iPhone Distribution' PROVISIONING_PROFILE_SPECIFIER='Github Actions profile (CWR)' OTHER_CODE_SIGN_FLAGS='--keychain #{ENV["RUNNER_TEMP"]}/app-signing.keychain-db'",
+      xcargs: "CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY='iPhone Distribution' PROVISIONING_PROFILE_SPECIFIER='Github Actions profile (CWR)' OTHER_CODE_SIGN_FLAGS='--keychain #{ENV["RUNNER_TEMP"]}/app-signing.keychain-db'",
       export_options: {
         signingStyle: "manual",
         provisioningProfiles: {
