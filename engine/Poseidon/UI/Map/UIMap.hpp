@@ -227,6 +227,9 @@ public:
 	int _color;
 	float _x, _y;
 	float _cx, _cy, _cw, _ch;
+
+	// direction of marker in DEG
+	int m_dir;
 protected:
 	int _exitKey;
 	int _exitVK;
@@ -247,6 +250,9 @@ protected:
 	void NextPicture();
 	void PrevColor();
 	void NextColor();
+
+	// change direction
+	void ChangeDir(int delta);
 };
 
 #define WEAPON_SLOTS			5

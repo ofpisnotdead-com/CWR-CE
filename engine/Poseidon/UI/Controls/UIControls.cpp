@@ -518,9 +518,53 @@ void CStatic::OnDraw(float alpha)
         {
             if (_texture)
             {
-                MipInfo mip = GLOB_ENGINE->TextBank()->UseMipmap(_texture, 0, 0);
-                GLOB_ENGINE->Draw2D(mip, ftColor, Rect2DPixel(xx, yy, ww, hh));
-                // GLOB_ENGINE->TextBank()->ReleaseMipmap();
+                if (0.0 == m_azimut)
+                {
+                    MipInfo mip = GLOB_ENGINE->TextBank()->UseMipmap(_texture, 0, 0);
+                    GLOB_ENGINE->Draw2D(mip, ftColor, Rect2DPixel(xx, yy, ww, hh));
+                    // GLOB_ENGINE->TextBank()->ReleaseMipmap();
+                }
+                else
+                {
+                    // similar with CStaticMap::DrawSign. Rotate and display
+                    float a = 0.5 * ww;
+                    float b = 0.5 * hh;
+
+                    float s = sin(m_azimut);
+                    float c = cos(m_azimut);
+                    float cx = xx + ww / 2.0;
+                    float cy = yy + hh / 2.0;
+
+                    const int n = 4;
+                    Vertex2DPixel vs[n];
+                    // 0
+                    vs[0].x = cx + c * a + s * b;
+                    vs[0].y = cy + s * a - c * b;
+                    vs[0].u = 1;
+                    vs[0].v = 0;
+                    vs[0].color = GetFtColor();
+                    // 1
+                    vs[1].x = cx + c * a + s * (-b);
+                    vs[1].y = cy + s * a - c * (-b);
+                    vs[1].u = 1;
+                    vs[1].v = 1;
+                    vs[1].color = GetFtColor();
+                    // 2
+                    vs[2].x = cx + c * (-a) + s * (-b);
+                    vs[2].y = cy + s * (-a) - c * (-b);
+                    vs[2].u = 0;
+                    vs[2].v = 1;
+                    vs[2].color = GetFtColor();
+                    // 3
+                    vs[3].x = cx + c * (-a) + s * b;
+                    vs[3].y = cy + s * (-a) - c * b;
+                    vs[3].u = 0;
+                    vs[3].v = 0;
+                    vs[3].color = GetFtColor();
+
+                    MipInfo mip = GEngine->TextBank()->UseMipmap(_texture, 0, 0);
+                    GEngine->DrawPoly(mip, vs, n, Rect2DPixel(_x * w, _y * h, _w * w, _h * h));
+                }
             }
             return; // do not draw any text (text field content texture name)
         }

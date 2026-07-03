@@ -120,6 +120,7 @@ DisplayInsertMarker::DisplayInsertMarker(ControlsContainer* parent, float x, flo
     _cy = cy;
     _cw = cw;
     _ch = ch;
+    m_dir = 0;
 
     _exitKey = -1;
     _exitVK = -1;
@@ -189,10 +190,15 @@ void DisplayInsertMarker::OnSimulate(EntityAI* vehicle)
     }
     if (input.IsKeyPressed(SDL_SCANCODE_DOWN))
     {
+        const bool pressingAlt = input.IsKeyDown(SDL_SCANCODE_LALT) || input.GetKey(SDL_SCANCODE_RALT);
         input.ConsumeKeyPress(SDL_SCANCODE_DOWN);
         if (input.IsKeyDown(SDL_SCANCODE_LSHIFT) || input.GetKey(SDL_SCANCODE_RSHIFT))
         {
             NextColor();
+        }
+        else if (input.IsKeyDown(SDL_SCANCODE_LCTRL) || input.GetKey(SDL_SCANCODE_RCTRL))
+        {
+            ChangeDir(pressingAlt ? -90 : -30);
         }
         else
         {
@@ -202,10 +208,15 @@ void DisplayInsertMarker::OnSimulate(EntityAI* vehicle)
     }
     if (input.IsKeyPressed(SDL_SCANCODE_UP))
     {
+        const bool pressingAlt = input.IsKeyDown(SDL_SCANCODE_LALT) || input.GetKey(SDL_SCANCODE_RALT);
         input.ConsumeKeyPress(SDL_SCANCODE_UP);
         if (input.IsKeyDown(SDL_SCANCODE_LSHIFT) || input.GetKey(SDL_SCANCODE_RSHIFT))
         {
             PrevColor();
+        }
+        else if (input.IsKeyDown(SDL_SCANCODE_LCTRL) || input.GetKey(SDL_SCANCODE_RCTRL))
+        {
+            ChangeDir(pressingAlt ? +90 : +30);
         }
         else
         {
@@ -279,6 +290,8 @@ void DisplayInsertMarker::UpdatePicture()
         }
         ctrl->SetText(picture);
         ctrl->SetFtColor(color);
+
+        ctrl->SetAzimut((m_dir % 360) * (H_PI / 180.0));
     }
 }
 
@@ -324,6 +337,11 @@ void DisplayInsertMarker::NextColor()
     {
         _color = 0;
     }
+}
+
+void DisplayInsertMarker::ChangeDir(int delta)
+{
+    m_dir += delta;
 }
 
 DisplayGetReady::DisplayGetReady(ControlsContainer* parent) : DisplayMap(parent, "RscDisplayGetReady")
