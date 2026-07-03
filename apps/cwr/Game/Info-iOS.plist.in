@@ -64,5 +64,13 @@
 	<string>This app does not use the camera.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Bluetooth is used to connect MFi game controllers.</string>
+	<!-- MasterServerServiceClient.cpp talks to the master server over
+	     plain HTTPS/TLS (curl+OpenSSL) for matchmaking/master-server
+	     requests -- standard, exempt encryption under Category 5 Part 2 of
+	     the EAR, not custom/proprietary crypto. Declaring this up front so
+	     every future TestFlight upload doesn't need a manual export
+	     compliance answer in App Store Connect. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
