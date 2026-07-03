@@ -293,9 +293,9 @@ jobs:
           ALSOFT_DRIVERS: ${{ runner.os == 'Linux' && 'null' || '' }}
         run: |
           if [ -z "${CTEST_EXCLUDE}" ]; then
-            ctest --test-dir '${{ matrix.build_dir }}' --output-on-failure
+            ctest --test-dir '${{ matrix.build_dir }}' --output-on-failure --timeout 600
           else
-            ctest --test-dir '${{ matrix.build_dir }}' --output-on-failure -E "${CTEST_EXCLUDE}"
+            ctest --test-dir '${{ matrix.build_dir }}' --output-on-failure --timeout 600 -E "${CTEST_EXCLUDE}"
           fi
 
       - name: Test
@@ -305,9 +305,9 @@ jobs:
           CTEST_EXCLUDE: ${{ matrix.ctest_exclude }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:CTEST_EXCLUDE)) {
-            ctest --test-dir '${{ matrix.build_dir }}' --output-on-failure
+            ctest --test-dir '${{ matrix.build_dir }}' --output-on-failure --timeout 600
           } else {
-            ctest --test-dir '${{ matrix.build_dir }}' --output-on-failure -E "$env:CTEST_EXCLUDE"
+            ctest --test-dir '${{ matrix.build_dir }}' --output-on-failure --timeout 600 -E "$env:CTEST_EXCLUDE"
           }
 
       - name: Show compiler cache stats

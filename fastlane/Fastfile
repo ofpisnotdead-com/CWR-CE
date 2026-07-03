@@ -31,7 +31,10 @@ platform :ios do
     # in by reconfiguring, not by patching a plist file or passing
     # CURRENT_PROJECT_VERSION as an xcarg (nothing in this project's
     # Info.plist template references that Xcode build setting).
-    sh("cmake", "-S", REPO_ROOT, "--preset", PRESET, "-DPOSEIDON_IOS_BUILD_NUMBER=#{next_build}")
+    sh("cmake", "-S", REPO_ROOT, "--preset", PRESET,
+       "-DPOSEIDON_IOS_BUILD_NUMBER=#{next_build}",
+       "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
+       "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache")
 
     build_app(
       project: "#{REPO_ROOT}/#{BUILD_DIR}/CWR.xcodeproj",
