@@ -262,7 +262,11 @@ jobs:
 
       - name: Configure Xcode
         if: matrix.xcode == true
-        run: cmake --preset ${{ matrix.preset }}
+        run: >
+          cmake
+          --preset ${{ matrix.preset }}
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
         if: matrix.build_target == ''
