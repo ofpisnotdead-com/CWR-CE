@@ -146,6 +146,16 @@ if(POSEIDON_TARGET_IOS)
         MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
         XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
         XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.mcardle.cwr"
+        # CMake's Xcode generator defaults every target's "Skip Install" to
+        # YES unless told otherwise, which makes `xcodebuild archive`
+        # produce a Generic Xcode Archive instead of an App Store archive --
+        # `xcodebuild archive` still reports "Archive Succeeded" either way,
+        # but -exportArchive then rejects it (exportOptionsPlist "method"
+        # error, since a generic archive has no ApplicationProperties).
+        # Scoped to just this target, not project-wide, so the static
+        # library dependencies don't also become "installable" products in
+        # the archive.
+        XCODE_ATTRIBUTE_SKIP_INSTALL "NO"
     )
     target_sources(PoseidonGame PRIVATE
         "${POSEIDON_IOS_ASSET_CATALOG}"
