@@ -31,29 +31,10 @@ platform :ios do
     # in by reconfiguring, not by patching a plist file or passing
     # CURRENT_PROJECT_VERSION as an xcarg (nothing in this project's
     # Info.plist template references that Xcode build setting).
-    cache_path = "#{REPO_ROOT}/#{BUILD_DIR}/CMakeCache.txt"
-    pbxproj_path = "#{REPO_ROOT}/#{BUILD_DIR}/CWR.xcodeproj/project.pbxproj"
-    UI.message("DIAGNOSTIC: CMakeCache.txt exists before configure? #{File.exist?(cache_path)}" +
-      (File.exist?(cache_path) ? " (mtime #{File.mtime(cache_path)})" : ""))
-
     sh("cmake", "-S", REPO_ROOT, "--preset", PRESET,
        "-DPOSEIDON_IOS_BUILD_NUMBER=#{next_build}",
        "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
        "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache")
-
-    # DIAGNOSTIC: verify SKIP_INSTALL actually landed in the generated
-    # project as intended (PRs #70/#71) before trusting it as a fix.
-    UI.message("DIAGNOSTIC: project.pbxproj mtime #{File.mtime(pbxproj_path)}, now #{Time.now}")
-    UI.message("DIAGNOSTIC: raw pbxproj SKIP_INSTALL lines:")
-    File.readlines(pbxproj_path).each_with_index { |line, i|
-      puts "#{i}: #{line}" if line =~ /SKIP_INSTALL/
-    }
-    sh("xcodebuild", "-showBuildSettings",
-       "-project", "#{REPO_ROOT}/#{BUILD_DIR}/CWR.xcodeproj",
-       "-scheme", "PoseidonGame",
-       "-configuration", "Release") { |status, result, cmd|
-      (result || "").each_line { |l| puts l if l =~ /SKIP_INSTALL/i }
-    }
 
     build_app(
       project: "#{REPO_ROOT}/#{BUILD_DIR}/CWR.xcodeproj",
@@ -62,7 +43,18 @@ platform :ios do
       sdk: "iphoneos",
       destination: "generic/platform=iOS",
       export_method: "app-store",
-      xcargs: "CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY='iPhone Distribution' PROVISIONING_PROFILE_SPECIFIER='Github Actions profile (CWR)' OTHER_CODE_SIGN_FLAGS='--keychain #{ENV["RUNNER_TEMP"]}/app-signing.keychain-db'",
+      # SKIP_INSTALL=NO here (not via CMake's XCODE_ATTRIBUTE_SKIP_INSTALL
+      # target property, which this CMake/Xcode-generator combo silently
+      # never writes into project.pbxproj -- confirmed by grepping the
+      # generated file for zero SKIP_INSTALL occurrences) -- without it,
+      # `xcodebuild archive` produces a Generic Xcode Archive (no
+      # ApplicationProperties in the .xcarchive's Info.plist), which
+      # -exportArchive then rejects. Applying it as a blanket xcodebuild
+      # override is safe here since every PoseidonGame dependency is a
+      # static library (.a); those get linked into the binary rather than
+      # separately "installed", so they can't trigger the multiple-
+      # installable-products variant of the same Generic Archive problem.
+      xcargs: "SKIP_INSTALL=NO CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY='iPhone Distribution' PROVISIONING_PROFILE_SPECIFIER='Github Actions profile (CWR)' OTHER_CODE_SIGN_FLAGS='--keychain #{ENV["RUNNER_TEMP"]}/app-signing.keychain-db'",
       export_options: {
         signingStyle: "manual",
         provisioningProfiles: {
