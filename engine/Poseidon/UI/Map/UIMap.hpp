@@ -246,10 +246,10 @@ public:
 
 protected:
 	void UpdatePicture();
-	void PrevPicture();
-	void NextPicture();
-	void PrevColor();
-	void NextColor();
+	void PrevPicture(int step);
+	void NextPicture(int step);
+	void PrevColor(int step);
+	void NextColor(int step);
 
 	// change direction
 	void ChangeDir(int delta);

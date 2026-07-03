@@ -194,7 +194,7 @@ void DisplayInsertMarker::OnSimulate(EntityAI* vehicle)
         input.ConsumeKeyPress(SDL_SCANCODE_DOWN);
         if (input.IsKeyDown(SDL_SCANCODE_LSHIFT) || input.GetKey(SDL_SCANCODE_RSHIFT))
         {
-            NextColor();
+            NextColor(pressingAlt ? 3 : 1);
         }
         else if (input.IsKeyDown(SDL_SCANCODE_LCTRL) || input.GetKey(SDL_SCANCODE_RCTRL))
         {
@@ -202,7 +202,7 @@ void DisplayInsertMarker::OnSimulate(EntityAI* vehicle)
         }
         else
         {
-            NextPicture();
+            NextPicture(pressingAlt ? 5 : 1);
         }
         UpdatePicture();
     }
@@ -212,7 +212,7 @@ void DisplayInsertMarker::OnSimulate(EntityAI* vehicle)
         input.ConsumeKeyPress(SDL_SCANCODE_UP);
         if (input.IsKeyDown(SDL_SCANCODE_LSHIFT) || input.GetKey(SDL_SCANCODE_RSHIFT))
         {
-            PrevColor();
+            PrevColor(pressingAlt ? 3 : 1);
         }
         else if (input.IsKeyDown(SDL_SCANCODE_LCTRL) || input.GetKey(SDL_SCANCODE_RCTRL))
         {
@@ -220,7 +220,7 @@ void DisplayInsertMarker::OnSimulate(EntityAI* vehicle)
         }
         else
         {
-            PrevPicture();
+            PrevPicture(pressingAlt ? 5 : 1);
         }
         UpdatePicture();
     }
@@ -295,47 +295,47 @@ void DisplayInsertMarker::UpdatePicture()
     }
 }
 
-void DisplayInsertMarker::PrevPicture()
+void DisplayInsertMarker::PrevPicture(int step)
 {
     const ParamEntry& markers = Pars >> "CfgMarkers";
     int n = markers.GetEntryCount();
-    _picture--;
-    if (_picture < 0)
+    _picture -= step;
+    while (_picture < 0)
     {
-        _picture = n - 1;
-    }
+        _picture += n;
+    } 
 }
 
-void DisplayInsertMarker::NextPicture()
+void DisplayInsertMarker::NextPicture(int step)
 {
     const ParamEntry& markers = Pars >> "CfgMarkers";
     int n = markers.GetEntryCount();
-    _picture++;
-    if (_picture >= n)
+	_picture += step;
+    while (_picture >= n)
     {
-        _picture = 0;
+        _picture -= n;
     }
 }
 
-void DisplayInsertMarker::PrevColor()
+void DisplayInsertMarker::PrevColor(int step)
 {
     const ParamEntry& colors = Pars >> "CfgMarkerColors";
     int n = colors.GetEntryCount();
-    _color--;
-    if (_color < 0)
+    _color -= step;
+    while (_color < 0)
     {
-        _color = n - 1;
+        _color += n;
     }
 }
 
-void DisplayInsertMarker::NextColor()
+void DisplayInsertMarker::NextColor(int step)
 {
     const ParamEntry& colors = Pars >> "CfgMarkerColors";
     int n = colors.GetEntryCount();
-    _color++;
-    if (_color >= n)
+    _color += step;
+    while (_color >= n)
     {
-        _color = 0;
+        _color -= n;
     }
 }
 
