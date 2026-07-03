@@ -31,6 +31,11 @@ platform :ios do
     # in by reconfiguring, not by patching a plist file or passing
     # CURRENT_PROJECT_VERSION as an xcarg (nothing in this project's
     # Info.plist template references that Xcode build setting).
+    cache_path = "#{REPO_ROOT}/#{BUILD_DIR}/CMakeCache.txt"
+    pbxproj_path = "#{REPO_ROOT}/#{BUILD_DIR}/CWR.xcodeproj/project.pbxproj"
+    UI.message("DIAGNOSTIC: CMakeCache.txt exists before configure? #{File.exist?(cache_path)}" +
+      (File.exist?(cache_path) ? " (mtime #{File.mtime(cache_path)})" : ""))
+
     sh("cmake", "-S", REPO_ROOT, "--preset", PRESET,
        "-DPOSEIDON_IOS_BUILD_NUMBER=#{next_build}",
        "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
@@ -38,6 +43,11 @@ platform :ios do
 
     # DIAGNOSTIC: verify SKIP_INSTALL actually landed in the generated
     # project as intended (PRs #70/#71) before trusting it as a fix.
+    UI.message("DIAGNOSTIC: project.pbxproj mtime #{File.mtime(pbxproj_path)}, now #{Time.now}")
+    UI.message("DIAGNOSTIC: raw pbxproj SKIP_INSTALL lines:")
+    File.readlines(pbxproj_path).each_with_index { |line, i|
+      puts "#{i}: #{line}" if line =~ /SKIP_INSTALL/
+    }
     sh("xcodebuild", "-showBuildSettings",
        "-project", "#{REPO_ROOT}/#{BUILD_DIR}/CWR.xcodeproj",
        "-scheme", "PoseidonGame",
