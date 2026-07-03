@@ -108,6 +108,9 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/"$UUID".mobileprovision
 
+      - name: Show Xcode version
+        run: xcodebuild -version
+
       - name: Build and upload to TestFlight
         env:
           DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
@@ -116,6 +119,15 @@ jobs:
           APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
           OTHER_CODE_SIGN_FLAGS: "--keychain ${{ runner.temp }}/app-signing.keychain-db"
         run: /opt/homebrew/bin/fastlane beta
+
+      - name: Diagnose archive product type
+        if: always()
+        run: |
+          ARCHIVE=$(ls -td ~/Library/Developer/Xcode/Archives/*/*.xcarchive 2>/dev/null | head -1)
+          echo "Latest archive: $ARCHIVE"
+          if [ -n "$ARCHIVE" ]; then
+            /usr/libexec/PlistBuddy -c "Print" "$ARCHIVE/Info.plist" || true
+          fi
 
       - name: Show compiler cache stats
         if: always()
