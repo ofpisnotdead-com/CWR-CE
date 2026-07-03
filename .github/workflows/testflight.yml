@@ -58,6 +58,13 @@ jobs:
           ccache --zero-stats
           echo "CCACHE_DIR=$CCACHE_DIR" >> "$GITHUB_ENV"
 
+      - name: Configure self-hosted vcpkg binary cache
+        run: |
+          mkdir -p "$HOME/.cache/vcpkg-bincache/arm64-ios"
+          mkdir -p .vcpkg-bincache
+          rm -rf ".vcpkg-bincache/arm64-ios"
+          ln -s "$HOME/.cache/vcpkg-bincache/arm64-ios" ".vcpkg-bincache/arm64-ios"
+
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         env:
