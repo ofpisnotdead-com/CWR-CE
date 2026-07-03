@@ -48,6 +48,7 @@ using namespace Poseidon::Dev;
 #include <Poseidon/Audio/IAudioSystem.hpp>
 #include <Poseidon/Audio/SoundScene.hpp>
 #include <Poseidon/Graphics/Rendering/Draw/FontSystem.hpp>
+#include <Poseidon/World/Scene/ScenePreloader.hpp>
 
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
 
@@ -140,6 +141,11 @@ void UnloadGameData(bool keepEngine)
         GEngine->ClearFontCache();
     }
     FontSystem::Instance().Shutdown();
+    // ScenePreloader is a process-lifetime singleton with an _initialized flag;
+    // without this Shutdown the next Initialize(newScene) after a re-mount
+    // early-returns and leaves the fresh Scene's _preloaded[] all-null. First
+    // explosion then dereferences a null CraterShell in Collisions.cpp.
+    ScenePreloader::Instance().Shutdown();
     GPreloadedTextures.Clear();
     // Release the sound scene's waves (env sounds, global sounds, music track) while the
     // sound system that owns their OpenAL buffers/sources is still alive. GSoundScene is a
