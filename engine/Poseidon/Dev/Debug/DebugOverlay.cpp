@@ -1739,7 +1739,7 @@ void ProcessEvent(const SDL_Event& event)
         // of keyboard layout.  Ctrl is required so the unmodified key stays
         // available to the game (it's used in radio/chat commands).
         const bool ctrlDown = (event.key.mod & SDL_KMOD_CTRL) != 0;
-        if (event.key.scancode == SDL_SCANCODE_GRAVE && ctrlDown)
+        if (event.key.scancode == SDL_SCANCODE_TAB && ctrlDown)
         {
             ToggleVisible();
             return;
