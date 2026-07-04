@@ -1679,7 +1679,7 @@ void DrawMainWindow()
     }
 
     ImGui::Separator();
-    ImGui::TextDisabled("Ctrl+` / Ctrl+; to hide");
+    ImGui::TextDisabled("Ctrl+Tab to hide");
     ImGui::End();
 }
 } // namespace
@@ -1709,7 +1709,7 @@ void Init(SDL_Window* window, void* glContext)
     }
 
     s_initialized = true;
-    LOG_INFO(Graphics, "DebugOverlay: ImGui initialized (press Ctrl+` / Ctrl+; to toggle)");
+    LOG_INFO(Graphics, "DebugOverlay: ImGui initialized (press Ctrl+Tab to toggle)");
 }
 
 void Shutdown()
@@ -1730,12 +1730,12 @@ void ProcessEvent(const SDL_Event& event)
 
     if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
     {
-        // Ctrl+Grave + F5 are dev-only hotkeys (toggle dev panel +
+        // Ctrl+Tab + F5 are dev-only hotkeys (toggle dev panel +
         // role-slot flicker) gated by --dev.
         if (!AppConfig::Instance().DevMode())
             return;
-        // Ctrl+` (US) / Ctrl+; (CZ) — toggle the dev panel.  Bound by physical
-        // scancode (GRAVE = the key above Tab) so the same key works regardless
+        // Ctrl+Tab — toggle the dev panel.  Bound by physical
+        // scancode (TAB) so the same key works regardless
         // of keyboard layout.  Ctrl is required so the unmodified key stays
         // available to the game (it's used in radio/chat commands).
         const bool ctrlDown = (event.key.mod & SDL_KMOD_CTRL) != 0;
