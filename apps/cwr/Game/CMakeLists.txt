@@ -154,6 +154,12 @@ if(POSEIDON_TARGET_IOS)
         # archive under UninstalledProducts.
         XCODE_ATTRIBUTE_SKIP_INSTALL "NO"
         XCODE_ATTRIBUTE_INSTALL_PATH "/Applications"
+        # CMake's Xcode generator leaves this unset, which does not default
+        # to Xcode's own "dwarf-with-dsym" -- without it, archive builds
+        # produce an empty dSYMs/ folder, so Apple never gets a dSYM and
+        # TestFlight crashes can't be symbolicated (Organizer's
+        # "Symbolicate" button just errors with nothing to fetch).
+        XCODE_ATTRIBUTE_DEBUG_INFORMATION_FORMAT "dwarf-with-dsym"
     )
     target_sources(PoseidonGame PRIVATE
         "${POSEIDON_IOS_ASSET_CATALOG}"
