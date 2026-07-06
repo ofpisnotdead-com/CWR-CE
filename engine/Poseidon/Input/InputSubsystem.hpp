@@ -163,6 +163,7 @@ class InputSubsystem
 
     // Action descriptions
     static UserActionDesc* GetUserActionDesc();
+    static UserActionDesc* GetUserActionDescA3Legacy();
 
     // Config settings
     bool IsReverseMouse() const;
@@ -202,15 +203,14 @@ class InputSubsystem
     // both code AND modifier match, so "Ctrl+W" doesn't conflict with bare
     // "W".  Returns UAN if no conflict.  Pass excludeSlot = -1 to scan
     // every slot of excludeAction too.  modifier = -1 means "no modifier".
-    UserAction FindBindingConflict(int packedCode,
-                                   UserAction excludeAction = UAN,
-                                   int excludeSlot = -1,
+    UserAction FindBindingConflict(int packedCode, UserAction excludeAction = UAN, int excludeSlot = -1,
                                    int modifier = -1) const;
 
     // Restore the engine defaults (UserActionDesc[i].keys) for every
     // action in the given Controls UI category.  Other categories'
     // bindings are left untouched.  Caller persists via SaveKeys().
     void ResetCategoryDefaults(ControlsCategory cat);
+    void ResetCategoryA3Legacy(ControlsCategory cat);
 
     // Binding detection — hardware polling for rebind UI
     bool GetMouseButtonToDo(int i) const;
@@ -239,6 +239,7 @@ class InputSubsystem
     InputSubsystem(const InputSubsystem&) = delete;
     InputSubsystem& operator=(const InputSubsystem&) = delete;
 
+    void ResetCategory(ControlsCategory cat, UserActionDesc* descs);
     void ComputeMovementState();
     void SyncToGInput();
 
@@ -265,4 +266,3 @@ class InputSubsystem
     float syntheticLeftStickY_ = 0.0f;
 };
 } // namespace Poseidon
-
