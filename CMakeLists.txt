@@ -195,6 +195,16 @@ add_subdirectory(engine/Poseidon)
 add_subdirectory(engine/PoseidonGL33)
 add_subdirectory(engine/PoseidonOpenAL)
 add_subdirectory(engine/PoseidonFormats)
+
+if(APPLE)
+    # Native Metal renderer backend for macOS (Apple Silicon). GL33 remains
+    # available and is still the default; Metal is an additional backend
+    # registered through GraphicsEngineFactory (see GraphicsBackendMTL.cpp).
+    add_subdirectory(engine/PoseidonMTL)
+    add_subdirectory(apps/tools/MetalSmokeTest)
+    add_subdirectory(apps/tools/GL33SmokeTest)
+endif()
+
 add_subdirectory(tests/unit/engine/Poseidon/Foundation)
 add_subdirectory(apps/tools/Evaluator)
 add_subdirectory(tests/unit/apps/Evaluator)

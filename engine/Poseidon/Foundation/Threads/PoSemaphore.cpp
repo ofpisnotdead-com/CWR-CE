@@ -12,6 +12,10 @@ PoSemaphore::PoSemaphore(long init, long maxCount)
 #ifdef _WIN32
     handle = CreateSemaphore(nullptr, init, maxCount, nullptr);
     error = (handle == nullptr);
+#elif defined(__APPLE__)
+    count = init;
+    error = false;
+    // maxCount is ignored, same as the pthreads path below
 #else
     error = (sem_init(&sem, 0, (unsigned)init) != 0);
     // maxCount is ignored under pthreads
@@ -25,6 +29,10 @@ void PoSemaphore::wait()
     {
         WaitForSingleObject(handle, INFINITE);
     }
+#elif defined(__APPLE__)
+    std::unique_lock<std::mutex> lk(mutex);
+    cv.wait(lk, [this] { return count > 0L; });
+    count--;
 #else
     sem_wait(&sem);
 #endif
@@ -38,6 +46,14 @@ bool PoSemaphore::tryWait()
         return false;
     }
     return (WaitForSingleObject(handle, 0L) == WAIT_OBJECT_0);
+#elif defined(__APPLE__)
+    std::unique_lock<std::mutex> lk(mutex);
+    if (count > 0L)
+    {
+        count--;
+        return true;
+    }
+    return false;
 #else
     return (sem_trywait(&sem) == 0);
 #endif
@@ -57,6 +73,13 @@ void PoSemaphore::signal(long count)
     }
     // NOTE: ReleaseSemaphore returns nonzero on success — this error test reads inverted.
     error = (ReleaseSemaphore(handle, count, nullptr) != 0);
+#elif defined(__APPLE__)
+    {
+        std::unique_lock<std::mutex> lk(mutex);
+        this->count += count;
+    }
+    error = false;
+    cv.notify_all();
 #else
     error = false;
     while (!error && count > 0L)
@@ -72,6 +95,10 @@ long PoSemaphore::getValue()
 #ifdef _WIN32
     error = true; // getValue is not available on Win32
     return 0L;
+#elif defined(__APPLE__)
+    std::unique_lock<std::mutex> lk(mutex);
+    error = false;
+    return count;
 #else
 #ifdef __CYGWIN__
     error = true;
@@ -92,6 +119,8 @@ PoSemaphore::~PoSemaphore()
         CloseHandle(handle);
         handle = nullptr;
     }
+#elif defined(__APPLE__)
+    // count, mutex, and cv clean up via their own destructors.
 #else
     sem_destroy(&sem);
 #endif
