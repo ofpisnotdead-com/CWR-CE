@@ -115,7 +115,9 @@ void InstallCrashHandler(const char*)
 #include <fcntl.h>
 #include <execinfo.h>
 #include <sys/resource.h>
+#ifdef __linux__
 #include <link.h>
+#endif
 
 namespace Poseidon::Foundation
 {
@@ -258,6 +260,7 @@ void handler(int sig, siginfo_t* info, void* /*ucontext*/)
     raise(sig);
 }
 
+#ifdef __linux__
 void captureBuildId()
 {
     g_buildId[0] = '\0';
@@ -297,6 +300,15 @@ void captureBuildId()
         },
         nullptr);
 }
+#else
+// macOS has no NT_GNU_BUILD_ID ELF note -- the equivalent would be the
+// Mach-O LC_UUID load command via <mach-o/dyld.h>. Not implemented yet;
+// g_buildId stays empty and the report just prints "unknown" (line ~227).
+void captureBuildId()
+{
+    g_buildId[0] = '\0';
+}
+#endif
 } // namespace
 
 void InstallCrashHandler(const char* crashDir)

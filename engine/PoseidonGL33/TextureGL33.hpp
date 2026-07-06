@@ -126,6 +126,8 @@ class TextureGL33 : public Texture
         return handle ? handle : GetSmallHandle();
     }
 
+    bool IsGpuValid() const override { return GetHandle() != 0; }
+
     const SurfaceInfoGL33& GetSurface() const { return _surface.GetTexture() ? _surface : _smallSurface; }
 
   private:

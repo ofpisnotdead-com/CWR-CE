@@ -6,7 +6,25 @@ namespace Poseidon::Foundation
 
 #ifndef _WIN32
 
-pthread_mutex_t mutexInit = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+namespace
+{
+// PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP is a glibc-only static-initializer
+// shortcut (not available on macOS/BSD libc); pthread_mutexattr_settype with
+// PTHREAD_MUTEX_RECURSIVE is the portable POSIX way to get the same recursive
+// mutex, just built at static-init time instead of as a compile-time constant.
+pthread_mutex_t MakeRecursiveMutexTemplate()
+{
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_t m;
+    pthread_mutex_init(&m, &attr);
+    pthread_mutexattr_destroy(&attr);
+    return m;
+}
+} // namespace
+
+pthread_mutex_t mutexInit = MakeRecursiveMutexTemplate();
 
 #endif
 

@@ -1,10 +1,6 @@
 #pragma once
 
-#ifdef _MSC_VER
-#include <intrin.h>
-#else
-#include <xmmintrin.h>
-#endif
+#include <Poseidon/Foundation/Common/X86IntrinsicsCompat.hpp>
 
 namespace Poseidon::Foundation
 {

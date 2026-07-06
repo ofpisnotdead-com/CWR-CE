@@ -349,7 +349,11 @@ private:
     bool _noSplash = false;
     bool _noBanner = false;
     bool _noMenuScene = false;
+#ifdef __APPLE__
+    std::string _renderBackend = "mtl";
+#else
     std::string _renderBackend = "gl33";
+#endif
     bool _enablePIII = false;
     bool _enableHWTL = false;
     bool _disableHWTL = false;

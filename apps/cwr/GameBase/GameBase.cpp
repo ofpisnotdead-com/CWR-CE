@@ -11,6 +11,7 @@
 #include <Poseidon/Dev/Diag/PerfTrace.hpp>
 #include <Poseidon/Core/TaskPool.hpp>
 #include <thread>
+#include <chrono>
 #include <Poseidon/IO/Streams/QBStream.hpp>          // GUseFileBanks
 #include <Poseidon/Foundation/Platform/FPUSetup.hpp> // InitFPU
 #include <Poseidon/Foundation/Platform/CrashHandler.hpp>

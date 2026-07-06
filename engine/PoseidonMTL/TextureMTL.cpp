@@ -6,6 +6,7 @@
 #include <Poseidon/IO/Streams/QStream.hpp>
 #include <Poseidon/Graphics/Textures/PAADecoder.hpp>
 #include <Poseidon/Foundation/Logging/Logging.hpp>
+#include <Poseidon/Foundation/Common/Filenames.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -29,9 +30,22 @@ AlphaStats::Kind ClassifyMetalAlpha(const AlphaStats& decoded)
     // occluding it. Keep genuinely partial surfaces (glass/smoke/fades) in
     // Blend, but route hole-heavy textures with limited partial edge pixels
     // through the cutout path.
-    if (decoded.pctClear >= 2.0 && decoded.pctPartial < 20.0)
+    // AI88 rope/fence art can devote roughly a quarter of its tiny texture to
+    // antialiased edge texels (stan_snura.paa is 16x32, ~25% partial). It is
+    // still a depth-resolved cutout, not a large translucent surface.
+    if (decoded.pctClear >= 2.0 && decoded.pctPartial < 30.0)
         return AlphaStats::Cutout;
     return decoded.kind;
+}
+
+// No filename component (name ends in a path separator, e.g. an empty
+// optional equipment icon "dtaext\equip\") is "no texture", not an error --
+// same reasoning SelectTextureSourceFactory (Pactext.cpp) uses for GL33.
+// Checked up front so an eagerly-decoding backend like this one doesn't
+// attempt (and warn about) a load that was never going to succeed.
+bool HasFilenameComponent(RStringB name)
+{
+    return GetFilenameExt(static_cast<const char*>(name))[0] != '\0';
 }
 
 // Shared by LoadPixels and LoadPixelsInterpolated: read a PAA/PAC file
@@ -106,6 +120,9 @@ TextureMTL::~TextureMTL()
 
 bool TextureMTL::LoadPixels(EngineMTLBootstrap& bootstrap)
 {
+    if (!HasFilenameComponent(Name()))
+        return false;
+
     DecodedImageChain chain;
     if (!ReadAndDecodeChain(Name(), chain))
     {
@@ -313,7 +330,8 @@ bool TextureMTL::LoadPixelsInterpolated(EngineMTLBootstrap& bootstrap, RStringB 
             break; // mismatched mip dims between the two sources -- stop, keep levels blended so far
         std::vector<uint8_t> out(a.rgba.size());
         for (size_t p = 0; p < out.size(); p++)
-            out[p] = static_cast<uint8_t>(a.rgba[p] + (static_cast<int>(b.rgba[p]) - static_cast<int>(a.rgba[p])) * factor);
+            out[p] =
+                static_cast<uint8_t>(a.rgba[p] + (static_cast<int>(b.rgba[p]) - static_cast<int>(a.rgba[p])) * factor);
         blended.push_back(std::move(out));
     }
     if (blended.empty())
@@ -543,7 +561,7 @@ Color TextureMTL::GetColor()
         a += rgba[i * 4 + 3];
     }
     return Color(static_cast<float>(r / pixelCount / 255.0), static_cast<float>(g / pixelCount / 255.0),
-                static_cast<float>(b / pixelCount / 255.0), static_cast<float>(a / pixelCount / 255.0));
+                 static_cast<float>(b / pixelCount / 255.0), static_cast<float>(a / pixelCount / 255.0));
 }
 
 } // namespace Poseidon

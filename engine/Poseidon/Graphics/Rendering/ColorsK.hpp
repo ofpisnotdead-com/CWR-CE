@@ -2,7 +2,7 @@
 int toInt(float fval);
 int toInt(double f);
 
-#include <xmmintrin.h>
+#include <Poseidon/Foundation/Common/X86IntrinsicsCompat.hpp>
 #include <Poseidon/Foundation/platform.hpp>
 #include <Poseidon/Foundation/Math/MathDefs.hpp>
 

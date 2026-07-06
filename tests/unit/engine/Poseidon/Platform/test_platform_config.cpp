@@ -22,6 +22,11 @@ TEST_CASE("appConfig: singleton defaults", "[platform][appConfig]")
     REQUIRE(config.BenchmarkMode() == false);
     REQUIRE(config.NoTextures() == false);
     REQUIRE(config.NoMap() == false);
+#ifdef __APPLE__
+    REQUIRE(config.GetRenderBackend() == "mtl");
+#else
+    REQUIRE(config.GetRenderBackend() == "gl33");
+#endif
 }
 
 TEST_CASE("config chain: FlashpointCfg defaults to UserDir + CfgName", "[platform][configChain]")

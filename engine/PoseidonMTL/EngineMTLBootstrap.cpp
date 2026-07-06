@@ -73,13 +73,22 @@ vertex VSOut vs2d(uint vid [[vertex_id]], const device Vertex2D* verts [[buffer(
 // straight from the legacy TLVertex's specular.a) -- 1.0 for ordinary 2D/UI
 // draws (no-op below), a real per-vertex value for the legacy 3D fan-draw
 // path (DrawIndexedFan3D), which otherwise had no fog at all.
+// alphaTest = {ref (0..1), enabled (0/1)} -- mirrors GL33's PSConstants.alphaRef
+// (EngineGL33_Shaders.cpp's s_psNormalGLSL: `r0.a - alphaRef.x*alphaRef.y < 0.0
+// discard`). Legacy-path cutout geometry (e.g. the watch bezel's alpha-holed
+// ring, see issue #86) relies on this: without a real discard here, "hole"
+// pixels still pass alpha-blend (invisible) but still write depth, occluding
+// anything drawn afterward that falls inside the hole.
 fragment float4 fs2d(VSOut in [[stage_in]], texture2d<float> tex [[texture(0)]],
                      texture2d<float> detailTex [[texture(1)]], sampler samp [[sampler(0)]],
                      sampler detailSamp [[sampler(1)]],
-                     constant float4& fogColor [[buffer(0)]])
+                     constant float4& fogColor [[buffer(0)]],
+                     constant float2& alphaTest [[buffer(1)]])
 {
     float4 texColor = tex.sample(samp, in.uv);
     float4 lit = texColor * in.color;
+    if (alphaTest.y > 0.5 && lit.a - alphaTest.x < 0.0)
+        discard_fragment();
     if (in.detailMode > 1.5)
     {
         float4 grass = detailTex.sample(detailSamp, in.uv1);
@@ -350,21 +359,40 @@ static inline float4 applyDetailMode(float4 baseTex, float3 diffuseLit, float3 s
     return float4(diffuseLit + specLit, baseTex.a);
 }
 
+// Conventional binary-alpha boundary: samples above this are treated as the
+// solid body of a cutout (important for foliage), while lower filtered
+// coverage may be represented spatially (important for distant mesh fences).
+constant float kSolidCutoutCoverage = 0.5;
+
 // Opaque-pipeline fragment shader (blending disabled at the pipeline level,
 // pipelineStateTLOpaque) -- used for every section EXCEPT true Blend
 // (AlphaStats::Blend) ones, matching GL33's pass split: opaque+cutout
 // sections never reach a blend-enabled draw, so partial-alpha noise in
 // ordinary diffuse textures (e.g. ijeepmg.paa, ~7% genuinely partial texels)
-// can't make part of the model see-through. Cutout sections still alpha-test
-// (ref = 0xc0/255, same threshold BuildRenderPassDescriptor.hpp uses for
-// AlphaMode::Test on WorldCutout) so fences/foliage punch through cleanly.
+// can't make part of the model see-through. A fixed alpha cutoff cannot
+// preserve a cutout's mip-filtered coverage: a low cutoff turns distant mesh
+// fences solid, while a high cutoff makes them disappear. Instead, compare
+// faint alpha against a stable screen-space pattern. A 25%-coverage mip texel
+// then writes roughly one quarter of its pixels (and depth), preserving
+// apparent density without bringing back blended-alpha ordering artifacts.
+// Mostly opaque texels bypass the pattern so foliage bodies remain solid
+// instead of acquiring conspicuous screen-door holes.
 fragment float4 fsMeshOpaque(VSOutMesh in [[stage_in]], constant FrameConstants& frame [[buffer(0)]],
                              texture2d<float> tex [[texture(0)]], texture2d<float> detailTex [[texture(1)]],
                              sampler samp [[sampler(0)]], sampler detailSamp [[sampler(1)]])
 {
     float4 texColor = tex.sample(samp, in.uv);
-    if (in.isCutout > 0.5 && texColor.a < (192.0 / 255.0))
-        discard_fragment();
+    if (in.isCutout > 0.5)
+    {
+        float coverage = in.color.a * texColor.a;
+        if (coverage < kSolidCutoutCoverage)
+        {
+            float coverageThreshold = fract(52.9829189 * fract(dot(floor(in.position.xy),
+                                                                   float2(0.06711056, 0.00583715))));
+            if (coverage <= coverageThreshold)
+                discard_fragment();
+        }
+    }
     float3 diffuseLit = texColor.rgb * in.color.rgb;
     float4 detailed = applyDetailMode(texColor, diffuseLit, in.specColor.rgb, in, detailTex, detailSamp);
     float3 finalColor = mix(detailed.rgb, frame.fogColor.rgb, in.fogFactor);
@@ -372,14 +400,23 @@ fragment float4 fsMeshOpaque(VSOutMesh in [[stage_in]], constant FrameConstants&
 }
 
 // Blend-pipeline fragment shader (blending enabled, pipelineStateTLBlend) --
-// used only for true Blend (AlphaStats::Blend) sections, where texColor.a is
-// real per-pixel data (glass, fences seen through, smoke) and is meant to
-// paint back-to-front over whatever is already in the framebuffer.
+// used only for true Blend sections, deferred back-to-front. Measured cutouts
+// use fsMeshOpaque's coverage discard instead, so surviving pixels have
+// deterministic opaque color and depth.
 fragment float4 fsMeshBlend(VSOutMesh in [[stage_in]], constant FrameConstants& frame [[buffer(0)]],
                             texture2d<float> tex [[texture(0)]], texture2d<float> detailTex [[texture(1)]],
                             sampler samp [[sampler(0)]], sampler detailSamp [[sampler(1)]])
 {
     float4 texColor = tex.sample(samp, in.uv);
+    // Alpha-blended mesh sections still write depth, matching the legacy
+    // renderer. Never let their fully transparent texture background write
+    // an invisible depth rectangle: this is essential for antialiased
+    // cutout-like details such as tent ropes and perforated wreck parts.
+    // AI88 is currently expanded through ARGB4444, whose first non-zero
+    // alpha step is 17/255. Treat that lowest quantization step as clear; it
+    // is visually negligible but otherwise stamps depth around thin ropes.
+    if (in.color.a * texColor.a < (18.0 / 255.0))
+        discard_fragment();
     float3 diffuseLit = texColor.rgb * in.color.rgb;
     float4 detailed = applyDetailMode(texColor, diffuseLit, in.specColor.rgb, in, detailTex, detailSamp);
     float3 finalColor = mix(detailed.rgb, frame.fogColor.rgb, in.fogFactor);
@@ -501,10 +538,10 @@ DrawableSizeChoice ResolveDrawableSize(SDL_Window* window, int fallbackWidth, in
 
     const double scaleX = static_cast<double>(choice.width) / static_cast<double>(logicalW);
     const double scaleY = static_cast<double>(choice.height) / static_cast<double>(logicalH);
-    const int safePixelW = std::clamp(static_cast<int>(std::lround(static_cast<double>(safe.w) * scaleX)), 1,
-                                      choice.width);
-    const int safePixelH = std::clamp(static_cast<int>(std::lround(static_cast<double>(safe.h) * scaleY)), 1,
-                                      choice.height);
+    const int safePixelW =
+        std::clamp(static_cast<int>(std::lround(static_cast<double>(safe.w) * scaleX)), 1, choice.width);
+    const int safePixelH =
+        std::clamp(static_cast<int>(std::lround(static_cast<double>(safe.h) * scaleY)), 1, choice.height);
     if (safePixelW <= 0 || safePixelH <= 0)
         return choice;
 
@@ -567,8 +604,8 @@ struct EngineMTLBootstrap::Impl
     // blending so opaque/cutout sections never have blending enabled, same
     // split GL33 gets from its opaque-pass-vs-BlendOnly-pass routing (see
     // DrawSectionTL's blendEnabled parameter).
-    MTL::RenderPipelineState* pipelineStateTL = nullptr;       // fsMeshOpaque, blending disabled
-    MTL::RenderPipelineState* pipelineStateTLBlend = nullptr;  // fsMeshBlend, blending enabled
+    MTL::RenderPipelineState* pipelineStateTL = nullptr;      // fsMeshOpaque, blending disabled
+    MTL::RenderPipelineState* pipelineStateTLBlend = nullptr; // fsMeshBlend, blending enabled
     // Single-pass shadow variant for the hardware-TL path: vsMesh/fsShadow,
     // color writes ON, Shadow blend factors (Zero, OneMinusSourceAlpha) --
     // paired with depthStateShadow's stencil EQUAL 0 + INCREMENT. See
@@ -594,6 +631,7 @@ struct EngineMTLBootstrap::Impl
     // changes from Metal's default (0), this resets the shadow mask back to
     // a clean slate ahead of the next shadow draw, every frame.
     MTL::DepthStencilState* depthStateTL = nullptr;
+    MTL::DepthStencilState* depthStateTLLess = nullptr; // strict cutout depth: equal rear layers lose
     MTL::DepthStencilState* depthStateDisabled = nullptr;
     MTL::DepthStencilState* depthStateTLNoWrite = nullptr; // depth test on, write off -- NoZWrite sections (shadows)
     // Stencil EQUAL(ref=0)+INCREMENT(clamped), gated by the normal depth test
@@ -622,6 +660,8 @@ struct EngineMTLBootstrap::Impl
         Poseidon::render::SamplerMode sampler = {Poseidon::render::SamplerFilter::Linear, true, true};
         Poseidon::render::SurfaceMode surface = Poseidon::render::SurfaceMode::Default;
         Poseidon::render::ShaderFamily shader = Poseidon::render::ShaderFamily::Normal;
+        Poseidon::render::AlphaMode alphaMode = Poseidon::render::AlphaMode::Disabled;
+        std::uint8_t alphaRef = 0;
         float fogColor[3] = {0.0f, 0.0f, 0.0f};
 
         bool operator==(const Triangles2DState& rhs) const
@@ -630,7 +670,8 @@ struct EngineMTLBootstrap::Impl
                    clipX == rhs.clipX && clipY == rhs.clipY && clipW == rhs.clipW && clipH == rhs.clipH &&
                    useDepth == rhs.useDepth && depthMode == rhs.depthMode && blendMode == rhs.blendMode &&
                    sampler == rhs.sampler && surface == rhs.surface && shader == rhs.shader &&
-                   fogColor[0] == rhs.fogColor[0] && fogColor[1] == rhs.fogColor[1] && fogColor[2] == rhs.fogColor[2];
+                   alphaMode == rhs.alphaMode && alphaRef == rhs.alphaRef && fogColor[0] == rhs.fogColor[0] &&
+                   fogColor[1] == rhs.fogColor[1] && fogColor[2] == rhs.fogColor[2];
         }
         bool operator!=(const Triangles2DState& rhs) const { return !(*this == rhs); }
     };
@@ -748,6 +789,9 @@ bool EngineMTLBootstrap::SetupDevice()
 
     _impl->layer->setDevice(_impl->device);
     _impl->layer->setPixelFormat(MTL::PixelFormatBGRA8Unorm);
+    // Explicit screenshots copy the drawable into a CPU-visible buffer.
+    // CAMetalLayer's framebuffer-only default rejects using it as a blit source.
+    _impl->layer->setFramebufferOnly(false);
     // Engine code skips the color clear on some Clear() calls (e.g. additive
     // animation/trail effects) on the assumption that the buffer it's about
     // to draw into already holds exactly last frame's image -- true under
@@ -1077,6 +1121,14 @@ void EngineMTLBootstrap::EnsurePipeline()
     depthDescTL->setBackFaceStencil(stencilAlwaysReplaceZero);
     _impl->depthStateTL = _impl->device->newDepthStencilState(depthDescTL);
     depthDescTL->release();
+
+    MTL::DepthStencilDescriptor* depthDescTLLess = MTL::DepthStencilDescriptor::alloc()->init();
+    depthDescTLLess->setDepthCompareFunction(MTL::CompareFunctionLess);
+    depthDescTLLess->setDepthWriteEnabled(true);
+    depthDescTLLess->setFrontFaceStencil(stencilAlwaysReplaceZero);
+    depthDescTLLess->setBackFaceStencil(stencilAlwaysReplaceZero);
+    _impl->depthStateTLLess = _impl->device->newDepthStencilState(depthDescTLLess);
+    depthDescTLLess->release();
 
     MTL::DepthStencilDescriptor* depthDescOff = MTL::DepthStencilDescriptor::alloc()->init();
     depthDescOff->setDepthCompareFunction(MTL::CompareFunctionAlways);
@@ -1410,6 +1462,14 @@ void EngineMTLBootstrap::FlushTriangles2D()
     const float fogColorBuf[4] = {state.fogColor[0], state.fogColor[1], state.fogColor[2], 0.0f};
     _impl->currentEncoder->setFragmentBytes(fogColorBuf, sizeof(fogColorBuf), 0);
 
+    // fs2d's alphaTest uniform -- see fs2d's doc comment. Harmless no-op for
+    // pipelines whose fragment function doesn't declare buffer(1) (e.g.
+    // fs2dShadow, which does its own unconditional alpha discard).
+    const bool alphaTestEnabled = state.alphaMode == Poseidon::render::AlphaMode::Test ||
+                                  state.alphaMode == Poseidon::render::AlphaMode::TestAndBlend;
+    const float alphaTestBuf[2] = {state.alphaRef / 255.0f, alphaTestEnabled ? 1.0f : 0.0f};
+    _impl->currentEncoder->setFragmentBytes(alphaTestBuf, sizeof(alphaTestBuf), 1);
+
     // Explicit rebind, not inherited from BeginFrame's initial bind -- a
     // DrawSectionTL call earlier in this same encoder would otherwise leave
     // the mesh pipeline/depth-test state bound for this 2D draw.
@@ -1417,9 +1477,8 @@ void EngineMTLBootstrap::FlushTriangles2D()
     // Shadow polys use the single-pass stencil-exclusion scheme as the TL
     // path. Non-shadow flat UI keeps depth disabled; legacy software-TL
     // callers opt into the descriptor depth state through useDepth.
-    const bool isShadow =
-        state.blendMode == Poseidon::render::BlendMode::Shadow ||
-        state.depthMode == Poseidon::render::DepthMode::Shadow;
+    const bool isShadow = state.blendMode == Poseidon::render::BlendMode::Shadow ||
+                          state.depthMode == Poseidon::render::DepthMode::Shadow;
     MTL::RenderPipelineState* pipeline = _impl->pipelineState;
     if (isShadow)
         pipeline = _impl->pipelineState2DShadow;
@@ -1434,7 +1493,7 @@ void EngineMTLBootstrap::FlushTriangles2D()
         if (state.depthMode == Poseidon::render::DepthMode::ReadOnly)
             depthState = _impl->depthStateTLNoWrite;
         else if (state.depthMode == Poseidon::render::DepthMode::Normal)
-            depthState = _impl->depthStateTL;
+            depthState = state.alphaRef == 254 ? _impl->depthStateTLLess : _impl->depthStateTL;
     }
     _impl->currentEncoder->setDepthStencilState(depthState);
     _impl->currentEncoder->setFragmentSamplerState(_impl->samplerStates[SamplerIndex(state.sampler)], 0);
@@ -1444,14 +1503,15 @@ void EngineMTLBootstrap::FlushTriangles2D()
     _impl->currentEncoder->setFragmentSamplerState(_impl->samplerStates[0], 1);
     SetDepthBiasForDescriptor(_impl->currentEncoder, state.surface,
                               isShadow ? Poseidon::render::ShaderFamily::Shadow : state.shader);
-    // The 3D mesh path (DrawIndexedTL) sets CullModeBack + WindingClockwise
-    // on this same encoder for closed-hull culling and never resets it --
-    // it's sticky state, not per-draw. 2D screen-space UI quads have no
-    // "back face" and their vertex winding isn't normalized against that
-    // convention (DrawLine's perpendicular-offset quads come out the
-    // opposite handedness from Draw2D's TL/TR/BR/BL rects for some
-    // orientations), so leftover backface culling silently drops them.
-    _impl->currentEncoder->setCullMode(MTL::CullModeNone);
+    // The measured world-cutout state is reserved by PrepareTriangle with
+    // alphaRef 254. Cull its back faces so the far/interior side of thin
+    // closed parts (notably the M113 wheels) cannot compete with the near
+    // face at almost identical depth. Control3D/UI pictures are explicitly
+    // excluded from that state and remain two-sided; their quads do not have
+    // a reliable winding convention.
+    const bool measuredWorldCutout = state.alphaRef == 254 && state.useDepth;
+    _impl->currentEncoder->setFrontFacingWinding(MTL::WindingClockwise);
+    _impl->currentEncoder->setCullMode(measuredWorldCutout ? MTL::CullModeBack : MTL::CullModeNone);
 
     // Clamp to the drawable -- Metal's setScissorRect raises a validation
     // error if the rect extends past the render target.
@@ -1495,7 +1555,8 @@ void EngineMTLBootstrap::FlushTriangles2D()
 
     const size_t vertexBytes = _impl->queued2DVertices.size() * sizeof(Vertex2DMTL);
     const size_t indexBytes = _impl->queued2DIndices.size() * sizeof(uint16_t);
-    if (_impl->queued2DVertexBuffer == nullptr || _impl->queued2DVertexBufferUsed + vertexBytes > _impl->queued2DVertexBufferBytes)
+    if (_impl->queued2DVertexBuffer == nullptr ||
+        _impl->queued2DVertexBufferUsed + vertexBytes > _impl->queued2DVertexBufferBytes)
     {
         if (_impl->queued2DVertexBuffer != nullptr)
             _impl->pending2DBufferRelease[_impl->destroyGeneration].push_back(_impl->queued2DVertexBuffer);
@@ -1508,7 +1569,8 @@ void EngineMTLBootstrap::FlushTriangles2D()
         _impl->queued2DVertexBufferBytes = newBytes;
         _impl->queued2DVertexBufferUsed = 0;
     }
-    if (_impl->queued2DIndexBuffer == nullptr || _impl->queued2DIndexBufferUsed + indexBytes > _impl->queued2DIndexBufferBytes)
+    if (_impl->queued2DIndexBuffer == nullptr ||
+        _impl->queued2DIndexBufferUsed + indexBytes > _impl->queued2DIndexBufferBytes)
     {
         if (_impl->queued2DIndexBuffer != nullptr)
             _impl->pending2DBufferRelease[_impl->destroyGeneration].push_back(_impl->queued2DIndexBuffer);
@@ -1540,10 +1602,9 @@ void EngineMTLBootstrap::FlushTriangles2D()
     _impl->currentEncoder->setVertexBuffer(_impl->queued2DVertexBuffer, static_cast<NS::UInteger>(vertexOffset), 0);
     _impl->currentEncoder->setFragmentTexture(tex, 0);
     _impl->currentEncoder->setFragmentTexture(secondaryTex, 1);
-    _impl->currentEncoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle,
-                                                 static_cast<NS::UInteger>(_impl->queued2DIndices.size()),
-                                                 MTL::IndexTypeUInt16, _impl->queued2DIndexBuffer,
-                                                 static_cast<NS::UInteger>(indexOffset));
+    _impl->currentEncoder->drawIndexedPrimitives(
+        MTL::PrimitiveTypeTriangle, static_cast<NS::UInteger>(_impl->queued2DIndices.size()), MTL::IndexTypeUInt16,
+        _impl->queued2DIndexBuffer, static_cast<NS::UInteger>(indexOffset));
 
     _impl->queued2DActive = false;
     _impl->queued2DVertices.clear();
@@ -1551,15 +1612,14 @@ void EngineMTLBootstrap::FlushTriangles2D()
 }
 
 void EngineMTLBootstrap::DrawTriangles2D(const Vertex2DMTL* verts, int vertCount, const uint16_t* indices,
-                                         int indexCount, int textureHandle, int secondaryTextureHandle,
-                                         int clipX, int clipY, int clipW, int clipH,
-                                         bool useDepth,
+                                         int indexCount, int textureHandle, int secondaryTextureHandle, int clipX,
+                                         int clipY, int clipW, int clipH, bool useDepth,
                                          Poseidon::render::DepthMode depthMode, Poseidon::render::BlendMode blendMode,
                                          Poseidon::render::SamplerMode sampler, Poseidon::render::SurfaceMode surface,
-                                         Poseidon::render::ShaderFamily shader, const float fogColor[3])
+                                         Poseidon::render::ShaderFamily shader, Poseidon::render::AlphaMode alphaMode,
+                                         std::uint8_t alphaRef, const float fogColor[3])
 {
-    if (_impl->currentEncoder == nullptr || vertCount <= 0 || indexCount <= 0 || verts == nullptr ||
-        indices == nullptr)
+    if (_impl->currentEncoder == nullptr || vertCount <= 0 || indexCount <= 0 || verts == nullptr || indices == nullptr)
         return;
 
     Impl::Triangles2DState state;
@@ -1575,6 +1635,8 @@ void EngineMTLBootstrap::DrawTriangles2D(const Vertex2DMTL* verts, int vertCount
     state.sampler = sampler;
     state.surface = surface;
     state.shader = shader;
+    state.alphaMode = alphaMode;
+    state.alphaRef = alphaRef;
     state.fogColor[0] = fogColor ? fogColor[0] : 0.0f;
     state.fogColor[1] = fogColor ? fogColor[1] : 0.0f;
     state.fogColor[2] = fogColor ? fogColor[2] : 0.0f;
@@ -1600,10 +1662,10 @@ void EngineMTLBootstrap::DrawTriangles2D(const Vertex2DMTL* verts, int vertCount
         _impl->queued2DIndices[firstNewIndex + static_cast<size_t>(i)] = static_cast<uint16_t>(indices[i] + baseVertex);
 }
 
-void EngineMTLBootstrap::EndFrame()
+bool EngineMTLBootstrap::EndFrame(std::vector<uint8_t>* screenshotRGB, int* screenshotWidth, int* screenshotHeight)
 {
     if (_impl->currentEncoder == nullptr)
-        return;
+        return false;
 
     FlushTriangles2D();
 
@@ -1616,8 +1678,54 @@ void EngineMTLBootstrap::EndFrame()
 
     _impl->currentEncoder->endEncoding();
 
+    MTL::Buffer* screenshotBuffer = nullptr;
+    int captureWidth = 0;
+    int captureHeight = 0;
+    size_t captureBytesPerRow = 0;
+    if (screenshotRGB != nullptr)
+    {
+        MTL::Texture* drawableTexture = _impl->currentDrawable->texture();
+        captureWidth = static_cast<int>(drawableTexture->width());
+        captureHeight = static_cast<int>(drawableTexture->height());
+        captureBytesPerRow = (static_cast<size_t>(captureWidth) * 4u + 255u) & ~size_t(255u);
+        screenshotBuffer = _impl->device->newBuffer(captureBytesPerRow * static_cast<size_t>(captureHeight),
+                                                    MTL::ResourceStorageModeShared);
+        if (screenshotBuffer != nullptr)
+        {
+            MTL::BlitCommandEncoder* blit = _impl->currentCommandBuffer->blitCommandEncoder();
+            blit->copyFromTexture(drawableTexture, 0, 0, MTL::Origin(0, 0, 0),
+                                  MTL::Size(captureWidth, captureHeight, 1), screenshotBuffer, 0, captureBytesPerRow,
+                                  captureBytesPerRow * static_cast<size_t>(captureHeight));
+            blit->endEncoding();
+        }
+    }
+
     _impl->currentCommandBuffer->presentDrawable(_impl->currentDrawable);
     _impl->currentCommandBuffer->commit();
+
+    const bool screenshotCaptured = screenshotBuffer != nullptr;
+    if (screenshotCaptured)
+    {
+        _impl->currentCommandBuffer->waitUntilCompleted();
+        screenshotRGB->resize(static_cast<size_t>(captureWidth) * static_cast<size_t>(captureHeight) * 3u);
+        const auto* bgra = static_cast<const uint8_t*>(screenshotBuffer->contents());
+        for (int y = 0; y < captureHeight; ++y)
+        {
+            const uint8_t* src = bgra + static_cast<size_t>(y) * captureBytesPerRow;
+            uint8_t* dst = screenshotRGB->data() + static_cast<size_t>(y) * static_cast<size_t>(captureWidth) * 3u;
+            for (int x = 0; x < captureWidth; ++x)
+            {
+                dst[x * 3 + 0] = src[x * 4 + 2];
+                dst[x * 3 + 1] = src[x * 4 + 1];
+                dst[x * 3 + 2] = src[x * 4 + 0];
+            }
+        }
+        if (screenshotWidth != nullptr)
+            *screenshotWidth = captureWidth;
+        if (screenshotHeight != nullptr)
+            *screenshotHeight = captureHeight;
+        screenshotBuffer->release();
+    }
 
     _impl->currentEncoder->release();
     _impl->currentCommandBuffer->release();
@@ -1659,6 +1767,7 @@ void EngineMTLBootstrap::EndFrame()
         DestroyMeshBuffer(h);
     _impl->pendingMeshBufferDestroy[oldGen].clear();
     _impl->destroyGeneration = oldGen;
+    return screenshotRGB == nullptr || screenshotCaptured;
 }
 
 int EngineMTLBootstrap::CreateMeshBuffer(const void* data, size_t byteSize, bool dynamic, const char* debugLabel)
@@ -1666,8 +1775,8 @@ int EngineMTLBootstrap::CreateMeshBuffer(const void* data, size_t byteSize, bool
     if (_impl->device == nullptr || data == nullptr || byteSize == 0)
         return 0;
 
-    MTL::Buffer* buf = _impl->device->newBuffer(data, static_cast<NS::UInteger>(byteSize),
-                                                MTL::ResourceStorageModeShared);
+    MTL::Buffer* buf =
+        _impl->device->newBuffer(data, static_cast<NS::UInteger>(byteSize), MTL::ResourceStorageModeShared);
     if (buf == nullptr)
         return 0;
     (void)dynamic; // storage mode is the same either way; kept for caller-side bookkeeping only
@@ -1712,10 +1821,10 @@ void EngineMTLBootstrap::DestroyMeshBufferDeferred(int handle)
 }
 
 void EngineMTLBootstrap::DrawSectionTL(int vertexBufferHandle, int indexBufferHandle, int firstIndex, int indexCount,
-                                       int textureHandle, int secondaryTextureHandle, const ObjectConstantsMTL& obj, const FrameConstantsMTL& frame,
-                                       Poseidon::render::DepthMode depthMode, Poseidon::render::BlendMode blendMode,
-                                       Poseidon::render::SamplerMode sampler, Poseidon::render::SurfaceMode surface,
-                                       Poseidon::render::ShaderFamily shader)
+                                       int textureHandle, int secondaryTextureHandle, const ObjectConstantsMTL& obj,
+                                       const FrameConstantsMTL& frame, Poseidon::render::DepthMode depthMode,
+                                       Poseidon::render::BlendMode blendMode, Poseidon::render::SamplerMode sampler,
+                                       Poseidon::render::SurfaceMode surface, Poseidon::render::ShaderFamily shader)
 {
     if (_impl->currentEncoder == nullptr || indexCount <= 0)
         return;
@@ -1724,8 +1833,7 @@ void EngineMTLBootstrap::DrawSectionTL(int vertexBufferHandle, int indexBufferHa
 
     EnsureTLPipeline();
     if (_impl->pipelineStateTL == nullptr || _impl->pipelineStateTLBlend == nullptr ||
-        _impl->pipelineStateTLAdditive == nullptr ||
-        _impl->pipelineStateTLShadow == nullptr)
+        _impl->pipelineStateTLAdditive == nullptr || _impl->pipelineStateTLShadow == nullptr)
         return;
 
     if (vertexBufferHandle <= 0 || static_cast<size_t>(vertexBufferHandle) > _impl->meshBuffers.size())
@@ -1757,11 +1865,12 @@ void EngineMTLBootstrap::DrawSectionTL(int vertexBufferHandle, int indexBufferHa
     //
     // Pipeline choice mirrors GL33's opaque-pass/BlendOnly-pass split:
     // BlendMode::AlphaBlend is true Blend-classified sections (AlphaStats::
-    // Blend's doc comment: "must be deferred to the back-to-front pass" and
-    // never occlude/write depth -- only Opaque/Cutout do); BlendMode::Shadow
-    // is the single-pass shadow scheme (see fsShadow's doc comment); anything
-    // else (Opaque, or a descriptor mode this path doesn't have a pipeline
-    // for yet) falls back to the no-blend Opaque/Cutout pipeline.
+    // Blend's doc comment: "must be deferred to the back-to-front pass"); its
+    // fragment shader discards clear texels before the descriptor-selected
+    // depth state is applied. BlendMode::Shadow is the single-pass shadow
+    // scheme (see fsShadow's doc comment); anything else (Opaque, or a
+    // descriptor mode this path doesn't have a pipeline for yet) falls back
+    // to the no-blend Opaque/Cutout pipeline.
     /// TODO: ShaderFamily::Water/Detail/Grass don't have a real pipeline yet -- see
     /// BuildRenderPassDescriptor.hpp. Anything that resolves to one of those
     /// today silently falls back to Opaque here instead of failing loudly.
@@ -1775,14 +1884,11 @@ void EngineMTLBootstrap::DrawSectionTL(int vertexBufferHandle, int indexBufferHa
     _impl->currentEncoder->setRenderPipelineState(pipeline);
 
     // Depth state: DepthMode::Shadow gets the stencil-exclusion state
-    // (depthStateShadow); ReadOnly (Blend sections, and NoZWrite sections
-    // such as the legacy spec's shadow-adjacent decals) gets depth-test-only;
-    // everything else (Normal, or a mode without a dedicated state yet) gets
-    // the ordinary test+write state. Multiple overlapping Blend panels on the
-    // same mesh (e.g. an M113/jeep wreck's several rust-holed body sections)
-    // each writing their own depth would z-fight against each other and let
-    // the interior show through unpredictably depending on draw/section
-    // order -- ReadOnly avoids that.
+    // (depthStateShadow); ReadOnly (explicit NoZWrite sections such as the
+    // legacy spec's shadow-adjacent decals) gets depth-test-only; everything
+    // else (Normal, or a mode without a dedicated state yet) gets the ordinary
+    // test+write state. fsMeshBlend discards clear texels before this state can
+    // write depth.
     MTL::DepthStencilState* depthState = _impl->depthStateTL;
     if (depthMode == Poseidon::render::DepthMode::Shadow)
         depthState = _impl->depthStateShadow;
@@ -1828,9 +1934,8 @@ int EngineMTLBootstrap::CreateTexture(int width, int height, const uint8_t* rgba
     if (_impl->device == nullptr || width <= 0 || height <= 0 || rgba == nullptr)
         return 0;
 
-    MTL::TextureDescriptor* desc =
-        MTL::TextureDescriptor::texture2DDescriptor(MTL::PixelFormatRGBA8Unorm, static_cast<NS::UInteger>(width),
-                                                    static_cast<NS::UInteger>(height), false);
+    MTL::TextureDescriptor* desc = MTL::TextureDescriptor::texture2DDescriptor(
+        MTL::PixelFormatRGBA8Unorm, static_cast<NS::UInteger>(width), static_cast<NS::UInteger>(height), false);
     desc->setUsage(MTL::TextureUsageShaderRead);
     desc->setStorageMode(MTL::StorageModeShared);
 
@@ -1860,7 +1965,7 @@ void UploadMipLevels(MTL::Texture* tex, const EngineMTLBootstrap::MipLevel* leve
         if (levels[i].rgba == nullptr || levels[i].width <= 0 || levels[i].height <= 0)
             break;
         MTL::Region levelRegion = MTL::Region::Make2D(0, 0, static_cast<NS::UInteger>(levels[i].width),
-                                                       static_cast<NS::UInteger>(levels[i].height));
+                                                      static_cast<NS::UInteger>(levels[i].height));
         tex->replaceRegion(levelRegion, static_cast<NS::UInteger>(i), levels[i].rgba,
                            static_cast<NS::UInteger>(levels[i].width) * 4);
     }
@@ -2103,6 +2208,11 @@ void EngineMTLBootstrap::Shutdown()
     {
         _impl->depthStateTL->release();
         _impl->depthStateTL = nullptr;
+    }
+    if (_impl->depthStateTLLess != nullptr)
+    {
+        _impl->depthStateTLLess->release();
+        _impl->depthStateTLLess = nullptr;
     }
     if (_impl->depthStateDisabled != nullptr)
     {

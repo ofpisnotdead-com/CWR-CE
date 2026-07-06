@@ -6,8 +6,8 @@ using Poseidon::Engine;
 
 using Poseidon::GraphicsBackendDescriptor;
 
-using Poseidon::GraphicsEngineParams;
 using Poseidon::GraphicsEngineFactory;
+using Poseidon::GraphicsEngineParams;
 
 using Poseidon::CreateEngineMTL;
 

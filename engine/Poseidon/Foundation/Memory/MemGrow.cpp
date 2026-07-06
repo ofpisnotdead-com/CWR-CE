@@ -2,13 +2,15 @@
 #include <Poseidon/Foundation/Memory/MemGrow.hpp>
 #include <Poseidon/Core/Global.hpp>
 #include <Poseidon/Foundation/Common/Win.h>
-#ifndef _WIN32
+#if defined(__linux__)
 #include <linux/sysinfo.h>
+#include <sys/sysinfo.h>
+#elif defined(__APPLE__)
+#include <sys/sysctl.h> // vm.swapusage -- macOS has no sysinfo()/struct sysinfo
 #endif
 #include <Poseidon/Foundation/Framework/AppFrame.hpp>
 #ifndef _WIN32
 #include <sys/mman.h>
-#include <sys/sysinfo.h>
 #include <unistd.h>
 #endif
 
@@ -141,7 +143,7 @@ bool MemGrow::Commit(size_t size)
                          static_cast<unsigned long long>(ConvertToMB(mstat.dwTotalPageFile)),
                          static_cast<unsigned long long>(ConvertToMB(mstat.dwAvailPageFile)),
                          static_cast<unsigned long long>(ConvertToMB(mstat.dwTotalPageFile - mstat.dwAvailPageFile)));
-#else
+#elif defined(__linux__)
             struct sysinfo si;
             sysinfo(&si);
             ErrorMessage("Cannot increase memory pool to %llu MB.\\n"
@@ -151,6 +153,17 @@ bool MemGrow::Commit(size_t size)
                          static_cast<unsigned long long>(ConvertToMB(_commited)),
                          static_cast<unsigned long long>(ConvertToMB((size_t)si.totalswap * si.mem_unit)),
                          static_cast<unsigned long long>(ConvertToMB((size_t)si.freeswap * si.mem_unit)));
+#else // __APPLE__
+            struct xsw_usage xsu;
+            size_t xsuLen = sizeof(xsu);
+            sysctlbyname("vm.swapusage", &xsu, &xsuLen, nullptr, 0);
+            ErrorMessage("Cannot increase memory pool to %llu MB.\\n"
+                         "Current memory pool size is %llu MB.\\n"
+                         "Total swap: %llu MB, Free swap: %llu MB",
+                         static_cast<unsigned long long>(ConvertToMB(size)),
+                         static_cast<unsigned long long>(ConvertToMB(_commited)),
+                         static_cast<unsigned long long>(ConvertToMB(xsu.xsu_total)),
+                         static_cast<unsigned long long>(ConvertToMB(xsu.xsu_avail)));
 #endif
             return false;
         }

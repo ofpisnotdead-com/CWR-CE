@@ -2,7 +2,7 @@
 
 #include <string.h>
 #include <string>
-#include <malloc.h>
+#include <stdlib.h>
 #include <fcntl.h>
 #include <time.h>
 

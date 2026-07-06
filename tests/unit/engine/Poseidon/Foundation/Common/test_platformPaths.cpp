@@ -120,12 +120,20 @@ TEST_CASE("Config/data, doc, and cache dirs are distinct on Linux", "[platformPa
     std::string doc = Poseidon::Foundation::getUserDocumentsDir("TestApp_Distinct");
     std::string cache = Poseidon::Foundation::getUserCacheDir("TestApp_Distinct");
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
     REQUIRE(config == data);
     // On Linux with XDG defaults, these should be different base paths
     REQUIRE(config != doc);
     REQUIRE(config != cache);
     REQUIRE(data != cache);
+#elif defined(__APPLE__)
+    // macOS has a distinct native folder for each of the four.
+    REQUIRE(config != data);
+    REQUIRE(config != doc);
+    REQUIRE(config != cache);
+    REQUIRE(data != doc);
+    REQUIRE(data != cache);
+    REQUIRE(doc != cache);
 #endif
     // All should contain the app name
     REQUIRE(config.find("TestApp_Distinct") != std::string::npos);
@@ -139,7 +147,89 @@ TEST_CASE("Config/data, doc, and cache dirs are distinct on Linux", "[platformPa
     fs::remove_all(cache);
 }
 
-#ifndef _WIN32
+#if defined(__APPLE__)
+TEST_CASE("getUserConfigDir uses Library/Preferences on macOS", "[platformPaths]")
+{
+    auto tmpHome = fs::temp_directory_path() / "test_macos_config";
+    fs::create_directories(tmpHome);
+
+    ScopedEnv homeEnv("HOME", tmpHome.c_str());
+    std::string dir = Poseidon::Foundation::getUserConfigDir("TestApp_MacConfig");
+
+    std::string expected = (tmpHome / "Library" / "Preferences" / "TestApp_MacConfig").string();
+    REQUIRE(dir == expected);
+    REQUIRE(dirExists(dir));
+
+    fs::remove_all(tmpHome);
+}
+
+TEST_CASE("getUserDataDir uses Library/Application Support on macOS", "[platformPaths]")
+{
+    auto tmpHome = fs::temp_directory_path() / "test_macos_data";
+    fs::create_directories(tmpHome);
+
+    ScopedEnv homeEnv("HOME", tmpHome.c_str());
+    std::string dir = Poseidon::Foundation::getUserDataDir("TestApp_MacData");
+
+    std::string expected = (tmpHome / "Library" / "Application Support" / "TestApp_MacData").string();
+    REQUIRE(dir == expected);
+    REQUIRE(dirExists(dir));
+
+    fs::remove_all(tmpHome);
+}
+
+TEST_CASE("getUserCacheDir uses Library/Caches on macOS", "[platformPaths]")
+{
+    auto tmpHome = fs::temp_directory_path() / "test_macos_cache";
+    fs::create_directories(tmpHome);
+
+    ScopedEnv homeEnv("HOME", tmpHome.c_str());
+    std::string dir = Poseidon::Foundation::getUserCacheDir("TestApp_MacCache");
+
+    std::string expected = (tmpHome / "Library" / "Caches" / "TestApp_MacCache").string();
+    REQUIRE(dir == expected);
+    REQUIRE(dirExists(dir));
+
+    fs::remove_all(tmpHome);
+}
+
+TEST_CASE("getUserDocumentsDir uses Documents on macOS", "[platformPaths]")
+{
+    auto tmpHome = fs::temp_directory_path() / "test_macos_documents";
+    fs::create_directories(tmpHome);
+
+    ScopedEnv homeEnv("HOME", tmpHome.c_str());
+    std::string dir = Poseidon::Foundation::getUserDocumentsDir("TestApp_MacDocs");
+
+    std::string expected = (tmpHome / "Documents" / "TestApp_MacDocs").string();
+    REQUIRE(dir == expected);
+    REQUIRE(dirExists(dir));
+
+    fs::remove_all(tmpHome);
+}
+
+TEST_CASE("macOS ignores XDG_* env vars", "[platformPaths]")
+{
+    auto tmpHome = fs::temp_directory_path() / "test_macos_no_xdg";
+    auto xdgDir = fs::temp_directory_path() / "test_macos_xdg_override";
+    fs::create_directories(tmpHome);
+    fs::create_directories(xdgDir);
+
+    ScopedEnv homeEnv("HOME", tmpHome.c_str());
+    ScopedEnv xdgEnv("XDG_CONFIG_HOME", xdgDir.c_str());
+    std::string dir = Poseidon::Foundation::getUserConfigDir("TestApp_MacNoXdg");
+
+    // Native macOS paths must not be redirected by Linux XDG_* overrides.
+    REQUIRE(dir.find(xdgDir.string()) != 0);
+    std::string expected = (tmpHome / "Library" / "Preferences" / "TestApp_MacNoXdg").string();
+    REQUIRE(dir == expected);
+
+    fs::remove_all(tmpHome);
+    fs::remove_all(xdgDir);
+}
+#endif
+
+#if !defined(_WIN32) && !defined(__APPLE__)
 TEST_CASE("getUserConfigDir respects XDG_CONFIG_HOME", "[platformPaths]")
 {
     // Use a temp directory to override XDG_CONFIG_HOME

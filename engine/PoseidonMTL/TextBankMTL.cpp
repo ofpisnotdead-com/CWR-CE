@@ -79,7 +79,8 @@ void TextBankMTL::InitDetailTextures()
         return;
 
     const ParamEntry& names = Remaster >> "CfgDetailTextures";
-    auto loadDetail = [this](RStringB name, int maxSize = 4096) -> Ref<TextureMTL> {
+    auto loadDetail = [this](RStringB name, int maxSize = 4096) -> Ref<TextureMTL>
+    {
         if (!QIFStreamB::FileExist(name))
             return nullptr;
         Ref<Texture> loaded = Load(name);
