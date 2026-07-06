@@ -39,6 +39,11 @@ runs:
       if: runner.os == 'Linux'
       uses: ./.github/actions/setup-linux-deps
 
+    - name: Install macOS system packages
+      if: runner.os == 'macOS'
+      shell: bash
+      run: brew install clang-format
+
     - name: Setup LLVM and Clang
       if: runner.os == 'Windows'
       uses: KyleMayes/install-llvm-action@v2

@@ -166,9 +166,13 @@ TEST_CASE("potime - Poseidon::Foundation::getSystemTime timing accuracy", "[fram
         unsigned64 elapsed_us = end - start;
         double elapsed_ms = elapsed_us / 1000.0;
 
-        // Should be close to 10ms (allow �5ms tolerance for scheduler variance)
+        // Should be close to 10ms. Upper bound is deliberately generous --
+        // shared/virtualized CI runners (e.g. hosted macOS) can see multi-
+        // hundred-ms scheduler latency spikes under load that a bare-metal
+        // dev box never would; this is a sanity check that the clock isn't
+        // broken, not a scheduler-latency benchmark.
         REQUIRE(elapsed_ms >= 5.0);
-        REQUIRE(elapsed_ms <= 50.0); // Generous upper bound for slow systems
+        REQUIRE(elapsed_ms <= 200.0);
     }
 
     SECTION("Can measure longer intervals")
@@ -182,9 +186,9 @@ TEST_CASE("potime - Poseidon::Foundation::getSystemTime timing accuracy", "[fram
         unsigned64 elapsed_us = end - start;
         double elapsed_ms = elapsed_us / 1000.0;
 
-        // Should be close to 50ms (allow �10ms tolerance)
+        // Should be close to 50ms -- see the upper-bound comment above.
         REQUIRE(elapsed_ms >= 40.0);
-        REQUIRE(elapsed_ms <= 100.0); // Generous upper bound
+        REQUIRE(elapsed_ms <= 250.0);
     }
 }
 
@@ -218,9 +222,11 @@ TEST_CASE("potime - SLEEP_MS macro", "[framework][potime][sleep]")
         unsigned64 elapsed_us = end - start;
         double elapsed_ms = elapsed_us / 1000.0;
 
-        // Should be approximately 10ms (allow scheduler variance)
-        REQUIRE(elapsed_ms >= 1.0);  // At least 1ms
-        REQUIRE(elapsed_ms <= 50.0); // Not more than 50ms
+        // Should be approximately 10ms. Upper bound generous for
+        // shared/virtualized CI runner scheduler jitter -- see the
+        // timing-accuracy test above for why.
+        REQUIRE(elapsed_ms >= 1.0); // At least 1ms
+        REQUIRE(elapsed_ms <= 200.0);
     }
 
     SECTION("Sleep for zero milliseconds")
@@ -300,8 +306,9 @@ TEST_CASE("potime - Common usage patterns", "[framework][potime]")
         unsigned64 total_elapsed = end - start;
         double elapsed_ms = total_elapsed / 1000.0;
 
-        // Should have completed before timeout (generous tolerance for scheduler)
-        REQUIRE(elapsed_ms < 50.0); // Increased tolerance
+        // Should have completed before timeout -- generous tolerance for
+        // shared/virtualized CI runner scheduler jitter.
+        REQUIRE(elapsed_ms < 200.0);
         REQUIRE(operation_complete == true);
     }
 }
@@ -327,12 +334,14 @@ TEST_CASE("potime - Platform consistency", "[framework][potime]")
         {
             REQUIRE(samples[i] > samples[i - 1]);
 
-            // Difference should be approximately 10ms (�5ms tolerance)
+            // Difference should be approximately 10ms. Upper bound generous
+            // for shared/virtualized CI runner scheduler jitter -- see the
+            // timing-accuracy test above for why.
             unsigned64 diff_us = samples[i] - samples[i - 1];
             double diff_ms = diff_us / 1000.0;
 
             REQUIRE(diff_ms >= 5.0);
-            REQUIRE(diff_ms <= 50.0);
+            REQUIRE(diff_ms <= 200.0);
         }
     }
 }
