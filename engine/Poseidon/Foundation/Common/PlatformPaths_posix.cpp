@@ -64,6 +64,26 @@ std::string getUserCacheDir(const char* appName) {
 std::string getUserDocumentsDir(const char* appName) {
     return getXdgDir("XDG_DATA_HOME", "Documents", appName);
 }
+#elif defined(__APPLE__)
+// Desktop macOS has its own directory conventions, distinct from both iOS's
+// sandboxed container and Linux's XDG dirs. No XDG_* env var override here —
+// those aren't a macOS convention; app-level overrides go through the
+// POSEIDON_* vars in GamePaths.cpp instead.
+std::string getUserConfigDir(const char* appName) {
+    return getXdgDir("", "Library/Preferences", appName);
+}
+
+std::string getUserDataDir(const char* appName) {
+    return getXdgDir("", "Library/Application Support", appName);
+}
+
+std::string getUserCacheDir(const char* appName) {
+    return getXdgDir("", "Library/Caches", appName);
+}
+
+std::string getUserDocumentsDir(const char* appName) {
+    return getXdgDir("", "Documents", appName);
+}
 #else
 std::string getUserConfigDir(const char* appName) {
     return getXdgDir("XDG_CONFIG_HOME", ".config", appName);
