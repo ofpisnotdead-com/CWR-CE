@@ -240,17 +240,26 @@ void ProcessMouse_SDL(DWORD timeDelta)
         clampPtr = &clamp;
     }
 
-    // Default to the reference aspect ratio, override with the actual viewport aspect ratio if available
-    float viewportAspectRatio = MouseState::kBaseAspectRatio;
+    // Aiming spans the full window, so it uses the window aspect ratio
+    // (Width/Height).  The cursor's coordinates are relative to the HUD region,
+    // so it uses that region's aspect ratio (Width2D/Height2D) — this keeps its
+    // speed consistent and unaffected by the HUD width limit.  Both fall back to
+    // the 4:3 reference when the engine size is unavailable.
+    float aimAspectRatio = MouseState::kBaseAspectRatio;
+    float cursorAspectRatio = MouseState::kBaseAspectRatio;
     if (::Poseidon::GEngine)
     {
-        const int viewH = ::Poseidon::GEngine->Height();
-        if (viewH > 0)
-            viewportAspectRatio = static_cast<float>(::Poseidon::GEngine->Width()) / static_cast<float>(viewH);
+        const int winH = ::Poseidon::GEngine->Height();
+        if (winH > 0)
+            aimAspectRatio = static_cast<float>(::Poseidon::GEngine->Width()) / static_cast<float>(winH);
+
+        const int uiH = ::Poseidon::GEngine->Height2D();
+        if (uiH > 0)
+            cursorAspectRatio = static_cast<float>(::Poseidon::GEngine->Width2D()) / static_cast<float>(uiH);
     }
 
     bool markKeyboardTurn = GInput.mouse.Update(GInput.cursor, GInput.gameFocusLost, GInput.lookAroundEnabled,
-                                                Glob.uiTime, clampPtr, viewportAspectRatio);
+                                                Glob.uiTime, clampPtr, cursorAspectRatio, aimAspectRatio);
 
     if (markKeyboardTurn)
         GInput.keyboard.turnLastActive = Glob.uiTime;
