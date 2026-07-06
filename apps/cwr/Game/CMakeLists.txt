@@ -160,6 +160,15 @@ if(POSEIDON_TARGET_IOS)
         # TestFlight crashes can't be symbolicated (Organizer's
         # "Symbolicate" button just errors with nothing to fetch).
         XCODE_ATTRIBUTE_DEBUG_INFORMATION_FORMAT "dwarf-with-dsym"
+        # Release defaults GCC_GENERATE_DEBUGGING_SYMBOLS to NO, so object
+        # files carry no DWARF at all -- with nothing to extract, Xcode
+        # silently skips the "Generate dSYM File" phase entirely even with
+        # DEBUG_INFORMATION_FORMAT set above (this is why the dSYMs/ folder
+        # stayed empty even after adding that attribute). This only enables
+        # emitting -g info at compile time; COPY_PHASE_STRIP/
+        # STRIP_INSTALLED_PRODUCT (both YES here) still strip the shipped
+        # binary itself, so this doesn't bloat or de-optimize the archive.
+        XCODE_ATTRIBUTE_GCC_GENERATE_DEBUGGING_SYMBOLS "YES"
     )
     target_sources(PoseidonGame PRIVATE
         "${POSEIDON_IOS_ASSET_CATALOG}"
