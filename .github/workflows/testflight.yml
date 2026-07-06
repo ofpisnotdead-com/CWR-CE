@@ -108,6 +108,9 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/"$UUID".mobileprovision
 
+      - name: Show Xcode version
+        run: xcodebuild -version
+
       - name: Build and upload to TestFlight
         env:
           DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
@@ -116,6 +119,23 @@ jobs:
           APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
           OTHER_CODE_SIGN_FLAGS: "--keychain ${{ runner.temp }}/app-signing.keychain-db"
         run: /opt/homebrew/bin/fastlane beta
+
+      - name: Report dSYM output
+        if: always()
+        run: |
+          echo "Looking for dSYM output next to the exported ipa:"
+          ls -la *.dSYM* 2>&1 || echo "(none found)"
+
+      - name: Upload dSYMs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PoseidonGame-dSYMs-${{ github.run_id }}
+          path: |
+            *.dSYM.zip
+            *.app.dSYM
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Show compiler cache stats
         if: always()

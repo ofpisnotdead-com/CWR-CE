@@ -146,16 +146,29 @@ if(POSEIDON_TARGET_IOS)
         MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
         XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
         XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.mcardle.cwr"
-        # CMake's Xcode generator defaults every target's "Skip Install" to
-        # YES unless told otherwise, which makes `xcodebuild archive`
-        # produce a Generic Xcode Archive instead of an App Store archive --
-        # `xcodebuild archive` still reports "Archive Succeeded" either way,
-        # but -exportArchive then rejects it (exportOptionsPlist "method"
-        # error, since a generic archive has no ApplicationProperties).
-        # Scoped to just this target, not project-wide, so the static
-        # library dependencies don't also become "installable" products in
-        # the archive.
+        # For Xcode archives, only the app bundle should be installable.
+        # The project-wide App Store preset defaults generated targets to
+        # SKIP_INSTALL=YES; this target opts back in and gives Xcode the
+        # standard iOS app install directory so the archive is shaped as an
+        # App Store archive under Products/Applications instead of a Generic
+        # archive under UninstalledProducts.
         XCODE_ATTRIBUTE_SKIP_INSTALL "NO"
+        XCODE_ATTRIBUTE_INSTALL_PATH "/Applications"
+        # CMake's Xcode generator leaves this unset, which does not default
+        # to Xcode's own "dwarf-with-dsym" -- without it, archive builds
+        # produce an empty dSYMs/ folder, so Apple never gets a dSYM and
+        # TestFlight crashes can't be symbolicated (Organizer's
+        # "Symbolicate" button just errors with nothing to fetch).
+        XCODE_ATTRIBUTE_DEBUG_INFORMATION_FORMAT "dwarf-with-dsym"
+        # Release defaults GCC_GENERATE_DEBUGGING_SYMBOLS to NO, so object
+        # files carry no DWARF at all -- with nothing to extract, Xcode
+        # silently skips the "Generate dSYM File" phase entirely even with
+        # DEBUG_INFORMATION_FORMAT set above (this is why the dSYMs/ folder
+        # stayed empty even after adding that attribute). This only enables
+        # emitting -g info at compile time; COPY_PHASE_STRIP/
+        # STRIP_INSTALLED_PRODUCT (both YES here) still strip the shipped
+        # binary itself, so this doesn't bloat or de-optimize the archive.
+        XCODE_ATTRIBUTE_GCC_GENERATE_DEBUGGING_SYMBOLS "YES"
     )
     target_sources(PoseidonGame PRIVATE
         "${POSEIDON_IOS_ASSET_CATALOG}"
