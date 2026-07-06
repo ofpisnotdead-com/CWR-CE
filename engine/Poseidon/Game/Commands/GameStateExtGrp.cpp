@@ -1365,27 +1365,38 @@ DEFINE_COMMAND(Target)
 
 namespace
 {
-bool preProcessSpecialAction(EntityAI *veh, UIAction& action)
+bool checkAndProcessSpecialAction(EntityAI *veh, UIAction& action, const GameArrayType& array)
 {
-    switch (action.type)
+    GameStringType type = array[0];
+    UIActionType actType = GetEnumValue<UIActionType>((const char*)type);
+    if (actType == INT_MIN)
     {
-    // Special process for "LOAD MAGAZINE". This action type is supported in OFP however
-    // in OFP no way to obtain magazine's creator and id info in script.
-    // BTW, In AA3 there're magazinesDetail command to provide creator and id to scripter.
-    case ATLoadMagazine:
+        actType = ATNone;
+    }
+    
+    if (actType == ATLoadMagazine)
     {
+        if (array.Size() != 7)
+        {
+            return false;
+        }
+
+        // format: unit action ["LoadMagazine", target, magazineCreator, number1, number2, weaponName, muzzleName]
+
+        // in OFP magazineCreator, number1, number2 are not used, but they are present in the sequel Arma 3, so we keep them for compatibility
+
+        // https://community.bistudio.com/wiki/ArmA:_Armed_Assault:_Actions
+        // https://community.bistudio.com/wiki/Arma_3:_Actions
+
+        action.target = dyn_cast<EntityAI>(GetObject(array[1]));
         EntityAI* object = action.target;
         if (!object)
+        {
             return false;
+        }
 
-        // action.param3 assigned by scripter should be weapon|magazine
-        // for example: "gun120|shell120" for M1A1 to "reload HEAT"
-        const char *separator = strchr(action.param3, '|');
-        if (!separator)
-            return false;
-        int separatorPos = separator - action.param3;
-        RString weaponName = action.param3.Substring(0, separatorPos);
-        RString magName = action.param3.Substring(separatorPos + 1, INT_MAX);
+        RString weaponName = array[5];
+        RString magName = array[6];
 
         int iSlot = -1;
         for (int i = 0; i < object->NMagazineSlots(); i++)
@@ -1398,9 +1409,12 @@ bool preProcessSpecialAction(EntityAI *veh, UIAction& action)
             }
         }
         if (iSlot < 0)
+        {
             return false;
+        }
         const MagazineSlot &slot = object->GetMagazineSlot(iSlot);
 
+        bool found = false;
         for (int i = 0; i < object->NMagazines(); i++)
         {
             const Magazine *mag = object->GetMagazine(i);
@@ -1414,15 +1428,21 @@ bool preProcessSpecialAction(EntityAI *veh, UIAction& action)
                     action.param = bestMag->_creator;
                     action.param2 = bestMag->_id;
                     action.param3 = muzzleID;
-                    return true;
+                    found = true;
+                    break;
                 }
             }
         }
-        return false;
-    }
-    default:
+        if (!found)
+        {
+            return false;
+        }
+
+        action.type = actType;
+        veh->StartActionProcessing(action, veh->CommanderUnit());
         return true;
     }
+    return false;
 }
 } // (anonymous)
 
@@ -1446,6 +1466,16 @@ GameValue VehProcessAction(const GameState* state, GameValuePar oper1, GameValue
 
     const GameArrayType& array = oper2;
     int n = array.Size();
+
+    // Most actions have no more than 3 parameters, even though the sequel Arma 3 is included
+    // We take Arma 3 into account for compatibility. If we intend to introduce an action that
+    // is also present in the sequel, then its usage in OFP should match the way it is used in the sequel.
+    // Any exceptions with more parameters are dealt with individually.
+    if (checkAndProcessSpecialAction(veh, action, array))
+    {
+        return NOTHING;
+    }
+
     switch (n)
     {
         case 5:
@@ -1463,14 +1493,6 @@ GameValue VehProcessAction(const GameState* state, GameValuePar oper1, GameValue
             if (action.type == INT_MIN)
             {
                 action.type = ATNone;
-            }
-            {
-                bool preproc = preProcessSpecialAction(veh, action);
-                if (!preproc)
-                {
-                    // todo: better prepare custom hint message for scripter
-                    return NOTHING;
-                }
             }
         }
             veh->StartActionProcessing(action, veh->CommanderUnit());
