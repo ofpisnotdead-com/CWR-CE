@@ -146,6 +146,11 @@ if(POSEIDON_TARGET_IOS)
         MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
         XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
         XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.mcardle.cwr"
+        # iCloud entitlement for CloudSync (engine/Poseidon/Core/CloudSync) --
+        # requires the "iCloud" capability + container enabled on this App ID
+        # in the Apple Developer portal, and the provisioning profile
+        # regenerated to include it, before this has any runtime effect.
+        XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${CMAKE_CURRENT_SOURCE_DIR}/PoseidonGame.entitlements"
         # For Xcode archives, only the app bundle should be installable.
         # The project-wide App Store preset defaults generated targets to
         # SKIP_INSTALL=YES; this target opts back in and gives Xcode the

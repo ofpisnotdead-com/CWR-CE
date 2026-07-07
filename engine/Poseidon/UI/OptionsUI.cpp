@@ -29,6 +29,7 @@
 
 #include <Poseidon/Foundation/Common/Win.h>
 #include <Poseidon/Foundation/Common/PlayerPrefs.hpp>
+#include <Poseidon/Core/CloudSync/CloudSyncPaths.hpp>
 #include <Poseidon/IO/Filesystem/FileOps.hpp>
 #include <Poseidon/Core/ModSystem.hpp>
 #include <Poseidon/UI/GameModule.hpp>
@@ -1619,6 +1620,11 @@ LSError SaveMission(const char* filename)
         return LSUnknownError;
     }
 #endif
+    // Opportunistic push so a mission save shows up on another device sooner
+    // than the next quit -- fire-and-forget, no-ops when CloudSync is
+    // unavailable. The quit-time push is the authoritative one if this is
+    // still in flight or fails.
+    Poseidon::CloudSync::PushInBackground();
     return LSOK;
 }
 

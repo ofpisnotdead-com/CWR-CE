@@ -78,6 +78,22 @@ if(POSEIDON_TARGET_IOS)
     )
 endif()
 
+if(APPLE)
+    # Unlike the whole-file swaps above, CloudSync.cpp stays in ALL_SOURCES
+    # unmodified on every platform -- it holds the platform-agnostic
+    # RunSyncJobs/SyncWorker plus a `#if !defined(__APPLE__)` fallback for
+    # IsAvailable()/ContainerPath()/MakeAppleSyncOpsEnv(). CloudSync.mm
+    # additively supplies the real NSFileManager/NSFileCoordinator-backed
+    # versions of just that trio, for both macOS and iOS -- the
+    # ubiquity-container APIs are plain Foundation, not UIKit, so this isn't
+    # gated to POSEIDON_TARGET_IOS like the two entries above.
+    list(APPEND ALL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/Core/CloudSync/CloudSync.mm)
+    set_source_files_properties(
+        ${CMAKE_CURRENT_SOURCE_DIR}/Core/CloudSync/CloudSync.mm
+        PROPERTIES SKIP_PRECOMPILE_HEADERS ON
+    )
+endif()
+
 # Global exclusions
 list(FILTER ALL_SOURCES EXCLUDE REGEX "Memory/MemTable\.cpp$")
 list(FILTER ALL_SOURCES EXCLUDE REGEX ".*soundDummy\.cpp$")
@@ -293,6 +309,13 @@ if(POSEIDON_TARGET_IOS)
     # final link, same pattern PoseidonMTL uses for Metal/QuartzCore/Foundation.
     find_library(UNIFORMTYPEIDENTIFIERS_FRAMEWORK UniformTypeIdentifiers REQUIRED)
     target_link_libraries(Poseidon PUBLIC ${UNIFORMTYPEIDENTIFIERS_FRAMEWORK})
+endif()
+
+if(APPLE)
+    # CloudSync.mm's NSFileManager/NSFileCoordinator/NSMetadataQuery calls
+    # (both macOS and iOS -- see the ALL_SOURCES block above).
+    find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
+    target_link_libraries(Poseidon PUBLIC ${FOUNDATION_FRAMEWORK})
 endif()
 
 find_package(cJSON CONFIG REQUIRED)

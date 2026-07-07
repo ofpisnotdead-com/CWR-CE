@@ -1,6 +1,7 @@
 #include <Poseidon/Core/Profile/ProfileService.hpp>
 
 #include <Poseidon/Core/Profile/ProfileManager.hpp>
+#include <Poseidon/Core/CloudSync/CloudSyncPaths.hpp>
 
 #include <utility>
 
@@ -54,6 +55,9 @@ std::string ProfileService::ResolveStartupProfile()
     if (choice.create)
     {
         ProfileManager::CreateProfile(m_boundaries.userDir, choice.name);
+        // So a brand-new profile shows up on another device sooner than the
+        // next quit -- fire-and-forget, no-ops when CloudSync is unavailable.
+        CloudSync::PushInBackground();
     }
     if (choice.persist && m_boundaries.savePersistedName)
     {
