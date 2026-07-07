@@ -16,6 +16,11 @@
 #include <CLI/Error.hpp>
 #include <CLI/Option.hpp>
 #include <CLI/Validators.hpp>
+// CLI11 2.6 split IsMember/IsNegation off into a separate header; older
+// releases (e.g. vcpkg-bundled) still expose them via <CLI/Validators.hpp>.
+#if __has_include(<CLI/ExtraValidators.hpp>)
+#include <CLI/ExtraValidators.hpp>
+#endif
 #include <algorithm>
 #include <exception>
 #include <system_error>

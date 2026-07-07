@@ -662,8 +662,10 @@ void World::DrawViewerSceneAddons()
         radius = shape->BoundingSphere();
     float kStep = (radius < 1.0f) ? 0.2f : 1.0f;
     const float kHalf = 10.0f * kStep;
-    const PackedColor minor(Color(0.40f, 0.42f, 0.46f, 0.45f));
-    const PackedColor major(Color(0.60f, 0.62f, 0.66f, 0.7f));
+    // Names avoid major()/minor() which are macros in <sys/types.h>
+    // on FreeBSD (devmajor/devminor extraction).
+    const PackedColor minorLine(Color(0.40f, 0.42f, 0.46f, 0.45f));
+    const PackedColor majorLine(Color(0.60f, 0.62f, 0.66f, 0.7f));
     // Plane sits just below the model's bounding sphere — keeps the
     // grid out of the model's visual centre but close enough that
     // the eye reads "the model is sitting on this".
@@ -672,7 +674,7 @@ void World::DrawViewerSceneAddons()
     {
         float t = i * kStep;
         bool isMajor = (i == 0) || (i % 5 == 0);
-        PackedColor c = isMajor ? major : minor;
+        PackedColor c = isMajor ? majorLine : minorLine;
         GEngine->DrawLine3D(Vector3(ctr.X() - kHalf, yPlane, ctr.Z() + t),
                             Vector3(ctr.X() + kHalf, yPlane, ctr.Z() + t), c, 0);
         GEngine->DrawLine3D(Vector3(ctr.X() + t, yPlane, ctr.Z() - kHalf),

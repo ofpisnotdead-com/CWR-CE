@@ -18,7 +18,11 @@ target_compile_definitions(PoseidonTetrisTests PRIVATE
 
 find_package(Catch2 3 CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
-find_package(freetype CONFIG REQUIRED)
+if(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+    find_package(Freetype CONFIG REQUIRED)
+else()
+    find_package(freetype CONFIG REQUIRED)
+endif()
 find_package(CLI11 CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 

@@ -40,7 +40,14 @@ JimboAllocator::JimboAllocator() : _heap(nullptr), _allocCount(0), _outOfMemory(
     // IMPORTANT: mi_heap_new() creates a thread-specific heap that cannot be
     // shared across threads. The default heap internally uses thread-local
     // heaps and is safe for multi-threaded use.
+#if MI_MALLOC_VERSION >= 30000
+    // mimalloc 3 split the thread-default-heap accessor into a separate
+    // mi_theap_t* type; mi_heap_collect/etc. still accept nullptr to mean
+    // "current thread's default heap", so we leave _heap nullptr here.
+    _heap = nullptr;
+#else
     _heap = mi_heap_get_default();
+#endif
 }
 
 JimboAllocator::~JimboAllocator()
@@ -148,7 +155,14 @@ int JimboAllocator::MemoryAllocatedBlocks()
 
 bool JimboAllocator::CheckIntegrity()
 {
+#if MI_MALLOC_VERSION >= 30000
+    // mimalloc 3 removed mi_heap_check_owned; mi_check_owned(p) is the
+    // replacement but takes a pointer, not a heap. The original code
+    // unconditionally returned true anyway, so just match that.
+    return true;
+#else
     return mi_heap_check_owned(_heap, nullptr) || true; // mimalloc always valid
+#endif
 }
 
 bool JimboAllocator::IsOutOfMemory()
@@ -159,7 +173,12 @@ bool JimboAllocator::IsOutOfMemory()
 void JimboAllocator::CleanUp()
 {
     // Collect any cached memory that mimalloc is holding
+#if MI_MALLOC_VERSION >= 30000
+    // _heap is nullptr on v3; mi_collect() targets the calling thread's heap.
+    mi_collect(true);
+#else
     mi_heap_collect(_heap, true);
+#endif
 }
 
 void JimboAllocator::RegisterFreeOnDemand(IMemoryFreeOnDemand* object)

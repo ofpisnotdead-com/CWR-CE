@@ -230,8 +230,10 @@ bool ServerApplication::InitializeServerEngine()
 void ServerApplication::OnPreEngineInit()
 {
     // Eager commit and reduced decommit keep allocator contention predictable on server threads.
+#if MI_MALLOC_VERSION < 30000
     mi_option_set(mi_option_eager_commit, 1);
     mi_option_set(mi_option_eager_commit_delay, 1);
+#endif
 }
 
 void ServerApplication::ConfigureBankMerge()
