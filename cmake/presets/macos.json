@@ -57,6 +57,22 @@
         "VCPKG_TARGET_TRIPLET": "arm64-osx",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/macos-arm64-clang.cmake"
       }
+    },
+    {
+      "name": "macos-arm64-xcode",
+      "displayName": "macOS arm64 Xcode (local signed bundle, for CloudSync/iCloud testing)",
+      "inherits": "base",
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/build/macos-arm64-xcode",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-osx",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/macos-arm64-clang.cmake",
+        "CMAKE_C_COMPILER_LAUNCHER": "",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "",
+        "POSEIDON_MACOS_SIGN_BUNDLE": "ON",
+        "CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM": "G75D5FBNYR",
+        "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE": "Automatic"
+      }
     }
   ]
 }
