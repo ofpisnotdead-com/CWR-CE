@@ -1,0 +1,56 @@
+name: CI-FreeBSD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build on FreeBSD ${{ matrix.release }} (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - release: "14.3"
+            arch: amd64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Build + test in FreeBSD VM
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: ${{ matrix.release }}
+          arch: ${{ matrix.arch }}
+          usesh: true
+          sync: rsync
+          copyback: false
+          prepare: |
+            # Ports mapped from games/CWR-CE Makefile BUILD_DEPENDS + LIB_DEPENDS.
+            # vcpkg is bypassed via -DCMAKE_DISABLE_FIND_PACKAGE_VCPKG=ON below,
+            # so every find_package() resolves against these system packages.
+            pkg install -y \
+              cmake ninja pkgconf git bash \
+              stb cli11 catch2 vulkan-headers glslang \
+              libcjson curl enkits libfmt freetype2 imgui mimalloc \
+              libogg openal-soft opus sdl3 vulkan-loader spdlog libvorbis \
+              zstd
+
+          run: |
+            set -eux
+            cd $GITHUB_WORKSPACE
+            cmake -B build -G Ninja -S . \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=/usr/local \
+              -DVCPKG_MANIFEST_MODE=OFF \
+              -DCMAKE_DISABLE_FIND_PACKAGE_VCPKG=ON \
+              -DPOSEIDON_DISABLE_PCH=OFF \
+              -DPOSEIDON_BUILD_FUZZERS=OFF
+            ninja -C build
+            # Uncomment once a test target exists:
+            # ctest --test-dir build --output-on-failure
