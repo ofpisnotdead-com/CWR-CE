@@ -570,6 +570,28 @@ void RunIosGameDataGate()
 
         PumpRunLoopBriefly(0.2);
 
+        // Belt-and-suspenders on top of declaring UIDeviceFamily correctly
+        // (see Info-iOS.plist.in -- the real fix for iPad windows launching
+        // at the wrong size): iPadOS 26 also deprecated/ignores
+        // UIRequiresFullScreen (WWDC25 "Make your UIKit app more flexible"),
+        // so apps launch windowed/resizable by default instead of filling
+        // the display. UIWindowScene.sizeRestrictions is the one remaining
+        // lever (Apple DTS: "best effort... not guaranteed"); pinning
+        // minimumSize == maximumSize == the real screen bounds collapses the
+        // window's whole allowed range to one size. Must read
+        // scene.screen.bounds here -- after makeKeyAndVisible + a pump --
+        // not any earlier: at process launch, before the scene has
+        // connected, it returns a placeholder size instead of the real one.
+        if (@available(iOS 26.0, *))
+        {
+            if (scene != nil && scene.sizeRestrictions != nil)
+            {
+                CGSize full = scene.screen.bounds.size;
+                scene.sizeRestrictions.minimumSize = full;
+                scene.sizeRestrictions.maximumSize = full;
+            }
+        }
+
         __block bool ready = false;
         controller.onDataReady = ^{
             ready = true;
