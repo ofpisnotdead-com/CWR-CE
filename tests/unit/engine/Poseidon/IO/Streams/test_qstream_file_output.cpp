@@ -334,6 +334,62 @@ TEST_CASE("QOFStream - Large file writing", "[qstream][file][output][large]")
     }
 }
 
+TEST_CASE("QOFStream - Atomic write via temp file", "[qstream][file][output][atomic]")
+{
+    const char* path = GetTempFilePath("atomic_test.dat");
+
+    SECTION("No leftover .tmp file after a successful close")
+    {
+        {
+            QOFStream stream(path);
+            stream.write("content", 7);
+            stream.close();
+        }
+
+        REQUIRE(QIFStream::FileExists(path) == true);
+
+        std::string tmpPath = std::string(path) + ".tmp";
+        REQUIRE(QIFStream::FileExists(tmpPath.c_str()) == false);
+
+        CleanupTempFile(path);
+    }
+
+    SECTION("Overwriting an existing file never leaves a truncated destination")
+    {
+        // Seed the destination with known content first.
+        {
+            QOFStream stream(path);
+            stream.write("original-content", 17);
+            stream.close();
+        }
+        REQUIRE(QIFStream::FileExists(path) == true);
+
+        // Re-save with different (shorter) content -- the destination must
+        // transition atomically from the old content straight to the new
+        // content, never through a truncated/empty intermediate state
+        // observable after close() returns.
+        {
+            QOFStream stream(path);
+            stream.write("new", 3);
+            stream.close();
+        }
+
+        QIFStream readStream;
+        readStream.open(path);
+        REQUIRE(readStream.fail() == false);
+        REQUIRE(readStream.rest() == 3);
+
+        char buffer[4] = {};
+        readStream.read(buffer, 3);
+        REQUIRE(strcmp(buffer, "new") == 0);
+
+        std::string tmpPath = std::string(path) + ".tmp";
+        REQUIRE(QIFStream::FileExists(tmpPath.c_str()) == false);
+
+        CleanupTempFile(path);
+    }
+}
+
 TEST_CASE("QOFStream - Multiple rewind/write cycles", "[qstream][file][output][rewind]")
 {
     const char* path = GetTempFilePath("rewind_test.txt");

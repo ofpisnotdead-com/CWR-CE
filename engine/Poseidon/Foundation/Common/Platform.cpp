@@ -157,7 +157,18 @@ bool fileCopy(const char* src, const char* dest)
     int f1 = open(sfn, O_RDONLY);
     if (f1 < 0)
         return false;
-    int f2 = open(dfn, O_CREAT | O_WRONLY | O_TRUNC);
+    // Copy through a same-directory ".tmp" sibling, then atomically rename over the
+    // real destination once the full copy has landed -- a partial read/write (or a
+    // process kill mid-copy) must never leave a truncated file sitting at dest.
+    char dtmp[MaxFileName + 8];
+    snprintf(dtmp, sizeof(dtmp), "%s.tmp", dfn);
+    // O_CREAT without an explicit mode reads an unspecified vararg for the
+    // permission bits -- this previously left copied files (e.g. continue.fps
+    // regenerated from save.fps) with garbage permissions, sometimes missing
+    // the owner-read bit entirely, which made every later attempt to load the
+    // "copied" file fail silently at open(). S_IREAD | S_IWRITE matches the
+    // mode QOFStream::close() uses for the same class of save file.
+    int f2 = open(dtmp, O_CREAT | O_WRONLY | O_TRUNC, S_IREAD | S_IWRITE);
     if (f2 < 0)
     {
         close(f1);
@@ -179,15 +190,30 @@ bool fileCopy(const char* src, const char* dest)
     } while (true);
     close(f1);
     close(f2);
-    // copy file attributes:
+    if (!result)
+    {
+        unlink(dtmp);
+        return false;
+    }
+    // copy file attributes onto the temp file before the atomic rename:
     struct stat sstat;
-    struct stat dstat;
+    struct stat dtstat;
     stat(sfn, &sstat);
-    stat(dfn, &dstat);
+    stat(dtmp, &dtstat);
     struct utimbuf dtim;
-    dtim.actime = dstat.st_atime; // not changed!
+    dtim.actime = dtstat.st_atime; // not changed!
     dtim.modtime = sstat.st_mtime;
-    return (utime(dfn, &dtim) == 0 && result);
+    if (utime(dtmp, &dtim) != 0)
+    {
+        unlink(dtmp);
+        return false;
+    }
+    if (rename(dtmp, dfn) != 0)
+    {
+        unlink(dtmp);
+        return false;
+    }
+    return true;
 }
 
 void createDirectory(const char* dir)
