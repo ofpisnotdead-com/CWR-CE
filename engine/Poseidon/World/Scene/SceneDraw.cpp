@@ -215,6 +215,13 @@ void Scene::DrawFlare(ColorVal color, Vector3Par lightPos, bool secondary)
     }
 }
 
+Poseidon::LightOcclusionRay Poseidon::ComputeLightOcclusionRay(Vector3Par camPos, Vector3Par lightPos)
+{
+    Vector3 toLight = lightPos - camPos;
+    float dist = toLight.Size();
+    return {toLight, dist, dist * 1.1f};
+}
+
 void Scene::DrawFlares()
 {
     if (!GetLandscape())
@@ -309,8 +316,9 @@ void Scene::DrawFlares()
             float visLand = 1;
             if (ENGINE_CONFIG.enableHWTL)
             {
-                float t = GLandscape->IntersectWithGroundOrSea(nullptr, cPos, dir, 0, 1.1);
-                visLand = t > 1;
+                LightOcclusionRay ray = ComputeLightOcclusionRay(camPos, light->Position());
+                float t = GLandscape->IntersectWithGroundOrSea(nullptr, cPos, ray.dir, 0, ray.maxDist);
+                visLand = t > ray.dist;
             }
 
             if (visLand > 0)
