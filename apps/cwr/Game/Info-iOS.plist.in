@@ -18,6 +18,20 @@
 	<string>${MACOSX_BUNDLE_SHORT_VERSION_STRING}</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<!-- Without this key, iOS defaults to treating the app as iPhone-only.
+	     That was harmless while iPhone was the only device this ever ran
+	     on, but it means iPad installs silently run inside a legacy
+	     compatibility box pinned to the old iPhone 3.5" resolution
+	     (480x320 pt) instead of the real screen -- confirmed via
+	     UIScreen.mainScreen.bounds/window.frame/scene.screen.bounds all
+	     agreeing on exactly that size on an iPad Pro 13" simulator.
+	     Universal (1, 2) makes both platforms explicit instead of relying
+	     on the iPhone-only default. -->
+	<key>UIDeviceFamily</key>
+	<array>
+		<integer>1</integer>
+		<integer>2</integer>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>${MACOSX_BUNDLE_BUNDLE_VERSION}</string>
 	<key>CSResourcesFileMapped</key>
