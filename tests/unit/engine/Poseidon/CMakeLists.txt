@@ -414,6 +414,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     World/Entities/Vehicles/Air/test_helicopter.cpp
 
     # Scene tests
+    World/Scene/test_light_occlusion_ray.cpp
     World/Scene/test_object.cpp
     World/Scene/test_scene.cpp
     World/Scene/test_scene_preloader.cpp
