@@ -545,7 +545,7 @@ void RunIosGameDataGate()
         // the same fixed codename/cfgBase/productName GameBase.cpp always
         // uses is safe -- without this, GameDataDir() resolves UserContentDir()
         // as empty, i.e. an unwritable path at the filesystem root.
-        Foundation::GamePaths::Instance().Initialize("CWR", "ColdWarAssault", "Cold War Assault");
+        Foundation::GamePaths::Instance().Initialize("CWR", "ColdWarAssault", GameDirs::ProductName);
 
         NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
         if ([defaults boolForKey:@"CWRResetGameData"])
