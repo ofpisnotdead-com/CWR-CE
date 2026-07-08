@@ -309,8 +309,11 @@ void Scene::DrawFlares()
             float visLand = 1;
             if (ENGINE_CONFIG.enableHWTL)
             {
-                float t = GLandscape->IntersectWithGroundOrSea(nullptr, cPos, dir, 0, 1.1);
-                visLand = t > 1;
+                // dir points from the light towards the camera - the ray towards
+                // the light (and the distance to test against) is the opposite
+                float dist = dir.Size();
+                float t = GLandscape->IntersectWithGroundOrSea(nullptr, cPos, -dir, 0, dist * 1.1);
+                visLand = t > dist;
             }
 
             if (visLand > 0)
