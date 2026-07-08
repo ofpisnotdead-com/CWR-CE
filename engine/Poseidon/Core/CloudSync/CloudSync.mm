@@ -80,8 +80,18 @@ bool CopyThroughCoordinator(NSURL* srcURL, NSURL* dstURL, bool coordinateRead, s
                          attributes:nil
                               error:nil];
 
+    // Land the copy in a same-directory temp file, then atomically replace
+    // dstURL only once the full copy is on disk. A process kill (or any other
+    // interruption) mid-copy must never leave a truncated file sitting at
+    // dstURL: on push that truncated file would get a fresh mtime and look
+    // "newer" than the good local copy, so a later pull would clobber it; on
+    // pull it would corrupt the (supposedly authoritative) local file
+    // directly. replaceItemAtURL: below does the actual swap atomically.
+    NSString* tmpName = [NSString stringWithFormat:@".%@.cloudsync-tmp-%08x", dstURL.lastPathComponent, arc4random()];
+    NSURL* tmpURL = [dstURL.URLByDeletingLastPathComponent URLByAppendingPathComponent:tmpName];
+
     __block BOOL ok = NO;
-    __block NSError* copyError = nil;
+    __block NSError* opError = nil;
     NSError* coordError = nil;
     NSFileCoordinator* coordinator = [[NSFileCoordinator alloc] initWithFilePresenter:nil];
 
@@ -95,24 +105,43 @@ bool CopyThroughCoordinator(NSURL* srcURL, NSURL* dstURL, bool coordinateRead, s
                                          options:NSFileCoordinatorReadingWithoutChanges
                                            error:&coordError
                                       byAccessor:^(NSURL* newURL) {
-                                          [fm removeItemAtURL:dstURL error:nil];
-                                          ok = [fm copyItemAtURL:newURL toURL:dstURL error:&copyError];
+                                          [fm removeItemAtURL:tmpURL error:nil];
+                                          ok = [fm copyItemAtURL:newURL toURL:tmpURL error:&opError];
                                       }];
+        if (ok)
+        {
+            ok = [fm replaceItemAtURL:dstURL
+                         withItemAtURL:tmpURL
+                        backupItemName:nil
+                               options:NSFileManagerItemReplacementUsingNewMetadataOnly
+                      resultingItemURL:nil
+                                 error:&opError];
+        }
     }
     else
     {
-        [coordinator coordinateWritingItemAtURL:dstURL
-                                         options:NSFileCoordinatorWritingForReplacing
-                                           error:&coordError
-                                      byAccessor:^(NSURL* newURL) {
-                                          [fm removeItemAtURL:newURL error:nil];
-                                          ok = [fm copyItemAtURL:srcURL toURL:newURL error:&copyError];
-                                      }];
+        [fm removeItemAtURL:tmpURL error:nil];
+        ok = [fm copyItemAtURL:srcURL toURL:tmpURL error:&opError];
+        if (ok)
+        {
+            [coordinator coordinateWritingItemAtURL:dstURL
+                                             options:NSFileCoordinatorWritingForReplacing
+                                               error:&coordError
+                                          byAccessor:^(NSURL* newURL) {
+                                              ok = [fm replaceItemAtURL:newURL
+                                                           withItemAtURL:tmpURL
+                                                          backupItemName:nil
+                                                                 options:NSFileManagerItemReplacementUsingNewMetadataOnly
+                                                        resultingItemURL:nil
+                                                                   error:&opError];
+                                          }];
+        }
     }
+    [fm removeItemAtURL:tmpURL error:nil]; // best-effort: no-op on success, cleans up a stray temp on failure
 
     if (!ok)
     {
-        NSError* reported = copyError != nil ? copyError : coordError;
+        NSError* reported = opError != nil ? opError : coordError;
         error = reported != nil ? ToStdString(reported.localizedDescription) : "copy failed";
     }
     return ok;

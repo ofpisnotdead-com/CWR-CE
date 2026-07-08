@@ -386,12 +386,21 @@ void QOFStream::close(const void* header, int headerSize)
         return; // no file
     }
     _error = LSOK;
+    // Write through a same-directory ".tmp" sibling, then atomically rename/replace
+    // it over the real destination once the full write has landed. A process kill
+    // (force-quit, crash, power loss) at any point before that final step leaves the
+    // pre-existing (or absent) destination file completely untouched -- never a
+    // zero-byte or partially-written save sitting at the real path.
 #ifdef POSIX_FILES
 #ifndef _WIN32
     LocalPath(fn, (const char*)_file);
-    int file = ::open(fn, O_CREAT | O_WRONLY | O_TRUNC, S_IREAD | S_IWRITE);
+    char tmpFn[MaxFileName + 8];
+    snprintf(tmpFn, sizeof(tmpFn), "%s.tmp", fn);
+    int file = ::open(tmpFn, O_CREAT | O_WRONLY | O_TRUNC, S_IREAD | S_IWRITE);
 #else
-    int file = ::open(_file, O_CREAT | O_BINARY | O_WRONLY | O_TRUNC, S_IREAD | S_IWRITE);
+    char tmpFn[MaxFileName + 8];
+    snprintf(tmpFn, sizeof(tmpFn), "%s.tmp", (const char*)_file);
+    int file = ::open(tmpFn, O_CREAT | O_BINARY | O_WRONLY | O_TRUNC, S_IREAD | S_IWRITE);
 #endif
     if (file >= 0)
     {
@@ -419,6 +428,16 @@ void QOFStream::close(const void* header, int headerSize)
         if (_fail)
         {
             _error = LSUnknownError;
+            ::unlink(tmpFn); // best-effort: don't leave a partial temp behind
+        }
+#ifndef _WIN32
+        else if (::rename(tmpFn, fn) != 0)
+#else
+        else if (::rename(tmpFn, _file) != 0)
+#endif
+        {
+            _fail = true;
+            _error = LSUnknownError;
         }
     }
     else
@@ -429,7 +448,9 @@ void QOFStream::close(const void* header, int headerSize)
     }
 #else
     DWORD eCode = 0;
-    HANDLE file = ::CreateFile(_file, GENERIC_WRITE, 0,
+    char tmpFile[MaxFileName + 8];
+    snprintf(tmpFile, sizeof(tmpFile), "%s.tmp", (const char*)_file);
+    HANDLE file = ::CreateFile(tmpFile, GENERIC_WRITE, 0,
                                nullptr, // security
                                CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL,
                                nullptr // template
@@ -480,6 +501,16 @@ void QOFStream::close(const void* header, int headerSize)
                 eCode = ::GetLastError();
             }
             _fail = true;
+        }
+        if (_fail)
+        {
+            ::DeleteFile(tmpFile); // best-effort: don't leave a partial temp behind
+        }
+        else if (!::MoveFileEx(tmpFile, _file, MOVEFILE_REPLACE_EXISTING))
+        {
+            _fail = true;
+            if (eCode == 0)
+                eCode = ::GetLastError();
         }
     }
     else
