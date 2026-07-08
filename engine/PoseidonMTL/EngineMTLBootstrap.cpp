@@ -73,13 +73,22 @@ vertex VSOut vs2d(uint vid [[vertex_id]], const device Vertex2D* verts [[buffer(
 // straight from the legacy TLVertex's specular.a) -- 1.0 for ordinary 2D/UI
 // draws (no-op below), a real per-vertex value for the legacy 3D fan-draw
 // path (DrawIndexedFan3D), which otherwise had no fog at all.
+// alphaTest = {ref (0..1), enabled (0/1)} -- mirrors GL33's PSConstants.alphaRef
+// (EngineGL33_Shaders.cpp's s_psNormalGLSL: `r0.a - alphaRef.x*alphaRef.y < 0.0
+// discard`). Legacy-path cutout geometry (e.g. the watch bezel's alpha-holed
+// ring, see issue #86) relies on this: without a real discard here, "hole"
+// pixels still pass alpha-blend (invisible) but still write depth, occluding
+// anything drawn afterward that falls inside the hole.
 fragment float4 fs2d(VSOut in [[stage_in]], texture2d<float> tex [[texture(0)]],
                      texture2d<float> detailTex [[texture(1)]], sampler samp [[sampler(0)]],
                      sampler detailSamp [[sampler(1)]],
-                     constant float4& fogColor [[buffer(0)]])
+                     constant float4& fogColor [[buffer(0)]],
+                     constant float2& alphaTest [[buffer(1)]])
 {
     float4 texColor = tex.sample(samp, in.uv);
     float4 lit = texColor * in.color;
+    if (alphaTest.y > 0.5 && lit.a - alphaTest.x < 0.0)
+        discard_fragment();
     if (in.detailMode > 1.5)
     {
         float4 grass = detailTex.sample(detailSamp, in.uv1);
@@ -622,6 +631,8 @@ struct EngineMTLBootstrap::Impl
         Poseidon::render::SamplerMode sampler = {Poseidon::render::SamplerFilter::Linear, true, true};
         Poseidon::render::SurfaceMode surface = Poseidon::render::SurfaceMode::Default;
         Poseidon::render::ShaderFamily shader = Poseidon::render::ShaderFamily::Normal;
+        Poseidon::render::AlphaMode alphaMode = Poseidon::render::AlphaMode::Disabled;
+        std::uint8_t alphaRef = 0;
         float fogColor[3] = {0.0f, 0.0f, 0.0f};
 
         bool operator==(const Triangles2DState& rhs) const
@@ -630,6 +641,7 @@ struct EngineMTLBootstrap::Impl
                    clipX == rhs.clipX && clipY == rhs.clipY && clipW == rhs.clipW && clipH == rhs.clipH &&
                    useDepth == rhs.useDepth && depthMode == rhs.depthMode && blendMode == rhs.blendMode &&
                    sampler == rhs.sampler && surface == rhs.surface && shader == rhs.shader &&
+                   alphaMode == rhs.alphaMode && alphaRef == rhs.alphaRef &&
                    fogColor[0] == rhs.fogColor[0] && fogColor[1] == rhs.fogColor[1] && fogColor[2] == rhs.fogColor[2];
         }
         bool operator!=(const Triangles2DState& rhs) const { return !(*this == rhs); }
@@ -1410,6 +1422,14 @@ void EngineMTLBootstrap::FlushTriangles2D()
     const float fogColorBuf[4] = {state.fogColor[0], state.fogColor[1], state.fogColor[2], 0.0f};
     _impl->currentEncoder->setFragmentBytes(fogColorBuf, sizeof(fogColorBuf), 0);
 
+    // fs2d's alphaTest uniform -- see fs2d's doc comment. Harmless no-op for
+    // pipelines whose fragment function doesn't declare buffer(1) (e.g.
+    // fs2dShadow, which does its own unconditional alpha discard).
+    const bool alphaTestEnabled = state.alphaMode == Poseidon::render::AlphaMode::Test ||
+                                  state.alphaMode == Poseidon::render::AlphaMode::TestAndBlend;
+    const float alphaTestBuf[2] = {state.alphaRef / 255.0f, alphaTestEnabled ? 1.0f : 0.0f};
+    _impl->currentEncoder->setFragmentBytes(alphaTestBuf, sizeof(alphaTestBuf), 1);
+
     // Explicit rebind, not inherited from BeginFrame's initial bind -- a
     // DrawSectionTL call earlier in this same encoder would otherwise leave
     // the mesh pipeline/depth-test state bound for this 2D draw.
@@ -1556,7 +1576,9 @@ void EngineMTLBootstrap::DrawTriangles2D(const Vertex2DMTL* verts, int vertCount
                                          bool useDepth,
                                          Poseidon::render::DepthMode depthMode, Poseidon::render::BlendMode blendMode,
                                          Poseidon::render::SamplerMode sampler, Poseidon::render::SurfaceMode surface,
-                                         Poseidon::render::ShaderFamily shader, const float fogColor[3])
+                                         Poseidon::render::ShaderFamily shader,
+                                         Poseidon::render::AlphaMode alphaMode, std::uint8_t alphaRef,
+                                         const float fogColor[3])
 {
     if (_impl->currentEncoder == nullptr || vertCount <= 0 || indexCount <= 0 || verts == nullptr ||
         indices == nullptr)
@@ -1575,6 +1597,8 @@ void EngineMTLBootstrap::DrawTriangles2D(const Vertex2DMTL* verts, int vertCount
     state.sampler = sampler;
     state.surface = surface;
     state.shader = shader;
+    state.alphaMode = alphaMode;
+    state.alphaRef = alphaRef;
     state.fogColor[0] = fogColor ? fogColor[0] : 0.0f;
     state.fogColor[1] = fogColor ? fogColor[1] : 0.0f;
     state.fogColor[2] = fogColor ? fogColor[2] : 0.0f;

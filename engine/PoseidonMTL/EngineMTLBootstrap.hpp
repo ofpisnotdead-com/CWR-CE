@@ -249,6 +249,8 @@ class EngineMTLBootstrap
                          Poseidon::render::SamplerMode sampler = {Poseidon::render::SamplerFilter::Linear, true, true},
                          Poseidon::render::SurfaceMode surface = Poseidon::render::SurfaceMode::Default,
                          Poseidon::render::ShaderFamily shader = Poseidon::render::ShaderFamily::Normal,
+                         Poseidon::render::AlphaMode alphaMode = Poseidon::render::AlphaMode::Disabled,
+                         std::uint8_t alphaRef = 0,
                          const float fogColor[3] = nullptr);
     void FlushTriangles2D();
 
