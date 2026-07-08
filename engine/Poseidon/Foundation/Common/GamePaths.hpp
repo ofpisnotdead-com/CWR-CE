@@ -11,6 +11,13 @@ constexpr const char* MPMissionsCache = "MPMissionsCache";
 constexpr const char* Missions       = "Missions";
 constexpr const char* Users          = "Users";
 
+/// Friendly product name for GamePaths::Initialize's productName param — the
+/// name of the discoverable, non-roaming user-content (Documents) folder.
+/// Every Initialize() call site must pass this so Tools/tests/the game all
+/// agree on one content directory (see GH #76 — passing nullptr silently
+/// falls back to cfgBase and produces a sibling "ColdWarAssault" directory).
+constexpr const char* ProductName    = "Cold War Assault";
+
 /// "MPMissions/" or "MPMissions\\" depending on platform.
 inline std::string MPMissionsPath()
 {

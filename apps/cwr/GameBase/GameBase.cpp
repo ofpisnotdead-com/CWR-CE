@@ -122,7 +122,7 @@ bool GameBase::ParseCommandLine(const char* commandLine)
         LOG_INFO(Core, "Changed working directory to: {}", workDir);
 
     const std::string oldPathsRoot = std::filesystem::current_path().string();
-    GamePaths::Instance().Initialize("CWR", "ColdWarAssault", "Cold War Assault", AppConfig::Instance().OldPaths(),
+    GamePaths::Instance().Initialize("CWR", "ColdWarAssault", GameDirs::ProductName, AppConfig::Instance().OldPaths(),
                                      oldPathsRoot.c_str());
     Poseidon::ApplyGamePathsToLegacyGlobals();
 
