@@ -26,17 +26,24 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
-    # The macOS-labeled matrix entries (macOS + iOS Device) share a single
-    # physical self-hosted runner, so they need to queue behind each other --
-    # but the group must vary per *workflow run* (github.run_id), not be a
-    # single global literal, or a newer run's queued job cancels an older
+    # The self-hosted-macOS-labeled matrix entries (macOS + iOS Device) share a
+    # single physical self-hosted runner, so they need to queue behind each
+    # other -- but the group must vary per *workflow run* (github.run_id), not
+    # be a single global literal, or a newer run's queued job cancels an older
     # run's still-queued job from an entirely unrelated PR/branch/push (only
     # one pending job per concurrency group is ever kept, even with
     # cancel-in-progress: false -- that only protects an already-*running*
-    # job, not one still waiting for the runner).
+    # job, not one still waiting for the runner). Checking for 'self-hosted'
+    # in addition to 'macOS' keeps the GitHub-hosted macOS leg out of this
+    # queue -- it runs on its own hosted VM, not the shared physical Mac.
     concurrency:
-      group: ${{ contains(matrix.os, 'macOS') && format('cwr-arm64-self-hosted-macos-{0}', github.run_id) || format('cwr-arm64-{0}-{1}', github.run_id, matrix.name) }}
+      group: ${{ (contains(matrix.os, 'self-hosted') && contains(matrix.os, 'macOS')) && format('cwr-arm64-self-hosted-macos-{0}', github.run_id) || format('cwr-arm64-{0}-{1}', github.run_id, matrix.name) }}
       cancel-in-progress: false
+
+    # The self-hosted macOS leg is a supplementary, real-data-backed check --
+    # its result doesn't gate the workflow. The GitHub-hosted macOS leg below
+    # is the fast, always-available required signal for macOS.
+    continue-on-error: ${{ matrix.optional == true }}
 
     strategy:
       fail-fast: false
@@ -48,7 +55,8 @@ jobs:
           # gitignored and not distributed to the GitHub-hosted runners by
           # design. The self-hosted macOS runner has the real data staged
           # outside the checkout path (see "Stage Combined test data" below)
-          # and runs these for real; Linux/Windows exclude them by name.
+          # and runs these for real; Linux/Windows/hosted-macOS exclude them
+          # by name, same as each other.
           - name: Linux RelWithDebInfo
             os: [self-hosted, debian-13, x64]
             preset: linux-x64-clang-rwdi
@@ -56,12 +64,32 @@ jobs:
             build_dir: build/linux-x64-clang-rwdi
             build_target: ''
             ctest_exclude: 'PoseidonTests - (STRINGTABLE_MAP\.utf8\.csv ships both legend keys with English fallbacks|STRINGTABLE_EQUIPMENT\.utf8\.csv ships M16 keys for all 8 languages|equipment\.utf8\.html lives loose and references STR_EQ_M16 tokens|equipment\.utf8\.html line endings are clean CRLF \(no doubled CR\)|equipment\.utf8\.html preserves every EQ_ anchor and weapon image)'
+          # Fast, always-available required check -- runs on GitHub's hosted
+          # infrastructure so it never queues behind the single physical
+          # self-hosted Mac. Same real-data exclusions as Linux; no ccache
+          # (hosted runners are ephemeral, nothing to persist a cache dir on
+          # between runs without extra setup) and no renderer smoke test
+          # (hosted macOS VMs aren't guaranteed real GPU/Metal access).
           - name: macOS (Apple Silicon) RelWithDebInfo
+            os: macos-latest
+            preset: macos-arm64-clang-rwdi
+            vcpkg_triplet: arm64-osx
+            build_dir: build/macos-arm64-clang-rwdi
+            build_target: ''
+            skip_smoke: true
+            ctest_exclude: 'PoseidonTests - (STRINGTABLE_MAP\.utf8\.csv ships both legend keys with English fallbacks|STRINGTABLE_EQUIPMENT\.utf8\.csv ships M16 keys for all 8 languages|equipment\.utf8\.html lives loose and references STR_EQ_M16 tokens|equipment\.utf8\.html line endings are clean CRLF \(no doubled CR\)|equipment\.utf8\.html preserves every EQ_ anchor and weapon image)'
+          # Supplementary check against the real (non-excluded) Combined data
+          # and a real GPU/Metal smoke test, on the single physical
+          # self-hosted Mac -- optional (continue-on-error above) so it never
+          # blocks on the shared-runner queue; treat a failure here as a real
+          # signal worth investigating, just not a merge gate.
+          - name: macOS (Apple Silicon, self-hosted, real data) RelWithDebInfo
             os: [self-hosted, macOS, arm64]
             preset: macos-arm64-clang-rwdi
             vcpkg_triplet: arm64-osx
             build_dir: build/macos-arm64-clang-rwdi
             build_target: ''
+            optional: true
           - name: iOS Device Debug
             os: [self-hosted, macOS, arm64]
             preset: ios-arm64-device
@@ -86,11 +114,18 @@ jobs:
       # (git clean -ffdx removes ignored files too) at the start of every
       # run, so the real data lives outside the checkout at
       # /Users/jarvis/ci-data/Combined and gets relinked in here each time.
+      # Self-hosted only -- that path doesn't exist on the hosted macOS
+      # runner, which instead excludes the [external-data] tests by name
+      # (matrix.ctest_exclude), same as Linux/Windows.
       - name: Stage Combined test data
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && runner.environment == 'self-hosted'
         run: |
           mkdir -p packages
           ln -sfn /Users/jarvis/ci-data/Combined packages/Combined
+
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS' && runner.environment != 'self-hosted'
+        run: brew install ccache clang-format
 
       - name: Install Linux system packages
         if: runner.os == 'Linux'
@@ -315,7 +350,7 @@ jobs:
         run: ccache --show-stats
 
       - name: Smoke test macOS renderers
-        if: runner.os == 'macOS' && matrix.skip_tests != true
+        if: runner.os == 'macOS' && matrix.skip_tests != true && matrix.skip_smoke != true
         run: |
           '${{ matrix.build_dir }}/apps/tools/GL33SmokeTest/GL33SmokeTest' --check
           '${{ matrix.build_dir }}/apps/tools/MetalSmokeTest/MetalSmokeTest' --check
@@ -324,6 +359,11 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ctest-logs-${{ matrix.preset }}
+          # matrix.name, not matrix.preset -- the hosted and self-hosted macOS
+          # legs share the same preset/build_dir (different runners entirely,
+          # no collision there) but actions/upload-artifact@v4 rejects two
+          # uploads with the same name within one workflow run, so the
+          # artifact name needs the thing that's actually unique per entry.
+          name: ctest-logs-${{ matrix.name }}
           path: ${{ matrix.build_dir }}/Testing/
           if-no-files-found: ignore
