@@ -258,7 +258,8 @@ void EngineMTL::DrawFan2D(const float* xy, const float* z, const float* rhw, con
                           const PackedColor* colors, int n, int textureHandle, int secondaryTextureHandle,
                           const Rect2DAbs& clip, render::DepthMode depthMode, render::BlendMode blendMode,
                           render::SamplerMode sampler, render::SurfaceMode surface, render::ShaderFamily shader,
-                          const PackedColor* specular, float detailMode)
+                          render::AlphaMode alphaMode, std::uint8_t alphaRef, const PackedColor* specular,
+                          float detailMode)
 {
     if (n < 3 || n > kMaxPolyVerts)
         return;
@@ -302,7 +303,8 @@ void EngineMTL::DrawFan2D(const float* xy, const float* z, const float* rhw, con
     _bootstrap.DrawTriangles2D(verts, n, indices, idxCount, textureHandle, secondaryTextureHandle,
                                static_cast<int>(clip.x),
                                static_cast<int>(clip.y), static_cast<int>(clip.w), static_cast<int>(clip.h),
-                               z != nullptr, depthMode, blendMode, sampler, surface, shader, fogColor);
+                               z != nullptr, depthMode, blendMode, sampler, surface, shader, alphaMode, alphaRef,
+                               fogColor);
 }
 
 void EngineMTL::Draw2D(const Draw2DPars& pars, const Rect2DAbs& rect, const Rect2DAbs& clip)
@@ -321,7 +323,7 @@ void EngineMTL::Draw2D(const Draw2DPars& pars, const Rect2DAbs& rect, const Rect
 
     const render::RenderPassDescriptor d = render::BuildRenderPassDescriptor(render::SplitLegacy(pars.spec));
     DrawFan2D(xy, nullptr, nullptr, uv, nullptr, colors, 4, GpuHandleOf(pars.mip._texture), 0, clip, d.depth, d.blend,
-              d.sampler, d.surface, d.shader);
+              d.sampler, d.surface, d.shader, d.alpha, d.alphaRef);
 }
 
 void EngineMTL::DrawPoly(const MipInfo& mip, const Vertex2DAbs* vertices, int n, const Rect2DAbs& clip,
@@ -344,7 +346,7 @@ void EngineMTL::DrawPoly(const MipInfo& mip, const Vertex2DAbs* vertices, int n,
 
     const render::RenderPassDescriptor d = render::BuildRenderPassDescriptor(render::SplitLegacy(specFlags));
     DrawFan2D(xy, nullptr, nullptr, uv, nullptr, colors, n, mip.IsOK() ? GpuHandleOf(mip._texture) : 0, 0, clip,
-              d.depth, d.blend, d.sampler, d.surface, d.shader);
+              d.depth, d.blend, d.sampler, d.surface, d.shader, d.alpha, d.alphaRef);
 }
 
 void EngineMTL::DrawPoly(const MipInfo& mip, const Vertex2DPixel* vertices, int n, const Rect2DPixel& clip,
@@ -372,7 +374,7 @@ void EngineMTL::DrawPoly(const MipInfo& mip, const Vertex2DPixel* vertices, int 
     Convert(clipAbs, clip);
     const render::RenderPassDescriptor d = render::BuildRenderPassDescriptor(render::SplitLegacy(specFlags));
     DrawFan2D(xy, nullptr, nullptr, uv, nullptr, colors, n, mip.IsOK() ? GpuHandleOf(mip._texture) : 0, 0, clipAbs, d.depth,
-              d.blend, d.sampler, d.surface, d.shader);
+              d.blend, d.sampler, d.surface, d.shader, d.alpha, d.alphaRef);
 }
 
 void EngineMTL::DrawDecal(Vector3Par screen, float rhw, float sizeX, float sizeY, PackedColor color,
@@ -422,7 +424,7 @@ void EngineMTL::DrawDecal(Vector3Par screen, float rhw, float sizeX, float sizeY
 
     const render::RenderPassDescriptor d = render::BuildRenderPassDescriptor(render::SplitLegacy(specFlags));
     DrawFan2D(xy, z, rhwValues, uv, nullptr, colors, 4, GpuHandleOf(mip._texture), 0, clip, d.depth, d.blend,
-              d.sampler, d.surface, d.shader);
+              d.sampler, d.surface, d.shader, d.alpha, d.alphaRef);
 }
 
 void EngineMTL::DrawLine(const Line2DAbs& line, PackedColor c0, PackedColor c1, const Rect2DAbs& clip)
@@ -478,7 +480,7 @@ void EngineMTL::DrawIndexedFan3D(const VertexIndex* indices, int n)
     const Rect2DAbs fullScreen(0, 0, static_cast<float>(_w), static_cast<float>(_h));
     DrawFan2D(xy, z, rhw, uv, uv1, colors, n, _currentTriTexture, _currentTriSecondaryTexture, fullScreen,
               _currentTriDepthMode, _currentTriBlendMode, _currentTriSampler, _currentTriSurfaceMode,
-              _currentTriShader, specular, _currentTriDetailMode);
+              _currentTriShader, _currentTriAlphaMode, _currentTriAlphaRef, specular, _currentTriDetailMode);
 }
 
 // GL33's equivalent is the legacy/queued path's FlushQueue -> ApplyPassState
@@ -505,6 +507,8 @@ void EngineMTL::PrepareTriangle(const MipInfo& mip, int specFlags)
     _currentTriSampler = d.sampler;
     _currentTriSurfaceMode = d.surface;
     _currentTriShader = d.shader;
+    _currentTriAlphaMode = d.alpha;
+    _currentTriAlphaRef = d.alphaRef;
     if (_legacyMeshUiOverlay && d.blend == render::BlendMode::AlphaBlend && d.fog == render::FogMode::AlphaFog)
         _currentTriDepthMode = render::DepthMode::ReadOnly;
 

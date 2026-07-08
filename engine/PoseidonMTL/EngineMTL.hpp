@@ -214,6 +214,13 @@ class EngineMTL : public Engine
     render::BlendMode _currentTriBlendMode = render::BlendMode::AlphaBlend;
     render::SurfaceMode _currentTriSurfaceMode = render::SurfaceMode::Default;
     render::ShaderFamily _currentTriShader = render::ShaderFamily::Normal;
+    // Alpha-test mode/ref for the same section (BuildRenderPassDescriptor's
+    // AlphaMode/alphaRef) -- fs2d discards fragments below this threshold,
+    // matching GL33's psNormal alphaRef uniform. Without this, legacy-path
+    // cutout geometry (alpha-holed decals like the watch bezel, issue #86)
+    // writes depth through its "transparent" holes since nothing discards.
+    render::AlphaMode _currentTriAlphaMode = render::AlphaMode::Disabled;
+    std::uint8_t _currentTriAlphaRef = 0;
     // Filter + wrap addressing for the same section, derived directly from
     // Backend::PointSampling/ClampU/ClampV spec bits (BuildRenderPassDescriptor.hpp's
     // exact mapping) -- defaults to Linear+ClampToEdge, this path's existing
@@ -292,6 +299,7 @@ class EngineMTL : public Engine
                    render::SamplerMode sampler = {render::SamplerFilter::Linear, true, true},
                    render::SurfaceMode surface = render::SurfaceMode::Default,
                    render::ShaderFamily shader = render::ShaderFamily::Normal,
+                   render::AlphaMode alphaMode = render::AlphaMode::Disabled, std::uint8_t alphaRef = 0,
                    const PackedColor* specular = nullptr, float detailMode = 0.0f);
 
     // Reads up to kMaxPolyVerts vertices from the bound _mesh by index and
