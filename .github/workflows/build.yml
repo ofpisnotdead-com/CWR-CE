@@ -71,13 +71,14 @@ jobs:
           # between runs without extra setup) and no renderer smoke test
           # (hosted macOS VMs aren't guaranteed real GPU/Metal access).
           #
-          # Also excludes 3 test_potime.cpp cases that assert tight sleep/
+          # Also excludes 4 test_potime.cpp cases that assert tight sleep/
           # interval budgets (e.g. a 50ms sleep completing within 50ms) --
           # confirmed flaky specifically on this hosted VM class (observed
-          # 89-143ms against 50-100ms budgets on a real run), consistent with
-          # GitHub's hosted macOS runners having looser scheduling guarantees
-          # than the dedicated self-hosted Mac. Not excluded on Linux/Windows/
-          # self-hosted, which don't show this jitter.
+          # 89-143ms against 50-100ms budgets on a real run; SLEEP_MS macro
+          # separately observed at 90ms against its 50ms budget), consistent
+          # with GitHub's hosted macOS runners having looser scheduling
+          # guarantees than the dedicated self-hosted Mac. Not excluded on
+          # Linux/Windows/self-hosted, which don't show this jitter.
           - name: macOS (Apple Silicon) RelWithDebInfo
             os: macos-latest
             preset: macos-arm64-clang-rwdi
@@ -85,7 +86,7 @@ jobs:
             build_dir: build/macos-arm64-clang-rwdi
             build_target: ''
             skip_smoke: true
-            ctest_exclude: 'PoseidonTests - (STRINGTABLE_MAP\.utf8\.csv ships both legend keys with English fallbacks|STRINGTABLE_EQUIPMENT\.utf8\.csv ships M16 keys for all 8 languages|equipment\.utf8\.html lives loose and references STR_EQ_M16 tokens|equipment\.utf8\.html line endings are clean CRLF \(no doubled CR\)|equipment\.utf8\.html preserves every EQ_ anchor and weapon image)|PoseidonFoundationTests - potime - (Poseidon - Foundation - getSystemTime timing accuracy|Common usage patterns|Platform consistency)'
+            ctest_exclude: 'PoseidonTests - (STRINGTABLE_MAP\.utf8\.csv ships both legend keys with English fallbacks|STRINGTABLE_EQUIPMENT\.utf8\.csv ships M16 keys for all 8 languages|equipment\.utf8\.html lives loose and references STR_EQ_M16 tokens|equipment\.utf8\.html line endings are clean CRLF \(no doubled CR\)|equipment\.utf8\.html preserves every EQ_ anchor and weapon image)|PoseidonFoundationTests - potime - (Poseidon - Foundation - getSystemTime timing accuracy|Common usage patterns|Platform consistency|SLEEP_MS macro)'
           # Supplementary check against the real (non-excluded) Combined data
           # and a real GPU/Metal smoke test, on the single physical
           # self-hosted Mac -- optional (continue-on-error above) so it never
