@@ -263,14 +263,31 @@ jobs:
           rm -rf ".vcpkg-bincache/${{ matrix.vcpkg_triplet }}"
           ln -s "$HOME/.cache/vcpkg-bincache/${{ matrix.vcpkg_triplet }}" ".vcpkg-bincache/${{ matrix.vcpkg_triplet }}"
 
+      # vcpkg's binary cache fingerprints each package by an ABI hash that
+      # bakes in the compiler/toolchain version. Windows pins its LLVM
+      # version explicitly (KyleMayes/install-llvm-action above) so it can't
+      # drift, but hosted macOS's Xcode/clang comes from whatever the
+      # macos-latest image currently ships, which GitHub updates over time.
+      # Without the toolchain version in the cache key, a cache built under
+      # an older Xcode would keep matching this key forever while every
+      # package's ABI hash silently mismatches -- "cache hit" downloads a
+      # blob vcpkg then rejects and rebuilds from source anyway (observed:
+      # a 156MB "hit" followed by 27 packages rebuilt, incl. a 2min openssl
+      # build). Folding the toolchain version into the key means a version
+      # change naturally busts the cache instead of poisoning it forever.
+      - name: Get macOS toolchain version
+        id: macos_toolchain
+        if: runner.os == 'macOS'
+        run: echo "version=$(xcrun clang --version | head -n 1)" >> "$GITHUB_OUTPUT"
+
       - name: Restore vcpkg binary cache
         if: runner.environment != 'self-hosted'
         uses: actions/cache@v4
         with:
           path: .vcpkg-bincache/${{ matrix.vcpkg_triplet }}
-          key: vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/vcpkg-triplets/**', 'cmake/vcpkg-overlay-ports/**') }}
+          key: vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-${{ steps.macos_toolchain.outputs.version }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/vcpkg-triplets/**', 'cmake/vcpkg-overlay-ports/**') }}
           restore-keys: |
-            vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-
+            vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-${{ steps.macos_toolchain.outputs.version }}-
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
