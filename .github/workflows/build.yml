@@ -117,7 +117,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # packages/ is gitignored and actions/checkout's clean:true wipes it
       # (git clean -ffdx removes ignored files too) at the start of every
@@ -283,7 +283,7 @@ jobs:
 
       - name: Restore vcpkg binary cache
         if: runner.environment != 'self-hosted'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .vcpkg-bincache/${{ matrix.vcpkg_triplet }}
           key: vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-${{ steps.macos_toolchain.outputs.version }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/vcpkg-triplets/**', 'cmake/vcpkg-overlay-ports/**') }}
@@ -383,7 +383,7 @@ jobs:
 
       - name: Upload CTest logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           # matrix.name, not matrix.preset -- the hosted and self-hosted macOS
           # legs share the same preset/build_dir (different runners entirely,
