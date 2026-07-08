@@ -41,7 +41,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Configure self-hosted compiler cache
         run: |
@@ -129,7 +129,7 @@ jobs:
 
       - name: Upload dSYMs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: PoseidonGame-dSYMs-${{ github.run_id }}
           path: |
