@@ -182,6 +182,16 @@ jobs:
           command -v pkg-config
           command -v xcodebuild
 
+      # Moved ahead of the ccache/vcpkg cache-setup steps below since both
+      # now key off this on hosted macOS, where Xcode/clang comes from
+      # whatever the macos-latest image currently ships and can drift
+      # between runs (self-hosted pins to whatever's on the physical Mac,
+      # so it doesn't need this until it changes there directly).
+      - name: Get macOS toolchain version
+        id: macos_toolchain
+        if: runner.os == 'macOS'
+        run: echo "version=$(xcrun clang --version | head -n 1)" >> "$GITHUB_OUTPUT"
+
       - name: Setup MSVC developer environment
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
@@ -196,13 +206,13 @@ jobs:
           arch: 'x64'
           directory: 'C:\Program Files\LLVM'
 
-      # Windows is hosted/ephemeral, so unlike the self-hosted runners below
-      # there's no local disk to persist a ccache dir on between runs --
-      # this wraps ccache's directory in actions/cache instead (restore
-      # before the build, save after). Experimental: this repo used to run
-      # this same action unconditionally on all hosted runners and dropped
-      # it in 43d1d43 without a documented reason; trying it on Windows
-      # alone first before considering hosted macOS too.
+      # Windows (and hosted macOS below) are hosted/ephemeral, so unlike the
+      # self-hosted runners there's no local disk to persist a ccache dir on
+      # between runs -- this wraps ccache's directory in actions/cache
+      # instead (restore before the build, save after). This repo used to
+      # run this same action unconditionally on all hosted runners and
+      # dropped it in 43d1d43 without a documented reason; validated on
+      # Windows alone first (see below) before extending to hosted macOS.
       #
       # max-size started at 300M (matching this repo's very first ccache
       # attempt) but that filled to 98.87% on the first run alone -- only a
@@ -215,6 +225,21 @@ jobs:
         with:
           variant: ccache
           key: ${{ matrix.preset }}
+          max-size: 1G
+
+      # Same reasoning as Windows above, validated there first (18min cold
+      # -> 13min at a 40% hit rate -> 7m52s at 79% once the cache was
+      # actually sized to fit the working set). Folds the Xcode/clang
+      # version into the key for the same reason the vcpkg cache does below
+      # (comment on "Restore vcpkg binary cache") -- ccache's own
+      # CCACHE_COMPILERCHECK doesn't cover this action's restore/save cycle
+      # the way it does on the self-hosted runner's persistent directory.
+      - name: Setup compiler cache (hosted macOS)
+        if: runner.os == 'macOS' && runner.environment != 'self-hosted'
+        uses: hendrikmuhs/ccache-action@v1.2.23
+        with:
+          variant: ccache
+          key: ${{ matrix.preset }}-${{ steps.macos_toolchain.outputs.version }}
           max-size: 1G
 
       - name: Configure self-hosted compiler cache
@@ -297,11 +322,6 @@ jobs:
       # a 156MB "hit" followed by 27 packages rebuilt, incl. a 2min openssl
       # build). Folding the toolchain version into the key means a version
       # change naturally busts the cache instead of poisoning it forever.
-      - name: Get macOS toolchain version
-        id: macos_toolchain
-        if: runner.os == 'macOS'
-        run: echo "version=$(xcrun clang --version | head -n 1)" >> "$GITHUB_OUTPUT"
-
       - name: Restore vcpkg binary cache
         if: runner.environment != 'self-hosted'
         uses: actions/cache@v6
@@ -334,16 +354,20 @@ jobs:
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+      # Every matrix leg now runs with ccache one way or another (self-hosted
+      # persistent dir, or actions/cache-backed for the two hosted legs
+      # below and Xcode further down) -- there's no longer a "leave the
+      # launcher unset" case to fall back to.
       - name: Configure
-        if: matrix.xcode != true && runner.environment != 'self-hosted' && runner.os != 'Windows'
+        if: matrix.xcode != true && runner.os == 'Windows'
         run: >
           cmake
           --preset ${{ matrix.preset }}
-          -DCMAKE_C_COMPILER_LAUNCHER=
-          -DCMAKE_CXX_COMPILER_LAUNCHER=
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Configure
-        if: matrix.xcode != true && runner.os == 'Windows'
+        if: matrix.xcode != true && runner.os == 'macOS' && runner.environment != 'self-hosted'
         run: >
           cmake
           --preset ${{ matrix.preset }}
@@ -401,7 +425,7 @@ jobs:
           }
 
       - name: Show compiler cache stats
-        if: always() && (runner.environment == 'self-hosted' || runner.os == 'Windows')
+        if: always()
         run: ccache --show-stats
 
       - name: Smoke test macOS renderers
