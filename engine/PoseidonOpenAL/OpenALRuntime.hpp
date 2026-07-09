@@ -175,11 +175,16 @@ inline bool TryLoadModule()
     // of the global symbol table via the RTLD_DEFAULT sentinel handle.
     ModuleHandle() = RTLD_DEFAULT;
 #elif defined(__APPLE__)
-    // Prefer a real openal-soft if the user has one (Homebrew installs it
-    // keg-only since macOS already ships OpenAL.framework), then fall back
-    // to Apple's built-in framework, which is always present but core-only
-    // (no EFX -- see OPENAL_EFX_FUNCTIONS above).
+    // Prefer the dylib DistCopy.cmake bundles next to the executable (built
+    // and tested against the exact version we ship), then a real openal-soft
+    // if the user has one (Homebrew installs it keg-only since macOS already
+    // ships OpenAL.framework), then fall back to Apple's built-in framework,
+    // which is always present but core-only (no EFX -- see
+    // OPENAL_EFX_FUNCTIONS above). "@executable_path/" is needed because a
+    // bare "libopenal.dylib" only hits dyld's default/fallback search paths,
+    // not the directory the binary actually launched from.
     static const char* const candidates[] = {
+        "@executable_path/libopenal.dylib",
         "libopenal.1.dylib",
         "libopenal.dylib",
         "/opt/homebrew/opt/openal-soft/lib/libopenal.1.dylib",

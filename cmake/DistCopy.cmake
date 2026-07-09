@@ -34,20 +34,26 @@ function(dist_copy TARGET)
         endif()
     endif()
 
-    # Copy runtime DLLs (e.g., OpenAL32.dll — LGPL dynamic linkage)
-    if(WIN32 AND TARGET OpenAL::OpenAL)
-        get_target_property(_openal_dll OpenAL::OpenAL IMPORTED_LOCATION)
-        if(NOT _openal_dll)
-            get_target_property(_openal_dll OpenAL::OpenAL IMPORTED_LOCATION_RELEASE)
+    # Copy runtime DLLs (e.g., OpenAL32.dll/libopenal.dylib — LGPL dynamic linkage)
+    if((WIN32 OR APPLE) AND TARGET OpenAL::OpenAL)
+        get_target_property(_openal_lib OpenAL::OpenAL IMPORTED_LOCATION)
+        if(NOT _openal_lib)
+            get_target_property(_openal_lib OpenAL::OpenAL IMPORTED_LOCATION_RELEASE)
         endif()
-        if(_openal_dll AND _openal_dll MATCHES "\\.dll$")
+        if(_openal_lib AND ((WIN32 AND _openal_lib MATCHES "\\.dll$") OR (APPLE AND _openal_lib MATCHES "\\.dylib$")))
+            if(WIN32)
+                set(_openal_dst "${DIST_DIR}")
+            else()
+                set(_openal_dst "${DIST_DIR}/libopenal.dylib")
+            endif()
             add_custom_command(TARGET ${TARGET} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${_openal_dll}" "${DIST_DIR}"
+                    "${_openal_lib}" "${_openal_dst}"
                 VERBATIM
             )
+            unset(_openal_dst)
         endif()
-        unset(_openal_dll)
+        unset(_openal_lib)
     endif()
 
     # Copy extra files from the target's source directory
