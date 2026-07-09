@@ -203,13 +203,19 @@ jobs:
       # this same action unconditionally on all hosted runners and dropped
       # it in 43d1d43 without a documented reason; trying it on Windows
       # alone first before considering hosted macOS too.
+      #
+      # max-size started at 300M (matching this repo's very first ccache
+      # attempt) but that filled to 98.87% on the first run alone -- only a
+      # 40% hit rate on the very next run since ccache was evicting its own
+      # entries mid-build. Matching self-hosted's 1G instead, since that's
+      # the value this repo already converged on once for the same codebase.
       - name: Setup compiler cache (Windows)
         if: runner.os == 'Windows'
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           variant: ccache
           key: ${{ matrix.preset }}
-          max-size: 300M
+          max-size: 1G
 
       - name: Configure self-hosted compiler cache
         if: runner.environment == 'self-hosted' && runner.os != 'Windows'
