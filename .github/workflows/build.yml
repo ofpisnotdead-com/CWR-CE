@@ -196,6 +196,21 @@ jobs:
           arch: 'x64'
           directory: 'C:\Program Files\LLVM'
 
+      # Windows is hosted/ephemeral, so unlike the self-hosted runners below
+      # there's no local disk to persist a ccache dir on between runs --
+      # this wraps ccache's directory in actions/cache instead (restore
+      # before the build, save after). Experimental: this repo used to run
+      # this same action unconditionally on all hosted runners and dropped
+      # it in 43d1d43 without a documented reason; trying it on Windows
+      # alone first before considering hosted macOS too.
+      - name: Setup compiler cache (Windows)
+        if: runner.os == 'Windows'
+        uses: hendrikmuhs/ccache-action@v1.2.23
+        with:
+          variant: ccache
+          key: ${{ matrix.preset }}
+          max-size: 300M
+
       - name: Configure self-hosted compiler cache
         if: runner.environment == 'self-hosted' && runner.os != 'Windows'
         run: |
@@ -314,12 +329,20 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Configure
-        if: matrix.xcode != true && runner.environment != 'self-hosted'
+        if: matrix.xcode != true && runner.environment != 'self-hosted' && runner.os != 'Windows'
         run: >
           cmake
           --preset ${{ matrix.preset }}
           -DCMAKE_C_COMPILER_LAUNCHER=
           -DCMAKE_CXX_COMPILER_LAUNCHER=
+
+      - name: Configure
+        if: matrix.xcode != true && runner.os == 'Windows'
+        run: >
+          cmake
+          --preset ${{ matrix.preset }}
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Configure Xcode
         if: matrix.xcode == true
@@ -372,7 +395,7 @@ jobs:
           }
 
       - name: Show compiler cache stats
-        if: always() && runner.environment == 'self-hosted' && runner.os != 'Windows'
+        if: always() && (runner.environment == 'self-hosted' || runner.os == 'Windows')
         run: ccache --show-stats
 
       - name: Smoke test macOS renderers
