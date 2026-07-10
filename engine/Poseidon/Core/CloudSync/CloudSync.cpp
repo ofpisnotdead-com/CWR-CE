@@ -25,6 +25,11 @@ std::unordered_map<std::string, double> ToMap(std::vector<std::pair<std::string,
 void RunSyncJobs(const std::vector<SyncPair>& pairs, SyncDirection direction, SyncProgress& progress, std::mutex& mtx,
                  const SyncOpsEnv& env, const std::atomic<bool>& cancel)
 {
+    // Give the remote side a chance to catch up with reality before diffing
+    // against it -- see SyncOpsEnv::refreshRemote. No-op when unset.
+    if (env.refreshRemote)
+        env.refreshRemote();
+
     // Build the flat list of (pair index, relPath, pull?, push?) up front so
     // progress.itemCount is known before any copying starts.
     struct PlannedOp
@@ -155,10 +160,30 @@ void SyncWorker::Start(std::vector<SyncPair> pairs, SyncDirection direction)
     // are read by the worker thread without a lock, and every actual caller
     // in this codebase (PushInBackground's static worker) always passes the
     // same DefaultSyncPairs()+Push, so there's nothing to reconcile.
-    if (_session && _session->active.load())
+    //
+    // The active/rerunRequested handoff below must happen under session->mtx
+    // on BOTH sides (here and in the worker loop). They used to be two
+    // independent atomics checked/set without a shared critical section: the
+    // worker could read rerunRequested==false, decide to exit, and only
+    // *then* set active=false -- if a Start() call landed in that exact gap,
+    // it would see active still true, set rerunRequested=true, and return
+    // believing a rerun was coming, while the worker thread (already past
+    // its check) never looked at the flag again. That request was silently
+    // lost -- no error, nothing logged, the file just never got pushed until
+    // some unrelated later call started a fresh session. Confirmed as the
+    // cause of a campaign-history .sqc that a device wrote locally via
+    // AddMission() but that never reached iCloud, most likely because that
+    // write's PushInBackground() call raced the backgrounding-triggered push
+    // finishing up right as the player quit -- the last push before the app
+    // was suspended, so there was no later call left to recover it.
+    if (_session)
     {
-        _session->rerunRequested.store(true);
-        return;
+        std::lock_guard<std::mutex> g(_session->mtx);
+        if (_session->active.load())
+        {
+            _session->rerunRequested = true;
+            return;
+        }
     }
 
     if (_thread.joinable())
@@ -174,17 +199,23 @@ void SyncWorker::Start(std::vector<SyncPair> pairs, SyncDirection direction)
     _thread = std::thread(
         [session]()
         {
-            do
+            for (;;)
             {
-                session->rerunRequested.store(false);
                 {
                     std::lock_guard<std::mutex> g(session->mtx);
                     session->progress = SyncProgress{};
                 }
                 RunSyncJobs(session->pairs, session->direction, session->progress, session->mtx, session->env,
                            session->cancel);
-            } while (session->rerunRequested.load() && !session->cancel.load());
-            session->active.store(false);
+
+                std::lock_guard<std::mutex> g(session->mtx);
+                if (session->cancel.load() || !session->rerunRequested)
+                {
+                    session->active.store(false);
+                    break;
+                }
+                session->rerunRequested = false;
+            }
         });
 }
 

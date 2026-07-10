@@ -58,6 +58,19 @@ struct SyncOpsEnv
     std::function<bool(const std::string& localDir, const std::string& containerRelPath, const std::string& relPath,
                        std::string& error)>
         pushFile; ///< local -> container
+
+    // Optional: called once per RunSyncJobs() run, before any pair is
+    // listed. Real (Apple) implementation actively queries iCloud's
+    // server-side metadata index and requests download of anything not yet
+    // local, rather than relying solely on whatever this device's OS daemon
+    // has already decided to mirror -- a brand-new remote item (one this
+    // device has never seen before) can otherwise sit invisible to
+    // listContainer() for an unbounded amount of time, since background
+    // materialization is scheduled entirely at the OS's discretion. No-op
+    // when unset (tests, non-Apple platforms) -- this only ever improves
+    // freshness, RunSyncJobs's diff logic is correct without it, just
+    // potentially stale.
+    std::function<void()> refreshRemote;
 };
 
 struct SyncProgress
@@ -127,7 +140,14 @@ class SyncWorker
         SyncProgress progress;
         std::atomic<bool> cancel{false};
         std::atomic<bool> active{false};
-        std::atomic<bool> rerunRequested{false}; ///< set by Start() when called while already active
+        // Guarded by mtx on BOTH the Start()-caller and worker-thread sides
+        // (unlike cancel/active, which are read lock-free elsewhere) -- the
+        // active-check-then-rerunRequested-set and the
+        // rerunRequested-check-then-active-clear must be part of the same
+        // critical section on their respective sides, or a Start() call can
+        // land in the gap between the worker deciding to exit and it
+        // actually clearing `active`, silently losing the rerun request.
+        bool rerunRequested = false; ///< set by Start() when called while already active
     };
 
     SyncOpsEnv _env;
