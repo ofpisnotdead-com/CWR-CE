@@ -140,6 +140,43 @@ TEST_CASE("TouchInput: mostly horizontal gameplay move snaps to pure strafe", "[
     CHECK(syntheticY == Catch::Approx(0.0f));
 }
 
+TEST_CASE("TouchInput: full move-stick deflection engages sprint", "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_TestSetGameplaySceneOverride(true, true);
+
+    // Straight down and well past kStickRadius (0.115) - clamps to full
+    // deflection (moveY == -1).
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, 0.20f, 0.80f));
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_MOTION, 1, 0.20f, 0.50f));
+    TouchInput_ProcessFrame(1920, 1080);
+
+    TouchInputDebugState state = TouchInput_GetDebugState();
+    CHECK(state.moveY == Catch::Approx(-1.0f));
+    CHECK(state.moveSprintActive);
+    CHECK(InputSubsystem::Instance().GetAction(UATurbo, false) == 1.0f);
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_UP, 1, 0.20f, 0.50f));
+    TouchInput_ProcessFrame(1920, 1080);
+    CHECK_FALSE(TouchInput_GetDebugState().moveSprintActive);
+    CHECK(InputSubsystem::Instance().GetAction(UATurbo, false) == 0.0f);
+}
+
+TEST_CASE("TouchInput: light move-stick deflection does not engage sprint", "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_TestSetGameplaySceneOverride(true, true);
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, 0.20f, 0.80f));
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_MOTION, 1, 0.20f, 0.76f));
+    TouchInput_ProcessFrame(1920, 1080);
+
+    TouchInputDebugState state = TouchInput_GetDebugState();
+    REQUIRE(state.moveActive);
+    CHECK_FALSE(state.moveSprintActive);
+    CHECK(InputSubsystem::Instance().GetAction(UATurbo, false) == 0.0f);
+}
+
 TEST_CASE("TouchInput: right-side drag owns cursor/look and does not steal button touches", "[input][touch]")
 {
     TouchFixture fixture;
@@ -431,6 +468,89 @@ TEST_CASE("TouchInput: map scene two-finger gesture pans and pinches", "[input][
     CHECK_FALSE(state.mapGestureActive);
 }
 
+TEST_CASE("TouchInput: gameplay two-finger pinch on the aim side zooms and suppresses look rotation",
+         "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_TestSetGameplaySceneOverride(true, true);
+    GInput.keyboard.ForgetKeys();
+
+    // Both fingers on the look/right side (x > kMoveRegionX == 0.45). Only
+    // the first gets FingerRole::Look; the second stays FingerRole::None
+    // (see CollectAimPinchFingers) but must still count toward the pinch.
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, 0.60f, 0.40f));
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 2, 0.80f, 0.40f));
+    TouchInput_ProcessFrame(1920, 1080);
+
+    // Fingers move apart, well past the deadzone - zoom in. UAZoomIn only
+    // has a real binding on SDL_SCANCODE_KP_PLUS (no mouse-wheel path
+    // exists for it), so that's what a spread pinch should hold.
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_MOTION, 1, 0.55f, 0.40f));
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_MOTION, 2, 0.90f, 0.40f));
+    TouchInput_ProcessFrame(1920, 1080);
+
+    TouchInputDebugState state = TouchInput_GetDebugState();
+    REQUIRE(state.aimPinchActive);
+    CHECK(state.aimZoom > 0.1f);
+    CHECK(state.aimZoomInHeld);
+    CHECK_FALSE(state.aimZoomOutHeld);
+    // The primary Look finger moved during this same frame; if rotation
+    // weren't suppressed during the pinch, lookDx/lookDy would be nonzero.
+    CHECK(state.lookDx == 0.0f);
+    CHECK(state.lookDy == 0.0f);
+
+    GInput.keyboard.Update(17, 16, true);
+    CHECK(GInput.keyboard.keys[SDL_SCANCODE_KP_PLUS] > 0.0f);
+    CHECK(GInput.keyboard.keys[SDL_SCANCODE_KP_MINUS] == 0.0f);
+
+    // Lift the second finger: zoom-in stays latched and the remaining
+    // finger goes back to ordinary look control.
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_UP, 2, 0.90f, 0.40f));
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_MOTION, 1, 0.60f, 0.40f));
+    TouchInput_ProcessFrame(1920, 1080);
+    state = TouchInput_GetDebugState();
+    CHECK_FALSE(state.aimPinchActive);
+    CHECK(state.aimZoomInHeld);
+    CHECK(state.lookDx != 0.0f);
+    GInput.keyboard.Update(17, 16, true);
+    CHECK(GInput.keyboard.keys[SDL_SCANCODE_KP_PLUS] > 0.0f);
+
+    // Start a fresh gesture and pinch inward past its deadzone to unlatch
+    // zoom-in and hold zoom-out for this gesture.
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 2, 0.80f, 0.40f));
+    TouchInput_ProcessFrame(1920, 1080);
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_MOTION, 2, 0.64f, 0.40f));
+    TouchInput_ProcessFrame(1920, 1080);
+    state = TouchInput_GetDebugState();
+    CHECK(state.aimZoom < -0.1f);
+    CHECK_FALSE(state.aimZoomInHeld);
+    CHECK(state.aimZoomOutHeld);
+
+    GInput.keyboard.Update(17, 16, true);
+    CHECK(GInput.keyboard.keys[SDL_SCANCODE_KP_PLUS] == 0.0f);
+    CHECK(GInput.keyboard.keys[SDL_SCANCODE_KP_MINUS] > 0.0f);
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_UP, 2, 0.64f, 0.40f));
+    TouchInput_ProcessFrame(1920, 1080);
+    CHECK_FALSE(TouchInput_GetDebugState().aimPinchActive);
+    GInput.keyboard.Update(17, 16, true);
+    CHECK(GInput.keyboard.keys[SDL_SCANCODE_KP_MINUS] == 0.0f);
+}
+
+TEST_CASE("TouchInput: single finger on the aim side still looks around normally", "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_TestSetGameplaySceneOverride(true, true);
+
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, 0.60f, 0.40f));
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_MOTION, 1, 0.65f, 0.40f));
+    TouchInput_ProcessFrame(1920, 1080);
+
+    TouchInputDebugState state = TouchInput_GetDebugState();
+    CHECK_FALSE(state.aimPinchActive);
+    CHECK(state.lookDx != 0.0f);
+}
+
 TEST_CASE("TouchInput: direct touch scene one finger drives primary touch", "[input][touch]")
 {
     TouchFixture fixture;
@@ -539,22 +659,72 @@ TEST_CASE("TouchInput: quick small action-button drag does not fire select (issu
     CHECK_FALSE(GInput.keyboard.keysToDo[SDL_SCANCODE_RETURN]);
 }
 
-TEST_CASE("TouchInput: stance button emits move-down stance key", "[input][touch]")
+TEST_CASE("TouchInput: stance button tap pulses Q for exactly one frame", "[input][touch]")
+{
+    // Q and Z are both self-contained toggles at the engine level (Crouch<->
+    // Stand and Prone<->Stand) - the touch button just needs to press
+    // whichever one applies, which is why there's no equivalent of a
+    // "ClassifyStance"/target-tier test here anymore: nothing on the touch
+    // side needs to know the player's current pose.
+    TouchFixture fixture;
+    TouchInput_TestSetGameplaySceneOverride(true, true);
+    GInput.keyboard.ForgetKeys();
+
+    Glob.uiTime = Poseidon::Foundation::UITime(1000);
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, kStanceButtonX, kStanceButtonY));
+    TouchInput_ProcessFrame(1920, 1080);
+    CHECK(TouchInput_GetDebugState().buttons[(int)TouchButton::Stance]);
+    CHECK_FALSE(TouchInput_GetDebugState().stancePulseActive); // tap fires on release, not press
+
+    // Quick release, well under the hold threshold.
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_UP, 1, kStanceButtonX, kStanceButtonY));
+    // Match the real game-loop order: finger event, touch processing, then
+    // keyboard processing. The pulse must survive this ProcessFrame call.
+    TouchInput_ProcessFrame(1920, 1080);
+    CHECK(TouchInput_GetDebugState().stancePulseActive);
+
+    GInput.keyboard.Update(17, 16, true);
+    CHECK(GInput.keyboard.keysToDo[SDL_SCANCODE_Q]);
+    CHECK(GInput.keyboard.keys[SDL_SCANCODE_Q] > 0.0f);
+    CHECK(GInput.keyboard.keys[SDL_SCANCODE_Z] == 0.0f);
+
+    // Auto-releases on the following ProcessFrame call.
+    TouchInput_ProcessFrame(1920, 1080);
+    CHECK_FALSE(TouchInput_GetDebugState().stancePulseActive);
+    GInput.keyboard.Update(17, 16, true);
+    CHECK(GInput.keyboard.keys[SDL_SCANCODE_Q] == 0.0f);
+}
+
+TEST_CASE("TouchInput: stance button hold pulses Z for exactly one frame", "[input][touch]")
 {
     TouchFixture fixture;
     TouchInput_TestSetGameplaySceneOverride(true, true);
     GInput.keyboard.ForgetKeys();
 
+    Glob.uiTime = Poseidon::Foundation::UITime(1000);
     TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, kStanceButtonX, kStanceButtonY));
     TouchInput_ProcessFrame(1920, 1080);
+    CHECK_FALSE(TouchInput_GetDebugState().stancePulseActive);
 
-    CHECK(TouchInput_GetDebugState().buttons[(int)TouchButton::Stance]);
+    // Cross the hold threshold while still held (kStanceHoldSeconds is
+    // 0.45s; 1s of elapsed game time is comfortably past it).
+    Glob.uiTime = Poseidon::Foundation::UITime(2000);
+    TouchInput_ProcessFrame(1920, 1080);
+    CHECK(TouchInput_GetDebugState().stancePulseActive);
 
     GInput.keyboard.Update(17, 16, true);
     CHECK(GInput.keyboard.keysToDo[SDL_SCANCODE_Z]);
     CHECK(GInput.keyboard.keys[SDL_SCANCODE_Z] > 0.0f);
+    CHECK(GInput.keyboard.keys[SDL_SCANCODE_Q] == 0.0f);
 
+    // Releasing the finger after hold already fired must not also pulse Q.
     TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_UP, 1, kStanceButtonX, kStanceButtonY));
+    GInput.keyboard.Update(17, 16, true);
+    CHECK(GInput.keyboard.keys[SDL_SCANCODE_Q] == 0.0f);
+
+    // The Z pulse still auto-releases on the next ProcessFrame call.
+    TouchInput_ProcessFrame(1920, 1080);
+    CHECK_FALSE(TouchInput_GetDebugState().stancePulseActive);
     GInput.keyboard.Update(17, 16, true);
     CHECK(GInput.keyboard.keys[SDL_SCANCODE_Z] == 0.0f);
 }

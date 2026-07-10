@@ -53,6 +53,27 @@ constexpr float kMinSensitivity = 0.25f;
 constexpr float kMaxSensitivity = 3.0f;
 constexpr float kTapMaxTravel = 0.018f;
 constexpr float kTapMaxSeconds = 0.30f;
+// Stance button: a press shorter than this is a tap (pulses Q - Crouch,
+// toggling back to Stand if already crouched); at or beyond it, it's a hold
+// (pulses Z - Prone, toggling back to Stand if already prone). Both keys
+// are already self-contained toggles at the engine level (SoldierOldActions
+// - MoveUp/MoveDown), so tapping while prone naturally lands on Crouch
+// first (Q's toggle doesn't know about Prone, only Crouch<->Stand) and a
+// second tap reaches Stand - no extra state machine needed on this side.
+// Deliberately its own (longer) threshold rather than reusing
+// kTapMaxSeconds - that one is only checked passively at release elsewhere,
+// this one actively fires the hold action while still pressed, so it needs
+// more slack for a real screen tap (or Simulator click latency) to land
+// under it.
+constexpr float kStanceHoldSeconds = 0.45f;
+// Move-stick deflection (0..1, see kStickRadius) above which touch movement
+// engages real sprint (UATurbo) rather than the default jog. Deliberately
+// close to full deflection - sprint should read as "pushed all the way",
+// not just "pushed further than walking".
+// TODO(#101): this is a 2-tier jog/sprint cut. A true 3rd walk tier would
+// mean driving UASlow's _walkToggle from touch, which is edge-triggered
+// state of the same shape as the stance button - follow-up, not this PR.
+constexpr float kSprintDeflectionThreshold = 0.85f;
 // Auto display mode: how long touch stays "the active input" after the last
 // real finger event before a more-recently-used keyboard/mouse/gamepad can
 // take over. Short enough to react promptly, long enough that a quick touch
@@ -62,6 +83,12 @@ constexpr float kInputModeSwitchDebounce = 1.5f;
 constexpr float kMapPanMouseScaleX = 200.0f / 1.5f;
 constexpr float kMapPanMouseScaleY = 150.0f / 1.5f;
 constexpr float kMapPinchZoomScale = 5.0f;
+// #98 spike: pinch-to-zoom on the aiming/look side of the screen. Fraction
+// of the gesture's starting finger-distance the pinch must move before it
+// counts as "zoom in"/"zoom out" (see ProcessAimPinchGesture) - small
+// enough to feel responsive, large enough that finger-down jitter doesn't
+// immediately trigger a zoom.
+constexpr float kAimPinchZoomDeadzone = 0.12f;
 constexpr float kActionScrollStepY = 0.035f;
 constexpr float kActionScrollWheelTicks = 1.0f;
 // Below this, vertical movement on the Action button is indistinguishable from
@@ -165,6 +192,7 @@ bool sButtonDown[(int)TouchButton::Count] = {};
 bool sPrevButtonDown[(int)TouchButton::Count] = {};
 float sMoveX = 0.0f;
 float sMoveY = 0.0f;
+bool sMoveSprintActive = false;
 float sLookDx = 0.0f;
 float sLookDy = 0.0f;
 float sMoveAnchorX = 0.18f;
@@ -176,6 +204,19 @@ float sLookY = 0.0f;
 bool sAimFocusActive = false;
 bool sAimFocusCalm = false;
 Foundation::UITime sAimFocusCalmSince;
+// Stance button: sStanceHoldFired classifies tap vs. hold using the live
+// Finger's own startTime (no need to duplicate press tracking). The pulse
+// itself is a single Q (tap) or Z (hold) press, released one frame later -
+// see StartStancePulse/EndStancePulse.
+bool sStanceHoldFired = false;
+bool sStancePulseActive = false;
+bool sStancePulseObservedFrame = false;
+SDL_Scancode sStancePulseScancode = SDL_SCANCODE_Q;
+bool sAimPinchActive = false;
+float sAimPinchStartDist = 0.0f;
+float sAimZoom = 0.0f;
+bool sAimZoomInHeld = false;
+bool sAimZoomOutHeld = false;
 bool sMapGestureActive = false;
 bool sMapPrimaryActive = false;
 SDL_FingerID sMapPrimaryFingerId = 0;
@@ -740,6 +781,32 @@ int CollectMapGestureFingers(const Finger** first, const Finger** second)
     return count;
 }
 
+// Unlike the map gesture (where IsDirectTouchScene() means ClassifyFinger
+// never assigns Move/Look roles at all - see the early-out at the top of
+// ClassifyFinger), a second finger in the look region during gameplay still
+// exists as a real Finger, just stuck at FingerRole::None because only one
+// finger can hold FingerRole::Look at a time. Collect on region + role
+// rather than role alone so that second finger counts too.
+int CollectAimPinchFingers(const Finger** first, const Finger** second)
+{
+    int count = 0;
+    for (const Finger& finger : sFingers)
+    {
+        if (!finger.active || IsTouchButtonFinger(finger))
+            continue;
+        if (finger.x <= kMoveRegionX)
+            continue;
+        if (finger.role != FingerRole::Look && finger.role != FingerRole::None)
+            continue;
+        if (count == 0 && first)
+            *first = &finger;
+        else if (count == 1 && second)
+            *second = &finger;
+        ++count;
+    }
+    return count;
+}
+
 void BufferCursorToTouch(float x, float y)
 {
     const float targetX = DirectTouchCursorX(x) * 2.0f - 1.0f;
@@ -805,6 +872,46 @@ void EndAimFocus()
     sAimFocusActive = false;
     sAimFocusCalm = false;
     sAimFocusCalmSince = Glob.uiTime;
+}
+
+void EndStancePulse()
+{
+    if (!sStancePulseActive)
+        return;
+    SDLInput_BufferKeyEvent(sStancePulseScancode, false, std::max<DWORD>(1, Foundation::GlobalTickCount()));
+    sStancePulseActive = false;
+    sStancePulseObservedFrame = false;
+}
+
+void AdvanceStancePulse()
+{
+    if (!sStancePulseActive)
+        return;
+
+    // Finger-up events arrive before ProcessTouch. Give a newly started
+    // pulse this complete ProcessTouch -> ProcessKeyboard cycle, then
+    // release it during the following cycle. This also works for a hold
+    // pulse started from inside ProcessTouch below.
+    if (sStancePulseObservedFrame)
+        EndStancePulse();
+    else
+        sStancePulseObservedFrame = true;
+}
+
+// Q and Z are both self-contained toggles at the engine level (Crouch<->
+// Stand and Prone<->Stand respectively - SoldierOldActions' MoveUp/
+// MoveDown), so all the touch side needs to do is press-and-release
+// whichever one applies. Held for exactly one frame boundary (down now, up
+// on the next TouchInput_ProcessFrame call) - long enough to register as a
+// real key-down to KeyboardState::Update, short enough that there's no
+// window for a second, unwanted toggle to fire.
+void StartStancePulse(SDL_Scancode scancode)
+{
+    EndStancePulse();
+    sStancePulseScancode = scancode;
+    SDLInput_BufferKeyEvent(scancode, true, std::max<DWORD>(1, Foundation::GlobalTickCount()));
+    sStancePulseActive = true;
+    sStancePulseObservedFrame = false;
 }
 
 void EndMapPrimary()
@@ -904,6 +1011,110 @@ void ProcessMapGesture()
     {
         SDLInput_BufferMouseWheel(sMapZoom);
         GInput.mouse.cursorLastActive = Glob.uiTime;
+    }
+}
+
+void EndAimPinchGesture()
+{
+    // Zoom-in is deliberately latched across gestures so the player can
+    // lift the second finger and look around while still zoomed. Zoom-out
+    // only needs to remain held for the inward pinch itself.
+    if (sAimZoomOutHeld)
+        SDLInput_BufferKeyEvent(SDL_SCANCODE_KP_MINUS, false, std::max<DWORD>(1, Foundation::GlobalTickCount()));
+    sAimZoomOutHeld = false;
+    sAimPinchActive = false;
+    sAimZoom = 0.0f;
+}
+
+void ReleaseAimZoom()
+{
+    EndAimPinchGesture();
+    if (sAimZoomInHeld)
+        SDLInput_BufferKeyEvent(SDL_SCANCODE_KP_PLUS, false, std::max<DWORD>(1, Foundation::GlobalTickCount()));
+    sAimZoomInHeld = false;
+}
+
+// #98 spike: two fingers in the look region pinch/unzoom gameplay aim.
+//
+// UAZoomIn/UAZoomOut (World.cpp) do NOT read the mouse wheel - the modern
+// InputCode/InputBinding system has no wheel device type at all; wheel
+// deltas only ever reach UI list-scrolling (InGameUI.cpp), never zoom. Their
+// only real bindings are SDL_SCANCODE_KP_PLUS/KP_MINUS (InputSubsystem.cpp).
+// So this synthesizes those two keys directly. A spread pinch latches zoom-in
+// after the gesture ends so one-finger look remains available while zoomed;
+// a later inward pinch releases that latch and holds zoom-out for the gesture.
+// What that produces depends
+// on camera mode: CamInternal (hip-fire/ADS, no scope) snaps FOV to a fixed
+// zoomed/normal value for as long as the key is held (World.cpp's
+// non-continuous branch); CamGunner with a variable-zoom optic drives real
+// smooth zoom at a fixed rate (World.cpp's continuous branch, via
+// pow(ZoomSpeed, ...)); a fixed-zoom scope has ~zero range either way, so
+// zoom is a no-op while looking through one - not a bug, matches keyboard.
+//
+// While active, the primary Look finger's per-frame rotation delta is
+// suppressed (see the FingerRole::Look branch below) so finger jitter
+// during the pinch doesn't also spin the camera.
+void ProcessAimPinchGesture()
+{
+    if (!IsGameplayScene())
+    {
+        ReleaseAimZoom();
+        return;
+    }
+
+    const Finger* a = nullptr;
+    const Finger* b = nullptr;
+    const int count = CollectAimPinchFingers(&a, &b);
+    if (count < 2 || !a || !b)
+    {
+        EndAimPinchGesture();
+        return;
+    }
+
+    const float ax = TouchToUiX(a->x);
+    const float ay = TouchToUiY(a->y);
+    const float bx = TouchToUiX(b->x);
+    const float by = TouchToUiY(b->y);
+    const float dist = std::max(Length(ax - bx, ay - by), 0.0001f);
+
+    if (!sAimPinchActive)
+        sAimPinchStartDist = dist;
+    sAimPinchActive = true;
+
+    sAimZoom = dist / sAimPinchStartDist - 1.0f;
+
+    const bool wantZoomIn = sAimZoom > kAimPinchZoomDeadzone;
+    const bool wantZoomOut = sAimZoom < -kAimPinchZoomDeadzone;
+    if (wantZoomIn && !sAimZoomInHeld)
+    {
+        if (sAimZoomOutHeld)
+        {
+            SDLInput_BufferKeyEvent(SDL_SCANCODE_KP_MINUS, false,
+                                    std::max<DWORD>(1, Foundation::GlobalTickCount()));
+            sAimZoomOutHeld = false;
+        }
+        SDLInput_BufferKeyEvent(SDL_SCANCODE_KP_PLUS, true, std::max<DWORD>(1, Foundation::GlobalTickCount()));
+        sAimZoomInHeld = true;
+    }
+    if (wantZoomOut)
+    {
+        if (sAimZoomInHeld)
+        {
+            SDLInput_BufferKeyEvent(SDL_SCANCODE_KP_PLUS, false,
+                                    std::max<DWORD>(1, Foundation::GlobalTickCount()));
+            sAimZoomInHeld = false;
+        }
+        if (!sAimZoomOutHeld)
+        {
+            SDLInput_BufferKeyEvent(SDL_SCANCODE_KP_MINUS, true,
+                                    std::max<DWORD>(1, Foundation::GlobalTickCount()));
+            sAimZoomOutHeld = true;
+        }
+    }
+    else if (sAimZoomOutHeld)
+    {
+        SDLInput_BufferKeyEvent(SDL_SCANCODE_KP_MINUS, false, std::max<DWORD>(1, Foundation::GlobalTickCount()));
+        sAimZoomOutHeld = false;
     }
 }
 
@@ -1052,7 +1263,8 @@ void EmitButtonEdge(TouchButton button, bool down)
             SDLInput_BufferKeyEvent(SDL_SCANCODE_V, down, Foundation::GlobalTickCount());
             break;
         case TouchButton::Stance:
-            SDLInput_BufferKeyEvent(SDL_SCANCODE_Z, down, std::max<DWORD>(1, Foundation::GlobalTickCount()));
+            // Handled in EmitFingerButtonEdge, which has the Finger (and so
+            // its startTime) needed to classify tap vs. hold.
             break;
         case TouchButton::Equipment:
             break;
@@ -1112,6 +1324,22 @@ void EmitFingerButtonEdge(const Finger& finger, bool down)
                 finger.maxTravel <= kTapMaxTravel)
                 EmitActionTap();
             ResetActionTap();
+        }
+        sPrevButtonDown[(int)finger.button] = down;
+        return;
+    }
+    if (finger.button == TouchButton::Stance)
+    {
+        if (down)
+        {
+            sStanceHoldFired = false;
+        }
+        else if (!sStanceHoldFired)
+        {
+            // A hold already would have pulsed Z itself (see the per-frame
+            // check in TouchInput_ProcessFrame); this is the "released
+            // before the hold threshold" case, i.e. a tap - pulse Q.
+            StartStancePulse(SDL_SCANCODE_Q);
         }
         sPrevButtonDown[(int)finger.button] = down;
         return;
@@ -1481,10 +1709,13 @@ void TouchInput_ProcessFrame(int viewportWidth, int viewportHeight)
         ResetActionScroll();
         EndMapPrimary();
         EndMapGesture();
+        ReleaseAimZoom();
+        AdvanceStancePulse();
         return;
     }
 
     ProcessMapGesture();
+    ProcessAimPinchGesture();
 
     bool moveActive = false;
     bool lookActive = false;
@@ -1508,32 +1739,38 @@ void TouchInput_ProcessFrame(int viewportWidth, int viewportHeight)
         }
         else if (finger.role == FingerRole::Look)
         {
-            const bool gameplay = IsGameplayScene();
-            const float sensitivity = gameplay ? sAimSensitivity : sCursorSensitivity;
-            const float scaleX = gameplay ? kBaseLookScaleX : (float)std::max(1, sViewportW);
-            const float scaleY = gameplay ? kBaseLookScaleY : (float)std::max(1, sViewportH);
-            const float dx = (finger.x - finger.lastX) * scaleX * sensitivity;
-            const float dy = (finger.y - finger.lastY) * scaleY * sensitivity;
-            sLookDx += dx;
-            sLookDy += dy;
-            if (gameplay)
+            // While a two-finger aim pinch is in flight, this finger's own
+            // per-frame motion shouldn't also spin the camera - see
+            // ProcessAimPinchGesture.
+            if (!sAimPinchActive)
             {
-                const float lookPixels = Length(dx, dy);
-                if (lookPixels <= kAimFocusCalmPixels)
+                const bool gameplay = IsGameplayScene();
+                const float sensitivity = gameplay ? sAimSensitivity : sCursorSensitivity;
+                const float scaleX = gameplay ? kBaseLookScaleX : (float)std::max(1, sViewportW);
+                const float scaleY = gameplay ? kBaseLookScaleY : (float)std::max(1, sViewportH);
+                const float dx = (finger.x - finger.lastX) * scaleX * sensitivity;
+                const float dy = (finger.y - finger.lastY) * scaleY * sensitivity;
+                sLookDx += dx;
+                sLookDy += dy;
+                if (gameplay)
                 {
-                    if (!sAimFocusCalm)
+                    const float lookPixels = Length(dx, dy);
+                    if (lookPixels <= kAimFocusCalmPixels)
                     {
-                        sAimFocusCalm = true;
+                        if (!sAimFocusCalm)
+                        {
+                            sAimFocusCalm = true;
+                            sAimFocusCalmSince = Glob.uiTime;
+                        }
+                    }
+                    else
+                    {
+                        sAimFocusCalm = false;
                         sAimFocusCalmSince = Glob.uiTime;
                     }
+                    if (sAimFocusActive && lookPixels >= kAimFocusReleasePixels)
+                        EndAimFocus();
                 }
-                else
-                {
-                    sAimFocusCalm = false;
-                    sAimFocusCalmSince = Glob.uiTime;
-                }
-                if (sAimFocusActive && lookPixels >= kAimFocusReleasePixels)
-                    EndAimFocus();
             }
             sLookX = finger.x;
             sLookY = finger.y;
@@ -1542,6 +1779,12 @@ void TouchInput_ProcessFrame(int viewportWidth, int viewportHeight)
         else if (finger.role == FingerRole::Button && finger.button != TouchButton::Count)
         {
             sButtonDown[(int)finger.button] = true;
+            if (finger.button == TouchButton::Stance && !sStanceHoldFired &&
+                Glob.uiTime - finger.startTime >= kStanceHoldSeconds)
+            {
+                sStanceHoldFired = true;
+                StartStancePulse(SDL_SCANCODE_Z);
+            }
         }
     }
 
@@ -1551,6 +1794,8 @@ void TouchInput_ProcessFrame(int viewportWidth, int viewportHeight)
         if (std::fabs(sMoveX) > 0.35f && std::fabs(sMoveY) < std::fabs(sMoveX) * kTouchStrafeSnapRatio)
             syntheticMoveY = 0.0f;
         InputSubsystem::Instance().SetSyntheticLeftStick(sMoveX, syntheticMoveY);
+        sMoveSprintActive = moveActive && Length(sMoveX, sMoveY) > kSprintDeflectionThreshold;
+        InputSubsystem::Instance().SetSyntheticTurbo(sMoveSprintActive);
         if (moveActive)
         {
             GInput.gamepad.moveLastActive = Glob.uiTime;
@@ -1559,6 +1804,8 @@ void TouchInput_ProcessFrame(int viewportWidth, int viewportHeight)
     }
     else
     {
+        sMoveSprintActive = false;
+        InputSubsystem::Instance().SetSyntheticTurbo(false);
         InputSubsystem::Instance().SetSyntheticLeftStick(0.0f, 0.0f);
         if (moveActive)
         {
@@ -1598,6 +1845,8 @@ void TouchInput_ProcessFrame(int viewportWidth, int viewportHeight)
         finger.lastX = finger.x;
         finger.lastY = finger.y;
     }
+
+    AdvanceStancePulse();
 }
 
 void TouchInput_DrawOverlay(Engine* engine)
@@ -1608,11 +1857,13 @@ void TouchInput_DrawOverlay(Engine* engine)
     const MipInfo white = engine->TextBank()->UseMipmap(nullptr, 0, 0);
     const PackedColor base(Color(0.02f, 0.03f, 0.04f, 0.44f));
     const PackedColor active(Color(0.98f, 1.0f, 1.0f, 0.72f));
+    const PackedColor sprintActive(Color(1.0f, 0.62f, 0.16f, 0.85f));
 
     if (std::fabs(sMoveX) > 0.001f || std::fabs(sMoveY) > 0.001f)
     {
         DrawCircleApprox(engine, white, sMoveAnchorX, sMoveAnchorY, kStickRadius, base);
-        DrawCircleApprox(engine, white, sMoveThumbX, sMoveThumbY, kStickRadius * 0.42f, active);
+        DrawCircleApprox(engine, white, sMoveThumbX, sMoveThumbY, kStickRadius * 0.42f,
+                         sMoveSprintActive ? sprintActive : active);
     }
     if (std::fabs(sLookDx) > 0.001f || std::fabs(sLookDy) > 0.001f)
         DrawCircleApprox(engine, white, sLookX, sLookY, 0.035f, active);
@@ -1712,11 +1963,16 @@ void TouchInput_Reset()
     ResetEquipmentRadial();
     EndMapPrimary();
     EndMapGesture();
+    EndStancePulse();
+    ReleaseAimZoom();
+    sStanceHoldFired = false;
     sFingers = {};
     std::fill(std::begin(sButtonDown), std::end(sButtonDown), false);
     std::fill(std::begin(sPrevButtonDown), std::end(sPrevButtonDown), false);
     sMoveX = sMoveY = sLookDx = sLookDy = sMapPanX = sMapPanY = sMapZoom = 0.0f;
+    sMoveSprintActive = false;
     InputSubsystem::Instance().SetSyntheticLeftStick(0.0f, 0.0f);
+    InputSubsystem::Instance().SetSyntheticTurbo(false);
 }
 
 TouchInputDebugState TouchInput_GetDebugState()
@@ -1726,9 +1982,15 @@ TouchInputDebugState TouchInput_GetDebugState()
     state.moveActive = RoleActive(FingerRole::Move);
     state.lookActive = RoleActive(FingerRole::Look);
     state.aimFocusActive = sAimFocusActive;
+    state.stancePulseActive = sStancePulseActive;
     state.mapPrimaryActive = sMapPrimaryActive;
     state.mapGestureActive = sMapGestureActive;
+    state.aimPinchActive = sAimPinchActive;
+    state.aimZoom = sAimZoom;
+    state.aimZoomInHeld = sAimZoomInHeld;
+    state.aimZoomOutHeld = sAimZoomOutHeld;
     state.actionScrollActive = sActionScrollActive;
+    state.moveSprintActive = sMoveSprintActive;
     state.moveX = sMoveX;
     state.moveY = sMoveY;
     state.lookDx = sLookDx;
