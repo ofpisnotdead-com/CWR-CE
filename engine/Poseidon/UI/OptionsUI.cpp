@@ -1857,6 +1857,22 @@ bool NextMission(Display* disp, EndMode mode)
 {
     SetBaseDirectory(GetCampaignDirectory(CurrentCampaign));
     GetGCampaignHistory().MissionCompleted(CurrentCampaign, CurrentBattle, CurrentMission);
+
+    // The mission we just finished is now recorded as reached in the campaign
+    // history (so it appears as a Revert entry), which makes any continue.fps
+    // still on disk a resume point for a mission that's already over. Previously
+    // this was only cleaned up once the *next* mission's intro/briefing screen
+    // closed (see IDD_INTRO in OptionsUIApp.cpp), leaving a window -- debriefing,
+    // outro, award, campaign intro cutscene, next mission's briefing -- where
+    // quitting left a stale continue.fps that pointed at the finished mission
+    // instead of the one the player had actually reached.
+    {
+        RString dir = GetSaveDirectory();
+        ::DeleteFile(dir + RString("continue.fps"));
+        ::DeleteFile(dir + RString("autosave.fps"));
+        ::DeleteFile(dir + RString("save.fps"));
+    }
+
     RString filename = GetTmpSaveDirectory() + CurrentCampaign + RString(".sqc");
     SaveMission(filename);
 
