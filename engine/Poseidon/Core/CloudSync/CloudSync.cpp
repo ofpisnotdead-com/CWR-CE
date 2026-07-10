@@ -141,10 +141,26 @@ SyncWorker::~SyncWorker()
 
 void SyncWorker::Start(std::vector<SyncPair> pairs, SyncDirection direction)
 {
-    // Abandon any prior run (cancel + detach, never block). A new run gets a
-    // fresh Session so a retry doesn't observe the old one's state.
-    if (_session)
-        _session->cancel.store(true);
+    // A run already in flight: don't cancel it. RunSyncJobs snapshots the
+    // file list up front, so anything written after that snapshot -- which
+    // is exactly what a Start() call arriving mid-run represents -- would
+    // never be seen by the in-flight copy. Flag it to loop once more instead
+    // once it finishes, so those newer changes still get synced. (Previously
+    // this cancelled + detached the in-flight run, which meant a burst of
+    // saves in quick succession -- e.g. NextMission() then AddMission() --
+    // could cancel every push before any of them completed.)
+    //
+    // Deliberately keeps running with the ORIGINAL pairs/direction rather
+    // than swapping in the new call's arguments: session->pairs/direction
+    // are read by the worker thread without a lock, and every actual caller
+    // in this codebase (PushInBackground's static worker) always passes the
+    // same DefaultSyncPairs()+Push, so there's nothing to reconcile.
+    if (_session && _session->active.load())
+    {
+        _session->rerunRequested.store(true);
+        return;
+    }
+
     if (_thread.joinable())
         _thread.detach();
 
@@ -158,8 +174,16 @@ void SyncWorker::Start(std::vector<SyncPair> pairs, SyncDirection direction)
     _thread = std::thread(
         [session]()
         {
-            RunSyncJobs(session->pairs, session->direction, session->progress, session->mtx, session->env,
-                       session->cancel);
+            do
+            {
+                session->rerunRequested.store(false);
+                {
+                    std::lock_guard<std::mutex> g(session->mtx);
+                    session->progress = SyncProgress{};
+                }
+                RunSyncJobs(session->pairs, session->direction, session->progress, session->mtx, session->env,
+                           session->cancel);
+            } while (session->rerunRequested.load() && !session->cancel.load());
             session->active.store(false);
         });
 }
