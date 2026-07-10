@@ -190,9 +190,10 @@ Known touch-control issues:
   still work in progress.
 
 For device debugging, the iOS app currently injects `--no-splash --show-fps`
-when those options are not supplied, and writes launch/stdout/stderr logs into
-the app preferences directory. To launch from Xcode without the FPS overlay, add
-`--no-fps` to the scheme arguments.
+when those options are not supplied, keeps stdout/stderr attached to the Xcode or
+`devicectl --console` session, and writes `ios-launch.log` into the app preferences
+directory. To launch from Xcode without the FPS overlay, add `--no-fps` to the
+scheme arguments.
 
 ## Layout
 

@@ -174,6 +174,11 @@ if(POSEIDON_TARGET_IOS)
         # STRIP_INSTALLED_PRODUCT (both YES here) still strip the shipped
         # binary itself, so this doesn't bloat or de-optimize the archive.
         XCODE_ATTRIBUTE_GCC_GENERATE_DEBUGGING_SYMBOLS "YES"
+        # Xcode's debug console is a pseudo-TTY that advertises ANSI support
+        # but renders escape sequences literally. Mark scheme launches so the
+        # logger can disable color without affecting manual devicectl sessions.
+        XCODE_GENERATE_SCHEME TRUE
+        XCODE_SCHEME_ENVIRONMENT "POSEIDON_XCODE_CONSOLE=1"
     )
     target_sources(PoseidonGame PRIVATE
         "${POSEIDON_IOS_ASSET_CATALOG}"
