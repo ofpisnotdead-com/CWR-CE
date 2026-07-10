@@ -256,3 +256,49 @@ TEST_CASE("SyncWorker: teardown does not block on a stuck copy", "[cloudSync][wo
     // Let the detached thread run out before the test ends.
     std::this_thread::sleep_for(std::chrono::milliseconds(900));
 }
+
+TEST_CASE("SyncWorker: Start() while running coalesces a rerun instead of cancelling",
+         "[cloudSync][worker][thread]")
+{
+    // Regression test for the CloudSync push bug found via issue #88: a burst
+    // of saves in quick succession (NextMission() then AddMission()) each
+    // called PushInBackground(), and the old Start() cancelled+detached
+    // whatever push was already in flight -- so a big enough save could mean
+    // NONE of several attempted pushes ever completed. Start() must instead
+    // let the in-flight run finish and then loop once more, so a file that
+    // only exists because of the second Start() call still gets synced.
+    FakeFs fs;
+    fs.remote["a.cfg"] = 1.0;
+    std::atomic<bool> entered{false};
+    std::atomic<bool> release{false};
+    SyncOpsEnv env = MakeFakeEnv(fs);
+    env.pullFile = [&](const std::string&, const std::string&, const std::string& relPath, std::string&) -> bool
+    {
+        entered.store(true);
+        while (!release.load())
+            std::this_thread::yield();
+        fs.local[relPath] = fs.remote.at(relPath);
+        fs.pulled.push_back(relPath);
+        return true;
+    };
+
+    SyncWorker worker(std::move(env));
+    worker.Start(kOnePair, SyncDirection::Pull);
+    while (!entered.load())
+        std::this_thread::yield();
+
+    // A change lands only now, after the first run's file-list snapshot was
+    // already taken -- simulating a save that happens mid-push.
+    fs.remote["b.cfg"] = 1.0;
+    worker.Start(kOnePair, SyncDirection::Pull); // must coalesce, not cancel
+
+    CHECK(worker.Running()); // still the same in-flight run, not restarted
+    release.store(true);     // let the first file's copy finish
+    worker.Wait();           // joins only once the coalesced rerun also finishes
+
+    SyncSnapshot s = worker.Poll();
+    CHECK(s.done);
+    CHECK_FALSE(s.failed);
+    CHECK(fs.local.count("a.cfg") == 1);
+    CHECK(fs.local.count("b.cfg") == 1); // picked up by the coalesced rerun
+}

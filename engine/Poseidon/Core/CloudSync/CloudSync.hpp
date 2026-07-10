@@ -97,7 +97,15 @@ class SyncWorker
     SyncWorker(const SyncWorker&) = delete;
     SyncWorker& operator=(const SyncWorker&) = delete;
 
-    void Start(std::vector<SyncPair> pairs, SyncDirection direction); ///< spawns the worker thread
+    // Spawns the worker thread. If a run is already in flight (same worker
+    // instance), does NOT cancel it -- RunSyncJobs snapshots its file list
+    // up front, so anything written after that snapshot but before the copy
+    // finishes would otherwise never get synced by that run. Instead, flags
+    // the in-flight run to loop once more on completion so newer changes
+    // still get picked up. See PushInBackground(), whose static SyncWorker
+    // can be re-triggered several times in quick succession by back-to-back
+    // saves.
+    void Start(std::vector<SyncPair> pairs, SyncDirection direction);
     void Cancel();                                                    ///< requests an early stop
     void Wait();                                                      ///< joins the worker thread
 
@@ -119,6 +127,7 @@ class SyncWorker
         SyncProgress progress;
         std::atomic<bool> cancel{false};
         std::atomic<bool> active{false};
+        std::atomic<bool> rerunRequested{false}; ///< set by Start() when called while already active
     };
 
     SyncOpsEnv _env;
