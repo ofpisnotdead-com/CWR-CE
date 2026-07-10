@@ -146,10 +146,6 @@ if(POSEIDON_TARGET_IOS)
         MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
         XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
         XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.mcardle.cwr"
-        # iCloud entitlement for CloudSync (engine/Poseidon/Core/CloudSync) --
-        # requires the "iCloud" capability + container enabled on this App ID
-        # in the Apple Developer portal, and the provisioning profile
-        # regenerated to include it, before this has any runtime effect.
         XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${CMAKE_CURRENT_SOURCE_DIR}/PoseidonGame.entitlements"
         # For Xcode archives, only the app bundle should be installable.
         # The project-wide App Store preset defaults generated targets to
@@ -186,35 +182,11 @@ if(POSEIDON_TARGET_IOS)
     )
 endif()
 
-# Off by default: the mac build normally ships as a bare unsigned executable
-# (see the `else()` branch of the WIN32/POSEIDON_TARGET_IOS/APPLE chain
-# above), which is fine for local dev/CI but can't access an iCloud ubiquity
-# container -- that requires a signed, entitled .app bundle on macOS just as
-# much as iOS. Turn this on for a personal/local build to let CloudSync work
-# on the Mac side too; leave it off for CI and everyday dev builds.
-#
-# XCODE_ATTRIBUTE_* properties only take effect with the Xcode generator (as
-# fastlane's iOS build_app already relies on) -- the day-to-day Ninja presets
-# will set MACOSX_BUNDLE (a real bundle appears) but silently skip actual
-# signing. Configure with `-G Xcode` to get a genuinely signed, entitled
-# bundle for real iCloud testing.
-option(POSEIDON_MACOS_SIGN_BUNDLE "Bundle+sign PoseidonGame as a .app for local iCloud sync testing" OFF)
-if(APPLE AND NOT POSEIDON_TARGET_IOS AND POSEIDON_MACOS_SIGN_BUNDLE)
-    set_target_properties(PoseidonGame PROPERTIES
-        MACOSX_BUNDLE TRUE
-        MACOSX_BUNDLE_GUI_IDENTIFIER "io.mcardle.cwr"
-        MACOSX_BUNDLE_BUNDLE_NAME "PoseidonGame"
-        MACOSX_BUNDLE_BUNDLE_VERSION "1.0"
-        MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
-        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.mcardle.cwr"
-        XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${CMAKE_CURRENT_SOURCE_DIR}/PoseidonGame.entitlements"
-        # Automatic signing: this is a single-developer local build, not a
-        # CI/distribution artifact (those stay on the default bare-executable
-        # path above) -- Xcode picks up whatever local Development identity
-        # is already configured rather than needing a named profile.
-        XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
-    )
-endif()
+# NOTE: POSEIDON_MACOS_SIGN_BUNDLE (a signed+entitled .app bundle for local
+# iCloud sync testing) existed solely to support CloudSync, which has been
+# removed (never delivered reliable cross-device continuity -- see
+# https://github.com/McArdle-Systems/CWR-arm64/issues/103). Removed alongside
+# it; the bare unsigned executable is the only macOS build shape now.
 
 if(POSEIDON_TARGET_IOS AND POSEIDON_IOS_BUNDLE_GAME_DATA)
     # Bundle the game's data files (DTA/AddOns/fonts/etc.) straight into the

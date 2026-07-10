@@ -506,7 +506,6 @@ list(APPEND POSEIDON_TEST_SOURCES
     Core/test_download_progress.cpp
     Core/test_download_worker.cpp
     Core/test_download_dialog_view.cpp
-    Core/CloudSync/test_cloudSync.cpp
     Asset/Probes/test_wave_to_lip.cpp
 )
 

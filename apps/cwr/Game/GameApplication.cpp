@@ -16,10 +16,6 @@
 #include <Poseidon/Core/TaskPool.hpp>
 #include <Poseidon/Core/Progress.hpp>
 #include <Poseidon/Core/Global.hpp>
-#include <Poseidon/Core/CloudSync/CloudSync.hpp>
-#include <Poseidon/Core/CloudSync/CloudSyncPaths.hpp>
-#include <chrono>
-#include <thread>
 #include <Poseidon/Game/Mission/MissionPathLoader.hpp>
 #include <Poseidon/Graphics/Core/Engine.hpp>
 #include <Poseidon/Graphics/Rendering/Draw/FontSystem.hpp>
@@ -1426,34 +1422,6 @@ void GameApplication::RunMainLoop()
             LOG_ERROR(Core, "Failed to clean up test-mission staging '{}': {}", s_testMissionStageRoot.string(),
                       ec.message());
         s_testMissionStageRoot.clear();
-    }
-
-    // Push local profile/save/mission changes to iCloud before the process
-    // exits. Unlike the launch-time pull, a detached-and-forgotten push would
-    // just get killed mid-copy by process exit, so this blocks briefly too --
-    // bounded by a timeout (rather than an unbounded wait) so a stuck iCloud
-    // daemon can't hang quitting the game.
-    if (Poseidon::CloudSync::IsAvailable())
-    {
-        LOG_INFO(Core, "CloudSync: pushing to iCloud...");
-        Poseidon::SyncWorker worker(Poseidon::CloudSync::MakeAppleSyncOpsEnv());
-        worker.Start(Poseidon::CloudSync::DefaultSyncPairs(), Poseidon::SyncDirection::Push);
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-        while (worker.Running() && std::chrono::steady_clock::now() < deadline)
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        if (worker.Running())
-        {
-            LOG_ERROR(Core, "CloudSync: push timed out, abandoning");
-            worker.Cancel();
-        }
-        else
-        {
-            const Poseidon::SyncSnapshot snap = worker.Poll();
-            if (snap.failed)
-                LOG_ERROR(Core, "CloudSync: push failed: {}", snap.error);
-            else
-                LOG_INFO(Core, "CloudSync: push complete ({} item(s))", snap.itemCount);
-        }
     }
 
     LOG_INFO(Core, "Shutdown complete");

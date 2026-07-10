@@ -10,10 +10,7 @@
 #include <Poseidon/Core/Config/Config.hpp>
 #include <Poseidon/Dev/Diag/PerfTrace.hpp>
 #include <Poseidon/Core/TaskPool.hpp>
-#include <Poseidon/Core/CloudSync/CloudSync.hpp>
-#include <Poseidon/Core/CloudSync/CloudSyncPaths.hpp>
 #include <thread>
-#include <chrono>
 #include <Poseidon/IO/Streams/QBStream.hpp>          // GUseFileBanks
 #include <Poseidon/Foundation/Platform/FPUSetup.hpp> // InitFPU
 #include <Poseidon/Foundation/Platform/CrashHandler.hpp>
@@ -135,26 +132,6 @@ bool GameBase::ParseCommandLine(const char* commandLine)
     LOG_INFO(Core, "  user_content_dir: {}", GamePaths::Instance().UserContentDir());
     LOG_INFO(Core, "  cache_dir: {}", GamePaths::Instance().CacheDir());
     LOG_INFO(Core, "  temp_dir:  {}", GamePaths::Instance().TempDir());
-
-    // Pull any newer profile/mission state from iCloud before anything reads
-    // local disk -- ProfileService::ResolveStartupProfile() runs shortly
-    // after this, and local disk is meant to be authoritative, so a fresh
-    // launch blocks briefly here rather than risk starting against stale
-    // data. No-ops immediately when unavailable (non-Apple, not signed into
-    // iCloud, or the entitlement/capability isn't provisioned yet).
-    if (Poseidon::CloudSync::IsAvailable())
-    {
-        LOG_INFO(Core, "CloudSync: pulling from iCloud...");
-        Poseidon::SyncWorker worker(Poseidon::CloudSync::MakeAppleSyncOpsEnv());
-        worker.Start(Poseidon::CloudSync::DefaultSyncPairs(), Poseidon::SyncDirection::Pull);
-        while (worker.Running())
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        const Poseidon::SyncSnapshot snap = worker.Poll();
-        if (snap.failed)
-            LOG_ERROR(Core, "CloudSync: pull failed: {}", snap.error);
-        else
-            LOG_INFO(Core, "CloudSync: pull complete ({} item(s))", snap.itemCount);
-    }
 
     // Disable caps lock for cheats / dev hotkeys.
     InitCapsLock();
