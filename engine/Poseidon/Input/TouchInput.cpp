@@ -64,6 +64,12 @@ constexpr float kMapPanMouseScaleY = 150.0f / 1.5f;
 constexpr float kMapPinchZoomScale = 5.0f;
 constexpr float kActionScrollStepY = 0.035f;
 constexpr float kActionScrollWheelTicks = 1.0f;
+// Below this, vertical movement on the Action button is indistinguishable from
+// sensor/press jitter on a stationary tap. Above it, the finger is deliberately
+// dragging - even a quick flick that never reaches a full kActionScrollStepY
+// tick should disqualify the release from firing a select/confirm tap, rather
+// than falling through to "execute whatever action is currently highlighted".
+constexpr float kActionScrollIntentTravel = 0.006f;
 constexpr float kEquipmentRadialCenterDeg = 135.0f;
 constexpr float kEquipmentRadialMinSpanDeg = 58.0f;
 constexpr float kEquipmentRadialSpanStepDeg = 23.0f;
@@ -1011,6 +1017,9 @@ void ProcessActionButtonDrag(const Finger& finger, float dy)
         sActionScrollFingerId = finger.id;
         sActionScrollAccumY = 0.0f;
     }
+
+    if (finger.maxTravel > kActionScrollIntentTravel)
+        ResetActionTap();
 
     sActionScrollAccumY += dy;
     while (std::fabs(sActionScrollAccumY) >= kActionScrollStepY)

@@ -521,6 +521,24 @@ TEST_CASE("TouchInput: quick action tap emits action key on release", "[input][t
     CHECK(GInput.keyboard.keysToDo[SDL_SCANCODE_RETURN]);
 }
 
+TEST_CASE("TouchInput: quick small action-button drag does not fire select (issue #99)", "[input][touch]")
+{
+    TouchFixture fixture;
+    TouchInput_TestSetGameplaySceneOverride(true, true);
+    GInput.keyboard.ForgetKeys();
+
+    // A fast, short flick: real directional movement, but well under the
+    // distance needed to complete a full scroll tick, and even under the
+    // legacy tap-jitter tolerance. This must not be treated as a tap that
+    // confirms/selects the currently-highlighted (default) action.
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_DOWN, 1, kActionButtonX, kActionButtonY));
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_MOTION, 1, kActionButtonX, kActionButtonY - 0.01f));
+    TouchInput_HandleFingerEvent(Finger(SDL_EVENT_FINGER_UP, 1, kActionButtonX, kActionButtonY - 0.01f));
+
+    GInput.keyboard.Update(Poseidon::Foundation::GlobalTickCount(), 16, true);
+    CHECK_FALSE(GInput.keyboard.keysToDo[SDL_SCANCODE_RETURN]);
+}
+
 TEST_CASE("TouchInput: stance button emits move-down stance key", "[input][touch]")
 {
     TouchFixture fixture;
