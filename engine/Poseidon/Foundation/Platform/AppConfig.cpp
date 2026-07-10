@@ -25,6 +25,10 @@
 #include <windows.h> // For Sleep
 #endif
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
+
 // Note: CLI11 has static initialization that allocates memory
 // This happens before WinMain, so we need to ensure memory system tolerates early allocation
 #include <CLI/App.hpp>
@@ -779,9 +783,30 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
                 _noLandscape = true;
             }
 
-            // Make log-file path absolute before any chdir (-C) changes the CWD
+            // Make log-file path absolute before any chdir (-C) changes the CWD.
+            // On iOS/tvOS a relative path resolved against getcwd() is meaningless:
+            // sandboxed apps don't control their launch cwd (commonly "/", which the
+            // sandbox forbids writing to), unlike a desktop shell's cwd. Anchor
+            // relative paths to the container home instead, where the app is always
+            // guaranteed write access -- matches getUserDataDir()'s own Library/
+            // convention for this platform. A bad cwd-relative path here doesn't
+            // just fail quietly: basic_file_sink_mt's constructor throws on open
+            // failure, which is uncaught this early in startup and crashes the app.
             if (!_logFile.empty())
+            {
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+                std::filesystem::path p(_logFile);
+                if (p.is_relative())
+                {
+                    const char* home = std::getenv("HOME");
+                    if (home && home[0] != '\0')
+                        p = std::filesystem::path(home) / p;
+                }
+                _logFile = p.string();
+#else
                 _logFile = std::filesystem::absolute(_logFile).string();
+#endif
+            }
             if (!_perfTracePath.empty())
                 _perfTracePath = std::filesystem::absolute(_perfTracePath).string();
 

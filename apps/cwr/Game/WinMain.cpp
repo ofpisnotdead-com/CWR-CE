@@ -32,7 +32,6 @@ int PASCAL WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR szCmdLine, int sw)
 #include <SDL3/SDL_hints.h>
 #include <Poseidon/Core/GameDataInstall.hpp>          // GameDataDir
 #include <Poseidon/UI/Controls/IosGameDataGateScreen.hpp> // RunIosGameDataGate
-#include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -50,22 +49,6 @@ bool HasArg(int argc, char* argv[], const char* name)
     return false;
 }
 
-void RedirectStdIOToFile(const std::string& prefPath)
-{
-    if (prefPath.empty())
-        return;
-
-    const std::string stdoutPath = prefPath + "ios-stdout.log";
-    const std::string stderrPath = prefPath + "ios-stderr.log";
-    freopen(stdoutPath.c_str(), "a", stdout);
-    freopen(stderrPath.c_str(), "a", stderr);
-    setvbuf(stdout, nullptr, _IOLBF, 0);
-    setvbuf(stderr, nullptr, _IONBF, 0);
-    std::fprintf(stdout, "\n--- iOS stdout redirected ---\n");
-    std::fprintf(stderr, "\n--- iOS stderr redirected ---\n");
-    std::fflush(stdout);
-    std::fflush(stderr);
-}
 }
 #endif
 #endif
@@ -97,7 +80,6 @@ int main(int argc, char* argv[])
     {
         iosPrefPath = prefPath;
         SDL_free(prefPath);
-        RedirectStdIOToFile(iosPrefPath);
     }
 
     if (!hasSplashArg)

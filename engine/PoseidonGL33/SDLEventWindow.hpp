@@ -7,8 +7,6 @@
 #include <SDL3/SDL_touch.h>
 #include <Poseidon/Dev/Debug/DebugOverlay.hpp>
 #include <Poseidon/Input/TouchInput.hpp>
-#include <Poseidon/Core/CloudSync/CloudSync.hpp>
-#include <Poseidon/Core/CloudSync/CloudSyncPaths.hpp>
 
 // SDL input buffer functions (InputProcessing_sdl.cpp)
 extern void SDLInput_BufferKeyEvent(SDL_Scancode sc, bool down, DWORD timestamp);
@@ -190,22 +188,6 @@ class SDLEventWindow
             else if (event.type == SDL_EVENT_WINDOW_RESTORED)
             {
                 GApp->m_appPaused = false;
-            }
-            else if (event.type == SDL_EVENT_WILL_ENTER_BACKGROUND || event.type == SDL_EVENT_TERMINATING)
-            {
-                // iOS/Android only (SDL never emits these on desktop). The
-                // "normal" way a player leaves the game on a phone is the
-                // home gesture / app switcher, not an in-game Quit action --
-                // GameApplication::RunMainLoop()'s quit-time CloudSync push
-                // only runs after its main loop returns via m_closeRequest,
-                // which nothing reaches from OS-level backgrounding. Once
-                // backgrounded, the app can be suspended or killed by the OS
-                // at any point with no further chance to run code, so this
-                // is the last reliable opportunity to get local saves onto
-                // iCloud. Fire-and-forget/no-op when CloudSync is
-                // unavailable, same as every other PushInBackground() call.
-                LOG_INFO(Core, "SDLEventWindow: entering background/terminating, pushing to iCloud");
-                Poseidon::CloudSync::PushInBackground();
             }
             else if (event.type == SDL_EVENT_KEY_DOWN)
             {

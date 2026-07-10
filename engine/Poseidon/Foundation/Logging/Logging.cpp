@@ -24,6 +24,9 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
 #ifndef _WIN32
 #include <unistd.h>
 #else
@@ -196,7 +199,7 @@ class JsonlSink : public spdlog::sinks::base_sink<std::mutex>
 class PoseidonFormatter : public spdlog::custom_flag_formatter
 {
   public:
-    explicit PoseidonFormatter(LoggingSystem* sys) : _sys(sys) {}
+    explicit PoseidonFormatter(LoggingSystem* sys, bool useColor) : _sys(sys), _useColor(useColor) {}
 
     static LoggingSystem::Category MapCategoryPublic(const spdlog::string_view_t& name) { return MapCategory(name); }
 
@@ -211,20 +214,35 @@ class PoseidonFormatter : public spdlog::custom_flag_formatter
             dest.append(std::string_view(appTag));
             dest.push_back(' ');
         }
-        const char* lvl = LoggingSystem::GetFormattedLevel(msg.level);
+        const char* lvl = _useColor ? LoggingSystem::GetFormattedLevel(msg.level) : PlainLevel(msg.level);
         dest.append(std::string_view(lvl, strlen(lvl)));
         dest.push_back(' ');
-        const char* catTag = LoggingSystem::GetColoredCategoryTag(cat);
+        const char* catTag = _useColor ? LoggingSystem::GetColoredCategoryTag(cat) : PlainCategory(cat);
         dest.append(std::string_view(catTag, strlen(catTag)));
         dest.push_back(' ');
     }
 
     [[nodiscard]] std::unique_ptr<custom_flag_formatter> clone() const override
     {
-        return std::make_unique<PoseidonFormatter>(_sys);
+        return std::make_unique<PoseidonFormatter>(_sys, _useColor);
     }
 
   private:
+    static const char* PlainLevel(spdlog::level::level_enum level)
+    {
+        static const char* names[] = {"[TRCE]", "[DBUG]", "[INFO]", "[WARN]", "[ERRR]", "[CRIT]"};
+        const int index = static_cast<int>(level);
+        return names[index >= 0 && index <= 5 ? index : 2];
+    }
+
+    static const char* PlainCategory(LoggingSystem::Category category)
+    {
+        static thread_local char buffer[32];
+        const char* name = LoggingSystem::GetCategoryName(category);
+        snprintf(buffer, sizeof(buffer), "[%s]%-*s", name, static_cast<int>(9 - strlen(name) - 2), "");
+        return buffer;
+    }
+
     static LoggingSystem::Category MapCategory(const spdlog::string_view_t& name)
     {
         struct Entry
@@ -249,6 +267,7 @@ class PoseidonFormatter : public spdlog::custom_flag_formatter
     }
 
     LoggingSystem* _sys;
+    bool _useColor;
 };
 
 // Static per-process app tag — read by the log formatter/sink without a
@@ -539,9 +558,21 @@ void LoggingSystem::Initialize(const char* logLevel, const char* categoryFilter,
         if (!suppressTestConsole)
         {
             // Text mode: colored console with custom formatter
+            bool useConsoleColor = true;
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+            // Xcode presents its debug console as a color-capable pseudo-TTY,
+            // but displays ANSI escapes literally. The generated Xcode scheme
+            // marks its launches explicitly; plain devicectl/terminal launches
+            // retain spdlog's normal TTY-based color detection.
+            const auto colorMode = std::getenv("POSEIDON_XCODE_CONSOLE") ? spdlog::color_mode::never
+                                                                        : spdlog::color_mode::automatic;
+            useConsoleColor = colorMode != spdlog::color_mode::never;
+            auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>(colorMode);
+#else
             auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+#endif
             auto formatter = std::make_unique<spdlog::pattern_formatter>();
-            formatter->add_flag<PoseidonFormatter>('*', this);
+            formatter->add_flag<PoseidonFormatter>('*', this, useConsoleColor);
             formatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %*%v");
             console_sink->set_formatter(std::move(formatter));
             sinks.push_back(console_sink);
@@ -551,21 +582,47 @@ void LoggingSystem::Initialize(const char* logLevel, const char* categoryFilter,
     // Error-counting sink — always attached, feeds the triErrorCount verb.
     sinks.push_back(std::make_shared<ErrorCountingSink>());
 
-    // Optional file sink (--log-file)
+    // Optional file sink (--log-file). A bad path (unwritable directory,
+    // sandbox-forbidden location, etc.) must degrade to console-only rather
+    // than take the whole process down -- basic_file_sink_mt's constructor
+    // throws spdlog_ex on open failure, and this runs early enough in
+    // startup (before any top-level catch is installed) that an uncaught
+    // throw here is a guaranteed SIGABRT. Confirmed on iOS with a relative
+    // --log-file value that resolved against an unwritable cwd.
     if (logFile && logFile[0] != '\0')
     {
-        auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFile, true);
-        auto formatter = std::make_unique<spdlog::pattern_formatter>();
-        formatter->add_flag<PoseidonFormatter>('*', this);
-        formatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %*%v");
-        file_sink->set_formatter(std::move(formatter));
-        sinks.push_back(file_sink);
-        m_hasFileSink = true;
+        try
+        {
+            auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFile, true);
+            auto formatter = std::make_unique<spdlog::pattern_formatter>();
+            formatter->add_flag<PoseidonFormatter>('*', this, false);
+            formatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %*%v");
+            file_sink->set_formatter(std::move(formatter));
+            sinks.push_back(file_sink);
+            m_hasFileSink = true;
+        }
+        catch (const std::exception& e)
+        {
+            fprintf(stderr, "LoggingSystem: could not open log file '%s': %s (continuing console-only)\n", logFile,
+                    e.what());
+        }
     }
 
-    // Flush policy: flush every message when writing to file (game may exit abruptly),
-    // otherwise flush only on warnings and above.
-    auto flushLevel = m_hasFileSink ? spdlog::level::trace : spdlog::level::warn;
+    // Flush policy: always flush every message immediately. The "only flush
+    // on warn+" console policy this used to have was a no-op perf tweak on a
+    // real terminal (a TTY line-buffers at the libc level regardless of
+    // spdlog's own flush() calls, so output always appeared live there
+    // anyway) but silently broke live output anywhere the console sink's
+    // fd is a pipe instead of a TTY -- e.g. Xcode's captured stdout for a
+    // debugger-attached iOS run, which is fully block-buffered and only
+    // flushes when spdlog explicitly asks it to. Below warn level, nothing
+    // showed up until either the buffer filled or process exit -- and on
+    // iOS, exit doesn't reliably run libc's atexit stdio flush either, so
+    // it could show literally nothing, ever. Trace-level flush costs an
+    // extra syscall per log call; already paid unconditionally in the
+    // file-sink case below for the same reason (game may exit abruptly),
+    // so extending it to console-only is free of new tradeoffs.
+    auto flushLevel = spdlog::level::trace;
 
     // Create one spdlog logger per category, all sharing the same sink(s).
     // Logger name = category name → accessible via %n, no string parsing.
