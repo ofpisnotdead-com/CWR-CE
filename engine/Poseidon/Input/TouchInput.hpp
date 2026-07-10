@@ -29,9 +29,17 @@ struct TouchInputDebugState
     bool moveActive = false;
     bool lookActive = false;
     bool aimFocusActive = false;
+    // Whether the stance button's Q/Z pulse is waiting to be consumed by
+    // keyboard processing (see StartStancePulse).
+    bool stancePulseActive = false;
     bool mapPrimaryActive = false;
     bool mapGestureActive = false;
+    bool aimPinchActive = false;
+    float aimZoom = 0.0f;
+    bool aimZoomInHeld = false;
+    bool aimZoomOutHeld = false;
     bool actionScrollActive = false;
+    bool moveSprintActive = false;
     float moveX = 0.0f;
     float moveY = 0.0f;
     float lookDx = 0.0f;

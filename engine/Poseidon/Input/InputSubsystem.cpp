@@ -644,6 +644,8 @@ float InputSubsystem::GetAction(InputContext ctx, UserAction action, bool checkF
         else
             value += std::max(0.0f, syntheticLeftStickX_);
     }
+    if (action == UATurbo && syntheticTurbo_)
+        value = std::max(value, 1.0f);
 
     return value;
 }
@@ -1403,6 +1405,10 @@ void InputSubsystem::SetSyntheticLeftStick(float x, float y)
             GInput.gamepad.jAxisBigLastActive[i] = Glob.uiTime;
         }
     }
+}
+void InputSubsystem::SetSyntheticTurbo(bool active)
+{
+    syntheticTurbo_ = active;
 }
 bool InputSubsystem::HasSyntheticStickInput() const
 {

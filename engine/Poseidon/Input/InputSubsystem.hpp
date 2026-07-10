@@ -217,6 +217,10 @@ class InputSubsystem
     void SetSyntheticStickButton(int i, bool value);
     void SetSyntheticStickPov(int i, bool value);
     void SetSyntheticLeftStick(float x, float y);
+    // Touch-stick-at-full-deflection sprint. Routes through the same
+    // UATurbo gating as keyboard Shift (CanSprint/stamina/slope checks all
+    // still apply) - see GetAction()'s UATurbo case.
+    void SetSyntheticTurbo(bool active);
     bool HasSyntheticStickInput() const;
     bool ConsumeSyntheticStickButton(int i);
     bool ConsumeSyntheticStickPov(int i);
@@ -256,6 +260,7 @@ class InputSubsystem
     bool syntheticStickPov_[8] = {};
     float syntheticLeftStickX_ = 0.0f;
     float syntheticLeftStickY_ = 0.0f;
+    bool syntheticTurbo_ = false;
 };
 } // namespace Poseidon
 

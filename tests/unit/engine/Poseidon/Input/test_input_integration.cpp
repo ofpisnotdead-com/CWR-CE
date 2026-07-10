@@ -644,3 +644,20 @@ TEST_CASE("InputSubsystem joystick enabled and axis activity", "[input][integrat
     REQUIRE_FALSE(sub.IsActionBoundToRecentAxis(UAAxisTurn));
     REQUIRE_FALSE(sub.IsActionBoundToRecentAxis(UAAxisThrust));
 }
+
+TEST_CASE("InputSubsystem SetSyntheticTurbo drives UATurbo like a held key", "[input][integration]")
+{
+    auto& sub = InputSubsystem::Instance();
+    InputContext savedContext = sub.GetContext();
+    sub.SetContext(InputContext::Infantry);
+
+    CHECK(sub.GetAction(UATurbo, false) == 0.0f);
+
+    sub.SetSyntheticTurbo(true);
+    CHECK(sub.GetAction(UATurbo, false) == 1.0f);
+
+    sub.SetSyntheticTurbo(false);
+    CHECK(sub.GetAction(UATurbo, false) == 0.0f);
+
+    sub.SetContext(savedContext);
+}
