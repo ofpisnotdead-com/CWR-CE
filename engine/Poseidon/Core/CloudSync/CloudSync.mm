@@ -4,6 +4,8 @@
 
 #import <Foundation/Foundation.h>
 
+#include <Poseidon/Foundation/Framework/Log.hpp>
+
 #include <chrono>
 #include <filesystem>
 #include <system_error>
@@ -35,11 +37,18 @@ NSURL* ContainerRootURL()
     return [[NSFileManager defaultManager] URLForUbiquityContainerIdentifier:kCloudSyncContainerID];
 }
 
-// Recursively lists regular files under `root`, skipping iCloud's
-// not-yet-downloaded ".icloud" placeholder markers (their real content isn't
-// local yet; NSFileCoordinator materializes them on demand inside
-// PullOneFile instead). Returns (path relative to `root`, mtime as seconds
-// since epoch).
+// Recursively lists regular files under `root`, INCLUDING iCloud's
+// not-yet-downloaded ".icloud" placeholder markers -- their metadata (name,
+// mtime) is known locally even before the content is; only the bytes are
+// missing. A placeholder for "1985.sqc" is named ".1985.sqc.icloud" on disk;
+// this maps it back to the real relPath so the diff in RunSyncJobs can match
+// it against the same file's entry on the other side. Actual content
+// materialization still happens on demand via NSFileCoordinator inside
+// pullFile, same as before -- this only fixes *discovery*, i.e. whether a
+// remote item too new for this device to have downloaded yet is even seen
+// as existing. (Previously placeholders were skipped outright, which meant
+// a pull could never even attempt an item this device hadn't materialized
+// at all -- see RefreshUbiquitousMetadata below for the other half of that.)
 std::vector<std::pair<std::string, double>> ListDirectory(NSURL* root)
 {
     std::vector<std::pair<std::string, double>> entries;
@@ -60,25 +69,108 @@ std::vector<std::pair<std::string, double>> ListDirectory(NSURL* root)
         [fileURL getResourceValue:&isRegular forKey:NSURLIsRegularFileKey error:nil];
         if (!isRegular.boolValue)
             continue;
-        if ([fileURL.lastPathComponent hasPrefix:@"."] && [fileURL.pathExtension isEqualToString:@"icloud"])
-            continue; // not-yet-downloaded placeholder; skip, don't sync a stub
+
+        NSString* lastComponent = fileURL.lastPathComponent;
+        const bool isPlaceholder =
+            [lastComponent hasPrefix:@"."] && [fileURL.pathExtension isEqualToString:@"icloud"];
 
         NSDate* mtime = nil;
         [fileURL getResourceValue:&mtime forKey:NSURLContentModificationDateKey error:nil];
 
         NSString* relPath = [fileURL.path substringFromIndex:root.path.length + 1];
+        if (isPlaceholder)
+        {
+            // ".<name>.icloud" -> "<name>": strip the leading dot, then the
+            // trailing ".icloud" extension, and swap it in for the mangled
+            // last path component.
+            NSString* realName = [[lastComponent substringFromIndex:1] stringByDeletingPathExtension];
+            NSString* dir = relPath.stringByDeletingLastPathComponent;
+            relPath = dir.length > 0 ? [dir stringByAppendingPathComponent:realName] : realName;
+        }
         entries.emplace_back(ToStdString(relPath), mtime != nil ? mtime.timeIntervalSince1970 : 0.0);
     }
     return entries;
 }
 
+// Actively asks iCloud for this container's real server-side state instead
+// of passively trusting whatever this device's OS daemon has already
+// decided to mirror locally. ListDirectory() above only ever sees local
+// state -- for an item this device has NEVER seen before (no placeholder,
+// nothing), that local state can lag the server by an unbounded amount of
+// time, since background materialization is scheduled entirely at the OS's
+// discretion. Confirmed directly: a file pushed successfully from another
+// device sat completely invisible on a second device for 30+ minutes with
+// no placeholder ever appearing, while sibling files updated within
+// seconds -- new-to-this-device paths appear to get deprioritized
+// separately from already-tracked ones. NSMetadataQuery bypasses that by
+// querying the actual iCloud metadata index, and startDownloadingUbiquitousItemAtURL:
+// requests immediate materialization instead of waiting on the background
+// scheduler. Best-effort: swallows failures (offline, query timeout) since
+// the existing pull/push logic already tolerates a stale/incomplete remote
+// listing -- this only ever helps freshness, never required for correctness.
+void RefreshUbiquitousMetadata(double timeoutSeconds)
+{
+    @autoreleasepool
+    {
+        NSMetadataQuery* query = [[NSMetadataQuery alloc] init];
+        query.searchScopes = @[ NSMetadataQueryUbiquitousDataScope ];
+        query.predicate = [NSPredicate predicateWithValue:YES];
+        NSOperationQueue* queryQueue = [[NSOperationQueue alloc] init];
+        // NSMetadataQuery requires a serial queue -- it delivers notifications
+        // in order and isn't safe with concurrent delivery. A freshly-created
+        // NSOperationQueue defaults to system-determined concurrency, which
+        // trips "API MISUSE: running a NSMetadataQuery with
+        // maxConcurrentOperationCount != 1 is not supported" at runtime.
+        queryQueue.maxConcurrentOperationCount = 1;
+        query.operationQueue = queryQueue;
+
+        dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+        __block id observer = nil;
+        observer = [[NSNotificationCenter defaultCenter]
+            addObserverForName:NSMetadataQueryDidFinishGatheringNotification
+                        object:query
+                         queue:query.operationQueue
+                    usingBlock:^(NSNotification* note) {
+                        dispatch_semaphore_signal(sema);
+                    }];
+
+        [query.operationQueue addOperationWithBlock:^{
+            [query startQuery];
+        }];
+
+        const int64_t timeoutNanos = (int64_t)(timeoutSeconds * NSEC_PER_SEC);
+        const bool finishedGathering =
+            dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, timeoutNanos)) == 0;
+
+        [query disableUpdates];
+        NSFileManager* fm = [NSFileManager defaultManager];
+        NSUInteger downloadRequested = 0;
+        for (NSMetadataItem* item in query.results)
+        {
+            NSURL* url = [item valueForAttribute:NSMetadataItemURLKey];
+            if (url != nil && [fm startDownloadingUbiquitousItemAtURL:url error:nil])
+                downloadRequested++;
+        }
+        LOG_INFO(Core, "CloudSync: RefreshUbiquitousMetadata finishedGathering={} results={} downloadRequested={}",
+                 finishedGathering, (unsigned long)query.results.count, (unsigned long)downloadRequested);
+        [query stopQuery];
+        [[NSNotificationCenter defaultCenter] removeObserver:observer];
+    }
+}
+
 bool CopyThroughCoordinator(NSURL* srcURL, NSURL* dstURL, bool coordinateRead, std::string& error)
 {
     NSFileManager* fm = [NSFileManager defaultManager];
-    [fm createDirectoryAtURL:dstURL.URLByDeletingLastPathComponent
-        withIntermediateDirectories:YES
-                         attributes:nil
-                              error:nil];
+    NSError* mkdirError = nil;
+    BOOL mkdirOk = [fm createDirectoryAtURL:dstURL.URLByDeletingLastPathComponent
+                 withIntermediateDirectories:YES
+                                  attributes:nil
+                                       error:&mkdirError];
+    if (!mkdirOk && mkdirError != nil)
+    {
+        LOG_WARN(Core, "CloudSync: createDirectoryAtURL failed for {} ({}): {}", ToStdString(dstURL.path),
+                 coordinateRead ? "pull" : "push", ToStdString(mkdirError.localizedDescription));
+    }
 
     // Land the copy in a same-directory temp file, then atomically replace
     // dstURL only once the full copy is on disk. A process kill (or any other
@@ -143,6 +235,15 @@ bool CopyThroughCoordinator(NSURL* srcURL, NSURL* dstURL, bool coordinateRead, s
     {
         NSError* reported = opError != nil ? opError : coordError;
         error = reported != nil ? ToStdString(reported.localizedDescription) : "copy failed";
+        LOG_ERROR(Core, "CloudSync: {} FAILED {} -> {}: opError=[{}] coordError=[{}]", coordinateRead ? "pull" : "push",
+                  ToStdString(srcURL.path), ToStdString(dstURL.path),
+                  opError != nil ? ToStdString(opError.localizedDescription) : "none",
+                  coordError != nil ? ToStdString(coordError.localizedDescription) : "none");
+    }
+    else
+    {
+        LOG_INFO(Core, "CloudSync: {} ok {} -> {}", coordinateRead ? "pull" : "push", ToStdString(srcURL.path),
+                 ToStdString(dstURL.path));
     }
     return ok;
 }
@@ -180,22 +281,37 @@ SyncOpsEnv MakeAppleSyncOpsEnv()
         std::error_code ec;
         if (!std::filesystem::is_directory(dir, ec))
             return entries;
-        for (const auto& entry : std::filesystem::recursive_directory_iterator(
-                 dir, std::filesystem::directory_options::skip_permission_denied, ec))
+        // A plain range-for over recursive_directory_iterator calls the throwing
+        // operator++() during traversal -- constructing with an `ec` out-param only
+        // suppresses errors at construction, not on each increment.
+        // skip_permission_denied covers permission errors specifically, but any
+        // other error mid-walk would throw std::filesystem::filesystem_error here,
+        // uncaught -- crashing the whole sync (and possibly the app, depending on
+        // caller) instead of just failing this one directory's listing.
+        try
         {
-            if (ec || !entry.is_regular_file(ec))
-                continue;
-            const std::string relPath = std::filesystem::relative(entry.path(), dir, ec).string();
-            const auto ftime = entry.last_write_time(ec);
-            if (ec)
-                continue;
-            // No std::chrono::clock_cast pre-C++20: the standard workaround
-            // (cppreference's file_time_type example) rebases the file-clock
-            // time_point onto system_clock via each clock's current instant.
-            const auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-                ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
-            const double mtime = std::chrono::duration<double>(sctp.time_since_epoch()).count();
-            entries.emplace_back(relPath, mtime);
+            for (const auto& entry : std::filesystem::recursive_directory_iterator(
+                     dir, std::filesystem::directory_options::skip_permission_denied, ec))
+            {
+                if (ec || !entry.is_regular_file(ec))
+                    continue;
+                const std::string relPath = std::filesystem::relative(entry.path(), dir, ec).string();
+                const auto ftime = entry.last_write_time(ec);
+                if (ec)
+                    continue;
+                // No std::chrono::clock_cast pre-C++20: the standard workaround
+                // (cppreference's file_time_type example) rebases the file-clock
+                // time_point onto system_clock via each clock's current instant.
+                const auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                    ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
+                const double mtime = std::chrono::duration<double>(sctp.time_since_epoch()).count();
+                entries.emplace_back(relPath, mtime);
+            }
+        }
+        catch (const std::filesystem::filesystem_error& e)
+        {
+            LOG_ERROR(Core, "CloudSync: listLocal({}) threw mid-walk after {} entries: {}", dir, entries.size(),
+                      e.what());
         }
         return entries;
     };
@@ -247,6 +363,12 @@ SyncOpsEnv MakeAppleSyncOpsEnv()
             return CopyThroughCoordinator(src, dst, /*coordinateRead=*/false, error);
         }
     };
+
+    // 3 second cap: this runs synchronously on the sync worker thread before
+    // every push/pull pass, and must never turn an offline device into an
+    // indefinite hang. Best-effort only -- see RefreshUbiquitousMetadata's
+    // own comment for why a timeout here doesn't compromise correctness.
+    env.refreshRemote = []() { RefreshUbiquitousMetadata(3.0); };
 
     return env;
 }
