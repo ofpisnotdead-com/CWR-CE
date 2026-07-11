@@ -3,6 +3,8 @@
 #include <Poseidon/Foundation/Types/LLinks.hpp>
 #include <Poseidon/Foundation/Types/EnumDecl.hpp>
 #include <Poseidon/Foundation/Math/Math3D.hpp>
+#include <Poseidon/Foundation/Time/Time.hpp>
+#include <Poseidon/Network/MessageFactory.hpp>
 
 #define OLink LLink
 #define OLinkArray LLinkArray
@@ -30,6 +32,70 @@ enum NetworkMessageClass
 };
 
 #include <Poseidon/Foundation/Strings/RString.hpp>
+
+DECL_ENUM(NetworkMessageErrorType)
+DECL_ENUM(NetworkCompressionType)
+struct NetworkMessageFormatItem;
+struct NetworkUpdateInfo;
+struct NetworkObjectInfo;
+struct NetworkPlayerObjectInfo;
+
+// Interface for class encapsulates value of basic message items types
+struct NetworkData : public RefCount
+{
+        // all fucntionality moved to RefNetworkData
+};
+
+// Class intended to optimization Ref<NetworkData> pointer overhead
+// note: No optimizaton implemented yet
+// Rules: classes derived from RefNetworkData
+// must have same size as RefNetworkData. No data members and no virtual functions
+// can be added, because RefNetworkData is used for direct assignement
+// using operator =.
+class RefNetworkData
+{
+        protected:
+        Ref<NetworkData> _data;
+
+        public:
+
+        // Calculate difference from other item with the same type
+        float CalculateError(NetworkMessageErrorType type, const RefNetworkData &value2, NetworkMessageFormatItem &item, float dt) const;
+        // Calculate size of serialized and compressed value
+        int CalculateSize(NetworkCompressionType compression, const NetworkMessageFormatItem &item) const;
+};
+
+// Network message (internal representation)
+struct NetworkMessage : public RefCount
+{
+	// network message header
+	// time when message was sent
+	Poseidon::Foundation::Time time;
+	// size of raw (serialized, compressed) message - not transferred, used for statistics
+	int size;
+
+	// network message body
+	// transferred values (message body)
+	AutoArray<RefNetworkData> values;
+
+	// Temporary pointer to update info - used for update object info whenever message is sent
+	NetworkUpdateInfo *objectUpdateInfo;
+
+	// Temporary pointer (OnSendComplete) - used on server only
+	NetworkObjectInfo *objectServerInfo;
+
+	// Temporary pointer (OnSendComplete) - used on server only
+	NetworkPlayerObjectInfo *objectPlayerInfo;
+
+	NetworkMessage()
+	{
+		size = 0;
+		objectUpdateInfo = nullptr;
+		objectServerInfo= nullptr;
+		objectPlayerInfo= nullptr;
+	}
+	~NetworkMessage() override {}
+};
 
 // simple network object
 // Base class for guaranteed message structures.
@@ -93,19 +159,13 @@ public:
 	virtual void Scan(NetworkMessageFormatBase *format) = 0;
 };
 
-// network message indices for NetworkObject
-class IndicesNetworkObject : public NetworkMessageIndices
-{
-public:
-	int objectCreator;
-	int objectId;
-	int objectPosition;
-	int guaranteed;
-	
-	IndicesNetworkObject();
-	NetworkMessageIndices *Clone() const override {return new IndicesNetworkObject;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+#define NETWORK_OBJECT_MSG(XX) \
+	XX(int, objectCreator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID of client, which created this object"), IdxTransfer) \
+	XX(int, objectId, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unique (for client) ID of object"), IdxTransfer) \
+	XX(Vector3, objectPosition, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Current position of object"), IdxTransfer) \
+	XX(bool, guaranteed, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Message is guaranteed (must be delivered"), IdxTransfer)
+
+DECLARE_NET_INDICES(NetworkObject, NETWORK_OBJECT_MSG)
 
 #include <Poseidon/Foundation/Time/Time.hpp>
 #include <Poseidon/Foundation/Strings/StrFormat.hpp>

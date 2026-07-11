@@ -857,93 +857,47 @@ NetworkMessageType SeaGullAuto::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesUpdateSeagull : public IndicesUpdateVehicle
-{
-    typedef IndicesUpdateVehicle base;
+#define UPDATE_SEAGULL_MSG(XX)                                                                                         \
+    XX(Vector3, pilotSpeed, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Wanted speed"), IdxTransfer,        \
+       ET_ABS_DIF, 1)                                                                                                  \
+    XX(float, pilotHeading, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted heading"), IdxTransfer, ET_ABS_DIF, \
+       ERR_COEF_VALUE_MAJOR)                                                                                           \
+    XX(float, pilotHeight, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted height"), IdxTransfer, ET_ABS_DIF,   \
+       ERR_COEF_VALUE_MAJOR)                                                                                           \
+    XX(int, state, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Autopilot state"), IdxTransfer,            \
+       ET_NOT_EQUAL, ERR_COEF_MODE)
 
-  public:
-    int pilotSpeed;
-    int pilotHeading;
-    int pilotHeight;
-    int state;
-
-    IndicesUpdateSeagull();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateSeagull; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateSeagull::IndicesUpdateSeagull()
-{
-    pilotSpeed = -1;
-    pilotHeading = -1;
-    pilotHeight = -1;
-    state = -1;
-}
-
-void IndicesUpdateSeagull::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(pilotSpeed)
-    SCAN(pilotHeading)
-    SCAN(pilotHeight)
-    SCAN(state)
-}
+DECLARE_NET_INDICES_EX_ERR(UpdateSeagull, UpdateVehicle, UPDATE_SEAGULL_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdateSeagull, UpdateVehicle, UPDATE_SEAGULL_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateSeagull()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateSeagull();
-}
+
+DEFINE_GET_INDICES(UpdateSeagull)
+
 namespace Poseidon
 {
 
-class IndicesUpdatePositionSeagull : public IndicesUpdatePositionVehicle
-{
-    typedef IndicesUpdatePositionVehicle base;
+#define UPDATE_POSITION_SEAGULL_MSG(XX)                                                                                \
+    XX(float, rpmWanted, NDTFloat, NCTFloat0To2, DEFVALUE(float, 0), DOC_MSG("Wanted RPM"), IdxTransfer, ET_ABS_DIF,   \
+       ERR_COEF_VALUE_MAJOR)                                                                                           \
+    XX(float, mainRotorWanted, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted main rotor state"), IdxTransfer, \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                               \
+    XX(float, cyclicForwardWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted forward cyclic"),     \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                  \
+    XX(float, cyclicAsideWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted aside cyclic"),         \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                  \
+    XX(float, wingDiveWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted wing dive"), IdxTransfer,  \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                               \
+    XX(float, thrustWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust"), IdxTransfer,       \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
-  public:
-    int rpmWanted;
-    int mainRotorWanted;
-    int cyclicForwardWanted;
-    int cyclicAsideWanted;
-    int wingDiveWanted;
-    int thrustWanted;
-
-    IndicesUpdatePositionSeagull();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdatePositionSeagull; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdatePositionSeagull::IndicesUpdatePositionSeagull()
-{
-    rpmWanted = 1;
-    mainRotorWanted = 1;
-    cyclicForwardWanted = 1;
-    cyclicAsideWanted = 1;
-    wingDiveWanted = 1;
-    thrustWanted = 1;
-}
-
-void IndicesUpdatePositionSeagull::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(rpmWanted)
-    SCAN(mainRotorWanted)
-    SCAN(cyclicForwardWanted)
-    SCAN(cyclicAsideWanted)
-    SCAN(wingDiveWanted)
-    SCAN(thrustWanted)
-}
+DECLARE_NET_INDICES_EX_ERR(UpdatePositionSeagull, UpdatePositionVehicle, UPDATE_POSITION_SEAGULL_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdatePositionSeagull, UpdatePositionVehicle, UPDATE_POSITION_SEAGULL_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdatePositionSeagull()
-{
-    using namespace Poseidon;
-    return new IndicesUpdatePositionSeagull();
-}
+
+DEFINE_GET_INDICES(UpdatePositionSeagull)
+
 namespace Poseidon
 {
 
@@ -953,31 +907,11 @@ NetworkMessageFormat& SeaGullAuto::CreateFormat(NetworkMessageClass cls, Network
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-
-            format.Add("pilotSpeed", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Wanted speed"), ET_ABS_DIF,
-                       1);
-            format.Add("pilotHeading", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted heading"), ET_ABS_DIF,
-                       ERR_COEF_VALUE_MAJOR);
-            format.Add("pilotHeight", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted height"), ET_ABS_DIF,
-                       ERR_COEF_VALUE_MAJOR);
-            format.Add("state", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Autopilot state"),
-                       ET_NOT_EQUAL, ERR_COEF_MODE);
+            UPDATE_SEAGULL_MSG(MSG_FORMAT_ERR)
             break;
         case NMCUpdatePosition:
             base::CreateFormat(cls, format);
-
-            format.Add("rpmWanted", NDTFloat, NCTFloat0To2, DEFVALUE(float, 0), DOC_MSG("Wanted RPM"), ET_ABS_DIF,
-                       ERR_COEF_VALUE_MAJOR);
-            format.Add("mainRotorWanted", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Wanted main rotor state"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("cyclicForwardWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0),
-                       DOC_MSG("Wanted forward cyclic"), ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("cyclicAsideWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0),
-                       DOC_MSG("Wanted aside cyclic"), ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("wingDiveWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted wing dive"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("thrustWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
+            UPDATE_POSITION_SEAGULL_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);

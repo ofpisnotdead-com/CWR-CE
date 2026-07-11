@@ -99,12 +99,12 @@ TEST_CASE("file transfer segments advance offsets for multi-segment payloads", "
 {
     struct TestTransferFileMessage
     {
-        RString path;
-        AutoArray<char> data;
-        int totSize = 0;
-        int offset = 0;
-        int totSegments = 0;
-        int curSegment = 0;
+        RString _path;
+        AutoArray<char> _data;
+        int _totSize = 0;
+        int _offset = 0;
+        int _totSegments = 0;
+        int _curSegment = 0;
     };
 
     constexpr int payload = NetworkFileTransferSegmentSize;
@@ -119,12 +119,12 @@ TEST_CASE("file transfer segments advance offsets for multi-segment payloads", "
         RString("tmp/players/player/face.jpg"), data.data(), static_cast<int>(data.size()),
         [&](const TestTransferFileMessage& msg)
         {
-            REQUIRE(msg.totSize == totalSize);
-            REQUIRE(msg.totSegments == 3);
-            offsets.push_back(msg.offset);
-            sizes.push_back(msg.data.Size());
-            indices.push_back(msg.curSegment);
-            std::copy(msg.data.Data(), msg.data.Data() + msg.data.Size(), reconstructed.begin() + msg.offset);
+            REQUIRE(msg._totSize == totalSize);
+            REQUIRE(msg._totSegments == 3);
+            offsets.push_back(msg._offset);
+            sizes.push_back(msg._data.Size());
+            indices.push_back(msg._curSegment);
+            std::copy(msg._data.Data(), msg._data.Data() + msg._data.Size(), reconstructed.begin() + msg._offset);
         });
 
     REQUIRE(segmentCount == 3);

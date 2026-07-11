@@ -50,53 +50,33 @@ AIUnit* RadioMessageVFireFailed::GetSender() const
     return _vehicle ? _vehicle->GunnerUnit() : nullptr;
 }
 
-NetworkMessageType RadioMessageVFireFailed::GetNMType(NetworkMessageClass cls) const
-{
-    return NMTMsgVFireFailed;
-}
-
-IndicesVMessage::IndicesVMessage()
-{
-    vehicle = -1;
-}
-
-void IndicesVMessage::Scan(NetworkMessageFormatBase* format)
-{
-    SCAN(vehicle)
-}
-
-class IndicesMsgVFireFailed : public IndicesVMessage
-{
-    typedef IndicesVMessage base;
-
-  public:
-    IndicesMsgVFireFailed();
-    NetworkMessageIndices* Clone() const override { return new IndicesMsgVFireFailed; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesMsgVFireFailed::IndicesMsgVFireFailed()
-{
-    vehicle = -1;
-}
-
-void IndicesMsgVFireFailed::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-}
+DEFINE_NET_INDICES(VMessage, V_MESSAGE_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesMsgVFireFailed()
+
+DEFINE_GET_INDICES(VMessage)
+
+namespace Poseidon
 {
-    using namespace Poseidon;
-    return new IndicesMsgVFireFailed();
-}
+
+DEFINE_NETWORK_OBJECT_SIMPLE(RadioMessageVFireFailed, MsgVFireFailed)
+
+#define MSG_V_FIRE_FAILED_MSG(XX)
+
+DECLARE_NET_INDICES_EX(MsgVFireFailed, VMessage, MSG_V_FIRE_FAILED_MSG)
+DEFINE_NET_INDICES_EX(MsgVFireFailed, VMessage, MSG_V_FIRE_FAILED_MSG)
+
+} // namespace Poseidon
+
+DEFINE_GET_INDICES(MsgVFireFailed)
+
 namespace Poseidon
 {
 
 NetworkMessageFormat& RadioMessageVFireFailed::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("In vehicle"));
+    V_MESSAGE_MSG(MSG_FORMAT)
+    MSG_V_FIRE_FAILED_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -105,7 +85,8 @@ TMError RadioMessageVFireFailed::TransferMsg(NetworkMessageContext& ctx)
     PoseidonAssert(dynamic_cast<const IndicesMsgVFireFailed*>(ctx.GetIndices())) const IndicesMsgVFireFailed* indices =
         static_cast<const IndicesMsgVFireFailed*>(ctx.GetIndices());
 
-    ITRANSF_REF(vehicle)
+    V_MESSAGE_MSG(MSG_TRANSFER)
+    MSG_V_FIRE_FAILED_MSG(MSG_TRANSFER)
     return TMOK;
 }
 
@@ -144,33 +125,23 @@ AIUnit* RadioMessageWithTarget::GetSender() const
     return _vehicle ? _vehicle->CommanderUnit() : nullptr;
 }
 
-class IndicesMessageWithTarget : public IndicesVMessage
+#define MESSAGE_WITH_TARGET_MSG(XX) \
+    XX(LinkTarget, target, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Target"), IdxTransferRef)
+
+DECLARE_NET_INDICES_EX(MessageWithTarget, VMessage, MESSAGE_WITH_TARGET_MSG)
+DEFINE_NET_INDICES_EX(MessageWithTarget, VMessage, MESSAGE_WITH_TARGET_MSG)
+
+} // namespace Poseidon
+
+DEFINE_GET_INDICES(MessageWithTarget)
+
+namespace Poseidon
 {
-    typedef IndicesVMessage base;
-
-  public:
-    int target;
-
-    IndicesMessageWithTarget();
-    NetworkMessageIndices* Clone() const override { return new IndicesMessageWithTarget; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesMessageWithTarget::IndicesMessageWithTarget()
-{
-    target = -1;
-}
-
-void IndicesMessageWithTarget::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-    SCAN(target)
-}
 
 NetworkMessageFormat& RadioMessageWithTarget::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("In vehicle"));
-    format.Add("target", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Target"));
+    V_MESSAGE_MSG(MSG_FORMAT)
+    MESSAGE_WITH_TARGET_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -179,7 +150,7 @@ TMError RadioMessageWithTarget::TransferMsg(NetworkMessageContext& ctx)
     PoseidonAssert(dynamic_cast<const IndicesMessageWithTarget*>(ctx.GetIndices()))
         const IndicesMessageWithTarget* indices = static_cast<const IndicesMessageWithTarget*>(ctx.GetIndices());
 
-    ITRANSF_REF(vehicle)
+    V_MESSAGE_MSG(MSG_TRANSFER)
 
     if (ctx.IsSending())
     {
@@ -253,17 +224,17 @@ LSError RadioMessageWithTarget::Serialize(ParamArchive& ar)
     return LSOK;
 }
 
-NetworkMessageType RadioMessageVTarget::GetNMType(NetworkMessageClass cls) const
-{
-    return NMTMsgVTarget;
-}
+DEFINE_NETWORK_OBJECT_SIMPLE(RadioMessageVTarget, MsgVTarget)
+
+#define MSG_V_TARGET_MSG(XX)
+
+DECLARE_NET_INDICES_EX(MsgVTarget, MessageWithTarget, MSG_V_TARGET_MSG)
+DEFINE_NET_INDICES_EX(MsgVTarget, MessageWithTarget, MSG_V_TARGET_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesMsgVTarget()
-{
-    using namespace Poseidon;
-    return new IndicesMessageWithTarget();
-}
+
+DEFINE_GET_INDICES(MsgVTarget)
+
 namespace Poseidon
 {
 
@@ -315,17 +286,17 @@ void RadioMessageVFire::Transmitted()
     _vehicle->ReceivedFire(_target);
 }
 
-NetworkMessageType RadioMessageVFire::GetNMType(NetworkMessageClass cls) const
-{
-    return NMTMsgVFire;
-}
+DEFINE_NETWORK_OBJECT_SIMPLE(RadioMessageVFire, MsgVFire)
+
+#define MSG_V_FIRE_MSG(XX)
+
+DECLARE_NET_INDICES_EX(MsgVFire, MessageWithTarget, MSG_V_FIRE_MSG)
+DEFINE_NET_INDICES_EX(MsgVFire, MessageWithTarget, MSG_V_FIRE_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesMsgVFire()
-{
-    using namespace Poseidon;
-    return new IndicesMessageWithTarget();
-}
+
+DEFINE_GET_INDICES(MsgVFire)
+
 namespace Poseidon
 {
 
@@ -397,47 +368,25 @@ LSError RadioMessageVMove::Serialize(ParamArchive& ar)
     return LSOK;
 }
 
-NetworkMessageType RadioMessageVMove::GetNMType(NetworkMessageClass cls) const
-{
-    return NMTMsgVMove;
-}
+DEFINE_NETWORK_OBJECT_SIMPLE(RadioMessageVMove, MsgVMove)
 
-class IndicesMsgVMove : public IndicesVMessage
-{
-    typedef IndicesVMessage base;
+#define MSG_V_MOVE_MSG(XX) \
+    XX(Vector3, destination, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Destination position"), IdxTransfer)
 
-  public:
-    int destination;
-
-    IndicesMsgVMove();
-    NetworkMessageIndices* Clone() const override { return new IndicesMsgVMove; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesMsgVMove::IndicesMsgVMove()
-{
-    destination = -1;
-}
-
-void IndicesMsgVMove::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-    SCAN(destination)
-}
+DECLARE_NET_INDICES_EX(MsgVMove, VMessage, MSG_V_MOVE_MSG)
+DEFINE_NET_INDICES_EX(MsgVMove, VMessage, MSG_V_MOVE_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesMsgVMove()
-{
-    using namespace Poseidon;
-    return new IndicesMsgVMove();
-}
+
+DEFINE_GET_INDICES(MsgVMove)
+
 namespace Poseidon
 {
 
 NetworkMessageFormat& RadioMessageVMove::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("In vehicle"));
-    format.Add("destination", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Destination position"));
+    V_MESSAGE_MSG(MSG_FORMAT)
+    MSG_V_MOVE_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -446,8 +395,8 @@ TMError RadioMessageVMove::TransferMsg(NetworkMessageContext& ctx)
     PoseidonAssert(dynamic_cast<const IndicesMsgVMove*>(ctx.GetIndices())) const IndicesMsgVMove* indices =
         static_cast<const IndicesMsgVMove*>(ctx.GetIndices());
 
-    ITRANSF_REF(vehicle)
-    ITRANSF(destination)
+    V_MESSAGE_MSG(MSG_TRANSFER)
+    MSG_V_MOVE_MSG(MSG_TRANSFER)
     return TMOK;
 }
 
@@ -517,40 +466,24 @@ LSError RadioMessageVFormation::Serialize(ParamArchive& ar)
     return LSOK;
 }
 
-NetworkMessageType RadioMessageVFormation::GetNMType(NetworkMessageClass cls) const
-{
-    return NMTMsgVFormation;
-}
+DEFINE_NETWORK_OBJECT_SIMPLE(RadioMessageVFormation, MsgVFormation)
 
-class IndicesMsgVFormation : public IndicesVMessage
-{
-    typedef IndicesVMessage base;
+#define MSG_V_FORMATION_MSG(XX)
 
-  public:
-    IndicesMsgVFormation();
-    NetworkMessageIndices* Clone() const override { return new IndicesMsgVFormation; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesMsgVFormation::IndicesMsgVFormation() = default;
-
-void IndicesMsgVFormation::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-}
+DECLARE_NET_INDICES_EX(MsgVFormation, VMessage, MSG_V_FORMATION_MSG)
+DEFINE_NET_INDICES_EX(MsgVFormation, VMessage, MSG_V_FORMATION_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesMsgVFormation()
-{
-    using namespace Poseidon;
-    return new IndicesMsgVFormation();
-}
+
+DEFINE_GET_INDICES(MsgVFormation)
+
 namespace Poseidon
 {
 
 NetworkMessageFormat& RadioMessageVFormation::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("In vehicle"));
+    V_MESSAGE_MSG(MSG_FORMAT)
+    MSG_V_FORMATION_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -559,7 +492,8 @@ TMError RadioMessageVFormation::TransferMsg(NetworkMessageContext& ctx)
     PoseidonAssert(dynamic_cast<const IndicesMsgVFormation*>(ctx.GetIndices())) const IndicesMsgVFormation* indices =
         static_cast<const IndicesMsgVFormation*>(ctx.GetIndices());
 
-    ITRANSF_REF(vehicle)
+    V_MESSAGE_MSG(MSG_TRANSFER)
+    MSG_V_FORMATION_MSG(MSG_TRANSFER)
     return TMOK;
 }
 
@@ -689,47 +623,25 @@ LSError RadioMessageVSimpleCommand::Serialize(ParamArchive& ar)
     return LSOK;
 }
 
-NetworkMessageType RadioMessageVSimpleCommand::GetNMType(NetworkMessageClass cls) const
-{
-    return NMTMsgVSimpleCommand;
-}
+DEFINE_NETWORK_OBJECT_SIMPLE(RadioMessageVSimpleCommand, MsgVSimpleCommand)
 
-class IndicesMsgVSimpleCommand : public IndicesVMessage
-{
-    typedef IndicesVMessage base;
+#define MSG_V_SIMPLE_COMMAND_MSG(XX) \
+    XX(int, cmd, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Command"), IdxTransfer)
 
-  public:
-    int cmd;
-
-    IndicesMsgVSimpleCommand();
-    NetworkMessageIndices* Clone() const override { return new IndicesMsgVSimpleCommand; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesMsgVSimpleCommand::IndicesMsgVSimpleCommand()
-{
-    cmd = -1;
-}
-
-void IndicesMsgVSimpleCommand::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-    SCAN(cmd)
-}
+DECLARE_NET_INDICES_EX(MsgVSimpleCommand, VMessage, MSG_V_SIMPLE_COMMAND_MSG)
+DEFINE_NET_INDICES_EX(MsgVSimpleCommand, VMessage, MSG_V_SIMPLE_COMMAND_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesMsgVSimpleCommand()
-{
-    using namespace Poseidon;
-    return new IndicesMsgVSimpleCommand();
-}
+
+DEFINE_GET_INDICES(MsgVSimpleCommand)
+
 namespace Poseidon
 {
 
 NetworkMessageFormat& RadioMessageVSimpleCommand::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("In vehicle"));
-    format.Add("cmd", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Command"));
+    V_MESSAGE_MSG(MSG_FORMAT)
+    MSG_V_SIMPLE_COMMAND_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -738,7 +650,7 @@ TMError RadioMessageVSimpleCommand::TransferMsg(NetworkMessageContext& ctx)
     PoseidonAssert(dynamic_cast<const IndicesMsgVSimpleCommand*>(ctx.GetIndices()))
         const IndicesMsgVSimpleCommand* indices = static_cast<const IndicesMsgVSimpleCommand*>(ctx.GetIndices());
 
-    ITRANSF_REF(vehicle)
+    V_MESSAGE_MSG(MSG_TRANSFER)
     ITRANSF_ENUM(cmd)
     return TMOK;
 }
@@ -895,47 +807,25 @@ LSError RadioMessageVLoad::Serialize(ParamArchive& ar)
     return LSOK;
 }
 
-NetworkMessageType RadioMessageVLoad::GetNMType(NetworkMessageClass cls) const
-{
-    return NMTMsgVLoad;
-}
+DEFINE_NETWORK_OBJECT_SIMPLE(RadioMessageVLoad, MsgVLoad)
 
-class IndicesMsgVLoad : public IndicesVMessage
-{
-    typedef IndicesVMessage base;
+#define MSG_V_LOAD_MSG(XX) \
+    XX(int, weapon, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Weapon index"), IdxTransfer)
 
-  public:
-    int weapon;
-
-    IndicesMsgVLoad();
-    NetworkMessageIndices* Clone() const override { return new IndicesMsgVLoad; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesMsgVLoad::IndicesMsgVLoad()
-{
-    weapon = -1;
-}
-
-void IndicesMsgVLoad::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-    SCAN(weapon)
-}
+DECLARE_NET_INDICES_EX(MsgVLoad, VMessage, MSG_V_LOAD_MSG)
+DEFINE_NET_INDICES_EX(MsgVLoad, VMessage, MSG_V_LOAD_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesMsgVLoad()
-{
-    using namespace Poseidon;
-    return new IndicesMsgVLoad();
-}
+
+DEFINE_GET_INDICES(MsgVLoad)
+
 namespace Poseidon
 {
 
 NetworkMessageFormat& RadioMessageVLoad::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("In vehicle"));
-    format.Add("weapon", NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Weapon index"));
+    V_MESSAGE_MSG(MSG_FORMAT)
+    MSG_V_LOAD_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -944,8 +834,8 @@ TMError RadioMessageVLoad::TransferMsg(NetworkMessageContext& ctx)
     PoseidonAssert(dynamic_cast<const IndicesMsgVLoad*>(ctx.GetIndices())) const IndicesMsgVLoad* indices =
         static_cast<const IndicesMsgVLoad*>(ctx.GetIndices());
 
-    ITRANSF_REF(vehicle)
-    ITRANSF(weapon)
+    V_MESSAGE_MSG(MSG_TRANSFER)
+    MSG_V_LOAD_MSG(MSG_TRANSFER)
     return TMOK;
 }
 
@@ -1019,47 +909,25 @@ LSError RadioMessageVAzimut::Serialize(ParamArchive& ar)
     return LSOK;
 }
 
-NetworkMessageType RadioMessageVAzimut::GetNMType(NetworkMessageClass cls) const
-{
-    return NMTMsgVAzimut;
-}
+DEFINE_NETWORK_OBJECT_SIMPLE(RadioMessageVAzimut, MsgVAzimut)
 
-class IndicesMsgVAzimut : public IndicesVMessage
-{
-    typedef IndicesVMessage base;
+#define MSG_V_AZIMUT_MSG(XX) \
+    XX(float, azimut, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Orientation azimuth"), IdxTransfer)
 
-  public:
-    int azimut;
-
-    IndicesMsgVAzimut();
-    NetworkMessageIndices* Clone() const override { return new IndicesMsgVAzimut; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesMsgVAzimut::IndicesMsgVAzimut()
-{
-    azimut = -1;
-}
-
-void IndicesMsgVAzimut::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-    SCAN(azimut)
-}
+DECLARE_NET_INDICES_EX(MsgVAzimut, VMessage, MSG_V_AZIMUT_MSG)
+DEFINE_NET_INDICES_EX(MsgVAzimut, VMessage, MSG_V_AZIMUT_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesMsgVAzimut()
-{
-    using namespace Poseidon;
-    return new IndicesMsgVAzimut();
-}
+
+DEFINE_GET_INDICES(MsgVAzimut)
+
 namespace Poseidon
 {
 
 NetworkMessageFormat& RadioMessageVAzimut::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("In vehicle"));
-    format.Add("azimut", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Orientation azimuth"));
+    V_MESSAGE_MSG(MSG_FORMAT)
+    MSG_V_AZIMUT_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -1068,8 +936,8 @@ TMError RadioMessageVAzimut::TransferMsg(NetworkMessageContext& ctx)
     PoseidonAssert(dynamic_cast<const IndicesMsgVAzimut*>(ctx.GetIndices())) const IndicesMsgVAzimut* indices =
         static_cast<const IndicesMsgVAzimut*>(ctx.GetIndices());
 
-    ITRANSF_REF(vehicle)
-    ITRANSF(azimut);
+    V_MESSAGE_MSG(MSG_TRANSFER)
+    MSG_V_AZIMUT_MSG(MSG_TRANSFER)
     return TMOK;
 }
 
@@ -1175,47 +1043,25 @@ AIUnit* RadioMessageVStopTurning::GetSender() const
     return _vehicle ? _vehicle->CommanderUnit() : nullptr;
 }
 
-NetworkMessageType RadioMessageVStopTurning::GetNMType(NetworkMessageClass cls) const
-{
-    return NMTMsgVStopTurning;
-}
+DEFINE_NETWORK_OBJECT_SIMPLE(RadioMessageVStopTurning, MsgVStopTurning)
 
-class IndicesMsgVStopTurning : public IndicesVMessage
-{
-    typedef IndicesVMessage base;
+#define MSG_V_STOP_TURNING_MSG(XX) \
+    XX(float, azimut, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Final azimuth"), IdxTransfer)
 
-  public:
-    int azimut;
-
-    IndicesMsgVStopTurning();
-    NetworkMessageIndices* Clone() const override { return new IndicesMsgVStopTurning; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesMsgVStopTurning::IndicesMsgVStopTurning()
-{
-    azimut = -1;
-}
-
-void IndicesMsgVStopTurning::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-    SCAN(azimut)
-}
+DECLARE_NET_INDICES_EX(MsgVStopTurning, VMessage, MSG_V_STOP_TURNING_MSG)
+DEFINE_NET_INDICES_EX(MsgVStopTurning, VMessage, MSG_V_STOP_TURNING_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesMsgVStopTurning()
-{
-    using namespace Poseidon;
-    return new IndicesMsgVStopTurning();
-}
+
+DEFINE_GET_INDICES(MsgVStopTurning)
+
 namespace Poseidon
 {
 
 NetworkMessageFormat& RadioMessageVStopTurning::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("vehicle", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("In vehicle"));
-    format.Add("azimut", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Final azimuth"));
+    V_MESSAGE_MSG(MSG_FORMAT)
+    MSG_V_STOP_TURNING_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -1224,8 +1070,8 @@ TMError RadioMessageVStopTurning::TransferMsg(NetworkMessageContext& ctx)
     PoseidonAssert(dynamic_cast<const IndicesMsgVStopTurning*>(ctx.GetIndices()))
         const IndicesMsgVStopTurning* indices = static_cast<const IndicesMsgVStopTurning*>(ctx.GetIndices());
 
-    ITRANSF_REF(vehicle)
-    ITRANSF(azimut);
+    V_MESSAGE_MSG(MSG_TRANSFER)
+    MSG_V_STOP_TURNING_MSG(MSG_TRANSFER)
     return TMOK;
 }
 
@@ -1789,42 +1635,12 @@ NetworkMessageType Transport::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-IndicesUpdateTransport::IndicesUpdateTransport()
-{
-    commander = -1;
-    driver = -1;
-    gunner = -1;
-    effCommander = -1;
-    manCargo = -1;
-    comFireTarget = -1;
-    lock = -1;
-    driverHiddenWanted = -1;
-    fuel = -1;
-    engineOff = -1;
-}
-
-void IndicesUpdateTransport::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(commander)
-    SCAN(driver)
-    SCAN(gunner)
-    SCAN(effCommander)
-    SCAN(manCargo)
-    SCAN(comFireTarget)
-    SCAN(lock)
-    SCAN(driverHiddenWanted)
-    SCAN(fuel);
-    SCAN(engineOff);
-}
+DEFINE_NET_INDICES_EX_ERR(UpdateTransport, UpdateVehicleSupply, UPDATE_TRANSPORT_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateTransport()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateTransport();
-}
+
+DEFINE_GET_INDICES(UpdateTransport)
+
 namespace Poseidon
 {
 
@@ -1834,27 +1650,7 @@ NetworkMessageFormat& Transport::CreateFormat(NetworkMessageClass cls, NetworkMe
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-            format.Add("commander", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Commander (observer) person"), ET_NOT_EQUAL,
-                       ERR_COEF_STRUCTURE);
-            format.Add("driver", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Driver person"), ET_NOT_EQUAL,
-                       ERR_COEF_STRUCTURE);
-            format.Add("gunner", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Gunner person"), ET_NOT_EQUAL,
-                       ERR_COEF_STRUCTURE);
-            format.Add("effCommander", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Currently commanding person"),
-                       ET_NOT_EQUAL, ERR_COEF_STRUCTURE);
-            format.Add("manCargo", NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("Men in cargo space"),
-                       ET_NOT_EQUAL_COUNT, 0.5 * ERR_COEF_STRUCTURE);
-            format.Add("comFireTarget", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Fire target, selected by commander"),
-                       ET_NOT_EQUAL, ERR_COEF_MODE);
-            format.Add("lock", NDTInteger, NCTSmallSigned, DEFVALUE(int, LSDefault), DOC_MSG("Lock state"),
-                       ET_NOT_EQUAL, ERR_COEF_MODE);
-            format.Add("driverHiddenWanted", NDTFloat, NCTFloat0To1, DEFVALUE(float, 0),
-                       DOC_MSG("Wanted position of (tank) driver - inside / outside"), ET_NOT_EQUAL,
-                       ERR_COEF_VALUE_MAJOR);
-            format.Add("fuel", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Current amount of fuel"), ET_ABS_DIF,
-                       ERR_COEF_VALUE_MINOR);
-            format.Add("engineOff", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Engine is off / on"), ET_ABS_DIF,
-                       ERR_COEF_MODE);
+            UPDATE_TRANSPORT_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);

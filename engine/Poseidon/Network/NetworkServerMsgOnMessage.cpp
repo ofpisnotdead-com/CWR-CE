@@ -191,8 +191,8 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             NetworkPlayerInfo* info = GetPlayerInfo(from);
             if (info)
             {
-                int qId = answer.id;
-                IntegrityQuestionType qType = answer.type;
+                int qId = answer._id;
+                IntegrityQuestionType qType = (IntegrityQuestionType)answer._type;
                 //  it should be an answer to the first question of given type
 
                 int qIndex = -1;
@@ -211,18 +211,18 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     // LogF
                     //(
                     //	"%s - %s: Received answer %d",
-                    //	(const char *)info->name,(const char *)q.name,answer.answer
+                    //	(const char *)info->name,(const char *)q.name,answer._answer
                     //);
                     bool dedicated = IsDedicatedServer();
                     unsigned int myAnswer = IntegrityCheckAnswer(qType, q, dedicated);
                     // integrity question may be a part of active investigation
-                    if (qType != IQTExe && myAnswer != answer.answer)
+                    if (qType != IQTExe && myAnswer != answer._answer)
                     {
                         LOG_DEBUG(Network, "{} - {}: Received answer {:x}, expected {:x}", (const char*)info->name,
-                                  (const char*)q.name, answer.answer, myAnswer);
+                                  (const char*)q.name, answer._answer, myAnswer);
                     }
-                    bool wasIA = IntegrityAnswerReceived(info, qType, q, myAnswer == answer.answer);
-                    if (!wasIA && myAnswer != answer.answer)
+                    bool wasIA = IntegrityAnswerReceived(info, qType, q, myAnswer == answer._answer);
+                    if (!wasIA && myAnswer != answer._answer)
                     {
                         // calculate correct answer
                         // try to provide more info if possible
@@ -248,7 +248,7 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
                 else
                 {
-                    LOG_DEBUG(Network, "Received unknown answer {:08x}", answer.id);
+                    LOG_DEBUG(Network, "Received unknown answer {:08x}", answer._id);
                 }
             }
         }
@@ -257,8 +257,8 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             SelectPlayerMessage pl;
             pl.TransferMsg(ctx);
-            NET_ERROR(pl.player != AI_PLAYER);
-            NetworkPlayerInfo* info = GetPlayerInfo(pl.player);
+            NET_ERROR(pl._player != AI_PLAYER);
+            NetworkPlayerInfo* info = GetPlayerInfo(pl._player);
             NET_ERROR(info);
             if (!info)
             {
@@ -267,29 +267,30 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             // A client may only select its own slot; only an admin/bot may assign
             // another player and change object ownership on its behalf, so the
             // ChangeOwner below is gated to the acting slot.
-            if (!Poseidon::SelectPlayerAuthorized(from, pl.player, _gameMaster, _botClient))
+            if (!Poseidon::SelectPlayerAuthorized(from, pl._player, _gameMaster, _botClient))
             {
-                LOG_WARN(Network, "SelectPlayer: rejected from={} acting for player={}", from, pl.player);
+                LOG_WARN(Network, "SelectPlayer: rejected from={} acting for player={}", from, pl._player);
                 break;
             }
-            info->person = pl.person;
-            info->cameraPosition = pl.position;
+            NetworkId person(pl._creator, pl._id);
+            info->person = person;
+            info->cameraPosition = pl._position;
             info->cameraPositionTime = msg->time;
             // fulfill info->unit, info->group
-            NetworkId brain = PersonToUnit(pl.person);
+            NetworkId brain = PersonToUnit(person);
             info->unit = brain;
 
-            if (from != pl.player)
+            if (from != pl._player)
             {
-                NetworkComponent::SendMsg(pl.player, msg, type, NMFGuaranteed);
+                NetworkComponent::SendMsg(pl._player, msg, type, NMFGuaranteed);
             }
-            NetworkObjectInfo* oInfo = GetObjectInfo(pl.person);
+            NetworkObjectInfo* oInfo = GetObjectInfo(person);
             NET_ERROR(oInfo);
             if (!oInfo)
             {
                 break;
             }
-            ChangeOwner(pl.person, oInfo->owner, pl.player);
+            ChangeOwner(person, oInfo->owner, pl._player);
             if (!brain.IsNull())
             {
                 NetworkObjectInfo* oInfo = GetObjectInfo(brain);
@@ -298,7 +299,7 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 {
                     break;
                 }
-                ChangeOwner(brain, oInfo->owner, pl.player);
+                ChangeOwner(brain, oInfo->owner, pl._player);
             }
         }
         break;
@@ -336,7 +337,7 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskMissionFileMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.valid)
+            if (ask._valid)
             {
                 NetworkPlayerInfo* info = GetPlayerInfo(from);
                 if (info)
@@ -802,7 +803,7 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         break;
         case NMTTransferFileToServer:
         {
-            TransferFileMessage transfer;
+            TransferFileToServerMessage transfer;
             transfer.TransferMsg(ctx);
             // check if path is valid upload path
             // if not, kick sender
@@ -830,25 +831,25 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             if (alreadyKicked)
             {
                 LOG_DEBUG(Network, "Transfer file {} request ignored, sender is being kicked off",
-                          (const char*)transfer.path);
+                          (const char*)transfer._path);
                 break;
             }
             // check if file transferred is within allowed range
             // if not, kick off sender
-            if (transfer.totSize > MaxCustomFileSize)
+            if (transfer._totSize > MaxCustomFileSize)
             {
                 // check name of player (from file name)
                 ServerMessage(Format("Player %s kicked off - too big custom file '%s' (%d B > %d B)", (const char*)name,
-                                     (const char*)GetRelUploadPath(transfer.path, from), transfer.totSize,
+                                     (const char*)GetRelUploadPath(transfer._path, from), transfer._totSize,
                                      MaxCustomFileSize));
                 KickOff(from, KORKick);
                 break;
             }
 
-            if (!CheckValidUpload(transfer.path, from))
+            if (!CheckValidUpload(transfer._path, from))
             {
                 ServerMessage(Format("Player %s kicked off - invalid custom file '%s'", (const char*)name,
-                                     (const char*)transfer.path));
+                                     (const char*)transfer._path));
                 KickOff(from, KORKick);
                 break;
             }
@@ -879,8 +880,8 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         break;
         case NMTSetFlagCarrier:
         {
-            NET_ERROR(dynamic_cast<const IndicesSetFlagOwner*>(ctx.GetIndices()))
-            const IndicesSetFlagOwner* indices = static_cast<const IndicesSetFlagOwner*>(ctx.GetIndices());
+            NET_ERROR(dynamic_cast<const IndicesSetFlagCarrier*>(ctx.GetIndices()))
+            const IndicesSetFlagCarrier* indices = static_cast<const IndicesSetFlagCarrier*>(ctx.GetIndices());
 
             NetworkId id;
             if (ctx.IdxGetId(indices->owner, id) == TMOK)
@@ -1147,7 +1148,11 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 {
                     AUTO_STATIC_ARRAY(int, oldPlayers, 32);
                     _server->GetTransmitTargets(from, oldPlayers);
-                    SetSpeakerMessage message(from, false, info->person);
+                    SetSpeakerMessage message;
+                    message._player = from;
+                    message._on = false;
+                    message._creator = info->person.creator;
+                    message._id = info->person.id;
                     for (int i = 0; i < oldPlayers.Size(); i++)
                     {
                         SendMsg(oldPlayers[i], &message, NMFGuaranteed);
@@ -1155,7 +1160,11 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
                 if (channel == CCDirect)
                 {
-                    SetSpeakerMessage message(from, true, info->person);
+                    SetSpeakerMessage message;
+                    message._player = from;
+                    message._on = true;
+                    message._creator = info->person.creator;
+                    message._id = info->person.id;
                     for (int i = 0; i < players.Size(); i++)
                     {
                         SendMsg(players[i], &message, NMFGuaranteed);
@@ -1179,7 +1188,11 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 if (Poseidon::ShouldNotifyJoinedPlayerAboutActiveDirectSpeaker(pi.dpid, from, pi.state, pi.channel,
                                                                                NGSCreate, CCDirect))
                 {
-                    SetSpeakerMessage message(pi.dpid, true, pi.person);
+                    SetSpeakerMessage message;
+                    message._player = pi.dpid;
+                    message._on = true;
+                    message._creator = pi.person.creator;
+                    message._id = pi.person.id;
                     SendMsg(from, &message, NMFGuaranteed);
                 }
             }
@@ -1219,7 +1232,7 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
 
 void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
 {
-    switch (cmd.type)
+    switch (cmd._type)
     {
         case NCMTLogin:
         {
@@ -1237,7 +1250,7 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
                 }
                 if (ident < _identities.Size())
                 {
-                    RString password = cmd.content.ReadString();
+                    RString password = cmd._content.ReadString();
                     if (!Poseidon::AdminLoginPasswordAccepted(_serverCfg, password))
                     {
                         if (++_identities[ident].failedLogin >= 10)
@@ -1255,7 +1268,7 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
                     if (_gameMaster != AI_PLAYER)
                     {
                         NetworkCommandMessage answer;
-                        answer.type = NCMTLoggedOut;
+                        answer._type = NCMTLoggedOut;
                         SendMsg(_gameMaster, &answer, NMFGuaranteed);
                     }
 
@@ -1267,14 +1280,14 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
                     _votings.Clear();
 
                     NetworkCommandMessage answer;
-                    answer.type = NCMTLogged;
-                    answer.content.Write(&_admin, sizeof(_admin));
+                    answer._type = NCMTLogged;
+                    answer._content.Write(&_admin, sizeof(_admin));
                     SendMsg(from, &answer, NMFGuaranteed);
 
                     if (_mission[0] == '?' && _mission[1] == 0)
                     {
                         NetworkCommandMessage answer;
-                        answer.type = NCMTVoteMission;
+                        answer._type = NCMTVoteMission;
                         AddMissionList(answer);
                         SendMsg(from, &answer, NMFGuaranteed);
                     }
@@ -1288,7 +1301,7 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
             if (Poseidon::CommandFromGameMaster(_dedicated, from, _gameMaster))
             {
                 NetworkCommandMessage answer;
-                answer.type = NCMTLoggedOut;
+                answer._type = NCMTLoggedOut;
                 SendMsg(_gameMaster, &answer, NMFGuaranteed);
 
                 RString name;
@@ -1312,7 +1325,7 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
                 {
                     // when admin logged out, perform mission voting instead
                     NetworkCommandMessage answer;
-                    answer.type = NCMTVoteMission;
+                    answer._type = NCMTVoteMission;
                     AddMissionList(answer);
                     for (int i = 0; i < _identities.Size(); i++)
                     {
@@ -1331,21 +1344,21 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
             if (Poseidon::CommandFromGameMaster(_dedicated, from, _gameMaster))
             {
                 float interval;
-                cmd.content.Read(&interval, sizeof(interval));
+                cmd._content.Read(&interval, sizeof(interval));
                 Monitor(interval);
             }
             break;
         case NCMTDebugAsk:
             if (_dedicated && from == _gameMaster || !_dedicated && from == _botClient)
             {
-                DebugAsk(cmd.content.ReadString(), from, !_admin);
+                DebugAsk(cmd._content.ReadString(), from, !_admin);
             }
             break;
         case NCMTMission:
             if (Poseidon::CommandFromGameMaster(_dedicated, from, _gameMaster))
             {
-                _mission = cmd.content.ReadString();
-                cmd.content.Read(&_cadetMode, sizeof(bool));
+                _mission = cmd._content.ReadString();
+                cmd._content.Read(&_cadetMode, sizeof(bool));
                 if (_mission.GetLength() > 0)
                 {
                     _restart = true;
@@ -1368,7 +1381,7 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
                     SetGameState(NGSCreate);
                 }
                 NetworkCommandMessage answer;
-                answer.type = NCMTVoteMission;
+                answer._type = NCMTVoteMission;
                 AddMissionList(answer);
                 SendMsg(_gameMaster, &answer, NMFGuaranteed);
             }
@@ -1425,7 +1438,7 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
             if (Poseidon::CommandFromPasswordAdmin(_dedicated, from, _gameMaster, _admin))
             {
                 bool lock;
-                if (cmd.content.Read(&lock, sizeof(bool)))
+                if (cmd._content.Read(&lock, sizeof(bool)))
                 {
                     _sessionLocked = lock;
                     const PlayerIdentity* adminId = FindIdentity(from);
@@ -1438,7 +1451,7 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
             if (Poseidon::CommandFromAdminOrBot(from, _gameMaster, _botClient))
             {
                 int player;
-                if (cmd.content.Read(&player, sizeof(int)) && player != _botClient)
+                if (cmd._content.Read(&player, sizeof(int)) && player != _botClient)
                 {
                     KickOff(player, KORKick);
                 }
@@ -1448,7 +1461,7 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
             if (Poseidon::CommandFromAdminOrBot(from, _gameMaster, _botClient))
             {
                 int player;
-                if (cmd.content.Read(&player, sizeof(int)) && player != _botClient)
+                if (cmd._content.Read(&player, sizeof(int)) && player != _botClient)
                 {
                     Ban(player);
                 }
@@ -1457,7 +1470,7 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
         case NCMTUnban:
             if (Poseidon::CommandFromAdminOrBot(from, _gameMaster, _botClient))
             {
-                RString arg = cmd.content.ReadString();
+                RString arg = cmd._content.ReadString();
                 if (arg.GetLength() > 0)
                 {
                     Unban(static_cast<const char*>(arg));
@@ -1476,13 +1489,13 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
                 char echo[512];
                 snprintf(echo, sizeof(echo), "%s votes: ", (const char*)info->name);
                 int subtype;
-                cmd.content.Read(&subtype, sizeof(int));
+                cmd._content.Read(&subtype, sizeof(int));
                 switch (subtype)
                 {
                     case NCMTMission:
                     {
-                        char* ptr = cmd.content.Data() + cmd.content.GetPos();
-                        int size = cmd.content.Size() - cmd.content.GetPos();
+                        char* ptr = cmd._content.Data() + cmd._content.GetPos();
+                        int size = cmd._content.Size() - cmd._content.GetPos();
                         _votings.Add(this, (char*)&subtype, sizeof(int), 0.9999, from, ptr, size, true);
                         // ptr is raw wire bytes, not guaranteed NUL-terminated; bound both the
                         // read (%.*s precision) and the write (snprintf) so a long or
@@ -1514,7 +1527,7 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
                     {
                         int id[2];
                         id[0] = subtype;
-                        cmd.content.Read(&id[1], sizeof(int));
+                        cmd._content.Read(&id[1], sizeof(int));
                         _votings.Add(this, (char*)id, 2 * sizeof(int), _voteThreshold, from);
                         const NetworkPlayerInfo* info = GetPlayerInfo(id[1]);
                         if (info)
@@ -1527,8 +1540,8 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
                     break;
                     case NCMTAdmin:
                     {
-                        char* ptr = cmd.content.Data() + cmd.content.GetPos();
-                        int size = cmd.content.Size() - cmd.content.GetPos();
+                        char* ptr = cmd._content.Data() + cmd._content.GetPos();
+                        int size = cmd._content.Size() - cmd._content.GetPos();
                         _votings.Add(this, (char*)&subtype, sizeof(int), _voteThreshold, from, ptr, size);
                         // ptr is wire data; the target player id is the first int — require it
                         // to actually be present before dereferencing.
@@ -1556,7 +1569,12 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
                 if (doEcho)
                 {
                     RefArray<NetworkObject> dummy;
-                    ChatMessage msg(CCGlobal, nullptr, dummy, "", echo);
+                    ChatMessage msg;
+                    msg._channel = CCGlobal;
+                    msg._sender = nullptr;
+                    msg._units = dummy;
+                    msg._name = "";
+                    msg._text = echo;
                     for (int i = 0; i < _players.Size(); i++)
                     {
                         if (_players[i].state >= NGSCreate)
@@ -1656,9 +1674,14 @@ void NetworkServer::OnGameStateMessage(int from, NetworkMessage* msg, NetworkMes
                     {
                         continue;
                     }
-                    SelectPlayerMessage pl(info.dpid, id, info.cameraPosition, false);
-                    NetworkComponent::SendMsg(pl.player, &pl, NMFGuaranteed);
-                    ChangeOwner(id, oInfo->owner, pl.player);
+                    SelectPlayerMessage pl;
+                    pl._player = info.dpid;
+                    pl._creator = id.creator;
+                    pl._id = id.id;
+                    pl._position = info.cameraPosition;
+                    pl._respawn = false;
+                    NetworkComponent::SendMsg(pl._player, &pl, NMFGuaranteed);
+                    ChangeOwner(id, oInfo->owner, pl._player);
                 }
                 // change state
                 SetGameState(NGSBriefing);
@@ -1738,9 +1761,9 @@ void NetworkServer::OnGameStateMessage(int from, NetworkMessage* msg, NetworkMes
 
                     // Send time sync so client sets _jip flag
                     NetworkCommandMessage timeMsg;
-                    timeMsg.type = NCMTMissionTimeElapsed;
+                    timeMsg._type = NCMTMissionTimeElapsed;
                     int timeElapsed = GlobalTickCount() - _missionHeader.start;
-                    timeMsg.content.Write(&timeElapsed, sizeof(timeElapsed));
+                    timeMsg._content.Write(&timeElapsed, sizeof(timeElapsed));
                     SendMsg(info->dpid, &timeMsg, NMFGuaranteed);
 
                     // DON'T send NGSPlay yet — player stays in NGSBriefing
@@ -1757,9 +1780,14 @@ void NetworkServer::OnGameStateMessage(int from, NetworkMessage* msg, NetworkMes
                         NetworkObjectInfo* oInfo = GetObjectInfo(info->person);
                         if (oInfo)
                         {
-                            SelectPlayerMessage pl(info->dpid, info->person, info->cameraPosition, false);
-                            NetworkComponent::SendMsg(pl.player, &pl, NMFGuaranteed);
-                            ChangeOwner(info->person, oInfo->owner, pl.player);
+                            SelectPlayerMessage pl;
+                            pl._player = info->dpid;
+                            pl._creator = info->person.creator;
+                            pl._id = info->person.id;
+                            pl._position = info->cameraPosition;
+                            pl._respawn = false;
+                            NetworkComponent::SendMsg(pl._player, &pl, NMFGuaranteed);
+                            ChangeOwner(info->person, oInfo->owner, pl._player);
                         }
                         // Also transfer ownership of the brain/unit
                         NetworkId brain = PersonToUnit(info->person);

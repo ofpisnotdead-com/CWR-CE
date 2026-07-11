@@ -709,7 +709,10 @@ void NetworkServer::ChangeOwner(NetworkId& id, int from, int to)
 
     // PlayerObjectInfo for object creates automatically
 
-    ChangeOwnerMessage msg(id, to);
+    ChangeOwnerMessage msg;
+    msg._creator = id.creator;
+    msg._id = id.id;
+    msg._owner = to;
     SendMsg(from, &msg, NMFGuaranteed);
     SendMsg(to, &msg, NMFGuaranteed);
 }
@@ -1569,7 +1572,12 @@ void NetworkServer::Unban(const char* idOrIp)
 void NetworkServer::ChatToAllPlayers(RString message)
 {
     RefArray<NetworkObject> dummy;
-    ChatMessage msg(CCGlobal, nullptr, dummy, "", message);
+    ChatMessage msg;
+    msg._channel = CCGlobal;
+    msg._sender = nullptr;
+    msg._units = dummy;
+    msg._name = "";
+    msg._text = message;
     for (int i = 0; i < _players.Size(); i++)
     {
         if (_players[i].state >= NGSCreate)

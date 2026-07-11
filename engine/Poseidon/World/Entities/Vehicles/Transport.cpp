@@ -360,55 +360,16 @@ LSError ResourceSupply::Serialize(ParamArchive& ar)
     return LSOK;
 }
 
-IndicesResourceSupply::IndicesResourceSupply()
-{
-    fuelCargo = -1;
-    repairCargo = -1;
-    ammoCargo = -1;
-    supplying = -1;
-    alloc = -1;
-    action = -1;
-    actionParam = -1;
-    actionParam2 = -1;
-    actionParam3 = -1;
-}
+DEFINE_NET_INDICES_EX_ERR(UpdateVehicleSupply, UpdateVehicleAI, UPDATE_VEHICLE_SUPPLY_MSG)
 
-void IndicesResourceSupply::Scan(NetworkMessageFormatBase* format)
-{
-    SCAN(fuelCargo)
-    SCAN(repairCargo)
-    SCAN(ammoCargo)
-    SCAN(supplying)
-    SCAN(alloc)
-    SCAN(action)
-    SCAN(actionParam)
-    SCAN(actionParam2)
-    SCAN(actionParam3)
-}
+} // namespace Poseidon
 
-void ResourceSupply::CreateFormat(NetworkMessageFormat& format)
-{
-    format.Add("fuelCargo", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Transported fuel"), ET_ABS_DIF,
-               0.01 * ERR_COEF_VALUE_MINOR);
-    format.Add("repairCargo", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Transported repair material"), ET_ABS_DIF,
-               0.01 * ERR_COEF_VALUE_MINOR);
-    format.Add("ammoCargo", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Transported ammunition (for vehicles)"),
-               ET_ABS_DIF, 0.01 * ERR_COEF_VALUE_MINOR);
-    format.Add("supplying", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Currently supplying unit"), ET_NOT_EQUAL,
-               ERR_COEF_MODE);
-    format.Add("alloc", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Unit allocated for supplying"), ET_NOT_EQUAL,
-               ERR_COEF_MODE);
-    format.Add("action", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ATNone), DOC_MSG("Currently processing action"),
-               ET_NOT_EQUAL, ERR_COEF_MODE);
-    format.Add("actionParam", NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Action parameter"), ET_NOT_EQUAL,
-               ERR_COEF_MODE);
-    format.Add("actionParam2", NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Action parameter"), ET_NOT_EQUAL,
-               ERR_COEF_MODE);
-    format.Add("actionParam3", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Action parameter"), ET_NOT_EQUAL,
-               ERR_COEF_MODE);
-}
+DEFINE_GET_INDICES(UpdateVehicleSupply)
 
-TMError ResourceSupply::TransferMsg(NetworkMessageContext& ctx, const IndicesResourceSupply* indices)
+namespace Poseidon
+{
+
+TMError ResourceSupply::TransferMsg(NetworkMessageContext& ctx, const IndicesUpdateVehicleSupply* indices)
 {
     ITRANSF(fuelCargo)
     ITRANSF(repairCargo)
@@ -422,7 +383,7 @@ TMError ResourceSupply::TransferMsg(NetworkMessageContext& ctx, const IndicesRes
     return TMOK;
 }
 
-float ResourceSupply::CalculateError(NetworkMessageContext& ctx, const IndicesResourceSupply* indices)
+float ResourceSupply::CalculateError(NetworkMessageContext& ctx, const IndicesUpdateVehicleSupply* indices)
 {
     float error = 0;
     switch (ctx.GetClass())
@@ -1710,31 +1671,13 @@ NetworkMessageType VehicleSupply::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-IndicesUpdateVehicleSupply::IndicesUpdateVehicleSupply() = default;
-
-void IndicesUpdateVehicleSupply::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    supply.Scan(format);
-}
-
-} // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateVehicleSupply()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateVehicleSupply();
-}
-namespace Poseidon
-{
-
 NetworkMessageFormat& VehicleSupply::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
     switch (cls)
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-            ResourceSupply::CreateFormat(format);
+            UPDATE_VEHICLE_SUPPLY_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);
@@ -1755,7 +1698,7 @@ TMError VehicleSupply::TransferMsg(NetworkMessageContext& ctx)
                     const IndicesUpdateVehicleSupply* indices =
                         static_cast<const IndicesUpdateVehicleSupply*>(ctx.GetIndices());
 
-                TMCHECK(_supply->TransferMsg(ctx, &indices->supply))
+                TMCHECK(_supply->TransferMsg(ctx, indices))
             }
             break;
         default:
@@ -1776,7 +1719,7 @@ float VehicleSupply::CalculateError(NetworkMessageContext& ctx)
                 PoseidonAssert(dynamic_cast<const IndicesUpdateVehicleSupply*>(ctx.GetIndices()))
                     const IndicesUpdateVehicleSupply* indices =
                         static_cast<const IndicesUpdateVehicleSupply*>(ctx.GetIndices());
-                error += _supply->CalculateError(ctx, &indices->supply);
+                error += _supply->CalculateError(ctx, indices);
             }
             break;
         default:

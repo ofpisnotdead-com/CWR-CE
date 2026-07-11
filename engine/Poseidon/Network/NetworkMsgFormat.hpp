@@ -40,7 +40,6 @@ DEFINE_ENUM_END(TMError)
 	XX(FORMAT_CREATE, SetVoiceChannelMessage, SetVoiceChannel, "Set Voice Over Net channel (targets).", Chat) \
 	XX(FORMAT_CREATE, SetSpeakerMessage, SetSpeaker, "Set which unit is speaking using Voice Over Net.", Chat) \
 	XX(FORMAT_CREATE, MissionHeader, MissionHeader, "Description of selected mission.", Control) \
-	XX(FORMAT_CREATE, PlayerRole, PlayerSide, "<notused/> Obsolete.", Control) \
 	XX(FORMAT_CREATE, PlayerRole, PlayerRole, "Define attachment between players and his role in game.", Control) \
 	XX(FORMAT_CREATE, SelectPlayerMessage, SelectPlayer, "Assign player to unit.", Control) \
 	XX(FORMAT_CREATE, AttachPersonMessage, AttachPerson, "Attach body (instance of class Person) and brain (instance of class AIUnit).", Control) \
@@ -168,7 +167,10 @@ DEFINE_ENUM_END(TMError)
 	XX(FORMAT_SIMPLE, Dummy, AskForAnimationPhase, "Ask vehicle for user defined animation.", Ask) \
 	XX(FORMAT_SIMPLE, Dummy, IncomingMissile, "Transfer message about fired missile to other clients.", Broadcast) \
 	XX(FORMAT_SIMPLE, Dummy, PublicExec, "Transfers command to exec.", Broadcast) \
-	XX(FORMAT_SIMPLE, Dummy, RemoteExec, "Targeted remote code execution with JIP support.", Broadcast)
+	XX(FORMAT_SIMPLE, Dummy, RemoteExec, "Targeted remote code execution with JIP support.", Broadcast) \
+	XX(FORMAT_CREATE, ArcadeMarkerInfo, Marker, "<embedded/> Marker in map.", Chat) \
+	XX(FORMAT_CREATE, ArcadeEffects, Effects, "<embedded/> Camera and title effects.", Create) \
+	XX(FORMAT_UPDATE, UpdateEntityAIWeaponsMessage, UpdateEntityAIWeapons, "<embedded/> Update of weapons and magazines.", Update)
 
 #define NMT_DEFINE_ENUM(macro, class, name, description, group) NMT##name,
 
@@ -230,8 +232,7 @@ REGISTER_NDT(AutoArray<RStringIB>,NDTStringArray)
 REGISTER_NDT(StaticArrayAuto<float>,NDTFloatArray)
 
 // Types of items compression
-enum NetworkCompressionType
-{
+DEFINE_ENUM_BEG(NetworkCompressionType)
 	NCTNone,
 	NCTSmallUnsigned, // special compression for unsigned int
 	NCTSmallSigned, // special compression for signed int
@@ -252,15 +253,7 @@ enum NetworkCompressionType
 	NCTVectorPosition,
 	// matrix orienttaion - matrix is assumed orthogonal
 	NCTMatrixOrientation,
-};
-
-struct NetworkMessageFormatItem;
-
-// Interface for class encapsulates value of basic message items types
-struct NetworkData : public RefCount
-{
-	// all fucntionality moved to RefNetworkData
-};
+DEFINE_ENUM_END(NetworkCompressionType)
 
 // Class encapsulates value of basic message items types
 template <class Type>
@@ -292,34 +285,10 @@ DEFINE_ENUM_BEG(NetworkMessageErrorType)
 	// number of items in second array, not contained in first array
 	ET_NOT_CONTAIN_COUNT,
 	// specialized entity position packed
-	ET_UPD_ENTITY_POS,
-	// specialized man position packed
-	ET_UPD_MAN_POS,
-	// specialized magazines difference
 	ET_MAGAZINES,
 	// difference of derivations (role of time is incorporated)
 	ET_DER_DIF,
 DEFINE_ENUM_END(NetworkMessageErrorType)
-
-// Class intended to optimization Ref<NetworkData> pointer overhead
-// note: No optimizaton implemented yet
-// Rules: classes derived from RefNetworkData
-// must have same size as RefNetworkData. No data members and no virtual functions
-// can be added, because RefNetworkData is used for direct assignement
-// using operator =.
-
-class RefNetworkData
-{
-	protected:
-	Ref<NetworkData> _data;
-
-	public:
-
-	// Calculate difference from other item with the same type
-	float CalculateError(NetworkMessageErrorType type, const RefNetworkData &value2, NetworkMessageFormatItem &item, float dt) const;
-	// Calculate size of serialized and compressed value
-	int CalculateSize(NetworkCompressionType compression, const NetworkMessageFormatItem &item) const;
-};
 
 class RefNetworkDataNull: public RefNetworkData
 {
@@ -482,25 +451,6 @@ struct EncodedMatrix3
 	// decode columns of 3x3 matrix
 	Vector3 DirectionUp() const;
 	Vector3 Direction() const;
-};
-
-// Entity update position submessage (behave as single format item)
-struct NetworkUpdEntityPos
-{
-	EncodedMatrix3 orientation;
-	Vector3 position;
-	Vector3 speed;
-	Vector3 angMomentum;
-};
-
-// Man update position submessage (behave as single format item)
-struct NetworkUpdManPos
-{
-	// 8b encoded, assumed in range -PI,+PI
-	char gunXRotWantedC;
-	char gunYRotWantedC;
-	char headXRotWantedC;
-	char headYRotWantedC;
 };
 
 // encode angle in range -PI to +PI to 8b represetation

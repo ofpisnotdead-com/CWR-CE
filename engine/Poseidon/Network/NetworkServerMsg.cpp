@@ -273,7 +273,10 @@ void NetworkServer::OnCreatePlayer(int player, bool botClient, const char* name)
         }
     }
 
-    PlayerMessage msg(player, pInfo->name, server);
+    PlayerMessage msg;
+    msg._player = player;
+    msg._name = pInfo->name;
+    msg._server = server;
     SendMsg(player, &msg, NMFGuaranteed);
 
     // JIP: send current server state so client knows to show role selection
@@ -706,9 +709,9 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
         if (_state == NGSPlay)
         {
             NetworkCommandMessage msg;
-            msg.type = NCMTMissionTimeElapsed;
+            msg._type = NCMTMissionTimeElapsed;
             int timeElapsed = GlobalTickCount() - _missionHeader.start;
-            msg.content.Write(&timeElapsed, sizeof(timeElapsed));
+            msg._content.Write(&timeElapsed, sizeof(timeElapsed));
             SendMsg(info->dpid, &msg, NMFGuaranteed);
         }
     }
@@ -776,7 +779,7 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
     if (_state == NGSCreate && _mission.GetLength() == 1 && _mission[0] == '?')
     {
         NetworkCommandMessage answer;
-        answer.type = NCMTVoteMission;
+        answer._type = NCMTVoteMission;
         AddMissionList(answer);
         SendMsg(identity.dpnid, &answer, NMFGuaranteed);
     }
@@ -785,8 +788,8 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
 void NetworkServer::SetPlayerState(int dpid, NetworkGameState state)
 {
     PlayerStateMessage ps;
-    ps.player = dpid;
-    ps.state = state;
+    ps._player = dpid;
+    ps._state = state;
     for (int i = 0; i < _players.Size(); i++)
     {
         SendMsg(_players[i].dpid, &ps, NMFGuaranteed);

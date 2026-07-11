@@ -662,84 +662,43 @@ LSError ArcadeMarkerInfo::Serialize(ParamArchive& ar)
     return LSOK;
 }
 
-class IndicesMarker
-{
-  public:
-    int position;
-    int name;
-    int text;
-    int markerType;
-    int type;
-    int colorName;
-    int fillName;
-    int a;
-    int b;
-    int angle;
+DEFINE_NETWORK_OBJECT_SIMPLE(ArcadeMarkerInfo, Marker)
 
-    IndicesMarker();
-    void Scan(NetworkMessageFormatBase* format);
-};
+#define MARKER_MSG(XX)                                                                                              \
+    XX(Vector3, position, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Marker position"), IdxTransfer)    \
+    XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Marker (unique) name"), IdxTransfer)      \
+    XX(RString, text, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Marker title"), IdxTransfer)              \
+    XX(int, markerType, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, MTIcon),                                        \
+       DOC_MSG("Marker type (icon, rectangle, ellipse)"), IdxTransfer)                                              \
+    XX(RString, type, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Marker icon"), IdxTransfer)               \
+    XX(RString, colorName, NDTString, NCTNone, DEFVALUE(RString, "Default"), DOC_MSG("Marker color name"),          \
+       IdxTransfer)                                                                                                 \
+    XX(RString, fillName, NDTString, NCTNone, DEFVALUE(RString, "Solid"), DOC_MSG("Marker fill name"), IdxTransfer) \
+    XX(float, a, NDTFloat, NCTNone, DEFVALUE(float, 1.0f), DOC_MSG("Width"), IdxTransfer)                           \
+    XX(float, b, NDTFloat, NCTNone, DEFVALUE(float, 1.0f), DOC_MSG("Height"), IdxTransfer)                          \
+    XX(float, angle, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Rotation"), IdxTransfer)
 
-IndicesMarker::IndicesMarker()
-{
-    position = -1;
-    name = -1;
-    text = -1;
-    markerType = -1;
-    type = -1;
-    colorName = -1;
-    fillName = -1;
-    a = -1;
-    b = -1;
-    angle = -1;
-}
-
-void IndicesMarker::Scan(NetworkMessageFormatBase* format)
-{
-    SCAN(position)
-    SCAN(name) SCAN(text) SCAN(markerType) SCAN(type) SCAN(colorName) SCAN(fillName) SCAN(a) SCAN(b) SCAN(angle)
-}
+DECLARE_NET_INDICES(Marker, MARKER_MSG)
+DEFINE_NET_INDICES(Marker, MARKER_MSG)
 
 } // namespace Poseidon
-IndicesMarker* GetIndicesMarker()
-{
-    using namespace Poseidon;
-    return new IndicesMarker();
-}
-void DeleteIndicesMarker(IndicesMarker* marker)
-{
-    using namespace Poseidon;
-    delete marker;
-}
+
+DEFINE_GET_INDICES(Marker)
+
 namespace Poseidon
 {
 
-} // namespace Poseidon
-void ScanIndicesMarker(IndicesMarker* marker, NetworkMessageFormatBase* format)
+NetworkMessageFormat& ArcadeMarkerInfo::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    using namespace Poseidon;
-    marker->Scan(format);
-}
-namespace Poseidon
-{
-
-void ArcadeMarkerInfo::CreateFormat(NetworkMessageFormat& format)
-{
-    format.Add("position", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Marker position"));
-    format.Add("name", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Marker (unique) name"));
-    format.Add("text", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Marker title"));
-    format.Add("markerType", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, MTIcon),
-               DOC_MSG("Marker type (icon, rectangle, ellipse)"));
-    format.Add("type", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Marker icon"));
-    format.Add("colorName", NDTString, NCTNone, DEFVALUE(RString, "Default"), DOC_MSG("Marker color name"));
-    format.Add("fillName", NDTString, NCTNone, DEFVALUE(RString, "Solid"), DOC_MSG("Marker fill name"));
-    format.Add("a", NDTFloat, NCTNone, DEFVALUE(float, 1.0f), DOC_MSG("Width"));
-    format.Add("b", NDTFloat, NCTNone, DEFVALUE(float, 1.0f), DOC_MSG("Height"));
-    format.Add("angle", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Rotation"));
+    MARKER_MSG(MSG_FORMAT)
+    return format;
 }
 
-TMError ArcadeMarkerInfo::TransferMsg(NetworkMessageContext& ctx, IndicesMarker* indices)
+TMError ArcadeMarkerInfo::TransferMsg(NetworkMessageContext& ctx)
 {
+    PoseidonAssert(dynamic_cast<const IndicesMarker*>(ctx.GetIndices())) const IndicesMarker* indices =
+        static_cast<const IndicesMarker*>(ctx.GetIndices());
+
     TMCHECK(ctx.IdxTransfer(indices->position, position))
     TMCHECK(ctx.IdxTransfer(indices->name, name))
     TMCHECK(ctx.IdxTransfer(indices->text, text))
@@ -900,92 +859,45 @@ LSError ArcadeEffects::WorldSerialize(ParamArchive& ar)
     return LSOK;
 }
 
-class IndicesEffects
-{
-  public:
-    int condition;
-    int cameraEffect;
-    int cameraPosition;
-    int sound;
-    int voice;
-    int soundEnv;
-    int soundDet;
-    int track;
-    int titleType;
-    int titleEffect;
-    int title;
+#define EFFECTS_MSG(XX)                                                                                              \
+    XX(RString, condition, NDTString, NCTNone, DEFVALUE(RString, "true"),                                            \
+       DOC_MSG("Condition when effect is performed"), IdxTransfer)                                                   \
+    XX(RString, cameraEffect, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Camera effect name"), IdxTransfer) \
+    XX(int, cameraPosition, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, CamEffectBack),                              \
+       DOC_MSG("Camera effect position"), IdxTransfer)                                                               \
+    XX(RString, sound, NDTString, NCTNone, DEFVALUE(RString, "$NONE$"), DOC_MSG("Sound effect (2D)"), IdxTransfer)   \
+    XX(RString, voice, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Sound effect (3D)"), IdxTransfer)         \
+    XX(RString, soundEnv, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Enviromental sound effect"),           \
+       IdxTransfer)                                                                                                  \
+    XX(RString, soundDet, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Detector sound effect"), IdxTransfer)  \
+    XX(RString, track, NDTString, NCTNone, DEFVALUE(RString, "$NONE$"), DOC_MSG("Musical track"), IdxTransfer)       \
+    XX(int, titleType, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, TitleNone),                                       \
+       DOC_MSG("Type of title effect (text, object, resource)"), IdxTransfer)                                        \
+    XX(int, titleEffect, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, TitPlain),                                      \
+       DOC_MSG("Type (placement) of text title effect"), IdxTransfer)                                                \
+    XX(RString, title, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Content of title effect"), IdxTransfer)
 
-    IndicesEffects();
-    void Scan(NetworkMessageFormatBase* format);
-};
-
-IndicesEffects::IndicesEffects()
-{
-    condition = -1;
-    cameraEffect = -1;
-    cameraPosition = -1;
-    sound = -1;
-    voice = -1;
-    soundEnv = -1;
-    soundDet = -1;
-    track = -1;
-    titleType = -1;
-    titleEffect = -1;
-    title = -1;
-}
-
-void IndicesEffects::Scan(NetworkMessageFormatBase* format)
-{
-    SCAN(condition)
-    SCAN(cameraEffect)
-    SCAN(cameraPosition)
-    SCAN(sound) SCAN(voice) SCAN(soundEnv) SCAN(soundDet) SCAN(track) SCAN(titleType) SCAN(titleEffect) SCAN(title)
-}
+DECLARE_NET_INDICES(Effects, EFFECTS_MSG)
+DEFINE_NET_INDICES(Effects, EFFECTS_MSG)
 
 } // namespace Poseidon
-IndicesEffects* GetIndicesEffects()
-{
-    using namespace Poseidon;
-    return new IndicesEffects();
-}
-void DeleteIndicesEffects(IndicesEffects* effects)
-{
-    using namespace Poseidon;
-    delete effects;
-}
+
+DEFINE_GET_INDICES(Effects)
+
 namespace Poseidon
 {
 
-} // namespace Poseidon
-void ScanIndicesEffects(IndicesEffects* effects, NetworkMessageFormatBase* format)
+NetworkMessageFormat& ArcadeEffects::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    using namespace Poseidon;
-    effects->Scan(format);
-}
-namespace Poseidon
-{
-
-void ArcadeEffects::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
-{
-    format.Add("condition", NDTString, NCTNone, DEFVALUE(RString, "true"),
-               DOC_MSG("Condition when effect is performed"));
-    format.Add("cameraEffect", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Camera effect name"));
-    format.Add("cameraPosition", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, CamEffectBack),
-               DOC_MSG("Camera effect position"));
-    format.Add("sound", NDTString, NCTNone, DEFVALUE(RString, "$NONE$"), DOC_MSG("Sound effect (2D)"));
-    format.Add("voice", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Sound effect (3D)"));
-    format.Add("soundEnv", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Enviromental sound effect"));
-    format.Add("soundDet", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Detector sound effect"));
-    format.Add("track", NDTString, NCTNone, DEFVALUE(RString, "$NONE$"), DOC_MSG("Musical track"));
-    format.Add("titleType", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, TitleNone),
-               DOC_MSG("Type of title effect (text, object, resource)"));
-    format.Add("titleEffect", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, TitPlain),
-               DOC_MSG("Type (placement) of text title effect"));
-    format.Add("title", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Content of title effect"));
+    EFFECTS_MSG(MSG_FORMAT)
+    return format;
 }
 
-TMError ArcadeEffects::TransferMsg(NetworkMessageContext& ctx, IndicesEffects* indices)
+TMError ArcadeEffects::TransferMsg(NetworkMessageContext& ctx)
 {
+    AI_ERROR(dynamic_cast<const IndicesEffects*>(ctx.GetIndices()))
+    const IndicesEffects* indices = static_cast<const IndicesEffects*>(ctx.GetIndices());
+
     TMCHECK(ctx.IdxTransfer(indices->condition, condition));
     TMCHECK(ctx.IdxTransfer(indices->cameraEffect, cameraEffect));
     TMCHECK(ctx.IdxTransfer(indices->cameraPosition, (int&)cameraPosition));
@@ -1200,127 +1112,50 @@ LSError WaypointInfo::Serialize(ParamArchive& ar)
     return LSOK;
 }
 
-class IndicesWaypoint : public NetworkMessageIndices
-{
-  public:
-    int position;
-    int placement;
-    int id;
-    int idStatic;
-    int housePos;
-    int type;
-    int combatMode;
-    int formation;
-    int speed;
-    int combat;
-    int timeoutMin;
-    int timeoutMid;
-    int timeoutMax;
-    int description;
-    int expCond;
-    int expActiv;
-    int script;
-    int showWP;
-    int synchronizations;
-    IndicesEffects* effects;
+#define WAYPOINT_MSG(XX)                                                                                               \
+    XX(Vector3, position, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Waypoint position"), IdxTransfer)     \
+    XX(float, placement, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Radius for random placement of waypoint"),    \
+       IdxTransfer)                                                                                                    \
+    XX(int, id, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("ID of attached vehicle"), IdxTransfer)         \
+    XX(int, idStatic, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("ID of attached static object"),          \
+       IdxTransfer)                                                                                                    \
+    XX(int, housePos, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Waypoint position in house"),            \
+       IdxTransfer)                                                                                                    \
+    XX(int, type, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ACMOVE), DOC_MSG("Waypoint type"), IdxTransfer)          \
+    XX(int, combatMode, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Group combat mode"), IdxTransfer)      \
+    XX(int, formation, NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Group formation"), IdxTransfer)         \
+    XX(int, speed, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, SpeedUnchanged), DOC_MSG("Group speed"), IdxTransfer)   \
+    XX(int, combat, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, CMUnchanged), DOC_MSG("Group behaviour"), IdxTransfer) \
+    XX(float, timeoutMin, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Waypoint timeout"), IdxTransfer)             \
+    XX(float, timeoutMid, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Waypoint timeout"), IdxTransfer)             \
+    XX(float, timeoutMax, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Waypoint timeout"), IdxTransfer)             \
+    XX(RString, description, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Waypoint description"), IdxTransfer)  \
+    XX(RString, expCond, NDTString, NCTNone, DEFVALUE(RString, "true"),                                                \
+       DOC_MSG("Condition for activation of waypoint"), IdxTransfer)                                                   \
+    XX(RString, expActiv, NDTString, NCTNone, DEFVALUE(RString, ""),                                                   \
+       DOC_MSG("Statement processed when waypoint is activated"), IdxTransfer)                                         \
+    XX(RString, script, NDTString, NCTNone, DEFVALUE(RString, ""),                                                     \
+       DOC_MSG("Controling script for scripted waypoints"), IdxTransfer)                                               \
+    XX(int, showWP, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ShowEasy), DOC_MSG("When waypoint is shown in map"),   \
+       IdxTransfer)                                                                                                    \
+    XX(AutoArray<int>, synchronizations, NDTIntArray, NCTSmallUnsigned, DEFVALUEINTARRAY,                              \
+       DOC_MSG("List of synchronizations"), IdxTransferArray)                                                          \
+    XX(ArcadeEffects, effects, NDTObject, NCTNone, DEFVALUE_MSG(NMTEffects), DOC_MSG("Camera and title effects"),      \
+       IdxTransferObject)
 
-    IndicesWaypoint();
-    ~IndicesWaypoint() override;
-    NetworkMessageIndices* Clone() const override { return new IndicesWaypoint; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesWaypoint::IndicesWaypoint()
-{
-    position = -1;
-    placement = -1;
-    id = -1;
-    idStatic = -1;
-    housePos = -1;
-    type = -1;
-    combatMode = -1;
-    formation = -1;
-    speed = -1;
-    combat = -1;
-    timeoutMin = -1;
-    timeoutMid = -1;
-    timeoutMax = -1;
-    description = -1;
-    expCond = -1;
-    expActiv = -1;
-    script = -1;
-    showWP = -1;
-    synchronizations = -1;
-
-    effects = GetIndicesEffects();
-}
-
-IndicesWaypoint::~IndicesWaypoint()
-{
-    DeleteIndicesEffects(effects);
-}
-
-void IndicesWaypoint::Scan(NetworkMessageFormatBase* format)
-{
-    SCAN(position)
-    SCAN(placement)
-    SCAN(id)
-    SCAN(idStatic)
-    SCAN(housePos)
-    SCAN(type)
-    SCAN(combatMode)
-    SCAN(formation)
-    SCAN(speed)
-    SCAN(combat)
-    SCAN(timeoutMin)
-    SCAN(timeoutMid)
-    SCAN(timeoutMax)
-    SCAN(description)
-    SCAN(expCond)
-    SCAN(expActiv)
-    SCAN(script)
-    SCAN(showWP)
-    SCAN(synchronizations)
-
-    ScanIndicesEffects(effects, format);
-}
+DECLARE_NET_INDICES(Waypoint, WAYPOINT_MSG)
+DEFINE_NET_INDICES(Waypoint, WAYPOINT_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesWaypoint()
-{
-    using namespace Poseidon;
-    return new IndicesWaypoint();
-}
+
+DEFINE_GET_INDICES(Waypoint)
+
 namespace Poseidon
 {
 
 NetworkMessageFormat& ArcadeWaypointInfo::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("position", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Waypoint position"));
-    format.Add("placement", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Radius for random placement of waypoint"));
-    format.Add("id", NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("ID of attached vehicle"));
-    format.Add("idStatic", NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("ID of attached static object"));
-    format.Add("housePos", NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Waypoint position in house"));
-    format.Add("type", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ACMOVE), DOC_MSG("Waypoint type"));
-    format.Add("combatMode", NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Group combat mode"));
-    format.Add("formation", NDTInteger, NCTSmallSigned, DEFVALUE(int, -1), DOC_MSG("Group formation"));
-    format.Add("speed", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, SpeedUnchanged), DOC_MSG("Group speed"));
-    format.Add("combat", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, CMUnchanged), DOC_MSG("Group behaviour"));
-    format.Add("timeoutMin", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Waypoint timeout"));
-    format.Add("timeoutMid", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Waypoint timeout"));
-    format.Add("timeoutMax", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Waypoint timeout"));
-    format.Add("description", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Waypoint description"));
-    format.Add("expCond", NDTString, NCTNone, DEFVALUE(RString, "true"),
-               DOC_MSG("Condition for activation of waypoint"));
-    format.Add("expActiv", NDTString, NCTNone, DEFVALUE(RString, ""),
-               DOC_MSG("Statement processed when waypoint is activated"));
-    format.Add("script", NDTString, NCTNone, DEFVALUE(RString, ""),
-               DOC_MSG("Controling script for scripted waypoints"));
-    format.Add("showWP", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ShowEasy),
-               DOC_MSG("When waypoint is shown in map"));
-    format.Add("synchronizations", NDTIntArray, NCTSmallUnsigned, DEFVALUEINTARRAY,
-               DOC_MSG("List of synchronizations"));
-    ArcadeEffects::CreateFormat(cls, format);
+    WAYPOINT_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -1348,7 +1183,7 @@ TMError ArcadeWaypointInfo::TransferMsg(NetworkMessageContext& ctx)
     TMCHECK(ctx.IdxTransfer(indices->script, script))
     TMCHECK(ctx.IdxTransfer(indices->showWP, (int&)showWP))
     TMCHECK(ctx.IdxTransfer(indices->synchronizations, synchronizations))
-    TMCHECK(effects.TransferMsg(ctx, indices->effects))
+    TMCHECK(ctx.IdxTransferObject(indices->effects, effects))
     return TMOK;
 }
 

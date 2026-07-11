@@ -1,9 +1,6 @@
 #pragma once
 
 #include <Poseidon/Network/Network.hpp>
-namespace Poseidon { class IndicesMarker; }
-using Poseidon::IndicesMarker;
-
 class SimpleStream : public AutoArray<char>
 {
 protected:
@@ -80,436 +77,70 @@ enum NetworkCommandMessageType
 	NCMTUnban,
 };
 
-// Message for transfer of Network Command
-struct NetworkCommandMessage : public NetworkSimpleObject
-{
-	// type of command
-	NetworkCommandMessageType type;
-	// parameters of command
-	SimpleStream content;
+#define NETWORK_COMMAND_MSG(XX) \
+        XX(int, type, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Type of command"), IdxTransfer) \
+        XX(SimpleStream, content, NDTRawData, NCTNone, DEFVALUERAWDATA, DOC_MSG("Parameters of command"), IdxTransfer)
 
-	NetworkMessageType GetNMType(NetworkMessageClass cls) const override {return NMTNetworkCommand;}
-	static NetworkMessageFormat &CreateFormat
-	(
-		NetworkMessageClass cls,
-		NetworkMessageFormat &format
-	);
-	TMError TransferMsg(NetworkMessageContext &ctx) override;
-};
+DECLARE_NET_MESSAGE(NetworkCommand, NETWORK_COMMAND_MSG)
 
-// network message indices for PlayerRole class
-class IndicesPlayerRole : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int index;
-	int side;
-	int group;
-	int unit;
-	int vehicle;
-	int position;
-	int leader;
-	int roleLocked;
-	int player;
+#define PLAYER_ROLE_MSG(XX) \
+	XX(int, index, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Index of role"), IdxTransfer) \
+	XX(int, side, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Side of role"), IdxTransfer) \
+	XX(int, group, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Group ID of role"), IdxTransfer) \
+	XX(int, unit, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Unit ID of role"), IdxTransfer) \
+	XX(RString, vehicle, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Vehicle used by this role"), IdxTransfer) \
+	XX(int, position, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Position in vehicle (driver, commander, ...)"), IdxTransfer) \
+	XX(bool, leader, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Is this unit group leader"), IdxTransfer) \
+	XX(bool, roleLocked, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Role is locked (only admin can assign this role)"), IdxTransfer) \
+	XX(int, player, NDTInteger, NCTNone, DEFVALUE(int, AI_PLAYER), DOC_MSG("Currently attached player"), IdxTransfer)
 
-	IndicesPlayerRole();
-	NetworkMessageIndices *Clone() const override {return new IndicesPlayerRole;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_MESSAGE(PlayerRole, PLAYER_ROLE_MSG)
 
-// network message indices for PlayerIdentity class
-class IndicesPlayerUpdate : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int dpnid;
-	int minPing,avgPing,maxPing;
-	int minBandwidth,avgBandwidth,maxBandwidth;
-	int desync;
-	int rights;
+#define LOGIN_MSG(XX) \
+	XX(int, dpnid, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Client (player) ID"), IdxTransfer) \
+	XX(int, playerid, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("ID unique in session (shorter than dpnid)"), IdxTransfer) \
+	XX(RString, id, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Unique id of player (derivated from CD key)"), IdxTransfer) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Nick (short) name of player"), IdxTransfer) \
+	XX(RString, face, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Selected face"), IdxTransfer) \
+	XX(RString, glasses, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Selected glasses"), IdxTransfer) \
+	XX(RString, speaker, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Selected speaker"), IdxTransfer) \
+	XX(float, pitch, NDTFloat, NCTNone, DEFVALUE(float, 1.0f), DOC_MSG("Selected voice pitch"), IdxTransfer) \
+	XX(RString, squad, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("unique id (URL) of squad"), IdxTransfer) \
+	XX(RString, fullname, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Full name of player"), IdxTransfer) \
+	XX(RString, email, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("E-mail of player"), IdxTransfer) \
+	XX(RString, icq, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("ICQ of player"), IdxTransfer) \
+	XX(RString, remark, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Remark about player"), IdxTransfer) \
+	XX(int, state, NDTInteger, NCTNone, DEFVALUE(int, NGSNone), DOC_MSG("State of player's network client"), IdxTransfer) \
+	XX(int, version, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Version player is using"), IdxTransfer)
 
-	IndicesPlayerUpdate();
-	NetworkMessageIndices *Clone() const override {return new IndicesPlayerUpdate;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES(Login, LOGIN_MSG)
 
-// network message indices for AttachPersonMessage class
-class IndicesAttachPerson : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int person;
-	int unit;
+#define PLAYER_UPDATE_MSG(XX) \
+	XX(int, dpnid, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Client (player) ID"), IdxTransfer) \
+	XX(int, minPing, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 10), DOC_MSG("Ping range estimation"), IdxTransfer) \
+	XX(int, avgPing, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 100), DOC_MSG("Ping range estimation"), IdxTransfer) \
+	XX(int, maxPing, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 1000), DOC_MSG("Ping range estimation"), IdxTransfer) \
+	XX(int, minBandwidth, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 2), DOC_MSG("Bandwidth estimation (in kbps)"), IdxTransfer) \
+	XX(int, avgBandwidth, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 14), DOC_MSG("Bandwidth estimation (in kbps)"), IdxTransfer) \
+	XX(int, maxBandwidth, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 28), DOC_MSG("Bandwidth estimation (in kbps)"), IdxTransfer) \
+	XX(int, desync, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Current desync level (max. error of unsent messages)"), IdxTransfer) \
+	XX(int, rights, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Special rights of given player"), IdxTransfer)
 
-	IndicesAttachPerson();
-	NetworkMessageIndices *Clone() const override {return new IndicesAttachPerson;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES(PlayerUpdate, PLAYER_UPDATE_MSG)
 
-// network message indices for AskForDammageMessage class
-class IndicesAskForDammage : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int who;
-	int owner;
-	int modelPos;
-	int val;
-	int valRange;
-	int ammo;
+#define SQUAD_MSG(XX) \
+	XX(RString, id, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Unique id of squad (URL of XML page)"), IdxTransfer) \
+	XX(RString, nick, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Nick (short) name of squad"), IdxTransfer) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Full name of squad"), IdxTransfer) \
+	XX(RString, email, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("E-mail of squad administrator"), IdxTransfer) \
+	XX(RString, web, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Web page of squad"), IdxTransfer) \
+	XX(RString, picture, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Picture of squad (shown on vehicles)"), IdxTransfer) \
+	XX(RString, title, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Title of squad (shown on vehicles)"), IdxTransfer)
 
-	IndicesAskForDammage();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForDammage;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_MESSAGE(Squad, SQUAD_MSG)
 
-// network message indices for AskForSetDammageMessage class
-class IndicesAskForSetDammage : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int who;
-	int dammage;
+#define UPDATE_WEAPONS_MSG(XX) \
+	XX(OLink<EntityAI>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Vehicle to update"), IdxTransferRef) \
+	XX(UpdateEntityAIWeaponsMessage, weapons, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateEntityAIWeapons), DOC_MSG("Weapons and magazines"), IdxTransferContent)
 
-	IndicesAskForSetDammage();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForSetDammage;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForGetInMessage class
-class IndicesAskForGetIn : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int soldier;
-	int vehicle;
-	int position;
-
-	IndicesAskForGetIn();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForGetIn;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForGetOutMessage class
-class IndicesAskForGetOut : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int soldier;
-	int vehicle;
-	int parachute;
-
-	IndicesAskForGetOut();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForGetOut;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForChangePositionMessage class
-class IndicesAskForChangePosition : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int soldier;
-	int vehicle;
-	int type;
-
-	IndicesAskForChangePosition();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForChangePosition;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForAimWeaponMessage class
-class IndicesAskForAimWeapon : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int weapon;
-	int dir;
-
-	IndicesAskForAimWeapon();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForAimWeapon;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForAimObserverMessage class
-class IndicesAskForAimObserver : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int dir;
-
-	IndicesAskForAimObserver();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForAimObserver;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForSelectWeaponMessage class
-class IndicesAskForSelectWeapon : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int weapon;
-
-	IndicesAskForSelectWeapon();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForSelectWeapon;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForAddImpulseMessage class
-class IndicesAskForAddImpulse : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int force;
-	int torque;
-
-	IndicesAskForAddImpulse();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForAddImpulse;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForAmmoMessage class
-class IndicesAskForAmmo : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int weapon;
-	int burst;
-
-	IndicesAskForAmmo();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForAmmo;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForMoveVectorMessage class
-class IndicesAskForMoveVector : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int pos;
-
-	IndicesAskForMoveVector();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForMoveVector;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForMoveMatrixMessage class
-class IndicesAskForMoveMatrix : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int pos;
-	int orient;
-
-	IndicesAskForMoveMatrix();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForMoveMatrix;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForJoinGroupMessage class
-class IndicesAskForJoinGroup : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int join;
-	int group;
-
-	IndicesAskForJoinGroup();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForJoinGroup;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForJoinUnitsMessage class
-class IndicesAskForJoinUnits : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int join;
-	int units;
-
-	IndicesAskForJoinUnits();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForJoinUnits;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for AskForHideBodyMessage class
-class IndicesAskForHideBody : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-
-	IndicesAskForHideBody();
-	NetworkMessageIndices *Clone() const override {return new IndicesAskForHideBody;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-namespace Poseidon { class IndicesUpdateEntityAIWeapons; }
-using Poseidon::IndicesUpdateEntityAIWeapons;
-
-// network message indices for UpdateWeaponsMessage class
-class IndicesUpdateWeapons : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	// indices of fields in message format
-	IndicesUpdateEntityAIWeapons *weapons;
-
-	IndicesUpdateWeapons();
-	~IndicesUpdateWeapons() override;
-	NetworkMessageIndices *Clone() const override {return new IndicesUpdateWeapons;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for SetFlagOwnerMessage and SetFlagCarrierMessage classes
-class IndicesSetFlagOwner : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int owner;
-	int carrier;
-
-	IndicesSetFlagOwner();
-	NetworkMessageIndices *Clone() const override {return new IndicesSetFlagOwner;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for DeleteObjectMessage class
-class IndicesDeleteObject : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int creator;
-	int id;
-
-	IndicesDeleteObject();
-	NetworkMessageIndices *Clone() const override {return new IndicesDeleteObject;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for DeleteCommandMessage class
-class IndicesDeleteCommand : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int creator;
-	int id;
-	int subgrp;
-	int index;
-
-	IndicesDeleteCommand();
-	NetworkMessageIndices *Clone() const override {return new IndicesDeleteCommand;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for ChatMessage class
-class IndicesChat : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int channel;
-	int sender;
-	int units;
-	int name;
-	int text;
-
-	IndicesChat();
-	NetworkMessageIndices *Clone() const override {return new IndicesChat;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for RadioChatMessage class
-class IndicesRadioChat : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int channel;
-	int sender;
-	int units;
-	int text;
-	int sentence;
-
-	IndicesRadioChat();
-	NetworkMessageIndices *Clone() const override {return new IndicesRadioChat;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for RadioChatWaveMessage class
-class IndicesRadioChatWave : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int channel;
-	int units;
-	int wave;
-	int sender;
-	int senderName;
-
-	IndicesRadioChatWave();
-	NetworkMessageIndices *Clone() const override {return new IndicesRadioChatWave;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for SetVoiceChannelMessage class
-class IndicesSetVoiceChannel : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int channel;
-	int units;
-
-	IndicesSetVoiceChannel();
-	NetworkMessageIndices *Clone() const override {return new IndicesSetVoiceChannel;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for MarkerCreateMessage class
-class IndicesMarkerCreate : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int channel;
-	int sender;
-	int units;
-	IndicesMarker *marker;
-
-	IndicesMarkerCreate();
-	~IndicesMarkerCreate() override;
-	NetworkMessageIndices *Clone() const override {return new IndicesMarkerCreate;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for ShowTargetMessage class
-class IndicesShowTarget : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int target;
-
-	IndicesShowTarget();
-	NetworkMessageIndices *Clone() const override {return new IndicesShowTarget;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
-// network message indices for ShowGroupDirMessage class
-class IndicesShowGroupDir : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int vehicle;
-	int dir;
-
-	IndicesShowGroupDir();
-	NetworkMessageIndices *Clone() const override {return new IndicesShowGroupDir;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
-
+DECLARE_NET_INDICES(UpdateWeapons, UPDATE_WEAPONS_MSG)

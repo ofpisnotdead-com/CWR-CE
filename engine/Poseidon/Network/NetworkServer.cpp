@@ -673,7 +673,7 @@ void AddMissionList(NetworkCommandMessage& answer)
             return;
         }
         added.emplace_back(name);
-        answer.content.WriteString(name);
+        answer._content.WriteString(name);
         LOG_DEBUG(Network, "MP mission discovered: name={} type={} path={}", name, type, sourcePath);
     };
 
@@ -717,7 +717,7 @@ void AddMissionList(NetworkCommandMessage& answer)
         }
     }
     LOG_DEBUG(Network, "MP mission scan complete: {} templates", added.size());
-    answer.content.WriteString("");
+    answer._content.WriteString("");
 }
 
 void NetworkServer::ApplyVoting(const AutoArray<char>& id, const AutoArray<char>* value)
@@ -754,7 +754,7 @@ void NetworkServer::ApplyVoting(const AutoArray<char>& id, const AutoArray<char>
                 SetGameState(NGSCreate);
             }
             NetworkCommandMessage answer;
-            answer.type = NCMTVoteMission;
+            answer._type = NCMTVoteMission;
             AddMissionList(answer);
             for (int i = 0; i < _identities.Size(); i++)
             {
@@ -834,14 +834,14 @@ void NetworkServer::ApplyVoting(const AutoArray<char>& id, const AutoArray<char>
                     _votings.Clear();
 
                     NetworkCommandMessage answer;
-                    answer.type = NCMTLogged;
-                    answer.content.Write(&_admin, sizeof(_admin));
+                    answer._type = NCMTLogged;
+                    answer._content.Write(&_admin, sizeof(_admin));
                     SendMsg(player, &answer, NMFGuaranteed);
 
                     if (_mission[0] == '?' && _mission[1] == 0)
                     {
                         NetworkCommandMessage answer;
-                        answer.type = NCMTVoteMission;
+                        answer._type = NCMTVoteMission;
                         AddMissionList(answer);
                         SendMsg(player, &answer, NMFGuaranteed);
                     }

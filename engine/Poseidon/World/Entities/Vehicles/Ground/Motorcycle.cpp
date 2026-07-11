@@ -2490,74 +2490,35 @@ NetworkMessageType Motorcycle::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesUpdateMotorcycle : public IndicesUpdateTankOrCar
-{
-    typedef IndicesUpdateTankOrCar base;
+#define UPDATE_MOTORCYCLE_MSG(XX)                                                                                     \
+    XX(RString, plateNumber, NDTString, NCTNone, DEFVALUE(RString, "XXXXXXXX"), DOC_MSG("Plate number"), IdxTransfer, \
+       ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR)                                                                            \
+    XX(float, thrustWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust"), IdxTransfer,      \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                              \
+    XX(float, turnWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted turning angle"), IdxTransfer, \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
-  public:
-    int plateNumber;
-    int thrustWanted;
-    int turnWanted;
-
-    IndicesUpdateMotorcycle();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateMotorcycle; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateMotorcycle::IndicesUpdateMotorcycle()
-{
-    plateNumber = -1;
-    thrustWanted = -1;
-    turnWanted = -1;
-}
-
-void IndicesUpdateMotorcycle::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(plateNumber)
-    SCAN(thrustWanted)
-    SCAN(turnWanted)
-}
+DECLARE_NET_INDICES_EX_ERR(UpdateMotorcycle, UpdateTankOrCar, UPDATE_MOTORCYCLE_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdateMotorcycle, UpdateTankOrCar, UPDATE_MOTORCYCLE_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateMotorcycle()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateMotorcycle();
-}
+
+DEFINE_GET_INDICES(UpdateMotorcycle)
+
 namespace Poseidon
 {
 
-class IndicesUpdatePositionMotorcycle : public IndicesUpdatePositionVehicle
-{
-    typedef IndicesUpdatePositionVehicle base;
+#define UPDATE_POSITION_MOTORCYCLE_MSG(XX)                                                                             \
+    XX(Turret, turret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Turret object"), IdxTransferObject, \
+       ET_ABS_DIF, 1)
 
-  public:
-    int turret;
-
-    IndicesUpdatePositionMotorcycle();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdatePositionMotorcycle; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdatePositionMotorcycle::IndicesUpdatePositionMotorcycle()
-{
-    turret = -1;
-}
-
-void IndicesUpdatePositionMotorcycle::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-    SCAN(turret)
-}
+DECLARE_NET_INDICES_EX_ERR(UpdatePositionMotorcycle, UpdatePositionVehicle, UPDATE_POSITION_MOTORCYCLE_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdatePositionMotorcycle, UpdatePositionVehicle, UPDATE_POSITION_MOTORCYCLE_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdatePositionMotorcycle()
-{
-    using namespace Poseidon;
-    return new IndicesUpdatePositionMotorcycle();
-}
+
+DEFINE_GET_INDICES(UpdatePositionMotorcycle)
+
 namespace Poseidon
 {
 
@@ -2567,17 +2528,11 @@ NetworkMessageFormat& Motorcycle::CreateFormat(NetworkMessageClass cls, NetworkM
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-            format.Add("plateNumber", NDTString, NCTNone, DEFVALUE(RString, "XXXXXXXX"), DOC_MSG("Plate number"),
-                       ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR);
-            format.Add("thrustWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted thrust"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("turnWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted turning angle"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
+            UPDATE_MOTORCYCLE_MSG(MSG_FORMAT_ERR)
             break;
         case NMCUpdatePosition:
             base::CreateFormat(cls, format);
-            format.Add("turret", NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Turret object"),
-                       ET_ABS_DIF, 1);
+            UPDATE_POSITION_MOTORCYCLE_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);

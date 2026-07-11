@@ -146,14 +146,10 @@ enum RadioMessageVehicleType
 
 RadioMessage *CreateVehicleMessage(int type);
 
-class IndicesVMessage : public NetworkMessageIndices
-{
-public:
-	int vehicle;
+#define V_MESSAGE_MSG(XX) \
+	XX(OLink<Transport>, vehicle, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("In vehicle"), IdxTransferRef)
 
-	IndicesVMessage();
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES(VMessage, V_MESSAGE_MSG)
 
 class RadioMessageWithTarget: public RadioMessage, public NetworkSimpleObject
 {
@@ -648,26 +644,21 @@ typedef TransportType VehicleTransportType;
 
 DECL_ENUM(LockState)
 
-class IndicesUpdateTransport : public IndicesUpdateVehicleSupply
-{
-	typedef IndicesUpdateVehicleSupply base;
+#define UPDATE_TRANSPORT_MSG(XX) \
+	XX(OLink<Person>, commander, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Commander (observer) person"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_STRUCTURE) \
+	XX(OLink<Person>, driver, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Driver person"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_STRUCTURE) \
+	XX(OLink<Person>, gunner, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Gunner person"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_STRUCTURE) \
+	XX(OLink<Person>, effCommander, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Currently commanding person"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_STRUCTURE) \
+	XX(RefArray<Person>, manCargo, NDTRefArray, NCTNone, DEFVALUEREFARRAY, DOC_MSG("Men in cargo space"), IdxTransferRefs, ET_NOT_EQUAL_COUNT, 0.5 * ERR_COEF_STRUCTURE) \
+	XX(TargetId, comFireTarget, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Fire target, selected by commander"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, lock, NDTInteger, NCTSmallSigned, DEFVALUE(int, LSDefault), DOC_MSG("Lock state"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(float, commanderHiddenWanted, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Wanted position of (tank) commander - inside / outside"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
+	XX(float, driverHiddenWanted, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Wanted position of (tank) driver - inside / outside"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
+	XX(float, gunnerHiddenWanted, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Wanted position of (tank) gunner - inside / outside"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_VALUE_MAJOR) \
+	XX(float, fuel, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Current amount of fuel"), IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MINOR) \
+	XX(bool, engineOff, NDTBool, NCTNone,  DEFVALUE(bool, false), DOC_MSG("Engine is off / on"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
 
-public:
-	int commander;
-	int driver;
-	int gunner;
-	int effCommander;
-	int manCargo;
-	int comFireTarget;
-	int lock;
-	int driverHiddenWanted;
-	int fuel;
-	int engineOff;
-
-	IndicesUpdateTransport();
-	NetworkMessageIndices *Clone() const override {return new IndicesUpdateTransport;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES_EX_ERR(UpdateTransport, UpdateVehicleSupply, UPDATE_TRANSPORT_MSG)
 
 class Transport: public VehicleSupply
 {

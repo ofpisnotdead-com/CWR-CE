@@ -2021,88 +2021,43 @@ NetworkMessageType AirplaneAuto::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesUpdateAirplane : public IndicesUpdateTransport
-{
-    typedef IndicesUpdateTransport base;
+#define UPDATE_AIRPLANE_MSG(XX)                                                                                        \
+    XX(int, pilotFlaps, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Position of flaps, wanted by pilot"), \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_MODE)                                                                         \
+    XX(bool, gearDammage, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Gear is damaged"), IdxTransfer,            \
+       ET_NOT_EQUAL, ERR_COEF_MODE)                                                                                    \
+    XX(bool, pilotGear, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Position of gear, wanted by pilot"),         \
+       IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
 
-  public:
-    int pilotFlaps;
-    int gearDammage;
-    int pilotGear;
-
-    IndicesUpdateAirplane();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateAirplane; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateAirplane::IndicesUpdateAirplane()
-{
-    pilotFlaps = -1;
-
-    gearDammage = -1;
-    pilotGear = -1;
-}
-
-void IndicesUpdateAirplane::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(pilotFlaps);
-
-    SCAN(gearDammage);
-    SCAN(pilotGear);
-}
+DECLARE_NET_INDICES_EX_ERR(UpdateAirplane, UpdateTransport, UPDATE_AIRPLANE_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdateAirplane, UpdateTransport, UPDATE_AIRPLANE_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateAirplane()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateAirplane();
-}
+
+DEFINE_GET_INDICES(UpdateAirplane)
+
 namespace Poseidon
 {
 
-class IndicesUpdatePositionAirplane : public IndicesUpdatePositionVehicle
-{
-    typedef IndicesUpdatePositionVehicle base;
+#define UPDATE_POSITION_AIRPLANE_MSG(XX)                                                                              \
+    XX(float, thrustWanted, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Wanted engine thrust"), IdxTransfer, \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                              \
+    XX(float, elevatorWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted elevator position"),      \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                 \
+    XX(float, rudderWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted rudder position"),          \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                 \
+    XX(float, aileronWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted aileron position"),        \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                 \
+    XX(float, pilotBrake, NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("State of brake, wanted by pilot"),     \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
-  public:
-    int thrustWanted;
-    int elevatorWanted;
-    int rudderWanted;
-    int aileronWanted;
-    int pilotBrake;
-
-    IndicesUpdatePositionAirplane();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdatePositionAirplane; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdatePositionAirplane::IndicesUpdatePositionAirplane()
-{
-    thrustWanted = -1;
-    elevatorWanted = -1;
-    rudderWanted = -1;
-    aileronWanted = -1;
-    pilotBrake = -1;
-}
-
-void IndicesUpdatePositionAirplane::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-    SCAN(thrustWanted);
-    SCAN(elevatorWanted);
-    SCAN(rudderWanted);
-    SCAN(aileronWanted);
-    SCAN(pilotBrake);
-}
+DECLARE_NET_INDICES_EX_ERR(UpdatePositionAirplane, UpdatePositionVehicle, UPDATE_POSITION_AIRPLANE_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdatePositionAirplane, UpdatePositionVehicle, UPDATE_POSITION_AIRPLANE_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdatePositionAirplane()
-{
-    using namespace Poseidon;
-    return new IndicesUpdatePositionAirplane();
-}
+
+DEFINE_GET_INDICES(UpdatePositionAirplane)
+
 namespace Poseidon
 {
 
@@ -2112,28 +2067,11 @@ NetworkMessageFormat& AirplaneAuto::CreateFormat(NetworkMessageClass cls, Networ
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
-
-            format.Add("pilotFlaps", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0),
-                       DOC_MSG("Position of flaps, wanted by pilot"), ET_ABS_DIF, ERR_COEF_MODE);
-            format.Add("gearDammage", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Gear is damaged"), ET_ABS_DIF,
-                       ERR_COEF_MODE);
-            format.Add("pilotGear", NDTBool, NCTNone, DEFVALUE(bool, false),
-                       DOC_MSG("Position of gear, wanted by pilot"), ET_ABS_DIF, ERR_COEF_MODE);
-
+            UPDATE_AIRPLANE_MSG(MSG_FORMAT_ERR)
             break;
         case NMCUpdatePosition:
             base::CreateFormat(cls, format);
-            format.Add("thrustWanted", NDTFloat, NCTFloat0To1, DEFVALUE(float, 0), DOC_MSG("Wanted engine thrust"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("elevatorWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0),
-                       DOC_MSG("Wanted elevator position"), ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("rudderWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted rudder position"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("aileronWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0),
-                       DOC_MSG("Wanted aileron position"), ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("pilotBrake", NDTFloat, NCTFloat0To1, DEFVALUE(float, 0),
-                       DOC_MSG("State of brake, wanted by pilot"), ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-
+            UPDATE_POSITION_AIRPLANE_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);

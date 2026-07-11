@@ -304,9 +304,10 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             question.TransferMsg(ctx);
 
             IntegrityAnswerMessage answer;
-            answer.id = question.id;
-            answer.type = question.type;
-            answer.answer = IntegrityCheckAnswer(question.type, question.q);
+            answer._id = question._id;
+            answer._type = question._type;
+            IntegrityQuestion q(question._name, question._offset, question._size);
+            answer._answer = IntegrityCheckAnswer((IntegrityQuestionType)question._type, q);
             SendMsg(&answer, NMFGuaranteed | NMFHighPriority);
         }
         break;
@@ -318,9 +319,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             for (int i = 0; i < _identities.Size(); i++)
             {
                 PlayerIdentity& identity = _identities[i];
-                if (identity.dpnid == state.player)
+                if (identity.dpnid == state._player)
                 {
-                    identity.state = state.state;
+                    identity.state = (NetworkGameState)state._state;
                     break;
                 }
             }
@@ -330,19 +331,19 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             NetworkCommandMessage cmd;
             cmd.TransferMsg(ctx);
-            switch (cmd.type)
+            switch (cmd._type)
             {
                 case NCMTLogged:
                 {
                     _gameMaster = true;
-                    cmd.content.Read(&_admin, sizeof(_admin));
+                    cmd._content.Read(&_admin, sizeof(_admin));
                     /*
                                 _serverMissions.Clear();
-                                RString mission = cmd.content.ReadString();
+                                RString mission = cmd._content.ReadString();
                                 while (mission.GetLength() > 0)
                                 {
                                   _serverMissions.Add(mission);
-                                  mission = cmd.content.ReadString();
+                                  mission = cmd._content.ReadString();
                                 }
                     */
                     GChatList.Add(CCGlobal, nullptr, LocalizeString(IDS_MP_LOGGED), false, true);
@@ -359,11 +360,11 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 case NCMTVoteMission:
                 {
                     _serverMissions.Clear();
-                    RString mission = cmd.content.ReadString();
+                    RString mission = cmd._content.ReadString();
                     while (mission.GetLength() > 0)
                     {
                         _serverMissions.Add(mission);
-                        mission = cmd.content.ReadString();
+                        mission = cmd._content.ReadString();
                     }
                     if (_gameMaster)
                     {
@@ -378,14 +379,14 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     int memory = 0;
                     float in = 0;
                     float out = 0;
-                    cmd.content.Read(&fps, sizeof(fps));
-                    cmd.content.Read(&memory, sizeof(memory));
-                    cmd.content.Read(&in, sizeof(in));
-                    cmd.content.Read(&out, sizeof(out));
+                    cmd._content.Read(&fps, sizeof(fps));
+                    cmd._content.Read(&memory, sizeof(memory));
+                    cmd._content.Read(&in, sizeof(in));
+                    cmd._content.Read(&out, sizeof(out));
 
                     int sizeNG = 0, sizeG = 0;
-                    cmd.content.Read(&sizeG, sizeof(sizeG));
-                    cmd.content.Read(&sizeNG, sizeof(sizeNG));
+                    cmd._content.Read(&sizeG, sizeof(sizeG));
+                    cmd._content.Read(&sizeNG, sizeof(sizeNG));
 
                     char buffer[256];
                     snprintf(buffer, sizeof(buffer), LocalizeString(IDS_SERVER_MONITOR), fps, 1e-6 * memory, 8e-3 * out,
@@ -394,12 +395,12 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
                 break;
                 case NCMTDebugAnswer:
-                    LOG_DEBUG(Network, "{}", (const char*)cmd.content.ReadString());
+                    LOG_DEBUG(Network, "{}", (const char*)cmd._content.ReadString());
                     break;
                 case NCMTMissionTimeElapsed:
                 {
                     int timeElapsed = 0;
-                    cmd.content.Read(&timeElapsed, sizeof(timeElapsed));
+                    cmd._content.Read(&timeElapsed, sizeof(timeElapsed));
                     _missionHeader.start = GlobalTickCount() - timeElapsed;
                     _jip = true;
                     LOG_INFO(Network, "JIP: Joined in progress (mission elapsed: {}ms)", timeElapsed);
@@ -412,9 +413,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             PlayerMessage playerMsg;
             playerMsg.TransferMsg(ctx);
-            _player = playerMsg.player;
+            _player = playerMsg._player;
             //{ DEDICATED SERVER SUPPORT
-            if (playerMsg.server)
+            if (playerMsg._server)
             {
                 break; // do not create identity for server
             }
@@ -426,7 +427,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             identity.version = MP_VERSION_ACTUAL;
             RString GetPublicKey();
             identity.id = GetPublicKey();
-            identity.name = playerMsg.name; // name is changed by server
+            identity.name = playerMsg._name; // name is changed by server
             identity.face = Glob.header.playerFace;
             identity.glasses = Glob.header.playerGlasses;
             identity.speaker = Glob.header.playerSpeaker;
@@ -578,7 +579,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             logout.TransferMsg(ctx);
             for (int i = 0; i < _identities.Size(); i++)
             {
-                if (_identities[i].dpnid == logout.dpnid)
+                if (_identities[i].dpnid == logout._dpnid)
                 {
                     _identities.Delete(i);
                     break;
@@ -649,7 +650,8 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 LOG_DEBUG(Network, "[MissionHeader] cache='{}' valid={}", (const char*)fullname, _missionFileValid);
             }
 
-            AskMissionFileMessage ask(_missionFileValid);
+            AskMissionFileMessage ask;
+            ask._valid = _missionFileValid;
             LOG_DEBUG(Network, "[MissionHeader] sending AskMissionFile valid={}", _missionFileValid);
             SendMsg(&ask, NMFGuaranteed);
         }
@@ -672,19 +674,20 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             SelectPlayerMessage pl;
             pl.TransferMsg(ctx);
-            NET_ERROR(pl.player == _player);
-            NetworkObject* object = GetObject(pl.person);
+            NET_ERROR(pl._player == _player);
+            NetworkId id(pl._creator, pl._id);
+            NetworkObject* object = GetObject(id);
             Person* veh = dynamic_cast<Person*>(object);
             if (!veh)
             {
-                RptF("Client: Player (%d) is not vehicle with brain (%x)", (int)pl.player, pl.person.id);
+                RptF("Client: Player (%d) is not vehicle with brain (%x)", (int)pl._player, pl._id);
                 break;
             }
             GWorld->SwitchCameraTo(veh->Brain()->GetVehicle(), CamInternal);
             GWorld->SetPlayerManual(true);
             GWorld->SwitchPlayerTo(veh);
             GWorld->SetRealPlayer(veh);
-            if (pl.respawn)
+            if (pl._respawn)
             {
                 RString name = "onPlayerResurrect.sqs";
                 if (QIFStreamB::FileExist(RString("scripts\\") + name))
@@ -702,18 +705,18 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             TransferFileMessage transfer;
             transfer.TransferMsg(ctx);
             const size_t maxTransferSize =
-                Poseidon::NetworkTransferredAssetMaxSize(transfer.path, static_cast<size_t>(MaxCustomFileSize));
-            if (!Poseidon::ShouldAcceptNetworkTransferredAsset(transfer.path, static_cast<size_t>(transfer.totSize),
+                Poseidon::NetworkTransferredAssetMaxSize(transfer._path, static_cast<size_t>(MaxCustomFileSize));
+            if (!Poseidon::ShouldAcceptNetworkTransferredAsset(transfer._path, static_cast<size_t>(transfer._totSize),
                                                                static_cast<size_t>(MaxCustomFileSize)))
             {
-                if (!Poseidon::IsSafeNetworkTransferredAssetPath(transfer.path))
+                if (!Poseidon::IsSafeNetworkTransferredAssetPath(transfer._path))
                 {
-                    LOG_WARN(Network, "[NMTTransferFile] rejected unsafe path '{}'", (const char*)transfer.path);
+                    LOG_WARN(Network, "[NMTTransferFile] rejected unsafe path '{}'", (const char*)transfer._path);
                 }
                 else
                 {
                     LOG_WARN(Network, "[NMTTransferFile] rejected oversized custom asset '{}' ({} B > {} B)",
-                             (const char*)transfer.path, transfer.totSize, maxTransferSize);
+                             (const char*)transfer._path, transfer._totSize, maxTransferSize);
                 }
                 break;
             }
@@ -727,8 +730,8 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
 
             // Rewrite transfer path to use client's own cache dir
             // (server embeds its absolute CacheDir which differs per-instance)
-            transfer.path = Poseidon::BuildNetworkMissionTransferCachePboPath(_missionHeader.fileName);
-            if (transfer.path.GetLength() == 0)
+            transfer._path = Poseidon::BuildNetworkMissionTransferCachePboPath(_missionHeader.fileName);
+            if (transfer._path.GetLength() == 0)
             {
                 LOG_WARN(Network, "[NMTTransferMissionFile] rejected unsafe mission file name '{}'",
                          (const char*)_missionHeader.fileName);
@@ -740,15 +743,15 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
 
             int ret = ReceiveFileSegment(transfer);
             LOG_DEBUG(Network, "[NMTTransferMissionFile] path='{}' ret={} state={} missionFileValid={}",
-                      (const char*)transfer.path, ret, (int)_state, _missionFileValid);
+                      (const char*)transfer._path, ret, (int)_state, _missionFileValid);
             if (ret > 0)
             {
                 // transfer mission file always into tmp directory (do not rewrite original file)
-                const char* ptr = transfer.path;
+                const char* ptr = transfer._path;
                 const char* ext = strrchr(ptr, '.');
                 NET_ERROR(ext);
                 NET_ERROR(stricmp(ext, ".pbo") == 0);
-                RString path = transfer.path.Substring(0, ext - ptr);
+                RString path = transfer._path.Substring(0, ext - ptr);
                 CreateMPMissionBank(path, _missionHeader.island);
 
                 _missionFileValid = true;
@@ -778,7 +781,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 if (id)
                 {
                     snprintf(message, sizeof(message), format, (const char*)id->name);
-                    sprintf(message + strlen(message), " - %s", (const char*)transfer.path);
+                    sprintf(message + strlen(message), " - %s", (const char*)transfer._path);
                 }
                 Disconnect(message);
             }
@@ -788,9 +791,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForDammageMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.who)
+            if (ask._who)
             {
-                ask.who->DoDammage(ask.owner, ask.modelPos, ask.val, ask.valRange, ask.ammo);
+                ask._who->DoDammage(ask._owner, ask._modelPos, ask._val, ask._valRange, ask._ammo);
             }
         }
         break;
@@ -798,9 +801,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForSetDammageMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.who)
+            if (ask._who)
             {
-                ask.who->SetDammage(ask.dammage);
+                ask._who->SetDammage(ask._dammage);
             }
         }
         break;
@@ -808,9 +811,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForAddImpulseMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle)
+            if (ask._vehicle)
             {
-                ask.vehicle->AddImpulse(ask.force, ask.torque);
+                ask._vehicle->AddImpulse(ask._force, ask._torque);
             }
         }
         break;
@@ -818,9 +821,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForMoveVectorMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle)
+            if (ask._vehicle)
             {
-                ask.vehicle->Move(ask.pos);
+                ask._vehicle->Move(ask._pos);
             }
         }
         break;
@@ -828,12 +831,12 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForMoveMatrixMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle)
+            if (ask._vehicle)
             {
                 Matrix4 trans;
-                trans.SetPosition(ask.pos);
-                trans.SetOrientation(ask.orient);
-                ask.vehicle->Move(trans);
+                trans.SetPosition(ask._pos);
+                trans.SetOrientation(ask._orient);
+                ask._vehicle->Move(trans);
             }
         }
         break;
@@ -842,7 +845,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             AskForJoinGroupMessage ask;
             ask.TransferMsg(ctx);
             void ProcessJoinGroups(AIGroup * from, AIGroup * to);
-            ProcessJoinGroups(ask.group, ask.join);
+            ProcessJoinGroups(ask._group, ask._join);
         }
         break;
         case NMTAskForJoinUnits:
@@ -850,16 +853,16 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             AskForJoinUnitsMessage ask;
             ask.TransferMsg(ctx);
             void ProcessJoinGroups(OLinkArray<AIUnit> & units, AIGroup * grp);
-            ProcessJoinGroups(ask.units, ask.join);
+            ProcessJoinGroups(ask._units, ask._join);
         }
         break;
         case NMTAskForHideBody:
         {
             AskForHideBodyMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle)
+            if (ask._vehicle)
             {
-                ask.vehicle->HideBody();
+                ask._vehicle->HideBody();
             }
         }
         break;
@@ -868,54 +871,54 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             ExplosionDammageEffectsMessage ask;
             ask.TransferMsg(ctx);
             Ref<AmmoType> ammo;
-            if (ask.type.GetLength() > 0)
+            if (ask._type.GetLength() > 0)
             {
-                VehicleNonAIType* type = VehicleTypes.New(ask.type);
+                VehicleNonAIType* type = VehicleTypes.New(ask._type);
                 ammo = dynamic_cast<AmmoType*>(type);
             }
-            GLandscape->ExplosionDammageEffects(ask.owner, ask.shot, ask.directHit, ask.pos, ask.dir, ammo,
-                                                ask.enemyDammage);
+            GLandscape->ExplosionDammageEffects(ask._owner, ask._shot, ask._directHit, ask._pos, ask._dir, ammo,
+                                                ask._enemyDammage);
         }
         break;
         case NMTAskForGetIn:
         {
             AskForGetInMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle)
+            if (ask._vehicle)
             {
                 bool ok = false;
-                switch (ask.position)
+                switch (ask._position)
                 {
                     case GIPCommander:
-                        if (ask.vehicle->Commander() && !ask.vehicle->Commander()->IsDammageDestroyed())
+                        if (ask._vehicle->Commander() && !ask._vehicle->Commander()->IsDammageDestroyed())
                         {
                             break;
                         }
-                        ask.vehicle->GetInCommander(ask.soldier);
+                        ask._vehicle->GetInCommander(ask._soldier);
                         ok = true;
                         break;
                     case GIPDriver:
-                        if (ask.vehicle->Driver() && !ask.vehicle->Driver()->IsDammageDestroyed())
+                        if (ask._vehicle->Driver() && !ask._vehicle->Driver()->IsDammageDestroyed())
                         {
                             break;
                         }
-                        ask.vehicle->GetInDriver(ask.soldier);
+                        ask._vehicle->GetInDriver(ask._soldier);
                         ok = true;
                         break;
                     case GIPGunner:
-                        if (ask.vehicle->Gunner() && !ask.vehicle->Gunner()->IsDammageDestroyed())
+                        if (ask._vehicle->Gunner() && !ask._vehicle->Gunner()->IsDammageDestroyed())
                         {
                             break;
                         }
-                        ask.vehicle->GetInGunner(ask.soldier);
+                        ask._vehicle->GetInGunner(ask._soldier);
                         ok = true;
                         break;
                     case GIPCargo:
                     {
-                        for (int i = 0; i < ask.vehicle->GetManCargo().Size(); i++)
+                        for (int i = 0; i < ask._vehicle->GetManCargo().Size(); i++)
                         {
-                            if (ask.vehicle->GetManCargo()[i] == nullptr ||
-                                ask.vehicle->GetManCargo()[i]->IsDammageDestroyed())
+                            if (ask._vehicle->GetManCargo()[i] == nullptr ||
+                                ask._vehicle->GetManCargo()[i]->IsDammageDestroyed())
                             {
                                 ok = true;
                                 break;
@@ -924,19 +927,19 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     }
                         if (ok)
                         {
-                            ask.vehicle->GetInCargo(ask.soldier);
+                            ask._vehicle->GetInCargo(ask._soldier);
                         }
                         break;
                     default:
-                        RptF("Client: Unknown get in position %d", ask.position);
+                        RptF("Client: Unknown get in position %d", ask._position);
                         break;
                 }
                 if (ok)
                 {
-                    ask.vehicle->GetInFinished(ask.soldier->Brain());
-                    if (GLOB_WORLD->FocusOn() == ask.soldier->Brain())
+                    ask._vehicle->GetInFinished(ask._soldier->Brain());
+                    if (GLOB_WORLD->FocusOn() == ask._soldier->Brain())
                     {
-                        GLOB_WORLD->SwitchCameraTo(ask.vehicle, GLOB_WORLD->GetCameraType());
+                        GLOB_WORLD->SwitchCameraTo(ask._vehicle, GLOB_WORLD->GetCameraType());
                     }
                 }
             }
@@ -946,17 +949,17 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForGetOutMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle && ask.soldier && ask.soldier->Brain())
+            if (ask._vehicle && ask._soldier && ask._soldier->Brain())
             {
                 /*
                 LOG_DEBUG(Network,
                   "%s: get out from %s to %s",
-                  (const char *)ask.soldier->GetDebugName(),
-                  (const char *)ask.vehicle->GetDebugName(),
-                  ask.parachute ? "Parachute" : "nothing"
+                  (const char *)ask._soldier->GetDebugName(),
+                  (const char *)ask._vehicle->GetDebugName(),
+                  ask._parachute ? "Parachute" : "nothing"
                 );
                 */
-                ask.soldier->Brain()->DoGetOut(ask.vehicle, ask.parachute);
+                ask._soldier->Brain()->DoGetOut(ask._vehicle, ask._parachute);
             }
         }
         break;
@@ -964,9 +967,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForChangePositionMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle && ask.soldier)
+            if (ask._vehicle && ask._soldier)
             {
-                ask.vehicle->ChangePosition(ask.type, ask.soldier);
+                ask._vehicle->ChangePosition((UIActionType)ask._type, ask._soldier);
             }
         }
         break;
@@ -974,14 +977,14 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForAimWeaponMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle)
+            if (ask._vehicle)
             {
-                int weapon = ask.vehicle->SelectedWeapon();
+                int weapon = ask._vehicle->SelectedWeapon();
                 if (weapon < 0)
                 {
-                    weapon = ask.weapon;
+                    weapon = ask._weapon;
                 }
-                ask.vehicle->AimWeapon(weapon, ask.dir);
+                ask._vehicle->AimWeapon(weapon, ask._dir);
             }
         }
         break;
@@ -989,9 +992,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForAimObserverMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle)
+            if (ask._vehicle)
             {
-                ask.vehicle->AimObserver(ask.dir);
+                ask._vehicle->AimObserver(ask._dir);
             }
         }
         break;
@@ -999,9 +1002,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForSelectWeaponMessage ask;
             ask.TransferMsg(ctx);
-            if (ask.vehicle)
+            if (ask._vehicle)
             {
-                ask.vehicle->SelectWeapon(ask.weapon);
+                ask._vehicle->SelectWeapon(ask._weapon);
             }
         }
         break;
@@ -1009,17 +1012,17 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AskForAmmoMessage ask;
             ask.TransferMsg(ctx);
-            if (!ask.vehicle)
+            if (!ask._vehicle)
             {
                 break;
             }
-            Magazine* state = ask.vehicle->GetMagazineSlot(ask.weapon)._magazine;
+            Magazine* state = ask._vehicle->GetMagazineSlot(ask._weapon)._magazine;
             if (!state)
             {
                 break;
             }
-            saturateMin(ask.burst, state->_ammo);
-            state->_ammo -= ask.burst;
+            saturateMin(ask._burst, state->_ammo);
+            state->_ammo -= ask._burst;
             if (state->_ammo < 0)
             {
                 state->_ammo = 0;
@@ -1030,11 +1033,11 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             FireWeaponMessage fire;
             fire.TransferMsg(ctx);
-            EntityAI* veh = fire.vehicle;
+            EntityAI* veh = fire._vehicle;
             if (veh)
             {
-                const Magazine* magazine = veh->FindMagazine(fire.magazineCreator, fire.magazineId);
-                veh->FireWeaponEffects(fire.weapon, magazine, fire.target);
+                const Magazine* magazine = veh->FindMagazine(fire._magazineCreator, fire._magazineId);
+                veh->FireWeaponEffects(fire._weapon, magazine, fire._target);
             }
         }
         break;
@@ -1048,10 +1051,10 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AddWeaponCargoMessage update;
             update.TransferMsg(ctx);
-            if (update.vehicle)
+            if (update._vehicle)
             {
-                Ref<WeaponType> weapon = WeaponTypes.New(update.weapon);
-                update.vehicle->AddWeaponCargo(weapon);
+                Ref<WeaponType> weapon = WeaponTypes.New(update._weapon);
+                update._vehicle->AddWeaponCargo(weapon);
             }
         }
         break;
@@ -1059,10 +1062,10 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             RemoveWeaponCargoMessage update;
             update.TransferMsg(ctx);
-            if (update.vehicle)
+            if (update._vehicle)
             {
-                Ref<WeaponType> weapon = WeaponTypes.New(update.weapon);
-                update.vehicle->RemoveWeaponCargo(weapon);
+                Ref<WeaponType> weapon = WeaponTypes.New(update._weapon);
+                update._vehicle->RemoveWeaponCargo(weapon);
             }
         }
         break;
@@ -1070,9 +1073,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             AddMagazineCargoMessage update;
             update.TransferMsg(ctx);
-            if (update.vehicle && update.magazine)
+            if (update._vehicle && update._magazine)
             {
-                update.vehicle->AddMagazineCargo(update.magazine);
+                update._vehicle->AddMagazineCargo(update._magazine);
             }
         }
         break;
@@ -1080,12 +1083,12 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             RemoveMagazineCargoMessage update;
             update.TransferMsg(ctx);
-            if (update.vehicle)
+            if (update._vehicle)
             {
-                const Magazine* magazine = update.vehicle->FindMagazine(update.creator, update.id);
+                const Magazine* magazine = update._vehicle->FindMagazine(update._creator, update._id);
                 if (magazine)
                 {
-                    update.vehicle->RemoveMagazineCargo(const_cast<Magazine*>(magazine));
+                    update._vehicle->RemoveMagazineCargo(const_cast<Magazine*>(magazine));
                 }
             }
         }
@@ -1103,9 +1106,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             VehicleDestroyedMessage info;
             info.TransferMsg(ctx);
-            if (info.killed)
+            if (info._killed)
             {
-                Person* person = dyn_cast<Person>(info.killed);
+                Person* person = dyn_cast<Person>(info._killed.GetLink());
                 if (person && person->GetInfo()._name.GetLength() == 0 && person->IsNetworkPlayer())
                 {
                     const PlayerIdentity* identity = FindIdentity(person->GetRemotePlayer());
@@ -1115,12 +1118,12 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     }
                 }
             }
-            if (info.killer)
+            if (info._killer)
             {
-                Person* person = dyn_cast<Person>(info.killer);
+                Person* person = dyn_cast<Person>(info._killer.GetLink());
                 if (!person)
                 {
-                    Transport* vehicle = dyn_cast<Transport>(info.killer);
+                    Transport* vehicle = dyn_cast<Transport>(info._killer.GetLink());
                     if (vehicle)
                     {
                         person = vehicle->Commander();
@@ -1144,17 +1147,17 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
             }
 
-            GStats.OnVehicleDestroyed(info.killed, info.killer);
+            GStats.OnVehicleDestroyed(info._killed, info._killer);
             // add experience
-            if (info.killer && info.killed)
+            if (info._killer && info._killed)
             {
                 // use Entity member to get original target side
                 // all dead bodies are considered civilian
-                TargetSide origSide = info.killed->Entity::GetTargetSide();
-                const VehicleType& type = *info.killed->GetType();
+                TargetSide origSide = info._killed->Entity::GetTargetSide();
+                const VehicleType& type = *info._killed->GetType();
 
                 // increase killer's experience
-                AIUnit* kBrain = info.killer->CommanderUnit();
+                AIUnit* kBrain = info._killer->CommanderUnit();
                 if (kBrain && kBrain->IsLocal())
                 {
                     kBrain->IncreaseExperience(type, origSide);
@@ -1163,24 +1166,24 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     if (killerGroup && killerGroup->GetCenter()->IsEnemy(origSide))
                     {
                         // find corresponding target
-                        Target* tar = killerGroup->FindTargetAll(info.killed);
+                        Target* tar = killerGroup->FindTargetAll(info._killed);
                         if (tar)
                         {
                             // mark killer
                             // when destroyed will be set, it will be marked for reporting
-                            tar->idKiller = info.killer;
+                            tar->idKiller = info._killer;
                         }
                     }
                 }
-                if (info.killer->GunnerUnit() && info.killer->GunnerUnit()->IsLocal() &&
-                    info.killer->GunnerUnit() != kBrain)
+                if (info._killer->GunnerUnit() && info._killer->GunnerUnit()->IsLocal() &&
+                    info._killer->GunnerUnit() != kBrain)
                 {
-                    info.killer->GunnerUnit()->IncreaseExperience(type, origSide);
+                    info._killer->GunnerUnit()->IncreaseExperience(type, origSide);
                 }
-                if (info.killer->PilotUnit() && info.killer->PilotUnit()->IsLocal() &&
-                    info.killer->PilotUnit() != kBrain)
+                if (info._killer->PilotUnit() && info._killer->PilotUnit()->IsLocal() &&
+                    info._killer->PilotUnit() != kBrain)
                 {
-                    info.killer->PilotUnit()->IncreaseExperience(type, origSide);
+                    info._killer->PilotUnit()->IncreaseExperience(type, origSide);
                 }
             }
         }
@@ -1212,11 +1215,11 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             }
             MarkerCreateMessage marker;
             marker.TransferMsg(ctx);
-            if (marker.channel != CCGlobal && !FindUnit(GWorld->GetRealPlayer(), marker.units))
+            if (marker._channel != CCGlobal && !FindUnit(GWorld->GetRealPlayer(), marker._units))
             {
                 break;
             }
-            RString name = marker.marker.name;
+            RString name = marker._marker.name;
             int index = -1;
             for (int i = 0; i < markersMap.Size(); i++)
             {
@@ -1230,7 +1233,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 index = markersMap.Add();
             }
-            markersMap[index] = marker.marker;
+            markersMap[index] = marker._marker;
         }
         break;
         case NMTMarkerDelete:
@@ -1240,7 +1243,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             for (int i = 0; i < markersMap.Size(); i++)
             {
                 ArcadeMarkerInfo& marker = markersMap[i];
-                if (marker.name == info.name)
+                if (marker.name == info._name)
                 {
                     markersMap.Delete(i);
                     break;
@@ -1261,22 +1264,22 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             SetFlagOwnerMessage ask;
             ask.TransferMsg(ctx);
-            if (!ask.carrier)
+            if (!ask._carrier)
             {
                 break;
             }
-            ask.carrier->SetFlagOwner(ask.owner);
+            ask._carrier->SetFlagOwner(ask._owner);
         }
         break;
         case NMTSetFlagCarrier:
         {
             SetFlagCarrierMessage ask;
             ask.TransferMsg(ctx);
-            if (!ask.owner)
+            if (!ask._owner)
             {
                 break;
             }
-            ask.owner->SetFlagCarrier(ask.carrier);
+            ask._owner->SetFlagCarrier(ask._carrier);
         }
         break;
         case NMTMsgVTarget:
@@ -1346,14 +1349,15 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             ChangeOwnerMessage co;
             co.TransferMsg(ctx);
-            if (co.owner == _player)
+            NetworkId id(co._creator, co._id);
+            if (co._owner == _player)
             {
                 // object becomes local
                 NetworkObject* object = nullptr;
                 for (int i = 0; i < _remoteObjects.Size(); i++)
                 {
                     NetworkRemoteObjectInfo& info = _remoteObjects[i];
-                    if (info.id == co.object)
+                    if (info.id == id)
                     {
                         object = info.object;
                         _remoteObjects.Delete(i);
@@ -1369,7 +1373,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     // add to local objects
                     int index = _localObjects.Add();
                     NetworkLocalObjectInfo& localObject = _localObjects[index];
-                    localObject.id = co.object;
+                    localObject.id = id;
                     localObject.object = object;
                     for (int j = NMCUpdateFirst; j < NMCUpdateN; j++)
                     {
@@ -1388,7 +1392,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
                 else
                 {
-                    RptF("Client: Remote object %d:%d not found", co.object.creator, co.object.id);
+                    RptF("Client: Remote object %d:%d not found", id.creator, id.id);
                 }
             }
             else
@@ -1401,7 +1405,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 for (int i = 0; i < _localObjects.Size(); i++)
                 {
                     NetworkLocalObjectInfo& info = _localObjects[i];
-                    if (info.id == co.object)
+                    if (info.id == id)
                     {
                         object = info.object;
                         _localObjects.Delete(i);
@@ -1417,7 +1421,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     // add to remote objects
                     int index = _remoteObjects.Add();
                     NetworkRemoteObjectInfo& info = _remoteObjects[index];
-                    info.id = co.object;
+                    info.id = id;
                     info.object = object;
                     if (DiagLevel >= 1)
                     {
@@ -1426,7 +1430,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
                 else
                 {
-                    RptF("Client: Local object %d:%d not found", co.object.creator, co.object.id);
+                    RptF("Client: Local object %d:%d not found", id.creator, id.id);
                 }
             }
         }
@@ -1439,7 +1443,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             ++GTriNetSoundsReceived; // tri test observable (replicated-sound count)
 
             IWave* wave =
-                GSoundScene->OpenAndPlayOnce(sound.name, sound.position, sound.speed, sound.volume, sound.freq);
+                GSoundScene->OpenAndPlayOnce(sound._name, sound._position, sound._speed, sound._volume, sound._freq);
             if (wave)
             {
                 GSoundScene->AddSound(wave);
@@ -1458,8 +1462,8 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
 
                 int index = _receivedSounds.Add();
-                _receivedSounds[index].creator = sound.creator;
-                _receivedSounds[index].id = sound.soundId;
+                _receivedSounds[index].creator = sound._creator;
+                _receivedSounds[index].id = sound._soundId;
                 _receivedSounds[index].wave = wave;
             }
         }
@@ -1477,10 +1481,10 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     _receivedSounds.Delete(i);
                     continue;
                 }
-                if (info.creator == sound.creator && info.id == sound.soundId)
+                if (info.creator == sound._creator && info.id == sound._soundId)
                 {
                     const bool applied =
-                        Poseidon::ApplyReplicatedNetworkSoundState(info.wave, static_cast<SoundStateType>(sound.state),
+                        Poseidon::ApplyReplicatedNetworkSoundState(info.wave, static_cast<SoundStateType>(sound._state),
                                                                    [](IWave* wave) { GSoundScene->DeleteSound(wave); });
                     if (!applied)
                     {
@@ -1673,13 +1677,13 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             ChatMessage chat;
             chat.TransferMsg(ctx);
-            if (chat.sender)
+            if (chat._sender)
             {
-                GChatList.Add((ChatChannel)chat.channel, chat.sender, chat.text, false, true);
+                GChatList.Add((ChatChannel)chat._channel, chat._sender, chat._text, false, true);
             }
             else
             {
-                GChatList.Add((ChatChannel)chat.channel, chat.name, chat.text, false, true);
+                GChatList.Add((ChatChannel)chat._channel, chat._name, chat._text, false, true);
             }
             if (_chatSound.name.GetLength() > 0)
             {
@@ -1702,22 +1706,22 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 break;
             }
-            if (chat.channel != CCGlobal && !FindUnit(GWorld->GetRealPlayer(), chat.units))
+            if (chat._channel != CCGlobal && !FindUnit(GWorld->GetRealPlayer(), chat._units))
             {
                 break;
             }
-            GChatList.Add((ChatChannel)chat.channel, chat.sender, chat.text, false, false);
-            if (chat.sender && chat.sentence.Size() > 0)
+            GChatList.Add((ChatChannel)chat._channel, chat._sender, chat._text, false, false);
+            if (chat._sender && chat._sentence.Size() > 0)
             {
                 AIUnit* unit = soldier->Brain();
                 if (!unit)
                 {
                     break;
                 }
-                RadioChannel* channel = FindChannel(unit, chat.channel);
+                RadioChannel* channel = FindChannel(unit, chat._channel);
                 if (channel)
                 {
-                    chat.sentence.Say(channel, chat.sender->GetSpeaker());
+                    chat._sentence.Say(channel, chat._sender->GetSpeaker());
                 }
             }
         }
@@ -1731,26 +1735,26 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 break;
             }
-            if (chat.channel != CCGlobal && !FindUnit(GWorld->GetRealPlayer(), chat.units))
+            if (chat._channel != CCGlobal && !FindUnit(GWorld->GetRealPlayer(), chat._units))
             {
                 break;
             }
-            if (chat.wave.GetLength() > 0)
+            if (chat._wave.GetLength() > 0)
             {
                 AIUnit* unit = soldier->Brain();
                 if (!unit)
                 {
                     break;
                 }
-                RadioChannel* channel = FindChannel(unit, chat.channel);
+                RadioChannel* channel = FindChannel(unit, chat._channel);
                 if (channel)
                 {
                     RString player;
-                    if (chat.wave[0] == '#' && chat.sender)
+                    if (chat._wave[0] == '#' && chat._sender)
                     {
-                        player = Poseidon::BuildNetworkPlayerStorageKey(chat.sender->GetPerson()->GetRemotePlayer());
+                        player = Poseidon::BuildNetworkPlayerStorageKey(chat._sender->GetPerson()->GetRemotePlayer());
                     }
-                    channel->Say(chat.wave, chat.sender, chat.senderName, player, 2.0);
+                    channel->Say(chat._wave, chat._sender, chat._senderName, player, 2.0);
                 }
             }
         }
@@ -1759,12 +1763,12 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             SetSpeakerMessage message;
             message.TransferMsg(ctx);
-            if (message.on)
+            if (message._on)
             {
                 int index = -1;
                 for (int i = 0; i < _soundBuffers.Size(); i++)
                 {
-                    if (_soundBuffers[i].player == message.player)
+                    if (_soundBuffers[i].player == message._player)
                     {
                         _soundBuffers[i].buffer = nullptr;
                         index = i;
@@ -1774,10 +1778,11 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 if (index < 0)
                 {
                     index = _soundBuffers.Add();
-                    _soundBuffers[index].player = message.player;
+                    _soundBuffers[index].player = message._player;
                 }
-                _soundBuffers[index].buffer = _client->Create3DSoundBuffer(message.player);
-                NetworkObject* networkObject = GetObject(message.object);
+                _soundBuffers[index].buffer = _client->Create3DSoundBuffer(message._player);
+                NetworkId id(message._creator, message._id);
+                NetworkObject* networkObject = GetObject(id);
                 if (networkObject)
                 {
                     Vector3 pos = networkObject->GetSpeakerPosition();
@@ -1792,7 +1797,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 for (int i = 0; i < _soundBuffers.Size(); i++)
                 {
-                    if (_soundBuffers[i].player == message.player)
+                    if (_soundBuffers[i].player == message._player)
                     {
                         _soundBuffers[i].buffer = nullptr;
                         _soundBuffers[i].object->SetRandomLip(false);
@@ -1963,7 +1968,8 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 DeleteObjectMessage dom;
                 dom.TransferMsg(ctx);
-                DestroyRemoteObject(dom.object);
+                NetworkId id(dom._creator, dom._id);
+                DestroyRemoteObject(id);
             }
             break;
         case NMTDeleteCommand:
@@ -1974,18 +1980,19 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 DeleteCommandMessage dc;
                 dc.TransferMsg(ctx);
+                NetworkId id(dc._creator, dc._id);
                 for (int i = 0; i < _remoteObjects.Size(); i++)
                 {
                     NetworkRemoteObjectInfo& info = _remoteObjects[i];
-                    if (info.id == dc.object)
+                    if (info.id == id)
                     {
-                        if (dc.subgrp && info.object)
+                        if (dc._subgrp && info.object)
                         {
-                            dc.subgrp->DeleteCommand(dc.index, dynamic_cast<Command*>(info.object.GetLink()));
+                            dc._subgrp->DeleteCommand(dc._index, dynamic_cast<Command*>(info.object.GetLink()));
                         }
                         if (DiagLevel >= 1)
                         {
-                            DiagLogF("Client: remote command destroyed %d:%d", dc.object.creator, dc.object.id);
+                            DiagLogF("Client: remote command destroyed %d:%d", id.creator, id.id);
                         }
                         _remoteObjects.Delete(i);
                         break;
@@ -2134,12 +2141,12 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             ShowTargetMessage show;
             show.TransferMsg(ctx);
-            Person* person = show.vehicle;
+            Person* person = show._vehicle;
             AIUnit* unit = person ? person->Brain() : nullptr;
             AIGroup* grp = unit ? unit->GetGroup() : nullptr;
-            if (grp && show.target)
+            if (grp && show._target)
             {
-                Target* target = grp->FindTarget(show.target);
+                Target* target = grp->FindTarget(show._target);
                 unit->AssignTarget(target);
                 if (GWorld->UI())
                     GWorld->UI()->ShowTarget();
@@ -2150,13 +2157,13 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             ShowGroupDirMessage show;
             show.TransferMsg(ctx);
-            Person* person = show.vehicle;
+            Person* person = show._vehicle;
             AIUnit* unit = person ? person->Brain() : nullptr;
             AIGroup* grp = unit ? unit->GetGroup() : nullptr;
             AISubgroup* subgrp = grp ? grp->MainSubgroup() : nullptr;
             if (subgrp)
             {
-                subgrp->SetDirection(show.dir);
+                subgrp->SetDirection(show._dir);
                 if (GWorld->UI())
                     GWorld->UI()->ShowGroupDir();
             }

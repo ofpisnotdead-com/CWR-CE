@@ -6,22 +6,18 @@
 
 namespace Poseidon
 {
-class IndicesResourceSupply
-{
-public:
-	int fuelCargo;
-	int repairCargo;
-	int ammoCargo;
-	int supplying;
-	int alloc;
-	int action;
-	int actionParam;
-	int actionParam2;
-	int actionParam3;
+#define UPDATE_VEHICLE_SUPPLY_MSG(XX) \
+	XX(float, fuelCargo, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Transported fuel"), IdxTransfer, ET_ABS_DIF, 0.01 * ERR_COEF_VALUE_MINOR) \
+	XX(float, repairCargo, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Transported repair material"), IdxTransfer, ET_ABS_DIF, 0.01 * ERR_COEF_VALUE_MINOR) \
+	XX(float, ammoCargo, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Transported ammunition (for vehicles)"), IdxTransfer, ET_ABS_DIF, 0.01 * ERR_COEF_VALUE_MINOR) \
+	XX(OLink<EntityAI>, supplying, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Currently supplying unit"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(OLink<EntityAI>, alloc, NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Unit allocated for supplying"), IdxTransferRef, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, action, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, ATNone), DOC_MSG("Currently processing action"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, actionParam, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Action parameter"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(int, actionParam2, NDTInteger, NCTSmallSigned, DEFVALUE(int, 0), DOC_MSG("Action parameter"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE) \
+	XX(RString, actionParam3, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Action parameter"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
 
-	IndicesResourceSupply();
-	void Scan(NetworkMessageFormatBase *format);
-};
+DECLARE_NET_INDICES_EX_ERR(UpdateVehicleSupply, UpdateVehicleAI, UPDATE_VEHICLE_SUPPLY_MSG)
 
 class ResourceSupply: public RefCount
 {
@@ -84,26 +80,13 @@ class ResourceSupply: public RefCount
 	LSError Serialize(ParamArchive &ar);
 	static ResourceSupply *CreateObject(ParamArchive &ar) {return new ResourceSupply();}
 
-	static void CreateFormat(NetworkMessageFormat &format);
-	TMError TransferMsg(NetworkMessageContext &ctx, const IndicesResourceSupply *indices);
-	float CalculateError(NetworkMessageContext &ctx, const IndicesResourceSupply *indices);
+	TMError TransferMsg(NetworkMessageContext &ctx, const IndicesUpdateVehicleSupply *indices);
+	float CalculateError(NetworkMessageContext &ctx, const IndicesUpdateVehicleSupply *indices);
 
 	void SetParent(EntityAI *vehicle) {_parent = vehicle;}
 private:
 	ResourceSupply(); // used for serialization only
 
-};
-
-class IndicesUpdateVehicleSupply : public IndicesUpdateVehicleAI
-{
-	typedef IndicesUpdateVehicleAI base;
-
-public:
-	IndicesResourceSupply supply;
-
-	IndicesUpdateVehicleSupply();
-	NetworkMessageIndices *Clone() const override {return new IndicesUpdateVehicleSupply;}
-	void Scan(NetworkMessageFormatBase *format) override;
 };
 
 class VehicleSupply: public EntityAI
@@ -240,17 +223,10 @@ struct AIUnitInfo : public SerializeClass
 	LSError Serialize(ParamArchive &ar) override;
 };
 
-class IndicesUpdateVehicleBrain : public IndicesUpdateVehicleSupply
-{
-	typedef IndicesUpdateVehicleSupply base;
+#define UPDATE_VEHICLE_BRAIN_MSG(XX) \
+	XX(int, remotePlayer, NDTInteger, NCTNone, DEFVALUE(int, 1), DOC_MSG("Person is controled by player on some client"), IdxTransfer, ET_NOT_EQUAL, ERR_COEF_MODE)
 
-public:
-	int remotePlayer;
-
-	IndicesUpdateVehicleBrain();
-	NetworkMessageIndices *Clone() const override {return new IndicesUpdateVehicleBrain;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES_EX_ERR(UpdateVehicleBrain, UpdateVehicleSupply, UPDATE_VEHICLE_BRAIN_MSG)
 
 //Target status (position, spotability etc.)
 struct Target: public RemoveLLinks

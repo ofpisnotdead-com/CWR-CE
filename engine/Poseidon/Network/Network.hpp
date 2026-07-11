@@ -2,42 +2,7 @@
 
 #include <Poseidon/Network/NetworkIface.hpp>
 #include <Poseidon/Network/NetworkMsgFormat.hpp>
-
-struct NetworkUpdateInfo;
-struct NetworkObjectInfo;
-struct NetworkPlayerObjectInfo;
-
-// Network message (internal representation)
-struct NetworkMessage : public RefCount
-{
-	// network message header
-	// time when message was sent
-	Poseidon::Foundation::Time time;
-	// size of raw (serialized, compressed) message - not transferred, used for statistics
-	int size;
-
-	// network message body
-	// transferred values (message body)
-	AutoArray<RefNetworkData> values;
-
-	// Temporary pointer to update info - used for update object info whenever message is sent
-	NetworkUpdateInfo *objectUpdateInfo;
-
-	// Temporary pointer (OnSendComplete) - used on server only
-	NetworkObjectInfo *objectServerInfo;
-
-	// Temporary pointer (OnSendComplete) - used on server only
-	NetworkPlayerObjectInfo *objectPlayerInfo;
-
-	NetworkMessage()
-	{
-		size = 0;
-		objectUpdateInfo = nullptr;
-		objectServerInfo= nullptr;
-		objectPlayerInfo= nullptr;
-	}
-	~NetworkMessage() override {}
-};
+#include <Poseidon/Core/Global.hpp>
 
 #define TRANSFER_FORMAT \
 	if (index < 0) return TMNotFound; \
@@ -804,6 +769,38 @@ protected:
 
 #include <Poseidon/Foundation/Containers/RStringArray.hpp>
 
+#define DIFF_FORMAT(name,XX) XX(bool, diff##name, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Difficulty settings"), IdxTransfer)
+
+#define MISSION_HEADER_MSG(XX) \
+	XX(RString, island, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Island (map), where mission is placed"), IdxTransfer) \
+	XX(RString, name, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Name of mission"), IdxTransfer) \
+	XX(RString, description, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Description of mission"), IdxTransfer) \
+	XX(RString, fileName, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Name of mission file"), IdxTransfer) \
+	XX(RString, fileDir, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Directory, where mission file is placed"), IdxTransfer) \
+	XX(int, fileSizeL, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Size of mission file (low DWORD)"), IdxTransfer) \
+	XX(int, fileSizeH, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Size of mission file (high DWORD)"), IdxTransfer) \
+	XX(int, fileCRC, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("CRC of mission file"), IdxTransfer) \
+	XX(int, respawn, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, RespawnSeaGull), DOC_MSG("Respawn type"), IdxTransfer) \
+	XX(float, respawnDelay, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Respawn delay (in seconds)"), IdxTransfer) \
+	XX(bool, cadetMode, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Cadet / Veteran mode"), IdxTransfer) \
+	XX(bool, disabledAI, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("AI is disabled"), IdxTransfer) \
+	XX(bool, aiKills, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Write AI kills into statistics"), IdxTransfer) \
+	XX(bool, updateOnly, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("This message is only update of (recently sent) mission info"), IdxTransfer) \
+	XX(bool, joinInProgress, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Allow players to join after mission has started"), IdxTransfer) \
+	DIFFICULTY_TYPE_ENUM(DIFF_FORMAT, XX) \
+	XX(FindArrayRStringCI, addOns, NDTStringArray, NCTNone, DEFVALUESTRINGARRAY, DOC_MSG("List of used addons"), IdxTransfer) \
+	XX(Time, estimatedEndTime, NDTTime, NCTNone, DEFVALUE(Time, TIME_MIN), DOC_MSG("Time of estimated end of mission"), IdxTransfer) \
+	XX(RString, titleParam1, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Mission parameter - title"), IdxTransfer) \
+	XX(AutoArray<float>, valuesParam1, NDTFloatArray, NCTNone, DEFVALUEFLOATARRAY, DOC_MSG("Mission parameter - list of values"), IdxTransfer) \
+	XX(AutoArray<RString>, textsParam1, NDTStringArray, NCTNone, DEFVALUESTRINGARRAY, DOC_MSG("Mission parameter - list of value names"), IdxTransfer) \
+	XX(float, defValueParam1, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Mission parameter - default value"), IdxTransfer) \
+	XX(RString, titleParam2, NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Mission parameter - title"), IdxTransfer) \
+	XX(AutoArray<float>, valuesParam2, NDTFloatArray, NCTNone, DEFVALUEFLOATARRAY, DOC_MSG("Mission parameter - list of values"), IdxTransfer) \
+	XX(AutoArray<RString>, textsParam2, NDTStringArray, NCTNone, DEFVALUESTRINGARRAY, DOC_MSG("Mission parameter - list of value names"), IdxTransfer) \
+	XX(float, defValueParam2, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Mission parameter - default value"), IdxTransfer)
+
+DECLARE_NET_INDICES(MissionHeader, MISSION_HEADER_MSG)
+
 // Description of currently played mission
 struct MissionHeader : public NetworkSimpleObject
 {
@@ -1057,23 +1054,16 @@ RString NetObjToNetId(NetworkObject *obj);
 // return object by id
 NetworkObject* NetIdToNetObj(const char* netId);
 
-// network message indices for Magazine and MagazineNetworkInfo classes
-class IndicesMagazine : public NetworkMessageIndices
-{
-public:
-	// index of field in message format
-	int type;
-	int ammo;
-	int burstLeft;
-	int reload;
-	int reloadMagazine;
-	int creator;
-	int id;
+#define MAGAZINE_MSG(XX) \
+	XX(RString, type, NDTString, NCTDefault, DEFVALUE(RString, ""), DOC_MSG("Magazine type"), IdxTransfer) \
+	XX(int, ammo, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Ammo count"), IdxTransfer) \
+	XX(int, burstLeft, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("How many shots are there in the burst (auto fired)"), IdxTransfer) \
+	XX(float, reload, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Time rest to reload shot"), IdxTransfer) \
+	XX(float, reloadMagazine, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Time rest to reload magazine"), IdxTransfer) \
+	XX(int, creator, NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Network ID of magazine"), IdxTransfer) \
+	XX(int, id, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Network ID of magazine"), IdxTransfer)
 
-	IndicesMagazine();
-	NetworkMessageIndices *Clone() const override {return new IndicesMagazine;}
-	void Scan(NetworkMessageFormatBase *format) override;
-};
+DECLARE_NET_INDICES(Magazine, MAGAZINE_MSG)
 
 // helper class for simple transfer of Magazine over network
 struct MagazineNetworkInfo : public NetworkSimpleObject

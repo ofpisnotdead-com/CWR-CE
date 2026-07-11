@@ -346,41 +346,23 @@ LSError Path::Serialize(ParamArchive& ar)
     return LSOK;
 }
 
-class IndicesPathPoint : public NetworkMessageIndices
-{
-  public:
-    int pos;
-    int cost;
+#define PATH_POINT_MSG(XX)                                                                                     \
+    XX(Vector3, pos, NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Path node position"), IdxTransfer) \
+    XX(float, cost, NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Path node cost"), IdxTransfer)
 
-    IndicesPathPoint();
-    NetworkMessageIndices* Clone() const override { return new IndicesPathPoint; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesPathPoint::IndicesPathPoint()
-{
-    pos = -1;
-    cost = -1;
-}
-
-void IndicesPathPoint::Scan(NetworkMessageFormatBase* format)
-{
-    SCAN(pos) SCAN(cost)
-}
+DECLARE_NET_INDICES(PathPoint, PATH_POINT_MSG)
+DEFINE_NET_INDICES(PathPoint, PATH_POINT_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesPathPoint()
-{
-    using namespace Poseidon;
-    return new IndicesPathPoint();
-}
+
+DEFINE_GET_INDICES(PathPoint)
+
 namespace Poseidon
 {
 
 NetworkMessageFormat& OperInfoResult::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("pos", NDTVector, NCTNone, DEFVALUE(Vector3, VZero), DOC_MSG("Path node position"));
-    format.Add("cost", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Path node cost"));
+    PATH_POINT_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -394,58 +376,20 @@ TMError OperInfoResult::TransferMsg(NetworkMessageContext& ctx)
     return TMOK;
 }
 
-class IndicesPath
-{
-  public:
-    int operIndex;
-    int maxIndex;
-    int searchTime;
-    int onRoad;
-    int path;
+DEFINE_NET_INDICES(Path, PATH_MSG)
+DEFINE_GET_INDICES(Path)
 
-    IndicesPath();
-    void Scan(NetworkMessageFormatBase* format);
-};
-
-IndicesPath::IndicesPath()
+NetworkMessageFormat& Path::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    operIndex = -1;
-    maxIndex = -1;
-    searchTime = -1;
-    onRoad = -1;
-    path = -1;
+    PATH_MSG(MSG_FORMAT)
+    return format;
 }
 
-void IndicesPath::Scan(NetworkMessageFormatBase* format){SCAN(operIndex) SCAN(maxIndex) SCAN(searchTime) SCAN(onRoad)
-                                                             SCAN(path)}
+TMError Path::TransferMsg(NetworkMessageContext& ctx)
+{
+    AI_ERROR(dynamic_cast<const IndicesPath*>(ctx.GetIndices()))
+    const IndicesPath* indices = static_cast<const IndicesPath*>(ctx.GetIndices());
 
-IndicesPath* GetIndicesPath()
-{
-    return new IndicesPath();
-}
-void DeleteIndicesPath(IndicesPath* path)
-{
-    delete path;
-}
-
-void ScanIndicesPath(IndicesPath* path, NetworkMessageFormatBase* format)
-{
-    path->Scan(format);
-}
-
-void Path::CreateFormat(NetworkMessageFormat& format)
-{
-    format.Add("operIndex", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 1),
-               DOC_MSG("Currently executed path node index"));
-    format.Add("maxIndex", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 1), DOC_MSG("Last valid path node index"));
-    format.Add("searchTime", NDTTime, NCTNone, DEFVALUE(Time, Time(0)), DOC_MSG("Time, when path was planned"),
-               ET_NOT_EQUAL, ERR_COEF_MODE);
-    format.Add("onRoad", NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Path on road"));
-    format.Add("path", NDTObjectArray, NCTNone, DEFVALUE_MSG(NMTPathPoint), DOC_MSG("List of nodes"));
-}
-
-TMError Path::TransferMsg(NetworkMessageContext& ctx, IndicesPath* indices)
-{
     ITRANSF(operIndex)
     ITRANSF(maxIndex)
     ITRANSF(searchTime)
@@ -454,8 +398,11 @@ TMError Path::TransferMsg(NetworkMessageContext& ctx, IndicesPath* indices)
     return TMOK;
 }
 
-float Path::CalculateError(NetworkMessageContext& ctx, IndicesPath* indices)
+float Path::CalculateError(NetworkMessageContext& ctx)
 {
+    AI_ERROR(dynamic_cast<const IndicesPath*>(ctx.GetIndices()))
+    const IndicesPath* indices = static_cast<const IndicesPath*>(ctx.GetIndices());
+
     float error = 0;
 
     ICALCERR_NEQ(Time, searchTime, ERR_COEF_MODE)

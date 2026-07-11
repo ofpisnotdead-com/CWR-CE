@@ -91,14 +91,14 @@ TransferFileMessage MakeTransferSegment(const RString& path, int totalSize, int 
                                         const char* bytes)
 {
     TransferFileMessage msg;
-    msg.path = path;
-    msg.totSize = totalSize;
-    msg.totSegments = totalSegments;
-    msg.curSegment = segment;
-    msg.offset = offset;
+    msg._path = path;
+    msg._totSize = totalSize;
+    msg._totSegments = totalSegments;
+    msg._curSegment = segment;
+    msg._offset = offset;
     const int size = static_cast<int>(strlen(bytes));
-    msg.data.Resize(size);
-    memcpy(msg.data.Data(), bytes, size);
+    msg._data.Resize(size);
+    memcpy(msg._data.Data(), bytes, size);
     return msg;
 }
 
@@ -192,7 +192,7 @@ TEST_CASE("mission file transfer sends contiguous one kilobyte segments to inval
             "throughput_test.Intro", payload.data(), static_cast<int>(payload.size()),
             static_cast<int>(recipients.size()), [&recipients](int index) { return recipients[index]; }, 99,
             [&sent](int dpid, TransferMissionFileMessage& msg)
-            { sent.push_back({dpid, msg.offset, msg.data.Size(), msg.curSegment, msg.totSegments, msg.data[0]}); },
+            { sent.push_back({dpid, msg._offset, msg._data.Size(), msg._curSegment, msg._totSegments, msg._data[0]}); },
             static_cast<int>(players.size()), [&players](int index) -> Player& { return players[index]; }, NGSCreate);
 
     const int expectedSegments = Poseidon::GetNetworkMissionTransferSegmentCount(static_cast<int>(payload.size()));

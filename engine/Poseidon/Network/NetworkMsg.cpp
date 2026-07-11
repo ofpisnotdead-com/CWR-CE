@@ -281,44 +281,19 @@ int NetworkMessageFormatBase::FindIndex(const char* name) const
     }
 }
 
-// network message indices for NetworkMessageFormatItem class
-class IndicesMsgFormatItem : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int name;
-    int type;
-    int compression;
-    int defValue;
+#define MSG_FORMAT_ITEM_MSG(XX)                                                                           \
+    XX(RString, name, NDTString, NCTDefault, ND_NULL, DOC_MSG("Item name"), IdxTransfer)                  \
+    XX(int, type, NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Item type"), IdxTransfer)               \
+    XX(int, compression, NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Item compression"), IdxTransfer) \
+    XX(RefNetworkData, defValue, NDTData, NCTNone, ND_NULL, DOC_MSG("Default value of item"), IdxTransfer)
 
-    IndicesMsgFormatItem();
-    NetworkMessageIndices* Clone() const override { return new IndicesMsgFormatItem; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesMsgFormatItem::IndicesMsgFormatItem()
-{
-    name = -1;
-    type = -1;
-    compression = -1;
-    defValue = -1;
-}
-
-void IndicesMsgFormatItem::Scan(NetworkMessageFormatBase* format){SCAN(name) SCAN(type) SCAN(compression)
-                                                                      SCAN(defValue)}
-
-// Create network message indices for NetworkMessageFormatItem class
-NetworkMessageIndices* GetIndicesMsgFormatItem()
-{
-    return new IndicesMsgFormatItem();
-}
+DECLARE_NET_INDICES(MsgFormatItem, MSG_FORMAT_ITEM_MSG)
+DEFINE_NET_INDICES(MsgFormatItem, MSG_FORMAT_ITEM_MSG)
+DEFINE_GET_INDICES(MsgFormatItem)
 
 NetworkMessageFormat& NetworkMessageFormatItem::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("name", NDTString, NCTDefault, ND_NULL, DOC_MSG("Item name"));
-    format.Add("type", NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Item type"));
-    format.Add("compression", NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Item compression"));
-    format.Add("defValue", NDTData, NCTNone, ND_NULL, DOC_MSG("Default value of item"));
+    MSG_FORMAT_ITEM_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -334,32 +309,14 @@ TMError NetworkMessageFormatItem::TransferMsg(NetworkMessageContext& ctx)
     return TMOK;
 }
 
-// network message indices for NetworkMessageFormatBase class
-class IndicesMsgFormat : public NetworkMessageIndices
-{
-  public:
-    // index of field in message format
-    int index;
-    int items;
+#define MSG_FORMAT_MSG(XX)                                                                                  \
+    XX(int, index, NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Index of message type"), IdxTransfer)    \
+    XX(AutoArray<NetworkMessageFormatItem>, items, NDTObjectArray, NCTNone, DEFVALUE_MSG(NMTMsgFormatItem), \
+       DOC_MSG("List of items"), IdxTransferArray)
 
-    IndicesMsgFormat();
-    NetworkMessageIndices* Clone() const override { return new IndicesMsgFormat; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesMsgFormat::IndicesMsgFormat()
-{
-    index = -1;
-    items = -1;
-}
-
-void IndicesMsgFormat::Scan(NetworkMessageFormatBase* format){SCAN(index) SCAN(items)}
-
-// Create network message indices for NetworkMessageFormatBase class
-NetworkMessageIndices* GetIndicesMsgFormat()
-{
-    return new IndicesMsgFormat();
-}
+DECLARE_NET_INDICES(MsgFormat, MSG_FORMAT_MSG)
+DEFINE_NET_INDICES(MsgFormat, MSG_FORMAT_MSG)
+DEFINE_GET_INDICES(MsgFormat)
 
 // Return index of field "index" in IndicesMsgFormat
 int IndicesMsgFormatGetIndex(const NetworkMessageIndices* ind)
@@ -372,8 +329,7 @@ int IndicesMsgFormatGetIndex(const NetworkMessageIndices* ind)
 
 NetworkMessageFormat& NetworkMessageFormatBase::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("index", NDTInteger, NCTSmallUnsigned, ND_NULL, DOC_MSG("Index of message type"));
-    format.Add("items", NDTObjectArray, NCTNone, DEFVALUE_MSG(NMTMsgFormatItem), DOC_MSG("List of items"));
+    MSG_FORMAT_MSG(MSG_FORMAT)
     return format;
 }
 
@@ -690,49 +646,6 @@ float RefNetworkDataTyped<AutoArray<char>>::CalculateError(NetworkMessageErrorTy
 
     switch (type)
     {
-        case ET_UPD_ENTITY_POS:
-        {
-            // check data size
-            if (value.Size() != sizeof(NetworkUpdEntityPos))
-            {
-                return 0;
-            }
-            if (withValue.Size() != sizeof(NetworkUpdEntityPos))
-            {
-                return 0;
-            }
-            const NetworkUpdEntityPos& d1 = *(NetworkUpdEntityPos*)value.Data();
-            const NetworkUpdEntityPos& d2 = *(NetworkUpdEntityPos*)withValue.Data();
-            float err;
-            err = d1.position.Distance(d2.position);
-
-            err += d1.orientation.DirectionUp().Distance(d2.orientation.DirectionUp());
-            err += d1.orientation.Direction().Distance(d2.orientation.Direction());
-
-            err += dt * d1.speed.Distance(d2.speed);
-            err += dt * d1.angMomentum.Distance(d2.angMomentum);
-
-            return err;
-        }
-        case ET_UPD_MAN_POS:
-        {
-            if (value.Size() != sizeof(NetworkUpdManPos))
-            {
-                return 0;
-            }
-            if (withValue.Size() != sizeof(NetworkUpdManPos))
-            {
-                return 0;
-            }
-            const NetworkUpdManPos& d1 = *(NetworkUpdManPos*)value.Data();
-            const NetworkUpdManPos& d2 = *(NetworkUpdManPos*)withValue.Data();
-            float err;
-            err = fabs(CompareRot8b(d1.gunXRotWantedC, d2.gunXRotWantedC)) * ERR_COEF_VALUE_MINOR;
-            err += fabs(CompareRot8b(d1.gunYRotWantedC, d2.gunYRotWantedC)) * ERR_COEF_VALUE_MINOR;
-            err += fabs(CompareRot8b(d1.headXRotWantedC, d2.headXRotWantedC)) * ERR_COEF_VALUE_MINOR;
-            err += fabs(CompareRot8b(d1.headYRotWantedC, d2.headYRotWantedC)) * ERR_COEF_VALUE_MINOR;
-            return err;
-        }
         default:
             Fail("Unexpected error type");
             return 0;
@@ -882,14 +795,7 @@ float RefNetworkDataTyped<NetworkMessage>::CalculateError(NetworkMessageErrorTyp
 
 NetworkMessageFormat& MagazineNetworkInfo::CreateFormat(NetworkMessageClass cls, NetworkMessageFormat& format)
 {
-    format.Add("type", NDTString, NCTDefault, DEFVALUE(RString, ""), DOC_MSG("Magazine type"));
-    format.Add("ammo", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Ammo count"));
-    format.Add("burstLeft", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0),
-               DOC_MSG("How many shots are there in the burst (auto fired)"));
-    format.Add("reload", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Time rest to reload shot"));
-    format.Add("reloadMagazine", NDTFloat, NCTNone, DEFVALUE(float, 0), DOC_MSG("Time rest to reload magazine"));
-    format.Add("creator", NDTInteger, NCTNone, DEFVALUE(int, 0), DOC_MSG("Network ID of magazine"));
-    format.Add("id", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("Network ID of magazine"));
+    MAGAZINE_MSG(MSG_FORMAT)
     return format;
 }
 

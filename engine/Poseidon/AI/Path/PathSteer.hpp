@@ -23,7 +23,14 @@ struct OperInfoResult
 	TMError TransferMsg(NetworkMessageContext &ctx);
 };
 
-class IndicesPath;
+#define PATH_MSG(XX) \
+	XX(int, operIndex, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 1), DOC_MSG("Currently executed path node index"), IdxTransfer) \
+	XX(int, maxIndex, NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 1), DOC_MSG("Last valid path node index"), IdxTransfer) \
+	XX(int, searchTime, NDTTime, NCTNone, DEFVALUE(Time, Time(0)), DOC_MSG("Time, when path was planned"), IdxTransfer) \
+	XX(bool, onRoad, NDTBool, NCTNone, DEFVALUE(bool, false), DOC_MSG("Path on road"), IdxTransfer) \
+	XX(AutoArray<OperInfoResult>, path, NDTObjectArray, NCTNone, DEFVALUE_MSG(NMTPathPoint), DOC_MSG("List of nodes"), IdxTransferArray)
+
+DECLARE_NET_INDICES(Path, PATH_MSG)
 
 class Path: public AutoArray<OperInfoResult>, public SerializeClass 
 {
@@ -70,12 +77,13 @@ class Path: public AutoArray<OperInfoResult>, public SerializeClass
 
 	LSError Serialize(ParamArchive &ar) override;
 
-	static void CreateFormat
+	static NetworkMessageFormat &CreateFormat
 	(
+		NetworkMessageClass cls,
 		NetworkMessageFormat &format
 	);
-	TMError TransferMsg(NetworkMessageContext &ctx, IndicesPath *indices);
-	float CalculateError(NetworkMessageContext &ctx, IndicesPath *indices);
+	TMError TransferMsg(NetworkMessageContext &ctx);
+	float CalculateError(NetworkMessageContext &ctx);
 	
 	void Optimize( VehicleWithAI *vehicle ); // drop unnecessary points
 	void AvoidCollision( VehicleWithAI *vehicle ); // change path to avoid collisions

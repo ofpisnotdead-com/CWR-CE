@@ -887,9 +887,9 @@ int NetworkComponent::ReceiveFileSegment(TransferFileMessage& msg)
     // outside the buffers.
     static const int kMaxTransferBytes = 256 * 1024 * 1024;
     static const int kMaxTransferSegments = 1024 * 1024;
-    if (!WireBounds::SegmentInBounds(msg.totSize, msg.totSegments, msg.curSegment, msg.offset, msg.data.Size()) ||
-        !WireBounds::ValidLength(msg.totSize, kMaxTransferBytes) ||
-        !WireBounds::ValidCount(msg.totSegments, kMaxTransferSegments))
+    if (!WireBounds::SegmentInBounds(msg._totSize, msg._totSegments, msg._curSegment, msg._offset, msg._data.Size()) ||
+        !WireBounds::ValidLength(msg._totSize, kMaxTransferBytes) ||
+        !WireBounds::ValidCount(msg._totSegments, kMaxTransferSegments))
     {
         return -1;
     }
@@ -898,7 +898,7 @@ int NetworkComponent::ReceiveFileSegment(TransferFileMessage& msg)
     int index = -1;
     for (int i = 0; i < _files.Size(); i++)
     {
-        if (_files[i].fileName == msg.path)
+        if (_files[i].fileName == msg._path)
         {
             index = i;
             break;
@@ -909,21 +909,21 @@ int NetworkComponent::ReceiveFileSegment(TransferFileMessage& msg)
         // new file
         index = _files.Add();
         ReceivingFile& file = _files[index];
-        file.fileName = msg.path;
-        file.fileSegments.Resize(msg.totSegments);
+        file.fileName = msg._path;
+        file.fileSegments.Resize(msg._totSegments);
         for (int i = 0; i < file.fileSegments.Size(); i++)
         {
             file.fileSegments[i] = false;
         }
-        file.fileData.Resize(msg.totSize);
+        file.fileData.Resize(msg._totSize);
         file.received = 0;
     }
     ReceivingFile& file = _files[index];
 
     // A resumed transfer must match the geometry the buffers were allocated for;
     // a later packet declaring a larger file must not write past them.
-    if (msg.curSegment >= file.fileSegments.Size() ||
-        !WireBounds::RangeInBounds(msg.offset, msg.data.Size(), file.fileData.Size()))
+    if (msg._curSegment >= file.fileSegments.Size() ||
+        !WireBounds::RangeInBounds(msg._offset, msg._data.Size(), file.fileData.Size()))
     {
         return -1;
     }
@@ -938,8 +938,8 @@ int NetworkComponent::ReceiveFileSegment(TransferFileMessage& msg)
     }
 
     const bool complete = Poseidon::ApplyReceivedNetworkFileTransferSegment(
-        file.fileSegments[msg.curSegment], msg.data.Size(), file.received, remainingSegments);
-    memcpy(file.fileData.Data() + msg.offset, msg.data.Data(), msg.data.Size());
+        file.fileSegments[msg._curSegment], msg._data.Size(), file.received, remainingSegments);
+    memcpy(file.fileData.Data() + msg._offset, msg._data.Data(), msg._data.Size());
     if (!complete)
     {
         return 0;
@@ -953,7 +953,7 @@ int NetworkComponent::ReceiveFileSegment(TransferFileMessage& msg)
     // delete buffer
     _files.Delete(index);
     if (f.fail())
-        LOG_WARN(Network, "[ReceiveFileSegment] FAILED to write '{}' ({} bytes)", (const char*)msg.path, msg.totSize);
+        LOG_WARN(Network, "[ReceiveFileSegment] FAILED to write '{}' ({} bytes)", (const char*)msg._path, msg._totSize);
     return f.fail() ? -1 : +1;
 }
 

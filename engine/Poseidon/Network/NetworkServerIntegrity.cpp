@@ -95,9 +95,11 @@ bool NetworkServer::IntegrityCheck(int dpnid, IntegrityQuestionType type, const 
     }
 
     IntegrityQuestionMessage msg;
-    msg.id = id;
-    msg.type = type;
-    msg.q = q;
+    msg._id = id;
+    msg._type = type;
+    msg._name = q.name;
+    msg._offset = q.offset;
+    msg._size = q.size;
     SendMsg(dpnid, &msg, NMFGuaranteed | NMFHighPriority);
     return true;
 }
@@ -614,7 +616,12 @@ NetworkPlayerInfo* NetworkServer::OnPlayerCreate(int dpid, const char* name)
         RString message =
             BuildNetworkServerPlayerMessage((const char*)LocalizeString(IDS_MP_CONNECTING), (const char*)info.name);
         RefArray<NetworkObject> dummy;
-        ChatMessage msg(CCGlobal, nullptr, dummy, "", message);
+        ChatMessage msg;
+        msg._channel = CCGlobal;
+        msg._sender = nullptr;
+        msg._units = dummy;
+        msg._name = "";
+        msg._text = message;
         for (int i = 0; i < _players.Size(); i++)
         {
             if (_players[i].state >= NGSCreate)
@@ -745,7 +752,10 @@ void NetworkServer::OnPlayerDestroy(int dpid)
             oInfo.owner = _botClient;
             if (!oInfo.id.IsNull())
             {
-                ChangeOwnerMessage msg(oInfo.id, _botClient);
+                ChangeOwnerMessage msg;
+                msg._creator = oInfo.id.creator;
+                msg._id = oInfo.id.id;
+                msg._owner = _botClient;
                 SendMsg(_botClient, &msg, NMFGuaranteed);
             }
         }
@@ -794,7 +804,7 @@ void NetworkServer::OnPlayerDestroy(int dpid)
         }
     }
     LogoutMessage logout;
-    logout.dpnid = dpid;
+    logout._dpnid = dpid;
     for (int i = 0; i < _identities.Size(); i++)
     {
         if (_identities[i].dpnid == dpid)
@@ -852,7 +862,7 @@ void NetworkServer::OnPlayerDestroy(int dpid)
     {
         NotifyMasterServerStateChanged();
         NetworkClient* client = _parent->GetClient();
-        NET_ERROR(client && client->GetPlayer() != logout.dpnid);
+        NET_ERROR(client && client->GetPlayer() != logout._dpnid);
         // send new identity to bot client
         SendMsg(client->GetPlayer(), &logout, NMFGuaranteed);
     }
@@ -1019,7 +1029,8 @@ void NetworkServer::OnObjectDestroy(const NetworkId& id)
 {
     int owner = PerformObjectDestroy(id);
     DeleteObjectMessage msg;
-    msg.object = id;
+    msg._creator = id.creator;
+    msg._id = id.id;
 
     for (int i = 0; i < _players.Size(); i++)
     {

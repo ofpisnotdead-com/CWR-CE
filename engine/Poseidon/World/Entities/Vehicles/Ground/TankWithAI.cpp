@@ -597,74 +597,37 @@ NetworkMessageType TankWithAI::GetNMType(NetworkMessageClass cls) const
     }
 }
 
-class IndicesUpdateTank : public IndicesUpdateTankOrCar
-{
-    typedef IndicesUpdateTankOrCar base;
+#define UPDATE_TANK_MSG(XX)
 
-  public:
-    IndicesUpdateTank();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdateTank; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdateTank::IndicesUpdateTank() = default;
-
-void IndicesUpdateTank::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-}
+DECLARE_NET_INDICES_EX_ERR(UpdateTank, UpdateTankOrCar, UPDATE_TANK_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdateTank, UpdateTankOrCar, UPDATE_TANK_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdateTank()
-{
-    using namespace Poseidon;
-    return new IndicesUpdateTank();
-}
+
+DEFINE_GET_INDICES(UpdateTank)
+
 namespace Poseidon
 {
 
-class IndicesUpdatePositionTank : public IndicesUpdatePositionVehicle
-{
-    typedef IndicesUpdatePositionVehicle base;
+#define UPDATE_POSITION_TANK_MSG(XX)                                                                                   \
+    XX(Turret, mainTurret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Main turret object"),           \
+       IdxTransferObject, ET_ABS_DIF, 1)                                                                               \
+    XX(Turret, comTurret, NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Commander turret object"),       \
+       IdxTransferObject, ET_ABS_DIF, 1)                                                                               \
+    XX(float, rpmWanted, NDTFloat, NCTFloat0To2, DEFVALUE(float, 0), DOC_MSG("Wanted value of RPM"), IdxTransfer,      \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                               \
+    XX(float, thrustLWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted left thrust"), IdxTransfer, \
+       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)                                                                               \
+    XX(float, thrustRWanted, NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted right thrust"),             \
+       IdxTransfer, ET_ABS_DIF, ERR_COEF_VALUE_MAJOR)
 
-  public:
-    int mainTurret;
-    int comTurret;
-    int rpmWanted;
-    int thrustLWanted;
-    int thrustRWanted;
-
-    IndicesUpdatePositionTank();
-    NetworkMessageIndices* Clone() const override { return new IndicesUpdatePositionTank; }
-    void Scan(NetworkMessageFormatBase* format) override;
-};
-
-IndicesUpdatePositionTank::IndicesUpdatePositionTank()
-{
-    mainTurret = -1;
-    comTurret = -1;
-    rpmWanted = -1;
-    thrustLWanted = -1;
-    thrustRWanted = -1;
-}
-
-void IndicesUpdatePositionTank::Scan(NetworkMessageFormatBase* format)
-{
-    base::Scan(format);
-
-    SCAN(mainTurret)
-    SCAN(comTurret)
-    SCAN(rpmWanted)
-    SCAN(thrustLWanted)
-    SCAN(thrustRWanted)
-}
+DECLARE_NET_INDICES_EX_ERR(UpdatePositionTank, UpdatePositionVehicle, UPDATE_POSITION_TANK_MSG)
+DEFINE_NET_INDICES_EX_ERR(UpdatePositionTank, UpdatePositionVehicle, UPDATE_POSITION_TANK_MSG)
 
 } // namespace Poseidon
-NetworkMessageIndices* GetIndicesUpdatePositionTank()
-{
-    using namespace Poseidon;
-    return new IndicesUpdatePositionTank();
-}
+
+DEFINE_GET_INDICES(UpdatePositionTank)
+
 namespace Poseidon
 {
 
@@ -674,19 +637,11 @@ NetworkMessageFormat& TankWithAI::CreateFormat(NetworkMessageClass cls, NetworkM
     {
         case NMCUpdateGeneric:
             base::CreateFormat(cls, format);
+            UPDATE_TANK_MSG(MSG_FORMAT_ERR)
             break;
         case NMCUpdatePosition:
             base::CreateFormat(cls, format);
-            format.Add("mainTurret", NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret), DOC_MSG("Main turret object"),
-                       ET_ABS_DIF, 1);
-            format.Add("comTurret", NDTObject, NCTNone, DEFVALUE_MSG(NMTUpdateTurret),
-                       DOC_MSG("Commander turret object"), ET_ABS_DIF, 1);
-            format.Add("rpmWanted", NDTFloat, NCTFloat0To2, DEFVALUE(float, 0), DOC_MSG("Wanted value of RPM"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("thrustLWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted left thrust"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
-            format.Add("thrustRWanted", NDTFloat, NCTFloatM1ToP1, DEFVALUE(float, 0), DOC_MSG("Wanted right thrust"),
-                       ET_ABS_DIF, ERR_COEF_VALUE_MAJOR);
+            UPDATE_POSITION_TANK_MSG(MSG_FORMAT_ERR)
             break;
         default:
             base::CreateFormat(cls, format);
