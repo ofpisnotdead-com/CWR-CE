@@ -6,6 +6,7 @@
 #include <Poseidon/Input/KeyInput.hpp>
 #include <Poseidon/Input/UserAction.hpp>
 #include <SDL3/SDL_scancode.h>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 using namespace Poseidon;
@@ -575,6 +576,61 @@ TEST_CASE("InputSubsystem synthetic gamepad edges consume once", "[input][integr
     REQUIRE_FALSE(sub.ConsumeSyntheticStickPov(4));
 }
 
+TEST_CASE("InputSubsystem synthetic left stick drives vehicle forward and back actions", "[input][integration]")
+{
+    auto& sub = InputSubsystem::Instance();
+    sub.LoadDefaultProfiles();
+    sub.SetSyntheticLeftStick(0.0f, 0.0f);
+    GInput.gameFocusLost = 0;
+
+    sub.SetSyntheticLeftStick(0.0f, -0.8f);
+    CHECK(sub.GetAction(InputContext::CarDriver, UAMoveForward) == Catch::Approx(0.8f));
+    CHECK(sub.GetAction(InputContext::CarDriver, UAMoveBack) == Catch::Approx(0.0f));
+
+    sub.SetSyntheticLeftStick(0.0f, 0.65f);
+    CHECK(sub.GetAction(InputContext::CarDriver, UAMoveForward) == Catch::Approx(0.0f));
+    CHECK(sub.GetAction(InputContext::CarDriver, UAMoveBack) == Catch::Approx(0.65f));
+
+    sub.SetSyntheticLeftStick(0.0f, 0.0f);
+}
+
+TEST_CASE("InputSubsystem synthetic left stick does not double count infantry left-Y bindings", "[input][integration]")
+{
+    auto& sub = InputSubsystem::Instance();
+    sub.LoadDefaultProfiles();
+    sub.SetSyntheticLeftStick(0.0f, -0.8f);
+    GInput.gameFocusLost = 0;
+
+    CHECK(sub.GetAction(InputContext::Infantry, UAMoveForward) == Catch::Approx(0.8f));
+    CHECK(sub.GetAction(InputContext::Infantry, UAMoveBack) == Catch::Approx(0.0f));
+
+    sub.SetSyntheticLeftStick(0.0f, 0.0f);
+}
+
+TEST_CASE("InputSubsystem synthetic left stick X drives infantry lateral movement actions", "[input][integration]")
+{
+    auto& sub = InputSubsystem::Instance();
+    sub.LoadDefaultProfiles();
+    sub.SetSyntheticLeftStick(0.0f, 0.0f);
+    GInput.gameFocusLost = 0;
+
+    sub.SetSyntheticLeftStick(-0.7f, 0.0f);
+    CHECK(sub.GetAction(InputContext::Infantry, UAMoveLeft) == Catch::Approx(0.7f));
+    CHECK(sub.GetAction(InputContext::Infantry, UAMoveRight) == Catch::Approx(0.0f));
+    CHECK(sub.GetAction(InputContext::Infantry, UATurnLeft) == Catch::Approx(0.7f));
+    CHECK(sub.GetAction(InputContext::Infantry, UATurnRight) == Catch::Approx(0.0f));
+
+    sub.SetSyntheticLeftStick(0.6f, 0.0f);
+    CHECK(sub.GetAction(InputContext::Infantry, UAMoveLeft) == Catch::Approx(0.0f));
+    CHECK(sub.GetAction(InputContext::Infantry, UAMoveRight) == Catch::Approx(0.6f));
+    CHECK(sub.GetAction(InputContext::Infantry, UATurnLeft) == Catch::Approx(0.0f));
+    CHECK(sub.GetAction(InputContext::Infantry, UATurnRight) == Catch::Approx(0.6f));
+    CHECK(sub.GetAction(InputContext::Gunner, UATurnLeft) == Catch::Approx(0.0f));
+    CHECK(sub.GetAction(InputContext::Gunner, UATurnRight) == Catch::Approx(0.6f));
+
+    sub.SetSyntheticLeftStick(0.0f, 0.0f);
+}
+
 TEST_CASE("InputSubsystem SaveKeys does not crash", "[input][integration]")
 {
     auto& sub = InputSubsystem::Instance();
@@ -637,4 +693,21 @@ TEST_CASE("InputSubsystem joystick enabled and axis activity", "[input][integrat
     // IsActionBoundToRecentAxis with no bindings should return false
     REQUIRE_FALSE(sub.IsActionBoundToRecentAxis(UAAxisTurn));
     REQUIRE_FALSE(sub.IsActionBoundToRecentAxis(UAAxisThrust));
+}
+
+TEST_CASE("InputSubsystem SetSyntheticTurbo drives UATurbo like a held key", "[input][integration]")
+{
+    auto& sub = InputSubsystem::Instance();
+    InputContext savedContext = sub.GetContext();
+    sub.SetContext(InputContext::Infantry);
+
+    CHECK(sub.GetAction(UATurbo, false) == 0.0f);
+
+    sub.SetSyntheticTurbo(true);
+    CHECK(sub.GetAction(UATurbo, false) == 1.0f);
+
+    sub.SetSyntheticTurbo(false);
+    CHECK(sub.GetAction(UATurbo, false) == 0.0f);
+
+    sub.SetContext(savedContext);
 }

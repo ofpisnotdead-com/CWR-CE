@@ -1335,6 +1335,13 @@ void AIUnit::CheckResources()
             SendAnswer(HealthCritical);
         }
     }
+    else if (_lastHealthState == RSCritical)
+    {
+        // Recovered (e.g. healed) -- tell the group so it clears its cached
+        // "reported critical" state and stops re-issuing Heal commands/radio
+        // chatter for a unit that's no longer hurt.
+        SendAnswer(HealthOk);
+    }
     _lastHealthState = state;
 
     if (IsUnit())
@@ -1359,6 +1366,11 @@ void AIUnit::CheckResources()
                 SendAnswer(FuelLow);
             }
         }
+        else if (_lastFuelState >= RSLow)
+        {
+            // Recovered (e.g. refueled) -- clear the group's cached state.
+            SendAnswer(FuelOk);
+        }
         _lastFuelState = state;
 
         state = GetArmorState();
@@ -1369,6 +1381,11 @@ void AIUnit::CheckResources()
                 _dammageCriticalTime = Glob.time + REPEAT_REPORT_TIME;
                 SendAnswer(DammageCritical);
             }
+        }
+        else if (_lastArmorState == RSCritical)
+        {
+            // Recovered (e.g. repaired) -- clear the group's cached state.
+            SendAnswer(DammageOk);
         }
         _lastArmorState = state;
 
@@ -1387,6 +1404,11 @@ void AIUnit::CheckResources()
             {
                 SendAnswer(AmmoLow);
             }
+        }
+        else if (_lastAmmoState >= RSLow)
+        {
+            // Recovered (e.g. rearmed) -- clear the group's cached state.
+            SendAnswer(AmmoOk);
         }
         _lastAmmoState = state;
     }

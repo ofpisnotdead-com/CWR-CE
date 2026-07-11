@@ -2,6 +2,7 @@
 #include <PoseidonOpenAL/SoundSystemOAL.hpp>
 #include <PoseidonOpenAL/WaveOAL.hpp>
 #include <PoseidonOpenAL/EFXPresets.hpp>
+#include <PoseidonOpenAL/IosAudioSession.hpp>
 #include <Poseidon/Audio/Streaming/WaveLoaders.hpp>
 #include <Poseidon/Audio/Streaming/WaveStream.hpp>
 #include <Poseidon/Audio/Shared/DX8Reference.hpp>
@@ -144,6 +145,11 @@ bool SoundSystemOAL::Init()
         return false;
     }
     alcMakeContextCurrent(static_cast<ALCcontext*>(_context));
+
+#ifdef POSEIDON_TARGET_IOS
+    if (!ConfigureIOSAudioSessionForPlayback())
+        return false;
+#endif
 
     // Check EFX extension availability (DX8 parity: soundDX8.cpp:2108-2114)
     _canEAX = alcIsExtensionPresent(static_cast<ALCdevice*>(_device), "ALC_EXT_EFX") == ALC_TRUE;
@@ -1342,6 +1348,11 @@ void SoundSystemOAL::ProcessPreview()
 
 IAudioSystem* CreateSoundSystemOAL()
 {
+#ifdef POSEIDON_TARGET_IOS
+    if (!ConfigureIOSAudioSessionForPlayback())
+        return nullptr;
+#endif
+
     if (!OpenALRuntime::EnsureLoaded())
         return nullptr;
 

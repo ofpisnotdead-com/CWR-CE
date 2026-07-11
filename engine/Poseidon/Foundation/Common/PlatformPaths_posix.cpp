@@ -3,6 +3,10 @@
 #include <sys/stat.h>
 #include <string>
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
+
 namespace {
 
 void ensureDirectory(const std::string& path) {
@@ -38,6 +42,49 @@ std::string getXdgDir(const char* envVar, const char* defaultSuffix, const char*
 
 namespace Poseidon::Foundation {
 
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+// Real iOS hardware sandboxes app containers more strictly than the
+// Simulator: creating a new dot-directory (".cache", ".local") directly at
+// the container root fails with EPERM (confirmed on-device -- the
+// Simulator allows it, masking this). Apps are only guaranteed to be able
+// to write under the standard Library/Documents/tmp scaffolding Apple
+// already creates, so use that instead of the desktop XDG convention.
+std::string getUserConfigDir(const char* appName) {
+    return getXdgDir("XDG_CONFIG_HOME", "Library/Preferences", appName);
+}
+
+std::string getUserDataDir(const char* appName) {
+    return getXdgDir("XDG_DATA_HOME", "Library/Application Support", appName);
+}
+
+std::string getUserCacheDir(const char* appName) {
+    return getXdgDir("XDG_CACHE_HOME", "Library/Caches", appName);
+}
+
+std::string getUserDocumentsDir(const char* appName) {
+    return getXdgDir("XDG_DATA_HOME", "Documents", appName);
+}
+#elif defined(__APPLE__)
+// Desktop macOS has its own directory conventions, distinct from both iOS's
+// sandboxed container and Linux's XDG dirs. No XDG_* env var override here —
+// those aren't a macOS convention; app-level overrides go through the
+// POSEIDON_* vars in GamePaths.cpp instead.
+std::string getUserConfigDir(const char* appName) {
+    return getXdgDir("", "Library/Preferences", appName);
+}
+
+std::string getUserDataDir(const char* appName) {
+    return getXdgDir("", "Library/Application Support", appName);
+}
+
+std::string getUserCacheDir(const char* appName) {
+    return getXdgDir("", "Library/Caches", appName);
+}
+
+std::string getUserDocumentsDir(const char* appName) {
+    return getXdgDir("", "Documents", appName);
+}
+#else
 std::string getUserConfigDir(const char* appName) {
     return getXdgDir("XDG_CONFIG_HOME", ".config", appName);
 }
@@ -57,6 +104,7 @@ std::string getUserDocumentsDir(const char* appName) {
     // correct, non-roaming home for user content (mods, editor missions).
     return getXdgDir("XDG_DATA_HOME", ".local/share", appName);
 }
+#endif
 
 } // namespace Poseidon::Foundation
 

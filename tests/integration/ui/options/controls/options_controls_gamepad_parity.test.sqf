@@ -33,6 +33,10 @@ triGpadPov 4            // Down -> Gamepad Tuning
 triWaitFrames 5
 triAssert [(triGetControlFocused 1406)]
 
+triGpadPov 4            // Down -> Touch Controls
+triWaitFrames 5
+triAssert [(triGetControlFocused 1407)]
+
 triGpadPov 4            // Down -> Reset all to defaults
 triWaitFrames 5
 triAssert [(triGetControlFocused 1403)]

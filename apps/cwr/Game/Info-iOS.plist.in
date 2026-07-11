@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>${MACOSX_BUNDLE_EXECUTABLE_NAME}</string>
+	<key>CFBundleIdentifier</key>
+	<string>${MACOSX_BUNDLE_GUI_IDENTIFIER}</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>${MACOSX_BUNDLE_BUNDLE_NAME}</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>${MACOSX_BUNDLE_SHORT_VERSION_STRING}</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<!-- Without this key, iOS defaults to treating the app as iPhone-only.
+	     That was harmless while iPhone was the only device this ever ran
+	     on, but it means iPad installs silently run inside a legacy
+	     compatibility box pinned to the old iPhone 3.5" resolution
+	     (480x320 pt) instead of the real screen -- confirmed via
+	     UIScreen.mainScreen.bounds/window.frame/scene.screen.bounds all
+	     agreeing on exactly that size on an iPad Pro 13" simulator.
+	     Universal (1, 2) makes both platforms explicit instead of relying
+	     on the iPhone-only default. -->
+	<key>UIDeviceFamily</key>
+	<array>
+		<integer>1</integer>
+		<integer>2</integer>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>${MACOSX_BUNDLE_BUNDLE_VERSION}</string>
+	<key>CSResourcesFileMapped</key>
+	<true/>
+	<!-- Makes Documents/ (where GameData/, Mods/, Workshop/, missions/ all
+	     live -- see Foundation::GamePaths) reachable from the Files app and
+	     over a USB Finder connection, so a large game-data archive can be
+	     copied in manually instead of only via the in-app importer/download. -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string></string>
+		<key>UIImageName</key>
+		<string></string>
+	</dict>
+	<key>UIStatusBarHidden</key>
+	<true/>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+	<!-- This engine has no portrait UI at all (desktop-style HUD/menus
+	     laid out for landscape) -- locking orientation here, rather than
+	     only handling it in the resize/rotation code path, avoids a real
+	     viewport bug: rotating portrait->landscape after launch leaves the
+	     Metal view off-center and not full-screen (tracked separately;
+	     locking orientation removes the way to trigger it in normal use,
+	     it doesn't fix the underlying resize handling). -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIRequiresFullScreen</key>
+	<true/>
+	<!-- Not actual gameplay features -- SDL3 links AVFoundation/CoreBluetooth
+	     symbols regardless of whether the game calls into them (camera via
+	     SDL3's camera subsystem, Bluetooth via its game-controller support),
+	     which is enough for Apple's binary processing to require these keys
+	     even though only Bluetooth controller pairing is genuinely used. -->
+	<key>NSCameraUsageDescription</key>
+	<string>This app does not use the camera.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Bluetooth is used to connect MFi game controllers.</string>
+	<!-- MasterServerServiceClient.cpp talks to the master server over
+	     plain HTTPS/TLS (curl+OpenSSL) for matchmaking/master-server
+	     requests -- standard, exempt encryption under Category 5 Part 2 of
+	     the EAR, not custom/proprietary crypto. Declaring this up front so
+	     every future TestFlight upload doesn't need a manual export
+	     compliance answer in App Store Connect. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+</dict>
+</plist>

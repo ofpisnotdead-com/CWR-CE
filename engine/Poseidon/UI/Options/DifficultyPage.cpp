@@ -68,6 +68,7 @@ void DifficultyPage::Unmount(OptionsShell& shell)
         USER_CONFIG.cadetDifficulty[i] = m_cadetDifficulty[i];
         USER_CONFIG.veteranDifficulty[i] = m_veteranDifficulty[i];
     }
+    USER_CONFIG.easyMode = m_selectedMode == 0;
     UserConfig_SaveDifficulties(USER_CONFIG);
     ScrollListPage::Unmount(shell);
 }
@@ -126,6 +127,7 @@ void DifficultyPage::DifficultyProvider::SetRowValue(int row, int value)
     if (row == kRowMode)
     {
         m_page->m_selectedMode = value;
+        Persist();
         return;
     }
     if (row < kRowFirstSetting || row >= kRowReset)
@@ -174,6 +176,7 @@ void DifficultyPage::DifficultyProvider::Persist() const
         USER_CONFIG.cadetDifficulty[i] = m_page->m_cadetDifficulty[i];
         USER_CONFIG.veteranDifficulty[i] = m_page->m_veteranDifficulty[i];
     }
+    USER_CONFIG.easyMode = m_page->m_selectedMode == 0;
     UserConfig_SaveDifficulties(USER_CONFIG);
 }
 

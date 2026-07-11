@@ -34,6 +34,11 @@ Makefile text eol=lf
 *.opensdf binary
 *.db binary
 *.opendb binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
 packages/** filter=lfs diff=lfs merge=lfs -text
 release/** filter=lfs diff=lfs merge=lfs -text
 

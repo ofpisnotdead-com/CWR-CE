@@ -580,6 +580,18 @@ void Object::DrawShadow(Shape* shadow, Vector3Par shadowPos, ClipFlags clipFlags
     // (PSShadow is layout-agnostic).
     int spec = IsOnSurface | IsShadow | IsAlphaFog;
 
+    // Both the buffered/TL path (GetVertexBuffer() != nullptr, below) and the
+    // legacy per-face path already share the same single-pass stencil
+    // EQUAL(0)+INCREMENT exclusion scheme (EngineMTLBootstrap's
+    // depthStateShadow, used by both pipelineStateTLShadow and
+    // pipelineState2DShadow) -- confirmed via live instrumentation
+    // (2026-06-26) that a prior comment here claiming the legacy path "has no
+    // stencil exclusion at all" was stale. The real bug that made idle
+    // vehicles' shadows flip solid black was in the buffered path's vertex
+    // shader reusing the general lit vsMesh (whose alpha output,
+    // obj.ambient.w, can exceed 1.0 for the shadow material specifically --
+    // see EngineMTLBootstrap.cpp's vsShadow doc comment); fixed 2026-06-26 by
+    // giving Metal its own dedicated unlit vsShadow, mirroring GL33's.
     if (GEngine->GetTL() && EnableHWTLState && shadow->GetVertexBuffer() && !(spec & OnSurface))
     {
         // T&L shadow drawing

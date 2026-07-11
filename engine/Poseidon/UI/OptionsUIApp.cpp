@@ -120,6 +120,8 @@ RString GetAppVersion()
 {
 #if defined(_M_X64) || defined(__x86_64__)
     const char* platform = "x64";
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    const char* platform = "arm64";
 #else
     const char* platform = "x86";
 #endif
@@ -131,7 +133,7 @@ RString GetAppVersion()
     return buf;
 }
 
-// Main-menu IDC → STRINGTABLE key. Verified present in packages/Remaster/BIN/STRINGTABLE.CSV.
+// Main-menu IDC → STRINGTABLE key. Verified present in packages/Combined/BIN/STRINGTABLE.CSV.
 // IDC_MAIN_PLAYER is excluded (DisplayMain::OnDraw re-sets it every frame).
 // IDC_MAIN_VERSION and IDC_MAIN_DATE are excluded (non-translated strings).
 // IDC_MAIN_EDITOR maps to STR_DISP_MAIN_CUSTOM because the rendered button text is "MISSION EDITOR".
@@ -438,11 +440,24 @@ void DisplayMain::OnChildDestroyed(int idd, int exit)
                 {
                     GetGCampaignHistory() = campaign;
                     RString save = GetCampaignSaveDirectory(campaign.campaignName) + RString("continue.fps");
-                    GWorld->LoadBin(save, IDS_LOAD_GAME);
-                    // remove continue.fps
-                    ::DeleteFile(save);
+                    // Destroy the campaign-load child (which `campaign` references into) before
+                    // the load, matching every other branch here -- otherwise the exited dialog
+                    // stays DisplayMain::_child throughout LoadBin(), so HUD/input/topmost checks
+                    // still see it as the active UI while the mission loads underneath it.
                     Display::OnChildDestroyed(idd, exit);
-                    CreateChild(new DisplayMission(this, false, false, true));
+                    // continue.fps is a one-shot resume point -- only consume it (delete + drop
+                    // into the mission) if the load actually succeeded. Deleting it unconditionally
+                    // meant a single LoadBin failure (bad content, stale addon state, whatever)
+                    // permanently destroyed the only copy of the resume point *and* dropped the
+                    // player into a DisplayMission built on a world LoadBin never finished
+                    // populating -- the "resume gives a blank/bugged screen" bug. LoadBin already
+                    // reports the failure via ErrorMessage(); on failure we just fall back to the
+                    // main menu with the save intact so the player can retry.
+                    if (GWorld->LoadBin(save, IDS_LOAD_GAME))
+                    {
+                        ::DeleteFile(save);
+                        CreateChild(new DisplayMission(this, false, false, true));
+                    }
                 }
                 else
                 {
@@ -772,10 +787,14 @@ void DisplayMain::OnChildDestroyed(int idd, int exit)
                     ApplyCurrentMissionViewDistance();
                 }
                 RString filename = GetMissionSaveDirectory(disp->GetDirectory() + mission) + RString("continue.fps");
-                GWorld->LoadBin(filename, IDS_LOAD_GAME);
 
+                // Same ordering fix as IDD_CAMPAIGN_LOAD's value == -1 branch: destroy the
+                // load-menu child before LoadBin(), not after. Also gated on success like that
+                // branch -- don't drop into a DisplayMission built on a world LoadBin failed to
+                // populate.
                 Display::OnChildDestroyed(idd, exit);
-                CreateChild(new DisplayMission(this, false, false));
+                if (GWorld->LoadBin(filename, IDS_LOAD_GAME))
+                    CreateChild(new DisplayMission(this, false, false));
             }
             else
             {
@@ -1906,7 +1925,10 @@ void DisplayMain::OnButtonClicked(int idc)
         case IDC_MAIN_OPTIONS:
             // Offer the Credits button only when CfgCredits is configured (the demo
             // ships none, matching the original 2001 demo).
-            CreateChild(new OptionsShell(this, true, IsCreditsConfigured()));
+            if (Res.FindEntry("RscOptionsShell"))
+                CreateChild(new OptionsShell(this, true, IsCreditsConfigured()));
+            else
+                CreateChild(new DisplayOptions(this, true, IsCreditsConfigured()));
             break;
         case IDC_MAIN_CUSTOM:
             CreateChild(new DisplayCustomArcade(this));

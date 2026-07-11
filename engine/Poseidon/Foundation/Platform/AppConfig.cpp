@@ -25,6 +25,10 @@
 #include <windows.h> // For Sleep
 #endif
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
+
 // Note: CLI11 has static initialization that allocates memory
 // This happens before WinMain, so we need to ensure memory system tolerates early allocation
 #include <CLI/App.hpp>
@@ -99,6 +103,8 @@ std::vector<std::string> NormalizeLegacyArguments(int argc, char** argv)
             arg = "--mod";
         else if (arg.rfind("-mod=", 0) == 0)
             arg = "--mod=" + arg.substr(5);
+        else if (arg == "-benchmark")
+            arg = "--benchmark";
         args.emplace_back(std::move(arg));
     }
     return args;
@@ -315,10 +321,18 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
         bool showMenuScene = true;
         displayGroup->add_flag("--menu-scene,!--no-menu-scene", showMenuScene, "Show 3D background scene in menu");
 
+#ifdef __APPLE__
+        showOption(displayGroup
+                       ->add_option("--render", _renderBackend,
+                                    "Graphics backend: dummy, gl33, mtl, auto (default: gl33)")
+                       ->check(CLI::IsMember({"dummy", "gl33", "mtl", "auto"})),
+                   CliHelpVisibility::Full);
+#else
         showOption(
             displayGroup->add_option("--render", _renderBackend, "Graphics backend: dummy, gl33, auto (default: gl33)")
                 ->check(CLI::IsMember({"dummy", "gl33", "auto"})),
             CliHelpVisibility::Full);
+#endif
 
         showOption(displayGroup->add_flag("--tl,--hw-tl", _enableHWTL,
                                           "Enable hardware transform & lighting (T&L, default on)"),
@@ -332,7 +346,7 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
                                           "Dual monitor mode (legacy flag, no effect)"),
                    CliHelpVisibility::Full);
 
-        displayGroup->add_flag("--fps,--show-fps", _showFps, "Show FPS overlay on screen");
+        displayGroup->add_flag("--fps,--show-fps,!--no-fps", _showFps, "Show FPS overlay on screen");
 
         showOption(displayGroup->add_flag("--notex,--no-textures", _noTextures, "Disable textures (debug mode)"),
                    CliHelpVisibility::Dev);
@@ -462,8 +476,8 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
                          "Working directory (game data directory with DTA/, Worlds/, etc.)")
             ->check(CLI::ExistingDirectory);
 
-        auto* legacyGroup = app.add_option_group("Legacy Compatibility",
-                                                 "Accepted OFP/CWA-style aliases: -nosplash, -mod, -nomap, -oldpaths");
+        auto* legacyGroup = app.add_option_group(
+            "Legacy Compatibility", "Accepted OFP/CWA-style aliases: -nosplash, -mod, -nomap, -oldpaths, -benchmark");
 
         legacyGroup->add_flag("--oldpaths", _oldPaths,
                               "Use game-folder paths for profiles, config, Mods, Missions, and MPMissions "
@@ -556,7 +570,8 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
 
         auto* debugGroup = app.add_option_group("Debug & Testing", "Development and testing options");
 
-        showOption(debugGroup->add_flag("--benchmark", _benchmark, "Benchmark mode"), CliHelpVisibility::Dev);
+        showOption(debugGroup->add_flag("--benchmark", _benchmark, "Benchmark mode (legacy alias: -benchmark)"),
+                   CliHelpVisibility::Dev);
 
         if (!BuildInfo::ReleaseBuild)
         {
@@ -778,9 +793,30 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
                 _noLandscape = true;
             }
 
-            // Make log-file path absolute before any chdir (-C) changes the CWD
+            // Make log-file path absolute before any chdir (-C) changes the CWD.
+            // On iOS/tvOS a relative path resolved against getcwd() is meaningless:
+            // sandboxed apps don't control their launch cwd (commonly "/", which the
+            // sandbox forbids writing to), unlike a desktop shell's cwd. Anchor
+            // relative paths to the container home instead, where the app is always
+            // guaranteed write access -- matches getUserDataDir()'s own Library/
+            // convention for this platform. A bad cwd-relative path here doesn't
+            // just fail quietly: basic_file_sink_mt's constructor throws on open
+            // failure, which is uncaught this early in startup and crashes the app.
             if (!_logFile.empty())
+            {
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+                std::filesystem::path p(_logFile);
+                if (p.is_relative())
+                {
+                    const char* home = std::getenv("HOME");
+                    if (home && home[0] != '\0')
+                        p = std::filesystem::path(home) / p;
+                }
+                _logFile = p.string();
+#else
                 _logFile = std::filesystem::absolute(_logFile).string();
+#endif
+            }
             if (!_perfTracePath.empty())
                 _perfTracePath = std::filesystem::absolute(_perfTracePath).string();
 

@@ -165,6 +165,17 @@ class PreloadedTextures
 
 extern PreloadedTextures GPreloadedTextures;
 
+// Ray to cast from the camera towards a point light for a terrain ground-occlusion
+// test (used by Scene::DrawFlares). Extracted as a free function so the
+// direction/distance math can be unit tested without a live Landscape/Scene.
+struct LightOcclusionRay
+{
+    Vector3 dir;    // unnormalized vector from the camera towards the light
+    float dist;     // |dir|, the actual distance to the light
+    float maxDist;  // distance to test the ray out to (matches the sun-flare convention)
+};
+LightOcclusionRay ComputeLightOcclusionRay(Vector3Par camPos, Vector3Par lightPos);
+
 // Scene graph management: LOD and light management.
 class Scene
 {

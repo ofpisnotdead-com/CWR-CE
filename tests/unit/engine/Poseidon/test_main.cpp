@@ -174,7 +174,7 @@ int main(int argc, char* argv[])
     SetMemorySystemReady(true);
     Poseidon::Foundation::gSoftAssert = true; // don't break into debugger on non-fatal assertions
     ScopedPoseidonTestPaths testPaths;
-    GamePaths::Instance().Initialize("CWR", "ColdWarAssault");
+    GamePaths::Instance().Initialize("CWR", "ColdWarAssault", GameDirs::ProductName);
     Poseidon::RegisterDummyAudioBackend();
     Poseidon::RegisterTextAudioBackend();
     Poseidon::RegisterOpenALAudioBackend();

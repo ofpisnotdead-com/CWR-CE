@@ -220,6 +220,39 @@ void CreatePath(RString path)
     }
 }
 
+static std::string NormalizeSlashes(std::string path)
+{
+    for (char& ch : path)
+    {
+        if (ch == '\\')
+            ch = '/';
+    }
+    return path;
+}
+
+static RString GetSaveBaseDirectory()
+{
+    RString base = GetBaseDirectory();
+    if (base.GetLength() == 0)
+    {
+        return base;
+    }
+
+    std::string basePath = NormalizeSlashes((const char*)base);
+    std::string contentRoot = NormalizeSlashes(GamePaths::Instance().UserContentDir());
+    if (!contentRoot.empty() && contentRoot.back() != '/')
+    {
+        contentRoot += '/';
+    }
+
+    if (!contentRoot.empty() && basePath.rfind(contentRoot, 0) == 0)
+    {
+        return RString(basePath.c_str() + contentRoot.size());
+    }
+
+    return base;
+}
+
 RString GetSaveDirectory()
 {
     /*
@@ -227,7 +260,7 @@ RString GetSaveDirectory()
         mkdir(dir, nullptr);
         return dir;
     */
-    RString dir = GetUserDirectory() + RString("Saved/") + GetBaseDirectory();
+    RString dir = GetUserDirectory() + RString("Saved/") + GetSaveBaseDirectory();
     if (!IsCampaign())
     {
         dir = dir + GetBaseSubdirectory() + RString(Glob.header.filenameReal) + RString(".") +
@@ -250,12 +283,14 @@ RString GetCampaignSaveDirectory(RString campaign)
     {
     }
     RString dir = GetUserDirectory() + RString("Saved/campaigns/") + campaign + RString("/");
+    CreatePath(dir);
     return dir;
 }
 
 RString GetMissionSaveDirectory(RString mission)
 {
     RString dir = GetUserDirectory() + RString("Saved/missions/") + mission + RString("/");
+    CreatePath(dir);
     return dir;
 }
 
@@ -894,7 +929,52 @@ static bool FindMissionPboCallback(RStringB dir, void* ctx)
     return false;
 }
 
-RString CreateSingleMissionBank(RString filename)
+static RString GetSingleMissionBankPrefix(RString filename, RString island, bool uniquePrefix)
+{
+    const char* prefix = "missions\\__cur_sp.";
+    if (!uniquePrefix)
+    {
+        return RString(prefix) + island + RString("\\");
+    }
+
+    const char* name = filename;
+    const char* base = name;
+    for (const char* p = name; *p != 0; ++p)
+    {
+        if (*p == '\\' || *p == '/')
+        {
+            base = p + 1;
+        }
+    }
+
+    const char* ext = strrchr(base, '.');
+    const char* end = ext ? ext : base + strlen(base);
+
+    char safeName[128];
+    int out = 0;
+    for (const char* p = base; p < end && out < static_cast<int>(sizeof(safeName)) - 1; ++p)
+    {
+        char c = *p;
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-')
+        {
+            safeName[out++] = c;
+        }
+        else
+        {
+            safeName[out++] = '_';
+        }
+    }
+    safeName[out] = 0;
+
+    if (out == 0)
+    {
+        snprintf(safeName, sizeof(safeName), "mission");
+    }
+
+    return RString(prefix) + RString(safeName) + RString(".") + island + RString("\\");
+}
+
+RString CreateSingleMissionBank(RString filename, bool uniquePrefix)
 {
     // suppose filename is without extension (.pbo)
 
@@ -935,7 +1015,7 @@ RString CreateSingleMissionBank(RString filename)
     int index = GFileBanks.Add();
     QFBank& bank = GFileBanks[index];
     bank.open(openPath);
-    RString str = RString(prefix) + island + RString("\\");
+    RString str = GetSingleMissionBankPrefix(filename, island, uniquePrefix);
     str.Lower();
     bank.SetPrefix(str);
     return str;
@@ -1775,6 +1855,22 @@ bool NextMission(Display* disp, EndMode mode)
 {
     SetBaseDirectory(GetCampaignDirectory(CurrentCampaign));
     GetGCampaignHistory().MissionCompleted(CurrentCampaign, CurrentBattle, CurrentMission);
+
+    // The mission we just finished is now recorded as reached in the campaign
+    // history (so it appears as a Revert entry), which makes any continue.fps
+    // still on disk a resume point for a mission that's already over. Previously
+    // this was only cleaned up once the *next* mission's intro/briefing screen
+    // closed (see IDD_INTRO in OptionsUIApp.cpp), leaving a window -- debriefing,
+    // outro, award, campaign intro cutscene, next mission's briefing -- where
+    // quitting left a stale continue.fps that pointed at the finished mission
+    // instead of the one the player had actually reached.
+    {
+        RString dir = GetSaveDirectory();
+        ::DeleteFile(dir + RString("continue.fps"));
+        ::DeleteFile(dir + RString("autosave.fps"));
+        ::DeleteFile(dir + RString("save.fps"));
+    }
+
     RString filename = GetTmpSaveDirectory() + CurrentCampaign + RString(".sqc");
     SaveMission(filename);
 
@@ -1971,7 +2067,10 @@ void DisplayInterrupt::OnButtonClicked(int idc)
     switch (idc)
     {
         case IDC_INT_OPTIONS:
-            CreateChild(new OptionsShell(this, false, false));
+            if (Res.FindEntry("RscOptionsShell"))
+                CreateChild(new OptionsShell(this, false, false));
+            else
+                CreateChild(new DisplayOptions(this, false, false));
             break;
         default:
             Exit(idc);
@@ -2115,6 +2214,10 @@ void StartRandomCutscene(RString world)
 
     const ParamEntry& cls = Pars >> "CfgWorlds" >> world >> "cutscenes";
     int n = cls.GetSize();
+    if (n <= 0)
+    {
+        return;
+    }
     int i = toIntFloor(n * GRandGen.RandomValue());
 
     RString name = cls[i];
@@ -2123,9 +2226,9 @@ void StartRandomCutscene(RString world)
     //	SetCampaign("");
     SetBaseDirectory("");
 
-    ParseIntro();
+    bool parsed = ParseIntro();
 
-    if (CurrentTemplate.groups.Size() > 0)
+    if (parsed && CurrentTemplate.groups.Size() > 0)
     {
         GLOB_WORLD->SwitchLandscape(GetWorldName(world));
         GWorld->ActivateAddons(CurrentTemplate.addOns);

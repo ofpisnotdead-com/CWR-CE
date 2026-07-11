@@ -11,25 +11,24 @@
 #include <dlfcn.h>
 #endif
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
+
 #include <string>
 
 namespace OpenALRuntime
 {
-#define OPENAL_RUNTIME_FUNCTIONS(X)                                                                                     \
-    X(alAuxiliaryEffectSloti)                                                                                           \
+// Core AL/ALC entry points every backend (OpenAL Soft, Apple's system
+// OpenAL.framework, ...) implements. Missing any of these means there's no
+// usable OpenAL at all.
+#define OPENAL_CORE_FUNCTIONS(X)                                                                                       \
     X(alBufferData)                                                                                                     \
-    X(alDeleteAuxiliaryEffectSlots)                                                                                     \
     X(alDeleteBuffers)                                                                                                  \
-    X(alDeleteEffects)                                                                                                  \
     X(alDeleteSources)                                                                                                  \
     X(alDistanceModel)                                                                                                  \
     X(alDopplerFactor)                                                                                                  \
-    X(alEffectf)                                                                                                        \
-    X(alEffectfv)                                                                                                       \
-    X(alEffecti)                                                                                                        \
-    X(alGenAuxiliaryEffectSlots)                                                                                        \
     X(alGenBuffers)                                                                                                     \
-    X(alGenEffects)                                                                                                     \
     X(alGenSources)                                                                                                     \
     X(alGetError)                                                                                                       \
     X(alGetSourcef)                                                                                                     \
@@ -62,6 +61,25 @@ namespace OpenALRuntime
     X(alcOpenDevice)                                                                                                    \
     X(alcProcessContext)                                                                                                \
     X(alcSuspendContext)
+
+// EFX (ALC_EXT_EFX, used for EAX-reverb presets) is an optional extension.
+// Apple's system OpenAL.framework (core AL 1.1 only) doesn't export these.
+// SoundSystemOAL already gates every call behind a runtime
+// alcIsExtensionPresent(ALC_EXT_EFX) check and never touches these pointers
+// unless that check passed, so it's safe to leave them null when missing.
+#define OPENAL_EFX_FUNCTIONS(X)                                                                                        \
+    X(alAuxiliaryEffectSloti)                                                                                           \
+    X(alDeleteAuxiliaryEffectSlots)                                                                                     \
+    X(alDeleteEffects)                                                                                                  \
+    X(alEffectf)                                                                                                        \
+    X(alEffectfv)                                                                                                       \
+    X(alEffecti)                                                                                                        \
+    X(alGenAuxiliaryEffectSlots)                                                                                        \
+    X(alGenEffects)
+
+#define OPENAL_RUNTIME_FUNCTIONS(X)                                                                                     \
+    OPENAL_CORE_FUNCTIONS(X)                                                                                            \
+    OPENAL_EFX_FUNCTIONS(X)
 
 struct Api
 {
@@ -116,6 +134,12 @@ inline void UnloadModule()
 {
     if (ModuleHandle() == nullptr)
         return;
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+    // iOS: ModuleHandle() is the RTLD_DEFAULT sentinel (see TryLoadModule),
+    // not a real dlopen handle -- there's nothing to dlclose.
+    ModuleHandle() = nullptr;
+    return;
+#endif
 #ifdef _WIN32
     FreeLibrary(static_cast<HMODULE>(ModuleHandle()));
 #else
@@ -142,6 +166,42 @@ inline bool TryLoadModule()
         SetError("OpenAL32.dll is not available");
         return false;
     }
+#elif defined(__APPLE__) && TARGET_OS_IPHONE
+    // iOS/Simulator sandboxing prohibits dlopen of anything outside the app
+    // bundle, so there's no equivalent of macOS's Homebrew/system-framework
+    // probing below. openal-soft is link-time static for this platform (see
+    // cmake/vcpkg-triplets/arm64-ios-simulator.cmake) -- its symbols are
+    // already part of this binary, so "loading" is just resolving them out
+    // of the global symbol table via the RTLD_DEFAULT sentinel handle.
+    ModuleHandle() = RTLD_DEFAULT;
+#elif defined(__APPLE__)
+    // Prefer the dylib DistCopy.cmake bundles next to the executable (built
+    // and tested against the exact version we ship), then a real openal-soft
+    // if the user has one (Homebrew installs it keg-only since macOS already
+    // ships OpenAL.framework), then fall back to Apple's built-in framework,
+    // which is always present but core-only (no EFX -- see
+    // OPENAL_EFX_FUNCTIONS above). "@executable_path/" is needed because a
+    // bare "libopenal.dylib" only hits dyld's default/fallback search paths,
+    // not the directory the binary actually launched from.
+    static const char* const candidates[] = {
+        "@executable_path/libopenal.dylib",
+        "libopenal.1.dylib",
+        "libopenal.dylib",
+        "/opt/homebrew/opt/openal-soft/lib/libopenal.1.dylib",
+        "/usr/local/opt/openal-soft/lib/libopenal.1.dylib",
+        "/System/Library/Frameworks/OpenAL.framework/OpenAL",
+    };
+    for (const char* candidate : candidates)
+    {
+        ModuleHandle() = dlopen(candidate, RTLD_NOW | RTLD_LOCAL);
+        if (ModuleHandle() != nullptr)
+            break;
+    }
+    if (ModuleHandle() == nullptr)
+    {
+        SetError("No OpenAL implementation found (tried openal-soft and the system OpenAL.framework)");
+        return false;
+    }
 #else
     ModuleHandle() = dlopen("libopenal.so.1", RTLD_NOW | RTLD_LOCAL);
     if (ModuleHandle() == nullptr)
@@ -158,15 +218,30 @@ inline bool TryLoadModule()
 inline bool ResolveFunctions()
 {
     Api resolved;
-#define RESOLVE_OPENAL_FUNCTION(name)                                                                                   \
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+#define RESOLVE_REQUIRED_OPENAL_FUNCTION(name) resolved.name = &::name;
+    OPENAL_CORE_FUNCTIONS(RESOLVE_REQUIRED_OPENAL_FUNCTION)
+#undef RESOLVE_REQUIRED_OPENAL_FUNCTION
+
+#define RESOLVE_OPTIONAL_OPENAL_FUNCTION(name) resolved.name = reinterpret_cast<decltype(resolved.name)>(LookupSymbol(#name));
+    OPENAL_EFX_FUNCTIONS(RESOLVE_OPTIONAL_OPENAL_FUNCTION)
+#undef RESOLVE_OPTIONAL_OPENAL_FUNCTION
+#else
+#define RESOLVE_REQUIRED_OPENAL_FUNCTION(name)                                                                         \
     resolved.name = reinterpret_cast<decltype(resolved.name)>(LookupSymbol(#name));                                    \
     if (resolved.name == nullptr)                                                                                       \
     {                                                                                                                   \
         SetError("Missing OpenAL symbol: " #name);                                                                      \
         return false;                                                                                                   \
     }
-    OPENAL_RUNTIME_FUNCTIONS(RESOLVE_OPENAL_FUNCTION)
-#undef RESOLVE_OPENAL_FUNCTION
+    OPENAL_CORE_FUNCTIONS(RESOLVE_REQUIRED_OPENAL_FUNCTION)
+#undef RESOLVE_REQUIRED_OPENAL_FUNCTION
+
+#define RESOLVE_OPTIONAL_OPENAL_FUNCTION(name)                                                                         \
+    resolved.name = reinterpret_cast<decltype(resolved.name)>(LookupSymbol(#name));
+    OPENAL_EFX_FUNCTIONS(RESOLVE_OPTIONAL_OPENAL_FUNCTION)
+#undef RESOLVE_OPTIONAL_OPENAL_FUNCTION
+#endif
 
     GetApiStorage() = resolved;
     return true;

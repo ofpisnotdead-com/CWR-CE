@@ -1,0 +1,85 @@
+{
+  "version": 6,
+  "include": [
+    "base.json"
+  ],
+  "configurePresets": [
+    {
+      "name": "ios-clang-debug",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "ios-clang-relwithdebinfo",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "ios-arm64-simulator",
+      "displayName": "iOS Simulator arm64 Clang Debug",
+      "inherits": "ios-clang-debug",
+      "binaryDir": "${sourceDir}/build/ios-arm64-simulator",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-ios-simulator",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/ios-arm64-clang.cmake"
+      }
+    },
+    {
+      "name": "ios-arm64-simulator-rwdi",
+      "displayName": "iOS Simulator arm64 Clang RelWithDebInfo",
+      "inherits": "ios-clang-relwithdebinfo",
+      "binaryDir": "${sourceDir}/build/ios-arm64-simulator-rwdi",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-ios-simulator",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/ios-arm64-clang.cmake"
+      }
+    },
+    {
+      "name": "ios-arm64-simulator-xcode",
+      "displayName": "iOS Simulator arm64 Xcode Debug",
+      "inherits": "base",
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/build/ios-arm64-simulator-xcode",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-ios-simulator",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/ios-arm64-clang.cmake",
+        "CMAKE_C_COMPILER_LAUNCHER": "",
+        "CMAKE_CXX_COMPILER_LAUNCHER": ""
+      }
+    },
+    {
+      "name": "ios-arm64-device",
+      "displayName": "iOS Device arm64 Xcode (code signing/provisioning)",
+      "inherits": "base",
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/build/ios-arm64-device",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-ios",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/ios-device-arm64-clang.cmake",
+        "CMAKE_C_COMPILER_LAUNCHER": "",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "",
+        "CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM": "G75D5FBNYR",
+        "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE": "Automatic"
+      }
+    },
+    {
+      "name": "ios-arm64-device-appstore",
+      "displayName": "iOS Device arm64 Xcode (App Store / TestFlight distribution)",
+      "inherits": "ios-arm64-device",
+      "binaryDir": "${sourceDir}/build/ios-arm64-device-appstore",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "POSEIDON_IOS_BUNDLE_GAME_DATA": "OFF",
+        "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE": "Manual",
+        "CMAKE_XCODE_GENERATE_SCHEME": "ON",
+        "CMAKE_XCODE_ATTRIBUTE_SKIP_INSTALL": "YES"
+      }
+    }
+  ]
+}

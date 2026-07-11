@@ -104,6 +104,10 @@ void Man::ProcessMoveFunction(ActionContextBase* context)
             if (ENGINE_CONFIG.blood && GRandGen.RandomValue() <= 0.3f)
             {
                 LODShapeWithShadow* shape = GLOB_SCENE->Preloaded(SlopBlood);
+                if (!shape)
+                {
+                    break;
+                }
                 float azimut = GRandGen.RandomValue() * H_PI * 2;
 
                 Matrix4 transform(MIdentity);

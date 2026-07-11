@@ -53,8 +53,6 @@ namespace Poseidon
 
 // Multiplayer wizard displays
 
-RString CreateSingleMissionBank(RString filename);
-
 namespace
 {
 

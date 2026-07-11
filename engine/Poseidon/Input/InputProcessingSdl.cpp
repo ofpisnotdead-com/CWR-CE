@@ -456,8 +456,9 @@ void ProcessJoystick_SDL()
     float syntheticLx = 0.0f;
     float syntheticLy = 0.0f;
     const bool hasSyntheticLeftStick = InputSubsystem::Instance().GetSyntheticLeftStick(syntheticLx, syntheticLy);
+    const bool hasSyntheticStickInput = InputSubsystem::Instance().HasSyntheticStickInput();
 
-    if ((!sGamepad && !hasSyntheticLeftStick) || !GWorld->IsUserInputEnabled())
+    if ((!sGamepad && !hasSyntheticStickInput) || !GWorld->IsUserInputEnabled())
     {
         sControllerEditorUiLayout.ResetDirections();
         sRumble.Update(sGamepad);
@@ -548,6 +549,7 @@ void ProcessJoystick_SDL()
             pressed = SDL_GetGamepadButton(sGamepad, kButtons[i]) != 0;
         else
             pressed = false;
+        pressed = pressed || InputSubsystem::Instance().ConsumeSyntheticStickButton(i);
 
         GInput.gamepad.stickButtons[i] = pressed ? 1.0f : 0.0f;
         GInput.gamepad.stickButtonsToDo[i] = pressed && !sPrev[i];
@@ -556,10 +558,14 @@ void ProcessJoystick_SDL()
 
     // ---- D-pad → 8-way stickPov ----
     // 0=N 1=NE 2=E 3=SE 4=S 5=SW 6=W 7=NW
-    bool dpUp = sGamepad && SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_UP) != 0;
-    bool dpDown = sGamepad && SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN) != 0;
-    bool dpLeft = sGamepad && SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) != 0;
-    bool dpRight = sGamepad && SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) != 0;
+    bool dpUp = (sGamepad && SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_UP) != 0) ||
+        InputSubsystem::Instance().ConsumeSyntheticStickPov(0);
+    bool dpDown = (sGamepad && SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN) != 0) ||
+        InputSubsystem::Instance().ConsumeSyntheticStickPov(4);
+    bool dpLeft = (sGamepad && SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) != 0) ||
+        InputSubsystem::Instance().ConsumeSyntheticStickPov(6);
+    bool dpRight = (sGamepad && SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) != 0) ||
+        InputSubsystem::Instance().ConsumeSyntheticStickPov(2);
     int pov8 = -1;
     if (dpUp && dpRight)
         pov8 = 1;

@@ -11,7 +11,7 @@
 // entirely except for a peak square that won the tie by accident.
 //
 // This file mirrors the constants from
-// `packages/Remaster/BIN/optionsUI.hpp` (the config-language
+// `packages/Combined/BIN/optionsUI.hpp` (the config-language
 // source of truth) so the staircase can be asserted without a
 // ParamFile load.  Any change there must be mirrored here OR the
 // constants moved into a single shared header that both sides

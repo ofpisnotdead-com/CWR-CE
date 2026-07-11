@@ -4,7 +4,9 @@
 #include <Poseidon/Graphics/Core/Engine.hpp>
 #include <Poseidon/Audio/IAudioSystem.hpp>
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_touch.h>
 #include <Poseidon/Dev/Debug/DebugOverlay.hpp>
+#include <Poseidon/Input/TouchInput.hpp>
 
 // SDL input buffer functions (InputProcessing_sdl.cpp)
 extern void SDLInput_BufferKeyEvent(SDL_Scancode sc, bool down, DWORD timestamp);
@@ -44,9 +46,17 @@ class SDLEventWindow
 
         if (_sdlWindow)
         {
+            Poseidon::TouchInput_UpdateSafeAreaFromWindow(_sdlWindow);
             if (_mouseGrab)
                 SDL_SetWindowRelativeMouseMode(_sdlWindow, true);
+#ifndef POSEIDON_TARGET_IOS
+            // Desktop only: keeps the OS IME ready for chat/console text
+            // entry. On iOS this is what makes the on-screen keyboard pop
+            // up immediately on launch with no way to dismiss it -- this
+            // engine has no touch UI for it yet (see EngineMTL.hpp, the
+            // only iOS user of this header-only class).
             SDL_StartTextInput(_sdlWindow);
+#endif
         }
 
         extern void SetMouseAcquired(bool acquired);
@@ -56,6 +66,7 @@ class SDLEventWindow
 
     void Detach()
     {
+        Poseidon::TouchInput_UpdateSafeAreaFromWindow(nullptr);
         _sdlWindow = nullptr;
         _open = false;
     }
@@ -116,11 +127,18 @@ class SDLEventWindow
             {
                 if (_sdlWindow)
                     SDL_GetWindowSizeInPixels(_sdlWindow, &_width, &_height);
+                Poseidon::TouchInput_UpdateSafeAreaFromWindow(_sdlWindow);
                 _resized = true;
                 // Notify the engine so it can resize the swap chain with the
                 // correct final dimensions (critical for D3D11 FLIP_DISCARD).
                 if (::Poseidon::GEngine)
                     ::Poseidon::GEngine->OnWindowResized(_width, _height);
+            }
+            else if (event.type == SDL_EVENT_WINDOW_SAFE_AREA_CHANGED)
+            {
+                Poseidon::TouchInput_UpdateSafeAreaFromWindow(_sdlWindow);
+                if (::Poseidon::GEngine)
+                    ::Poseidon::GEngine->OnWindowSafeAreaChanged();
             }
             else if (event.type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN)
             {
@@ -224,6 +242,8 @@ class SDLEventWindow
                 SDLInput_BufferUICharEvent(event.text.text);
             else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
             {
+                if (event.button.which == SDL_TOUCH_MOUSEID)
+                    continue;
                 int btn = event.button.button - 1;
                 if (btn == 1)
                     btn = 2;
@@ -233,6 +253,8 @@ class SDLEventWindow
             }
             else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP)
             {
+                if (event.button.which == SDL_TOUCH_MOUSEID)
+                    continue;
                 int btn = event.button.button - 1;
                 if (btn == 1)
                     btn = 2;
@@ -241,9 +263,19 @@ class SDLEventWindow
                 SDLInput_BufferMouseButton(btn, false);
             }
             else if (event.type == SDL_EVENT_MOUSE_MOTION)
+            {
+                if (event.motion.which == SDL_TOUCH_MOUSEID)
+                    continue;
                 SDLInput_BufferMouseMotion(event.motion.xrel, event.motion.yrel);
+            }
             else if (event.type == SDL_EVENT_MOUSE_WHEEL)
                 SDLInput_BufferMouseWheel(event.wheel.y);
+            else if (event.type == SDL_EVENT_FINGER_DOWN || event.type == SDL_EVENT_FINGER_MOTION ||
+                     event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED)
+            {
+                if (SDL_GetTouchDeviceType(event.tfinger.touchID) == SDL_TOUCH_DEVICE_DIRECT)
+                    Poseidon::TouchInput_HandleFingerEvent(event.tfinger);
+            }
             else if (event.type == SDL_EVENT_GAMEPAD_ADDED)
                 SDLInput_GamepadAdded(event.gdevice.which);
             else if (event.type == SDL_EVENT_GAMEPAD_REMOVED)

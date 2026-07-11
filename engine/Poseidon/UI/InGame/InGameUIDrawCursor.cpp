@@ -1074,6 +1074,12 @@ void InGameUI::DrawHUD(const Camera& camera, EntityAI* vehicle, CameraType cam)
         return;
     }
 
+    if (!ShouldShowGameplayHUD())
+    {
+        _actions.Clear();
+        return;
+    }
+
     bool isMap = GWorld->HasMap();
     AIUnit* commanderUnit = vehicle->CommanderUnit();
     if (!commanderUnit)

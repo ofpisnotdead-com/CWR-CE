@@ -1320,6 +1320,22 @@ void AIGroup::ReceiveUnitStatus(AIUnit* unit, Answer answer)
         case AmmoLow:
             _ammoState[id - 1] = AIUnit::RSLow;
             break;
+        // Resource recovered -- clear the cached "reported" state so CheckHealth()/
+        // CheckFuel()/CheckAmmo()/CheckDammage() stop re-issuing commands and radio
+        // chatter for a unit that's no longer in trouble (was previously a one-way
+        // ratchet: nothing ever reset these back to RSNormal on recovery).
+        case HealthOk:
+            _healthState[id - 1] = AIUnit::RSNormal;
+            break;
+        case DammageOk:
+            _dammageState[id - 1] = AIUnit::RSNormal;
+            break;
+        case FuelOk:
+            _fuelState[id - 1] = AIUnit::RSNormal;
+            break;
+        case AmmoOk:
+            _ammoState[id - 1] = AIUnit::RSNormal;
+            break;
     }
 }
 

@@ -1141,7 +1141,7 @@ void CStaticMap::DrawLegend()
     step *= step10;
 
     Font* font = _fontGrid;
-    // Legend strings live in `packages/Remaster/BIN/STRINGTABLE_MAP.utf8.csv`
+    // Legend strings live in `packages/Combined/BIN/STRINGTABLE_MAP.utf8.csv`
     // so the briefing-map scale picks up the active UI language.
     // The new key restores the correct CONTOUR spelling — the
     // original hardcoded literal had a typo on the first word.

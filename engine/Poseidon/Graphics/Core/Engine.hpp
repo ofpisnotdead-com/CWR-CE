@@ -454,18 +454,27 @@ class Engine : public IGraphicsEngine
     virtual void EnableReorderQueues(bool enableReorded) {}
     virtual void FlushQueues() {}
 
-    // Shadow pipeline.  Wraps the per-caster shadow draw loop in scene.cpp:
-    //   BeginShadowPass()   — color writes off, stencil REPLACE 0xFF
-    //                          ALWAYS.  Each shadow draw stamps the
-    //                          stencil buffer (alpha-cutout discard
-    //                          via PSShadow's discard).  Idempotent
-    //                          across overlapping casters.
-    //   ...per-caster shadow draws...
-    //   EndShadowPass()     — color writes on, stencil EQUAL 0xFF +
-    //                          KEEP, draw fullscreen quad
-    //                          (1-shadowFactor) blend.  Single uniform
-    //                          darken regardless of overlap, replaces
-    //                          the per-poly INCR/EQUAL-0 dance.
+    // Shadow pipeline.  Wraps the per-caster shadow draw loop in scene.cpp.
+    // This is the "projected accumulator" fallback shadow technique used
+    // when shadow maps are off (SceneDraw.cpp checks ShadowMapsEnabled()) —
+    // not the cascaded shadow-map system (RenderShadowDepthScene), which
+    // darkens receivers from a depth map instead and is mutually exclusive
+    // with this one at runtime.
+    //
+    // GL33's actual implementation (EngineGL33_Draw.cpp) is a single-pass
+    // per-polygon scheme, not a separate mark+darken pair: each shadow draw
+    // uses DepthMode::Shadow (stencil EQUAL 0 / INCR, depth test on/write
+    // off) gating BlendMode::Shadow (ZERO, ONE_MINUS_SRC_ALPHA) in the same
+    // draw call, so a polygon either darkens the framebuffer and marks the
+    // stencil, or is rejected outright if an earlier overlapping polygon
+    // already marked that pixel this pass — see BuildRenderPassDescriptor.hpp
+    // and GLDepthStencilState.hpp/GLBlendState.hpp's Shadow() helpers for the
+    // exact state. BeginShadowPass()/EndShadowPass() bracket the loop only to
+    // flush any pending batched geometry before/after — they do not
+    // themselves draw anything. (An earlier version of this comment described
+    // a two-phase mark-then-darken-with-a-fullscreen-quad scheme; that was
+    // never actually implemented by GL33 and should not be used as a
+    // reference for new backends.)
     virtual void BeginShadowPass() {}
     virtual void EndShadowPass() {}
 
@@ -844,6 +853,12 @@ class Engine : public IGraphicsEngine
     /// a fullscreen transition completes).  Backends that need to resize their
     /// swap chain should override this.
     virtual void OnWindowResized(int /*w*/, int /*h*/) {}
+
+    /// Called when the platform's safe area changes without a pixel-size
+    /// resize (for example, macOS fullscreen display cutouts / menu-bar
+    /// reservations). Backends that derive their renderable surface from the
+    /// safe area can refresh it here.
+    virtual void OnWindowSafeAreaChanged() {}
 
     /// Post-resize hook — fires after OnWindowResized has finished updating
     /// _w/_h.  Apps register a function pointer here at boot to re-run the

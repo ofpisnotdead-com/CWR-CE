@@ -6,6 +6,86 @@ project(CWR
     DESCRIPTION "Arma: Cold War Assault - Remastered"
 )
 
+# iOS has no desktop OpenGL (no OpenGL.framework) -- PoseidonGL33 and
+# anything that requires it are skipped for this platform; Metal is the
+# only renderer there.
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(POSEIDON_TARGET_IOS TRUE)
+    add_compile_definitions(POSEIDON_TARGET_IOS)
+else()
+    set(POSEIDON_TARGET_IOS FALSE)
+endif()
+
+if(POSEIDON_TARGET_IOS)
+    # Resolve SDL3::SDL3-static once at root scope (visible to every
+    # add_subdirectory() below, including sibling directories like
+    # engine/Poseidon and engine/PoseidonMTL that each separately call
+    # find_package(SDL3) -- without this, each of those calls would create
+    # its own directory-scoped copy of the imported target).
+    #
+    # Also works around a CMake/vcpkg interaction on iOS: SDL3-static's
+    # INTERFACE_LINK_LIBRARIES uses $<LINK_LIBRARY:FRAMEWORK,...> entries,
+    # and when those follow a long plain-library link chain on the final
+    # link line, the linker receives "-framework <path-to-libSDL3.a>"
+    # instead of "-framework CoreMedia" for the first framework -- the
+    # static lib's own path gets duplicated in as the bogus argument.
+    # Move the framework list to plain INTERFACE_LINK_OPTIONS flags
+    # (bypassing the LINK_LIBRARY feature) to sidestep it.
+    find_package(SDL3 CONFIG REQUIRED)
+    if(TARGET SDL3::SDL3-static)
+        set(_sdl3_ios_frameworks
+            CoreMedia CoreVideo CoreAudio AudioToolbox AVFoundation
+            CoreBluetooth CoreGraphics CoreMotion Foundation GameController
+            Metal OpenGLES QuartzCore UIKit
+        )
+        # Each entry must be a single "SHELL:-framework Name" string -- two
+        # separate list items ("-framework", "Name") get hit by CMake's
+        # link-line de-duplication, which treats repeated bare "-framework"
+        # tokens as duplicate libraries and collapses them, orphaning the
+        # framework names that followed. A plain combined "-framework Name"
+        # item (no SHELL: prefix) avoids the dedup issue but then gets
+        # quoted as one opaque shell token instead of word-split. The
+        # SHELL: prefix tells CMake to treat the spaces as real argument
+        # separators when emitting the command line.
+        set(_sdl3_ios_link_options "")
+        foreach(_fw IN LISTS _sdl3_ios_frameworks)
+            list(APPEND _sdl3_ios_link_options "SHELL:-framework ${_fw}")
+        endforeach()
+        list(APPEND _sdl3_ios_link_options "SHELL:-weak_framework CoreHaptics")
+        set_target_properties(SDL3::SDL3-static PROPERTIES
+            INTERFACE_LINK_LIBRARIES "m;SDL3::Headers"
+        )
+        set_property(TARGET SDL3::SDL3-static APPEND PROPERTY
+            INTERFACE_LINK_OPTIONS ${_sdl3_ios_link_options}
+        )
+        unset(_sdl3_ios_frameworks)
+        unset(_sdl3_ios_link_options)
+    endif()
+
+    # imgui's vcpkg port has the same problem one level worse: its iOS
+    # INTERFACE_LINK_LIBRARIES literally ships "-framework;OpenGLES" as two
+    # separate plain list items (not even a $<LINK_LIBRARY:...> genex), so
+    # CMake treats "-framework" and "OpenGLES" as two independent plain
+    # libraries -- "OpenGLES" becomes "-lOpenGLES" and pairs with whatever
+    # "-framework" happens to land next to during link-line de-duplication.
+    # Recombine them into one "-framework OpenGLES" item, which plain
+    # LINK_LIBRARIES entries (unlike LINK_OPTIONS) pass through correctly
+    # without needing a SHELL: prefix -- see PoseidonMTL's own Metal/
+    # QuartzCore/Foundation find_library() results for the same pattern.
+    find_package(imgui CONFIG REQUIRED)
+    if(TARGET imgui::imgui)
+        get_target_property(_imgui_link_libs imgui::imgui INTERFACE_LINK_LIBRARIES)
+        if(_imgui_link_libs)
+            list(REMOVE_ITEM _imgui_link_libs "-framework" "OpenGLES")
+            list(APPEND _imgui_link_libs "-framework OpenGLES")
+            set_target_properties(imgui::imgui PROPERTIES
+                INTERFACE_LINK_LIBRARIES "${_imgui_link_libs}"
+            )
+        endif()
+        unset(_imgui_link_libs)
+    endif()
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -154,6 +234,22 @@ option(POSEIDON_DISABLE_PCH "Disable precompiled headers (include self-containme
 # preset turns it on. Requires a clang toolchain built with -fsanitize=fuzzer.
 option(POSEIDON_BUILD_FUZZERS "Build libFuzzer network harnesses" OFF)
 
+# Bundle packages/Combined straight into the iOS .app (apps/cwr/Game/CMakeLists.txt).
+# OFF (default) is the distributable/App Store (and now TestFlight)
+# configuration -- the licensed game data can't ship in the bundle, so it's
+# acquired on-device instead (see the iOS game-data acquisition gate,
+# WinMain.cpp). Opt into ON explicitly for local dev/simulator convenience
+# (e.g. a build-and-run.sh-style flow) -- defaulting OFF means a build that
+# forgets to pass the flag fails safe (no data) rather than accidentally
+# shipping ~700MB of licensed content. No effect on non-iOS platforms.
+option(POSEIDON_IOS_BUNDLE_GAME_DATA "Bundle packages/Combined into the iOS .app" OFF)
+if(POSEIDON_TARGET_IOS)
+    # WinMain.cpp's iOS branch reads this to decide whether to auto-inject -C
+    # at the bundled data path (ON) or run the on-device acquisition gate
+    # instead (OFF, see IosGameDataGateScreen.mm once that lands).
+    add_compile_definitions(POSEIDON_IOS_BUNDLE_GAME_DATA=$<BOOL:${POSEIDON_IOS_BUNDLE_GAME_DATA}>)
+endif()
+
 configure_file(
     ${CMAKE_SOURCE_DIR}/cmake/BuildConfig.h.in
     ${CMAKE_BINARY_DIR}/generated/BuildConfig.h
@@ -192,31 +288,53 @@ endif()
 set(DIST_DIR "${CMAKE_SOURCE_DIR}/dist/${DIST_PRESET_NAME}")
 
 add_subdirectory(engine/Poseidon)
-add_subdirectory(engine/PoseidonGL33)
+if(NOT POSEIDON_TARGET_IOS)
+    add_subdirectory(engine/PoseidonGL33)
+endif()
 add_subdirectory(engine/PoseidonOpenAL)
 add_subdirectory(engine/PoseidonFormats)
-add_subdirectory(tests/unit/engine/Poseidon/Foundation)
-add_subdirectory(apps/tools/Evaluator)
-add_subdirectory(tests/unit/apps/Evaluator)
-add_subdirectory(tests/unit/engine/Poseidon)
-add_subdirectory(apps/cwr/GameBase)
-add_subdirectory(apps/cwr/Server)
-add_subdirectory(tests/unit/apps/Server)
 
-if(POSEIDON_BUILD_FUZZERS)
-    add_subdirectory(apps/fuzzers/Fuzzer)
+if(APPLE)
+    # Milestone-0 native Metal backend scaffold — macOS/Apple Silicon and iOS.
+    # See engine/PoseidonMTL/EngineMTL.hpp for scope notes.
+    add_subdirectory(engine/PoseidonMTL)
+    add_subdirectory(apps/tools/MetalSmokeTest)
+    if(NOT POSEIDON_TARGET_IOS)
+        # Depends on PoseidonGL33, which iOS doesn't build (no desktop OpenGL).
+        add_subdirectory(apps/tools/GL33SmokeTest)
+    endif()
 endif()
-
+add_subdirectory(apps/cwr/GameBase)
 add_subdirectory(apps/cwr/Game)
-add_subdirectory(apps/cwr/GameDemo)
-add_subdirectory(apps/tools/Tools)
-add_subdirectory(apps/tools/TcPbo)
-add_subdirectory(apps/tools/TcLister)
-add_subdirectory(apps/tools/Studio)
-# tests/unit/apps/Studio's ImGui-Test-Engine UI suite is quarantined under
-# License-restricted UI test sources are not part of this public tree.
-add_subdirectory(apps/tetris/Tetris)
-add_subdirectory(tests/unit/apps/Tetris)
+
+if(POSEIDON_TARGET_IOS)
+    # iOS bring-up is scoped to the Metal-only engine + PoseidonGame itself.
+    # Everything below this branch -- desktop CLI tools (Tools/TcPbo/TcLister),
+    # the Studio editor, the dedicated server, GameDemo, Tetris, and the unit
+    # test binaries -- has no iOS bundle/install setup yet (most aren't
+    # meaningful as standalone iOS apps at all) and isn't part of this pass.
+else()
+    add_subdirectory(tests/unit/engine/Poseidon/Foundation)
+    add_subdirectory(apps/tools/Evaluator)
+    add_subdirectory(tests/unit/apps/Evaluator)
+    add_subdirectory(tests/unit/engine/Poseidon)
+    add_subdirectory(apps/cwr/Server)
+    add_subdirectory(tests/unit/apps/Server)
+
+    if(POSEIDON_BUILD_FUZZERS)
+        add_subdirectory(apps/fuzzers/Fuzzer)
+    endif()
+
+    add_subdirectory(apps/cwr/GameDemo)
+    add_subdirectory(apps/tools/Tools)
+    add_subdirectory(apps/tools/TcPbo)
+    add_subdirectory(apps/tools/TcLister)
+    add_subdirectory(apps/tools/Studio)
+    # tests/unit/apps/Studio's ImGui-Test-Engine UI suite is quarantined under
+    # License-restricted UI test sources are not part of this public tree.
+    add_subdirectory(apps/tetris/Tetris)
+    add_subdirectory(tests/unit/apps/Tetris)
+endif()
 
 include(${CMAKE_SOURCE_DIR}/cmake/TridentCTest.cmake)
 register_trident_integration_ctests()
@@ -275,6 +393,9 @@ set(ANALYSIS_TARGETS
 )
 
 foreach(target ${ANALYSIS_TARGETS})
+    if(NOT TARGET ${target})
+        continue()
+    endif()
     get_target_property(target_sources ${target} SOURCES)
     get_target_property(target_source_dir ${target} SOURCE_DIR)
     

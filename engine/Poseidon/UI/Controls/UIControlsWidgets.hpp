@@ -41,6 +41,8 @@ public:
 	bool DoChar(unsigned nChar, unsigned nRepCnt, unsigned nFlags);
 	bool DoIMEChar(unsigned nChar, unsigned nRepCnt, unsigned nFlags);
 	bool DoIMEComposition(unsigned nChar, unsigned nFlags);
+	void BeginPlatformTextInput();
+	void EndPlatformTextInput();
 
 protected:
 //	virtual int FindPos(float x, float y);
@@ -73,6 +75,8 @@ public:
 	CEdit(ControlsContainer *parent, int idc, const ParamEntry &cls);
 
 	void OnDraw(float alpha) override;
+	bool OnSetFocus(bool up = true, bool def = false) override;
+	bool OnKillFocus() override;
 	bool OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags) override;
 	bool OnChar(unsigned nChar, unsigned nRepCnt, unsigned nFlags) override;
 	bool OnIMEChar(unsigned nChar, unsigned nRepCnt, unsigned nFlags) override;
@@ -870,6 +874,8 @@ public:
 	C3DEdit(ControlsContainer *parent, int idc, const ParamEntry &cls);
 
 	void OnDraw(float alpha) override;
+	bool OnSetFocus(bool up = true, bool def = false) override;
+	bool OnKillFocus() override;
 	bool OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags) override;
 	bool OnChar(unsigned nChar, unsigned nRepCnt, unsigned nFlags) override;
 	bool OnIMEChar(unsigned nChar, unsigned nRepCnt, unsigned nFlags) override;

@@ -1,6 +1,7 @@
 #include <Poseidon/World/Entities/Infantry/SoldierOldCommon.hpp>
 #include <Poseidon/Core/Application.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
+#include <Poseidon/Input/TouchInput.hpp>
 #include <stdio.h>
 #include <cmath>
 #include <Poseidon/Foundation/Common/FltOpts.hpp>
@@ -501,7 +502,6 @@ void Soldier::KeyboardPilot(float deltaT, SimulationImportance prec)
         {
             fbFlag = -1;
         }
-
         if (IsDown())
         {
             if (!_canMoveFast)
@@ -2452,6 +2452,10 @@ float Man::RifleInaccuracy() const
     if (mode && mode->_ammo && mode->_ammo->_simulation == AmmoShotLaser)
     {
         ret *= 0.2f;
+    }
+    if (QIsManual() && TouchInput_IsAimFocusActive())
+    {
+        ret *= 0.35f;
     }
     return ret * woundFactor;
 }

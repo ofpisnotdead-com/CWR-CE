@@ -586,6 +586,22 @@ bool C3DEdit::OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
     return CEditContainer::DoKeyDown(nChar, nRepCnt, nFlags);
 }
 
+bool C3DEdit::OnSetFocus(bool up, bool def)
+{
+    if (!Control3D::OnSetFocus(up, def))
+    {
+        return false;
+    }
+    BeginPlatformTextInput();
+    return true;
+}
+
+bool C3DEdit::OnKillFocus()
+{
+    EndPlatformTextInput();
+    return Control3D::OnKillFocus();
+}
+
 bool C3DEdit::OnChar(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
 {
     return CEditContainer::DoChar(nChar, nRepCnt, nFlags);
@@ -603,6 +619,8 @@ bool C3DEdit::OnIMEComposition(unsigned nChar, unsigned nFlags)
 
 void C3DEdit::OnLButtonDown(float x, float y)
 {
+    BeginPlatformTextInput();
+
     IsInside(x, y);
     int pos = FindPos(_u, _v);
     if (!InputSubsystem::Instance().IsKeyDown(SDL_SCANCODE_LSHIFT) &&

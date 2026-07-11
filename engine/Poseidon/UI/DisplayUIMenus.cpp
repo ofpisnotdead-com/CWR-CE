@@ -1135,8 +1135,18 @@ void DisplayMission::OnChildDestroyed(int idd, int exit)
             }
             else if (exit == IDC_INT_SAVE)
             {
-                RString name = GetSaveDirectory() + RString("save.fps");
-                GWorld->SaveBin(name, IDS_SAVE_GAME);
+                RString dir = GetSaveDirectory();
+                GWorld->SaveBin(dir + RString("save.fps"), IDS_SAVE_GAME);
+
+                // continue.fps otherwise only gets refreshed by SaveContinue() on
+                // Abort/failed-Retry (and only once per mission session -- see
+                // ContinueSaved). A manual save is always at least as current as
+                // that, so mirror it here too; otherwise a save made after the
+                // last Abort -- or with no Abort at all before the app quits --
+                // leaves "Continue" pointing at an older point than what the
+                // player explicitly saved, even though pause-menu Load correctly
+                // reads the fresh save.fps.
+                GWorld->SaveBin(dir + RString("continue.fps"), IDS_AUTOSAVE_GAME);
             }
             else if (exit == IDC_INT_LOAD)
             {

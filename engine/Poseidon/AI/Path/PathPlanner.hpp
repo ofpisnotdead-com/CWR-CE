@@ -65,6 +65,10 @@ public:
 		FuelLow,
 		AmmoLow,
 		IsLeader,
+		HealthOk,
+		DammageOk,
+		FuelOk,
+		AmmoOk,
 // Subgroup => Group (answer to Command)
 		CommandCompleted	= 0x100,
 		CommandFailed,

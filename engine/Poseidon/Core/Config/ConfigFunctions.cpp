@@ -54,7 +54,6 @@ void Config::InitDifficulties()
     diffDesc[10].stringId = IDS_DIFF_TRACERS;
     diffDesc[11].stringId = IDS_ULTRA_AI;
 
-    USER_CONFIG.InitDifficulties();
     GChatList.Enable(true);
 }
 

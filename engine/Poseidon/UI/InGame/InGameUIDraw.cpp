@@ -1,5 +1,6 @@
 
 #include <Poseidon/Core/Global.hpp>
+#include <Poseidon/Input/TouchInput.hpp>
 #include <SDL3/SDL_scancode.h>
 #include <Poseidon/Core/Config/UserConfig.hpp>
 #include <Poseidon/World/World.hpp>
@@ -753,6 +754,8 @@ void InGameUI::DrawTankDirection(const Camera& camera)
 
 void InGameUI::DrawMenu()
 {
+    _commandMenuTapZones.Clear();
+
     if (_tmPos >= 1.0)
     {
         return;
@@ -762,11 +765,50 @@ void InGameUI::DrawMenu()
     const int w = GLOB_ENGINE->Width2D();
     const int h = GLOB_ENGINE->Height2D();
     const float border = 0.005;
-    float size = 0.02;
+    const bool touch = TouchInput_IsEnabled();
+    // Bigger text and padded rows for touch - easier to read and tap on a
+    // touchscreen. Keyboard/mouse users get the original compact size,
+    // unchanged, since they don't need the extra room.
+    const float size = touch ? 0.036f : 0.02f;
+    const float rowPadY = touch ? 0.006f : 0.0f;
+    const float rowHeight = size + 2 * rowPadY;
 
     float tmLeft = tmX + (1 - tmX) * _tmPos;
+
+    // The config's tmW/tmH is sized for the default (small) text. Growing
+    // `size` for touch without also growing the frame would overflow rows
+    // past the background box, so touch instead sizes the frame to fit its
+    // own (larger) content; keyboard keeps the exact original fixed frame.
+    float frameW = tmW;
+    float frameH = tmH;
+    if (touch)
+    {
+        int visibleCount = 0;
+        int separatorCount = 0;
+        float maxRowWidth = 0;
+        for (int i = 0; i < _menuCurrent->_items.Size(); i++)
+        {
+            MenuItem* item = _menuCurrent->_items[i];
+            if (!item->_visible)
+            {
+                continue;
+            }
+            if (item->_cmd == CMD_SEPARATOR)
+            {
+                separatorCount++;
+                continue;
+            }
+            visibleCount++;
+            float ow = GEngine->GetTextWidth(size, _font24, item->_char);
+            float tw = GEngine->GetTextWidth(size, _font24, item->_text);
+            saturateMax(maxRowWidth, floatMax(0.02f, ow + 0.01f) + tw);
+        }
+        frameH = floatMax(tmH, visibleCount * rowHeight + separatorCount * 2 * border + 2 * border);
+        frameW = floatMax(tmW, maxRowWidth + 2 * border);
+    }
+
     Texture* corner = GLOB_SCENE->Preloaded(Corner);
-    DrawFrame(corner, bgColor, Rect2DPixel(tmLeft * w, tmY * h, tmW * w, tmH * h));
+    DrawFrame(corner, bgColor, Rect2DPixel(tmLeft * w, tmY * h, frameW * w, frameH * h));
 
     MipInfo mip = GLOB_ENGINE->TextBank()->UseMipmap(textureDef, 0, 0);
 
@@ -774,14 +816,14 @@ void InGameUI::DrawMenu()
     width = GLOB_ENGINE->GetTextWidth(size, _font24, _menuCurrent->_text) + 2 * border;
 
     float height = size + 2 * border;
-    float left = tmLeft + tmW - border - width;
-    float top = tmY + tmH;
+    float left = tmLeft + frameW - border - width;
+    float top = tmY + frameH;
     GLOB_ENGINE->Draw2D(mip, capBgColor, Rect2DPixel(left * w, top * h, width * w, height * h));
 
     GLOB_ENGINE->DrawText(Point2DFloat(left + border, top + border), size, _font24, capFtColor, _menuCurrent->_text);
 
     top = tmY + border;
-    height = size;
+    height = rowHeight;
     PackedColor color;
     for (int i = 0; i < _menuCurrent->_items.Size(); i++)
     {
@@ -794,7 +836,7 @@ void InGameUI::DrawMenu()
         if (item->_cmd == CMD_SEPARATOR)
         {
             top += border;
-            GEngine->DrawLine(Line2DPixel((tmLeft + border) * w, top * h, (tmLeft + tmW - border) * w, top * h),
+            GEngine->DrawLine(Line2DPixel((tmLeft + border) * w, top * h, (tmLeft + frameW - border) * w, top * h),
                               menuDisabledColor, menuDisabledColor);
             top += border;
             continue;
@@ -814,17 +856,47 @@ void InGameUI::DrawMenu()
         }
 
         bool bottom = item->_key == SDL_SCANCODE_BACKSPACE;
-        float t = bottom ? tmY + tmH - border - height : top;
+        float t = bottom ? tmY + frameH - border - height : top;
 
-        GLOB_ENGINE->DrawText(Point2DFloat(tmLeft + border, t), size, _font24, color, item->_char);
+        if (item->_enable)
+        {
+            // Full row width, not just the text's bounding box - a bigger,
+            // more forgiving touch target than a tight text-only hit-box.
+            CommandMenuTapZone& zone = _commandMenuTapZones.Append();
+            zone.x = tmLeft + border;
+            zone.y = t;
+            zone.w = frameW - 2 * border;
+            zone.h = rowHeight;
+            zone.key = item->_key;
+        }
+
+        const float textTop = t + rowPadY;
+        GLOB_ENGINE->DrawText(Point2DFloat(tmLeft + border, textTop), size, _font24, color, item->_char);
         float ow = GEngine->GetTextWidth(size, _font24, item->_char);
         left = tmLeft + floatMax(0.02, ow + 0.01);
-        GLOB_ENGINE->DrawText(Point2DFloat(left, t), size, _font24, color, item->_text);
+        GLOB_ENGINE->DrawText(Point2DFloat(left, textTop), size, _font24, color, item->_text);
         if (!bottom)
         {
             top += height;
         }
     }
+}
+
+int InGameUI::CommandMenuKeyAtTouch(float normX, float normY) const
+{
+    // _commandMenuTapZones is only populated while DrawMenu actually draws
+    // rows (gated on _showMenu via ShouldShowGameplayHUD()/DrawHUD, and on
+    // _tmPos - the menu's slide-in animation - internally) - if the menu
+    // isn't open this frame, it's empty and every tap here is a miss.
+    for (int i = 0; i < _commandMenuTapZones.Size(); i++)
+    {
+        const CommandMenuTapZone& zone = _commandMenuTapZones[i];
+        if (normX >= zone.x && normX <= zone.x + zone.w && normY >= zone.y && normY <= zone.y + zone.h)
+        {
+            return zone.key;
+        }
+    }
+    return 0;
 }
 
 void InGameUI::DrawTacticalDisplay(const Camera& camera, AIUnit* unit, const TargetList& list)
@@ -1752,6 +1824,8 @@ void InGameUI::DrawGroupUnit(AIUnit* u, float xScreen, float yScreen, float alph
 
 void InGameUI::DrawGroupInfo(EntityAI* vehicle)
 {
+    _groupBarTapZoneCount = 0;
+
     AIUnit* unit = GWorld->FocusOn();
     PoseidonAssert(unit);
     AISubgroup* subgroup = unit->GetSubgroup();
@@ -1985,6 +2059,40 @@ void InGameUI::DrawGroupInfo(EntityAI* vehicle)
             }
         }
 
+        if (_groupBarTapZoneCount < MAX_UNITS_PER_GROUP)
+        {
+            GroupBarTapZone& zone = _groupBarTapZones[_groupBarTapZoneCount++];
+            zone.x = left;
+            zone.y = uiY + border;
+            zone.w = width;
+            zone.h = height;
+            zone.unitIds.Clear();
+            zone.unitIds.Add(i + 1);
+            if (info.vehicle)
+            {
+                // Fold in any other group unit sharing this vehicle whose own
+                // slot got skipped above (a commander/gunner deferring to a
+                // driver, or a gunner deferring to a commander) - they're
+                // represented by this same icon, so a tap here should select
+                // all of them, not just unit i+1.
+                for (int j = 0; j < MAX_UNITS_PER_GROUP; j++)
+                {
+                    if (j == i || !_groupInfo[j].valid || _groupInfo[j].vehicle != info.vehicle)
+                    {
+                        continue;
+                    }
+                    const UnitDescription& other = _groupInfo[j];
+                    const bool folded = (other.status == UnitDescription::commander && info.vehicle->DriverBrain()) ||
+                                        (other.status == UnitDescription::gunner &&
+                                         (info.vehicle->DriverBrain() || info.vehicle->CommanderBrain()));
+                    if (folded)
+                    {
+                        zone.unitIds.Add(j + 1);
+                    }
+                }
+            }
+        }
+
         // draw rectangle
 
         // draw picture
@@ -2185,4 +2293,55 @@ void InGameUI::DrawGroupInfo(EntityAI* vehicle)
 
         left += width + border;
     }
+}
+
+AutoArray<int> InGameUI::GroupBarUnitsAtTouch(float normX, float normY) const
+{
+    // DrawGroupInfo (and the _groupBarTapZones it records) only runs when
+    // InGameUIDrawCursor.cpp's own "_showGroupInfo && leader && NUnits()>1"
+    // check passes - if it doesn't run this frame, _groupBarTapZones holds
+    // whatever it last recorded while the bar *was* shown. Re-check the same
+    // condition here so a stale zone from an earlier frame can't be tapped
+    // after the bar stops being relevant (e.g. the player loses group lead).
+    if (!_showGroupInfo)
+    {
+        return AutoArray<int>();
+    }
+    AIUnit* unit = GWorld->FocusOn();
+    if (!unit)
+    {
+        return AutoArray<int>();
+    }
+    AISubgroup* subgroup = unit->GetSubgroup();
+    if (!subgroup)
+    {
+        return AutoArray<int>();
+    }
+    AIGroup* group = subgroup->GetGroup();
+    if (!group || !unit->IsGroupLeader() || group->NUnits() <= 1)
+    {
+        return AutoArray<int>();
+    }
+
+    // Looks up the icon layout DrawGroupInfo itself recorded while rendering
+    // (_groupBarTapZones), rather than re-deriving positions independently -
+    // that guessing approach broke as soon as a vehicle crew (driver +
+    // gunner + commander) got dedup'd onto one icon, since the "next" icon's
+    // real position depends on how many earlier slots got folded away.
+    for (int i = 0; i < _groupBarTapZoneCount; i++)
+    {
+        const GroupBarTapZone& zone = _groupBarTapZones[i];
+        // Extend the hit zone upward (away from the screen's bottom edge,
+        // never downward) beyond the drawn icon - the icons are small and
+        // this is the bottom-most HUD element, both a fat-finger target and
+        // right where iOS's own edge-swipe gesture already competes for the
+        // touch.
+        const float top = zone.y - zone.h;
+        const float bottom = zone.y + zone.h;
+        if (normX >= zone.x && normX <= zone.x + zone.w && normY >= top && normY <= bottom)
+        {
+            return zone.unitIds;
+        }
+    }
+    return AutoArray<int>();
 }

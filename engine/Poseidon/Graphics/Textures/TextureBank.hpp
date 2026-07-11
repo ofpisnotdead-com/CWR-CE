@@ -60,6 +60,15 @@ class Texture : public RemoveLLinks
     virtual Color GetColor() = 0;
     virtual bool IsAlpha() const = 0;
 
+    // Has this texture's backing GPU resource been freed out from under it
+    // (e.g. a hot-reload that dropped every handle in the bank) while the
+    // CPU-side object/cache entry is still alive? Used by callers that cache
+    // a Ref<Texture> across frames (the FreeType glyph-atlas system) to know
+    // whether to re-create instead of re-binding a dead handle. Default true
+    // -- only backends with a fallible/recyclable GPU handle need to track
+    // this.
+    virtual bool IsGpuValid() const { return true; }
+
     //! three-way alpha class (opaque / cutout / blend) for per-section transparency
     //! routing; computed once and cached by the backend. Default: opaque.
     virtual AlphaStats::Kind GetAlphaClass() { return AlphaStats::Opaque; }

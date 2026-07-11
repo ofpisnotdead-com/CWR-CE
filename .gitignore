@@ -1,3 +1,6 @@
+# OS junk
+.DS_Store
+
 # Build outputs
 /build/
 /dist/
@@ -5,6 +8,12 @@
 /obj/
 **/vcpkg_installed/
 CMakeUserPresets.json
+
+# fastlane-generated (fastlane/Fastfile and fastlane/Appfile are checked in)
+/fastlane/report.xml
+/fastlane/Preview.html
+/fastlane/screenshots/
+/fastlane/test_output/
 
 # Local/runtime output
 /tmp/
@@ -20,6 +29,8 @@ lock*.txt
 imgui.ini
 .trident.env
 .trident_history
+/debug-data/
+*.gputrace
 
 # Local game data and fixtures
 /assets/
@@ -73,7 +84,11 @@ target/
 # Render/test output
 *.bmp
 *.png
+!.github/images/**/*.png
 !resources/**/*.png
 !docs/**/*.png
 !tests/missions/screenshot/**/*.bmp
 !tests/missions/screenshot/**/*.png
+
+# debug data
+debug-data/

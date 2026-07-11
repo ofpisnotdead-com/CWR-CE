@@ -20,7 +20,7 @@ RString GetSaveDirectory();
 RString GetSaveDirectoryCampaign(RString campaign);
 RString GetSaveDirectoryMission(RString world, RString mission);
 RString GetTmpSaveDirectory();
-RString CreateSingleMissionBank(RString filename);
+RString CreateSingleMissionBank(RString filename, bool uniquePrefix = false);
 void CreatePath(RString path);
 void SetBaseDirectory(RString dir);
 void SetBaseSubdirectory(RString dir);

@@ -1,5 +1,7 @@
 #include <Poseidon/Foundation/Strings/Mbcs.hpp>
+#include <Poseidon/UI/Controls/IosKeyboardAccessory.hpp>
 #include <SDL3/SDL_clipboard.h>
+#include <SDL3/SDL_hints.h>
 #include <SDL3/SDL_keyboard.h>
 #include <SDL3/SDL_stdinc.h>
 #include <limits.h>
@@ -1613,6 +1615,54 @@ bool CEditContainer::DoIMEComposition(unsigned nChar, unsigned nFlags)
     return true;
 }
 
+void CEditContainer::BeginPlatformTextInput()
+{
+    if (!SDL_HasScreenKeyboardSupport())
+    {
+        return;
+    }
+
+    SDL_Window* window = SDL_GetKeyboardFocus();
+    if (window == nullptr)
+    {
+        return;
+    }
+
+    SDL_SetHint(SDL_HINT_ENABLE_SCREEN_KEYBOARD, "1");
+    SDL_SetHint(SDL_HINT_RETURN_KEY_HIDES_IME, "0");
+
+    SDL_PropertiesID props = SDL_CreateProperties();
+    if (props != 0)
+    {
+        SDL_SetNumberProperty(props, SDL_PROP_TEXTINPUT_TYPE_NUMBER, SDL_TEXTINPUT_TYPE_TEXT);
+        SDL_SetNumberProperty(props, SDL_PROP_TEXTINPUT_CAPITALIZATION_NUMBER, SDL_CAPITALIZE_NONE);
+        SDL_SetBooleanProperty(props, SDL_PROP_TEXTINPUT_AUTOCORRECT_BOOLEAN, false);
+        SDL_SetBooleanProperty(props, SDL_PROP_TEXTINPUT_MULTILINE_BOOLEAN, false);
+        SDL_StartTextInputWithProperties(window, props);
+        SDL_DestroyProperties(props);
+        Poseidon::InstallIosKeyboardHideAccessory();
+        return;
+    }
+
+    SDL_StartTextInput(window);
+    Poseidon::InstallIosKeyboardHideAccessory();
+}
+
+void CEditContainer::EndPlatformTextInput()
+{
+    if (!SDL_HasScreenKeyboardSupport())
+    {
+        return;
+    }
+
+    SDL_Window* window = SDL_GetKeyboardFocus();
+    if (window != nullptr)
+    {
+        SDL_StopTextInput(window);
+    }
+    SDL_SetHint(SDL_HINT_ENABLE_SCREEN_KEYBOARD, "0");
+}
+
 int CEditContainer::CurLine() const
 {
     int n = _lines.Size();
@@ -2017,6 +2067,22 @@ bool CEdit::OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
     return CEditContainer::DoKeyDown(nChar, nRepCnt, nFlags);
 }
 
+bool CEdit::OnSetFocus(bool up, bool def)
+{
+    if (!Control::OnSetFocus(up, def))
+    {
+        return false;
+    }
+    BeginPlatformTextInput();
+    return true;
+}
+
+bool CEdit::OnKillFocus()
+{
+    EndPlatformTextInput();
+    return Control::OnKillFocus();
+}
+
 bool CEdit::OnChar(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
 {
     return CEditContainer::DoChar(nChar, nRepCnt, nFlags);
@@ -2057,6 +2123,8 @@ int CEdit::FindPos(float x, float y)
 
 void CEdit::OnLButtonDown(float x, float y)
 {
+    BeginPlatformTextInput();
+
     int pos = FindPos(x, y);
     if (!InputSubsystem::Instance().IsKeyDown(SDL_SCANCODE_LSHIFT) &&
         !InputSubsystem::Instance().IsKeyDown(SDL_SCANCODE_RSHIFT))

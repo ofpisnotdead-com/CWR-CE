@@ -1,8 +1,8 @@
-set(OFPR_GAME_DATA_DIR "${CMAKE_SOURCE_DIR}/packages/Remaster")
+set(OFPR_GAME_DATA_DIR "${CMAKE_SOURCE_DIR}/packages/Combined")
 set(OFPR_CATCH_TEST_SPEC "")
 if(NOT EXISTS "${OFPR_GAME_DATA_DIR}")
     set(OFPR_CATCH_TEST_SPEC "~[GameData] ~[gamescan] ~[external-data]")
-    message(STATUS "Remaster game data not found at ${OFPR_GAME_DATA_DIR}; excluding external-data Catch2 tests")
+    message(STATUS "Combined game data not found at ${OFPR_GAME_DATA_DIR}; excluding external-data Catch2 tests")
 endif()
 set(OFPR_CATCH_TEST_SPEC_ARGS)
 if(NOT OFPR_CATCH_TEST_SPEC STREQUAL "")
@@ -323,6 +323,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     UI/Settings/test_contextControlsConfig.cpp
     UI/Settings/test_gamepadConfig.cpp
     UI/Settings/test_mouseConfig.cpp
+    UI/Settings/test_touchConfig.cpp
 
     # Platform config tests (batch-13)
     Platform/test_platform_config.cpp
@@ -352,6 +353,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     Input/test_gamepad_state.cpp
     Input/test_mouse_state.cpp
     Input/test_keyboard_state.cpp
+    Input/test_touch_input.cpp
     Input/test_ui_key_repeat_sdl.cpp
     Input/test_rumble_manager.cpp
 
@@ -415,6 +417,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     World/Entities/Vehicles/Air/test_helicopter.cpp
 
     # Scene tests
+    World/Scene/test_light_occlusion_ray.cpp
     World/Scene/test_object.cpp
     World/Scene/test_scene.cpp
     World/Scene/test_scene_preloader.cpp
@@ -445,6 +448,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     UI/Map/test_uiMap.cpp
     UI/Map/test_map_legend_localized.cpp
     UI/Map/test_equipment_localization.cpp
+    UI/test_game_data_download_support.cpp
     UI/Controls/test_uiControls.cpp
     UI/Controls/test_progress_bar_widget.cpp
     UI/Controls/test_control_object_rotate_devmode.cpp
@@ -471,6 +475,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     UI/test_optionsUI.cpp
     UI/test_press_button_page.cpp
     UI/test_press_key_page.cpp
+    UI/test_touch_page.cpp
     UI/test_ui_zbias_staircase.cpp
     UI/test_gameModule.cpp
     UI/test_viewer_cursor_overlay.cpp
@@ -499,6 +504,8 @@ list(APPEND POSEIDON_TEST_SOURCES
     Core/test_mod_archive.cpp
     Core/test_mod_collection.cpp
     Core/test_mod_install.cpp
+    Core/test_game_data_install.cpp
+    Core/test_game_data_archive.cpp
     Core/test_mod_selection.cpp
     Core/test_server_mod_resolve.cpp
     Core/test_pending_connect.cpp
@@ -548,6 +555,11 @@ if(WIN32)
         version     # Version info
         comctl32    # Common controls
         legacy_stdio_definitions.lib  # Legacy CRT functions (swprintf, etc.)
+    )
+elseif(APPLE)
+    target_link_libraries(PoseidonTests PRIVATE
+        PoseidonGL33 Poseidon PoseidonOpenAL
+        pthread dl
     )
 else()
     target_link_libraries(PoseidonTests PRIVATE
