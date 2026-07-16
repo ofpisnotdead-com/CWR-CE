@@ -29,7 +29,7 @@ class Mission
 	};
 	class Markers
 	{
-		items=3;
+		items=9;
 		class Item0
 		{
 			position[]={5978.265137,354.269257,6467.002930};
@@ -50,6 +50,36 @@ class Mission
 			name="conflictName";
 			type="End";
 			colorName="ColorGreen";
+		};
+		class Item3
+		{
+			position[]={0,0,0};
+			name="a";
+		};
+		class Item4
+		{
+			position[]={1,1,1};
+			name="b";
+		};
+		class Item5
+		{
+			position[]={100,100,100};
+			name="a";
+		};
+		class Item6
+		{
+			position[]={2,2,2};
+			name="c";
+		};
+		class Item7
+		{
+			position[]={200,200,200};
+			name="a";
+		};
+		class Item8
+		{
+			position[]={3,3,3};
+			name="d";
 		};
 	};
 };
