@@ -101,7 +101,8 @@ TEST_CASE("WRP: WrpReader reports error for invalid data", "[Formats][WRP]")
 static std::vector<char> BuildRvw4Blob()
 {
     std::vector<char> blob;
-    auto put = [&blob](const void* p, size_t n) {
+    auto put = [&blob](const void* p, size_t n)
+    {
         const char* c = static_cast<const char*>(p);
         blob.insert(blob.end(), c, c + n);
     };
