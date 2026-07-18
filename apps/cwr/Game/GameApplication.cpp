@@ -1685,6 +1685,11 @@ void GameApplication::StartGameMode()
         {
             snprintf(LoadFile, sizeof(LoadFile), "%s",
                      (const char*)"Users\\Test\\Missions\\Benchmark.Abel\\mission.sqm");
+            // Boot the benchmark mission into gameplay; without this the mission
+            // never loads (StartAutoTest is gated on AutoTest, WorldImpl.cpp) and
+            // the GModeArcade-gated benchmark FPS tracking never runs. Mirrors the
+            // test-mission branch above.
+            AutoTest = true;
         }
         if (AppConfig::Instance().IsViewerMode())
         {
