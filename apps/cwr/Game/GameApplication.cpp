@@ -1683,8 +1683,11 @@ void GameApplication::StartGameMode()
         }
         else if (Benchmark)
         {
-            snprintf(LoadFile, sizeof(LoadFile), "%s",
-                     (const char*)"Users\\Test\\Missions\\Benchmark.Abel\\mission.sqm");
+            // Forward slashes: on POSIX the backslash form is not normalized
+            // before StartIntro's FileExist() (WorldImpl.cpp:2219), so a
+            // "Users\\..." literal is never found and the mission silently does
+            // not load. Forward slashes resolve on POSIX and Windows both.
+            snprintf(LoadFile, sizeof(LoadFile), "%s", (const char*)"Users/Test/Missions/Benchmark.Abel/mission.sqm");
             // Boot the benchmark mission into gameplay; without this the mission
             // never loads (StartAutoTest is gated on AutoTest, WorldImpl.cpp) and
             // the GModeArcade-gated benchmark FPS tracking never runs. Mirrors the
