@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 
+#include <Poseidon/Audio/Voice/VonNet.hpp>
 
 namespace Poseidon
 {
@@ -19,12 +20,13 @@ struct VoNSpeaker
 
     void init();
     void destroy();
+    void setChannel(VoNChatChannel channel);
     void setPosition(float x, float y, float z);
     void stopStream();
     bool feed(VoNClient* client, uint32_t channel);
 
-    bool active  = false;
-    float level  = 0.0f;
+    bool active = false;
+    float level = 0.0f;
 
   private:
     IVoiceSpeakerBackend* EnsureImpl();

@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include <Poseidon/Audio/Voice/VonNet.hpp>
 
 namespace Poseidon
 {
@@ -35,6 +36,7 @@ class IVoiceSpeakerBackend
 
     virtual void init() = 0;
     virtual void destroy() = 0;
+    virtual void setChannel(VoNChatChannel channel) = 0;
     virtual void setPosition(float x, float y, float z) = 0;
     virtual void stopStream() = 0;
     virtual bool feed(VoNClient* client, uint32_t channel) = 0;
@@ -56,7 +58,7 @@ class IVoiceLoopbackBackend
 struct VoiceBackendDescriptor
 {
     const char* codeName = "dummy";
-    int priority         = 0;
+    int priority = 0;
     bool (*isAvailable)() = nullptr;
     std::unique_ptr<IVoiceCaptureBackend> (*createCapture)() = nullptr;
     std::unique_ptr<IVoiceSpeakerBackend> (*createSpeaker)() = nullptr;
@@ -68,5 +70,12 @@ bool RegisterVoiceBackend(const VoiceBackendDescriptor& backend);
 const VoiceBackendDescriptor& GetSelectedVoiceBackend();
 
 void RegisterOpenALVoiceBackend();
+
+// Test-only backend simulating an always-hot microphone that produces a
+// continuous 440 Hz tone in real time. Selected over the platform backends
+// only when POSEIDON_VOICE_TEST_TONE is set in the environment, so live
+// integration tests can drive the real capture -> recorder -> network path
+// on machines without input devices.
+void RegisterTestToneVoiceBackend();
 
 } // namespace Poseidon
