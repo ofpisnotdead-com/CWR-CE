@@ -61,6 +61,8 @@
 
 #include <Poseidon/Foundation/Common/Filenames.hpp>
 
+#include <Poseidon/IO/Filesystem/DirTree.hpp>
+
 #include <Poseidon/Core/Global.hpp>
 
 extern bool AutoTest;
@@ -74,47 +76,6 @@ int GetNetworkPort();
 RString GetNetworkPassword();
 
 RString GetIdentityText(const PlayerIdentity& identity);
-
-void DeleteDirectoryStructure(const char* name, bool deleteDir = true)
-{
-    if (!name || *name == 0)
-    {
-        return;
-    }
-
-    char buffer[256];
-    snprintf(buffer, sizeof(buffer), "%s\\*.*", name);
-
-    _finddata_t info;
-    intptr_t h = _findfirst(buffer, &info);
-    if (h != -1)
-    {
-        do
-        {
-            if ((info.attrib & _A_SUBDIR) != 0)
-            {
-                // FIX - do not delete only current and parent directory
-                if (strcmp(info.name, ".") != 0 && strcmp(info.name, "..") != 0)
-                {
-                    snprintf(buffer, sizeof(buffer), "%s\\%s", name, info.name);
-                    DeleteDirectoryStructure(buffer);
-                }
-            }
-            else
-            {
-                snprintf(buffer, sizeof(buffer), "%s\\%s", name, info.name);
-                chmod(buffer, _S_IREAD | _S_IWRITE);
-                unlink(buffer);
-            }
-        } while (_findnext(h, &info) == 0);
-        _findclose(h);
-    }
-    if (deleteDir)
-    {
-        chmod(name, _S_IREAD | _S_IWRITE);
-        rmdir(name);
-    }
-}
 
 void CopyDirectoryStructure(const char* dst, const char* src)
 {
