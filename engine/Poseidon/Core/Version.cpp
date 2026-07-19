@@ -73,4 +73,11 @@ RString GetVersionString()
     return ComposeVersionString(APP_VERSION_TEXT, GetVersionTag());
 }
 
+RString GetVersionStringForState(bool devMode, bool isDemo)
+{
+    const bool effectiveDevMode = !BuildInfo::ReleaseBuild && devMode;
+    return ComposeVersionString(APP_VERSION_TEXT,
+                                ResolveVersionTag(BuildInfo::VersionTag, BuildInfo::GitSha, effectiveDevMode, isDemo));
+}
+
 } // namespace Poseidon

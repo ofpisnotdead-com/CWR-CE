@@ -129,6 +129,9 @@ public:
     
     /// Auto-assign client to side:slot (--mp-assign WEST:1), empty=disabled
     const std::string& GetMPAssign() const { return _mpAssign; }
+
+    /// Print the exact MP compatibility tuple and exit before opening a window.
+    bool PrintMPVersion() const { return _printMPVersion; }
     
     // Audio
 
@@ -379,6 +382,7 @@ private:
     int _mpAutoStart = 0;
     bool _forceJIP = false;
     std::string _mpAssign;
+    bool _printMPVersion = false;
     
     // Audio
     bool _noSound = false;
