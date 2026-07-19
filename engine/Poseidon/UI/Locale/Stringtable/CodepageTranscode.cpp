@@ -537,8 +537,16 @@ std::string TranscodeToUtf8(const std::string& input, Codepage cp)
 
 Codepage SelectLegacyTextCodepage(const std::string& input, Codepage preferredCp)
 {
-    if (input.empty() || preferredCp == Codepage::Utf8 || IsValidUtf8(input))
+    if (input.empty() || preferredCp == Codepage::Utf8)
     {
+        return Codepage::Utf8;
+    }
+    if (IsValidUtf8(input))
+    {
+        if (preferredCp == Codepage::CP1250 && CountUtf8CodepointsInRange(input, 0x0600, 0x06FF) > 0)
+        {
+            return Codepage::CP1250;
+        }
         return Codepage::Utf8;
     }
 
