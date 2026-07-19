@@ -227,7 +227,11 @@ void ResetFontRenderers()
 void ClearFreeTypeCaches()
 {
     ClearFreeTypeAtlasTextures();
-    GetFTRenderers().clear();
+    // Cached Font objects hold raw pointers into this renderer map, and some UI
+    // objects keep Font refs across world remounts.  Dropping the renderers here
+    // leaves those refs with dangling FreeType faces on the next draw.  Keep the
+    // renderers process-lifetime; ResetFontRenderers refreshes mappings without
+    // invalidating existing Font objects.
 }
 
 static ui::FontRenderer* GetOrCreateRenderer(const char* ttfPath, bool syntheticOblique, float syntheticBold)
