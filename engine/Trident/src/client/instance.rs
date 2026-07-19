@@ -520,4 +520,47 @@ mod tests {
         assert_eq!(cc.retry_delay, Duration::from_millis(500));
         assert_eq!(cc.command_timeout, Duration::from_secs(5));
     }
+
+    // Dropping a `kill_on_drop` child must terminate the process. This is the
+    // reaping the shutdown path relies on: on SIGINT/SIGTERM `main` returns, the
+    // runtime drops each GameInstance, and this is what actually kills the game
+    // instead of orphaning it. Without kill_on_drop the sleep here would survive.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn kill_on_drop_reaps_spawned_process() {
+        let child = Command::new("sleep")
+            .arg("300")
+            .kill_on_drop(true)
+            .spawn()
+            .expect("spawn sleep");
+        let pid = child.id().expect("child pid");
+        assert!(process_running(pid), "sleep should be running after spawn");
+
+        drop(child);
+
+        for _ in 0..200 {
+            if !process_running(pid) {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("process {pid} still running after the child was dropped");
+    }
+
+    #[cfg(unix)]
+    fn process_running(pid: u32) -> bool {
+        // Reads /proc/<pid>/stat and treats a missing file (reaped) or 'Z'
+        // (zombie) as no longer running; comm can contain ')' so split on the last.
+        match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
+            Ok(stat) => {
+                let state = stat
+                    .rsplit(')')
+                    .next()
+                    .and_then(|rest| rest.split_whitespace().next())
+                    .and_then(|token| token.chars().next());
+                state != Some('Z')
+            }
+            Err(_) => false,
+        }
+    }
 }

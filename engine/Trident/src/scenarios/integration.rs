@@ -1094,7 +1094,8 @@ async fn run_mission_test(
         .current_dir(&work_dir)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
 
     tracing::debug!(
         "[{name}] spawning {} --test-mission {resolved} {}",

@@ -174,6 +174,34 @@ enum Commands {
     },
 }
 
+// Resolves when the process is asked to terminate (Ctrl-C anywhere; SIGTERM on
+// Unix). Wrapping a game-spawning run in `select!` against this lets the command
+// return early: the tokio runtime then shuts down, drops every in-flight
+// GameInstance, and `kill_on_drop` reaps the game processes instead of orphaning
+// them. Cross-platform — no process-group / signal machinery.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            }
+            Err(_) => std::future::pending::<()>().await,
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        () = ctrl_c => {}
+        () = terminate => {}
+    }
+}
+
 #[tokio::main]
 #[allow(clippy::too_many_lines)]
 async fn main() -> anyhow::Result<()> {
@@ -240,17 +268,21 @@ async fn main() -> anyhow::Result<()> {
                 tests.len()
             );
 
-            let results = scenarios::integration::run_all(
-                &tests,
-                &game_dir,
-                data_dir.as_deref(),
-                jobs,
-                retries,
-                &out_dir,
-                render.as_deref(),
-                &game_args,
-            )
-            .await?;
+            let results = tokio::select! {
+                result = scenarios::integration::run_all(
+                    &tests,
+                    &game_dir,
+                    data_dir.as_deref(),
+                    jobs,
+                    retries,
+                    &out_dir,
+                    render.as_deref(),
+                    &game_args,
+                ) => result?,
+                () = shutdown_signal() => {
+                    anyhow::bail!("interrupted (SIGINT/SIGTERM) — shutting down and killing games");
+                }
+            };
 
             if let Some(n) = profile {
                 scenarios::integration::print_profile(&results, n);
@@ -281,15 +313,19 @@ async fn main() -> anyhow::Result<()> {
                 );
             }
 
-            let result = scenarios::stress::run_stress_scenario(
-                &scenario_dir,
-                &game_dir,
-                data_dir.as_deref(),
-                &out_dir,
-                render.as_deref(),
-                &game_args,
-            )
-            .await?;
+            let result = tokio::select! {
+                result = scenarios::stress::run_stress_scenario(
+                    &scenario_dir,
+                    &game_dir,
+                    data_dir.as_deref(),
+                    &out_dir,
+                    render.as_deref(),
+                    &game_args,
+                ) => result?,
+                () = shutdown_signal() => {
+                    anyhow::bail!("interrupted (SIGINT/SIGTERM) — shutting down and killing games");
+                }
+            };
 
             println!("{}", result.message);
             if !result.passed {
