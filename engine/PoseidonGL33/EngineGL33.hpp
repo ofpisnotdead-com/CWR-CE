@@ -808,6 +808,7 @@ class EngineGL33 : public Engine
         return pure;
     }
     void UploadWorldInstances(const float* matrices, int count);
+    void UploadBonePalette(const float* mats, int count) override;
     // Run accumulation: Scene adds model-to-world transforms; the engine
     // converts (camera-relative GfxMatrix) and uploads on BeginInstancedRunUpload.
     void InstancedRunReset() override { _instPending = 0; }

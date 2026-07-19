@@ -776,6 +776,7 @@ static float s_psShadow[108] = {}; // 27 vec4 slots — c8-c23 cascadeVP[4], c24
 
 static GLuint s_vsUBO = 0;
 static GLuint s_worldUBO = 0;
+static GLuint s_boneUBO = 0; // BonePalette{ mat4 bones[128] } — binding 3 (GPU skinning)
 static GLuint s_psUBO = 0;
 
 void EngineGL33::FlushVSConstants()
@@ -842,6 +843,14 @@ void EngineGL33::InitVertexShaders()
     glBufferData(GL_UNIFORM_BUFFER, 256 * 64, nullptr, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_UNIFORM_BUFFER, 2, s_worldUBO);
 
+    // BonePalette UBO (binding 3) — 128 mat4 = 8 KB.  Holds one skinned object's
+    // model-space bone matrices; re-uploaded per skinned draw (UploadBonePalette).
+    // The skinning VS reads bones[boneIdx]; unused while GPU skinning is off.
+    glGenBuffers(1, &s_boneUBO);
+    glBindBuffer(GL_UNIFORM_BUFFER, s_boneUBO);
+    glBufferData(GL_UNIFORM_BUFFER, 128 * 64, nullptr, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 3, s_boneUBO);
+
     _vertexShaderSel = VSNone;
 }
 
@@ -866,6 +875,11 @@ void EngineGL33::DeinitVertexShaders()
     {
         glDeleteBuffers(1, &s_vsUBO);
         s_vsUBO = 0;
+    }
+    if (s_boneUBO)
+    {
+        glDeleteBuffers(1, &s_boneUBO);
+        s_boneUBO = 0;
     }
 }
 
@@ -1090,6 +1104,16 @@ void EngineGL33::UploadWorldInstances(const float* matrices, int count)
         count = 256;
     glBindBuffer(GL_UNIFORM_BUFFER, s_worldUBO);
     glBufferSubData(GL_UNIFORM_BUFFER, 0, count * 64, matrices);
+}
+
+void EngineGL33::UploadBonePalette(const float* mats, int count)
+{
+    if (!s_boneUBO || count <= 0 || !mats)
+        return;
+    if (count > 128)
+        count = 128;
+    glBindBuffer(GL_UNIFORM_BUFFER, s_boneUBO);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, count * 64, mats);
 }
 
 void EngineGL33::UploadVSWorldMatrix(const float worldMatrix[16])

@@ -39,6 +39,11 @@ public:
 	virtual void GetMaterial(TLMaterial &mat, int index) const = 0;
 	// check if given shape is animated
 	virtual bool GetAnimated(const Shape &src) const = 0;
+	// GPU-skinning bone palette (model-space bone matrices, 16 floats each) for
+	// the shape about to be drawn.  Default: none, so animators that are not
+	// GPU-skinned need no override.  Objects that GPU-skin their view LOD retain
+	// the per-frame palette and return it here.
+	virtual void GetBonePalette(const Matrix4 *&mats, int &count) const { mats = nullptr; count = 0; }
 };
 
 // hints: different handling of object/surface relations
@@ -94,6 +99,10 @@ public:
 
 	// update vertices if necessary
 	virtual void Update(const Shape &src, bool dynamic) = 0;
+
+	// True when this buffer uses the skinned vertex layout (GPU skinning); the
+	// draw path then uploads the object's bone palette before the draw.
+	virtual bool IsSkinned() const { return false; }
 };
 
 // Per-vertex bone binding for GPU skinning: up to 4 (boneIndex, weight)

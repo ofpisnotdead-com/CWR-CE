@@ -11,6 +11,7 @@
 #include <Poseidon/Graphics/Rendering/Frame/Frame.hpp>
 #include <Poseidon/Graphics/Shared/ScreenshotWriter.hpp>
 #include <Poseidon/Dev/Debug/DebugOverlay.hpp>
+#include <Poseidon/Core/Config/EngineConfig.hpp>
 
 using namespace Poseidon::Dev;
 
@@ -45,6 +46,7 @@ class VertexBufferGL33 : public VertexBuffer
 
     bool Init(const Shape& src, VBType type);
     void Update(const Shape& src, bool dynamic) override;
+    bool IsSkinned() const override { return _skinned; }
 
   private:
     void CopyVertices(const Shape& src);
@@ -52,21 +54,16 @@ class VertexBufferGL33 : public VertexBuffer
     size_t VertexStride() const { return _skinned ? sizeof(SSkinnedVertex) : sizeof(SVertex); }
 };
 
-// GPU-skinning master switch — see EngineGL33.hpp.  TU-local; flipped by the
-// engine config / CLI once the skinning VS and view-LOD static path are wired.
-namespace
-{
-bool sGpuSkinningEnabled = false;
-}
-
+// GPU-skinning master switch — see EngineGL33.hpp.  Backed by the shared engine
+// config so World (Man::Animate) and this backend read one source of truth.
 void SetGpuSkinningEnabled(bool on)
 {
-    sGpuSkinningEnabled = on;
+    ENGINE_CONFIG.enableGpuSkinning = on;
 }
 
 bool GpuSkinningEnabled()
 {
-    return sGpuSkinningEnabled;
+    return ENGINE_CONFIG.enableGpuSkinning;
 }
 
 VertexBufferGL33::~VertexBufferGL33()

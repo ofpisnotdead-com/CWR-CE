@@ -488,6 +488,9 @@ class Engine : public IGraphicsEngine
     virtual void BeginMeshTL(const Shape& sMesh, int spec, bool dynamic = false) {} // convert all mesh vertices
     virtual void EndMeshTL(const Shape& sMesh) {}                                   // forget mesh
     virtual void DrawSectionTL(const Shape& sMesh, int beg, int end) {}
+    // Upload the per-object bone palette for the next skinned mesh draw (model-
+    // space bone matrices, 16 floats each).  No-op on backends without skinning.
+    virtual void UploadBonePalette(const float* mats, int count) {}
 
     virtual int HowLongIdle() { return 0; }
     virtual size_t GetDrawItemCount() const { return 0; }

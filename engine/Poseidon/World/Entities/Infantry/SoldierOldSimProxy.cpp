@@ -975,6 +975,20 @@ void Man::Animate(int level)
         }
 
         AnimationRT::ApplyMatrices(type->GetWeights(), _shape, level, matrix);
+
+        // GPU skinning: retain this frame's bone palette on the object so the
+        // skinned view-LOD draw can upload it (see Man::GetBonePalette).  Gated
+        // so the default CPU-skinning path pays nothing.
+        if (ENGINE_CONFIG.enableGpuSkinning)
+        {
+            const int nb = matrix.Size();
+            _bonePalette.Realloc(nb);
+            _bonePalette.Resize(nb);
+            for (int i = 0; i < nb; i++)
+            {
+                _bonePalette[i] = matrix[i];
+            }
+        }
     }
 
     BasicAnimation(level);

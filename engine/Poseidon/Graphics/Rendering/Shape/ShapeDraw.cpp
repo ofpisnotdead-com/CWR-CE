@@ -107,6 +107,16 @@ void Shape::Draw(class IAnimator* matSource, const LightList& lights, ClipFlags 
             // check if shape is dynamic or not
             bool dynamic = matSource->GetAnimated(*this);
             engine->BeginMeshTL(*this, spec, dynamic);
+            if (_buffer->IsSkinned())
+            {
+                // GPU skinning: push the object's bone palette to the backend
+                // once per skinned shape draw, before the section draws whose VS
+                // reads it.  Empty palette (count 0) is a no-op -> bind pose.
+                const Matrix4* pal = nullptr;
+                int palCount = 0;
+                matSource->GetBonePalette(pal, palCount);
+                engine->UploadBonePalette(reinterpret_cast<const float*>(pal), palCount);
+            }
             // check first face properties
             int secBeg = -1;
             int secEnd = -1;
