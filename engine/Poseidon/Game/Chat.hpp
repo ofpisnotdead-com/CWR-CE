@@ -4,6 +4,7 @@
 #include <Poseidon/Core/Global.hpp>
 #include <Poseidon/Graphics/Core/Engine.hpp>
 #include <Poseidon/Audio/Speaker.hpp>
+#include <Poseidon/Network/NetTransport.hpp>
 
 namespace Poseidon
 {
@@ -33,6 +34,13 @@ struct ChatItem
 	bool forceDisplay;
 };
 
+struct SpeakingIndication
+{
+    RString name;
+    ChatChannel channel = CCGlobal;
+    Poseidon::Foundation::UITime lastSpeaking = Poseidon::Foundation::UITime(0);
+};
+
 class NetworkObject;
 using Poseidon::RadioSentence;
 
@@ -53,6 +61,8 @@ protected:
 	bool _enable;
 
 	int _offset;
+    Poseidon::Foundation::UITime _lastSpeaking;
+    AutoArray<SpeakingIndication> _speaking;
 
 public:
 	ChatList();
@@ -70,6 +80,7 @@ public:
 	bool Enabled() const {return _enable;}
 
 	void OnDraw();
+    void GetSpeakingPlayers();
 
 	void BrowseUp();
 	void BrowseDown();
@@ -80,6 +91,8 @@ void SendRadioChat(ChatChannel channel, AIUnit *sender, NetworkObject *object, R
 void SendRadioChatWave(ChatChannel channel, NetworkObject *object, RString wave, AIUnit *sender, RString senderName);
 void SendRadioChatWave(ChatChannel channel, RString wave, AIUnit *sender, RString senderName);
 void SendMarker(ChatChannel channel, AIUnit *sender, ArcadeMarkerInfo &marker);
+
+void SetTestSpeakingIndications(const AutoArray<SpeakingIndication>& speakers);
 
 extern ChatList GChatList;
 
