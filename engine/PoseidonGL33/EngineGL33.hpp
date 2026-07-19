@@ -203,6 +203,24 @@ struct SVertex
     Poseidon::UVPair t0;
 };
 
+// Skinned mesh vertex — SVertex plus per-vertex bone bindings, used ONLY by
+// per-shape skinned VBOs (GPU skinning).  Deliberately NOT an extension of
+// SVertex: the global `_vaoMesh` streaming VAO reads a TLVertex buffer at
+// `sizeof(SVertex)` stride (see EngineGL33_2DRendering.cpp), so growing SVertex
+// would corrupt that path.  boneIdx/boneWeight map 1:1 onto AnimationRTPair
+// {char _sel; unsigned char _weight}, with _weight quantized by WeightScale=128
+// — both are uploaded as raw bytes and read as INTEGER attributes in the VS,
+// where the weight is rescaled by 1/128 (NOT the /255 an OpenGL-normalized
+// unsigned-byte read would give).  Up to 4 bones/vertex (matches ARTWMaxSize).
+struct SSkinnedVertex
+{
+    Vector3P pos;
+    Vector3P norm;
+    Poseidon::UVPair t0;
+    unsigned char boneIdx[4];    // AnimationRTPair::_sel per influencing bone
+    unsigned char boneWeight[4]; // AnimationRTPair::_weight (value * WeightScale)
+};
+
 // Free-function override for hot-reload — when set (typically via CLI
 // --shader-override-dir), GL33's CompileGLShader prefers
 // `<dir>/<name>.glsl` over the inline source.  Empty = inline only.

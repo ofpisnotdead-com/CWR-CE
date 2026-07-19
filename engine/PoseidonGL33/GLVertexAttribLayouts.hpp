@@ -69,4 +69,26 @@ inline void SetupSVertexLayout()
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(SVertex, t0)));
 }
 
+// VSSkinned reads SSkinnedVertex — the 3 SVertex attributes plus two integer
+// bone attributes.  boneIdx/boneWeight are fed via glVertexAttribIPointer so
+// the shader receives them as `uvec4` (exact byte values), not float-normalized:
+// the weight's WeightScale=128 quantization is undone in the VS, and bone
+// indices must stay exact integers for the palette lookup.  Caller must have a
+// non-zero VAO + the SSkinnedVertex VBO bound to GL_ARRAY_BUFFER.
+inline void SetupSkinnedVertexLayout()
+{
+    const GLsizei stride = sizeof(SSkinnedVertex);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(SSkinnedVertex, pos)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(SSkinnedVertex, norm)));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(SSkinnedVertex, t0)));
+    glEnableVertexAttribArray(3);
+    glVertexAttribIPointer(3, 4, GL_UNSIGNED_BYTE, stride, reinterpret_cast<void*>(offsetof(SSkinnedVertex, boneIdx)));
+    glEnableVertexAttribArray(4);
+    glVertexAttribIPointer(4, 4, GL_UNSIGNED_BYTE, stride,
+                           reinterpret_cast<void*>(offsetof(SSkinnedVertex, boneWeight)));
+}
+
 } // namespace Poseidon::render::vao
