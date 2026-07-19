@@ -195,6 +195,10 @@ void ProcessKeyboard_SDL(DWORD /*sysTime*/, DWORD timeDelta)
     // (Event timestamps are in GlobalTickCount() space, not ::GetTickCount())
     DWORD sysTime = GlobalTickCount();
     GInput.keyboard.Update(sysTime, timeDelta, GWorld->IsUserInputEnabled());
+    if (GWorld)
+    {
+        GWorld->HandleVoiceChatShortcuts();
+    }
 }
 
 void SDLInput_BufferMouseButton(int btn, bool down)
