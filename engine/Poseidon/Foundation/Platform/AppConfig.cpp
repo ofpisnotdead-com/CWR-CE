@@ -602,6 +602,9 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
         auto* debugGroup = app.add_option_group("Debug & Testing", "Development and testing options");
 
         showOption(debugGroup->add_flag("--benchmark", _benchmark, "Benchmark mode"), CliHelpVisibility::Dev);
+        showOption(debugGroup->add_flag("--gpu-skinning", _gpuSkinning,
+                                        "Experimental: GPU-skin infantry view LODs (bind-pose static VBO + bone UBO)"),
+                   CliHelpVisibility::Dev);
 
         if (!BuildInfo::ReleaseBuild)
         {
@@ -1121,6 +1124,7 @@ void AppConfig::ApplyToLegacyGlobals()
     ENGINE_CONFIG.noTerrainCache = _noTerrainCache;
 
     // Debug & Testing
+    ENGINE_CONFIG.enableGpuSkinning = _gpuSkinning;
     ::Benchmark = _benchmark;
     ::GLogFileOps = _logFileOps;
 #ifdef NET_LOG_COMMAND_LINE

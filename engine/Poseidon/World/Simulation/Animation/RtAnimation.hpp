@@ -137,7 +137,7 @@ class Skeleton: public RefCountWithLinks
 	int NBones() const {return _matrixNames.Size();}
 	RStringB GetBone( int i ) const {return _matrixNames[i];}
 
-	void Prepare(LODShape *lShape, WeightInfo &weights);
+	void Prepare(LODShape *lShape, WeightInfo &weights, bool gpuSkin = false);
 };
 
 template<>
@@ -293,7 +293,7 @@ class AnimationRT: public RefCount, public CLDLink
 	int GetKeyframeCount() const {return _nPhases;}
 	const Skeleton *GetSkeleton() const {return _name.skeleton;}
 
-	void Prepare(LODShape *lShape, Skeleton *skelet, WeightInfo &weights, bool looped);
+	void Prepare(LODShape *lShape, Skeleton *skelet, WeightInfo &weights, bool looped, bool gpuSkin = false);
 	void RemoveLoopFrame();
 	void ForceMatrixOrientation(int matIndex, const Matrix3 &orient, float factor);
 	void IntroduceStep();

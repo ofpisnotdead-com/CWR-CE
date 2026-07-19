@@ -736,7 +736,7 @@ void AnimationRT::SetLooped(bool looped)
     RemoveLoopFrame();
 }
 
-void Skeleton::Prepare(LODShape* lShape, WeightInfo& weights)
+void Skeleton::Prepare(LODShape* lShape, WeightInfo& weights, bool gpuSkin)
 {
     for (int level = 0; level < lShape->NLevels(); level++)
     {
@@ -764,29 +764,41 @@ void Skeleton::Prepare(LODShape* lShape, WeightInfo& weights)
         // so the skinning VS reproduces the CPU skin bit-for-bit in intent.
         // Unweighted vertices keep the all-zero binding AllocSkin() cleared them
         // to (weight-sum 0 -> the VS falls back to bind pose).
-        const AnimationRTWeights& w = weights[level];
-        shape->AllocSkin(shape->NPos());
-        for (int i = 0; i < shape->NPos(); i++)
+        //
+        // Only when the caller opts in (gpuSkin) and only for GRAPHICAL LODs
+        // (Resolution < 1000 — the drawn view LODs).  Special LODs (geometry,
+        // shadow-volume, memory: Resolution >= 1000) stay on the CPU path: they
+        // feed collision / shadow / bounding, which must remain bit-identical for
+        // MP determinism, and the shadow pass draws them with the non-skinned VS.
+        // gpuSkin is passed true only by the infantry skeleton prepare — the only
+        // object that retains a bone palette (Man::GetBonePalette); vehicles with
+        // skeletal anims (scud, parachute) leave it default-false and stay CPU.
+        if (gpuSkin && lShape->Resolution(level) < 1000)
         {
-            const AnimationRTWeight& e = w[i];
-            SkinVertexBinding& b = shape->SkinRW(i);
-            int n = e.Size();
-            if (n > 4)
+            const AnimationRTWeights& w = weights[level];
+            shape->AllocSkin(shape->NPos());
+            for (int i = 0; i < shape->NPos(); i++)
             {
-                n = 4;
-            }
-            for (int j = 0; j < n; j++)
-            {
-                b.idx[j] = static_cast<unsigned char>(e[j].GetSel());
-                b.weight[j] = e[j]._weight;
+                const AnimationRTWeight& e = w[i];
+                SkinVertexBinding& b = shape->SkinRW(i);
+                int n = e.Size();
+                if (n > 4)
+                {
+                    n = 4;
+                }
+                for (int j = 0; j < n; j++)
+                {
+                    b.idx[j] = static_cast<unsigned char>(e[j].GetSel());
+                    b.weight[j] = e[j]._weight;
+                }
             }
         }
     }
 }
 
-void AnimationRT::Prepare(LODShape* lShape, Skeleton* skelet, WeightInfo& weights, bool looped)
+void AnimationRT::Prepare(LODShape* lShape, Skeleton* skelet, WeightInfo& weights, bool looped, bool gpuSkin)
 {
-    skelet->Prepare(lShape, weights);
+    skelet->Prepare(lShape, weights, gpuSkin);
     SetLooped(looped);
 }
 

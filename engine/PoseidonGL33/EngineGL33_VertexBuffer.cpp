@@ -117,8 +117,13 @@ void VertexBufferGL33::CopyVertices(const Shape& src)
     char* base = static_cast<char*>(mapped);
 
     const UVPair* uv = &src.UV(0);
-    const Vector3* pos = &src.Pos(0);
-    const Vector3* norm = &src.Norm(0);
+    // Skinned buffers hold the BIND POSE (OrigPos/OrigNorm), uploaded once; the VS
+    // re-skins from it each frame via the bone palette.  Uploading the CPU-skinned
+    // Pos/Norm would double-transform.  Fall back to Pos/Norm if the original pose
+    // has not been saved yet (SaveOriginalPos runs inside ApplyMatrices).
+    const bool bindPose = _skinned && src.OriginalPosValid();
+    const Vector3* pos = bindPose ? &src.OrigPos(0) : &src.Pos(0);
+    const Vector3* norm = bindPose ? &src.OrigNorm(0) : &src.Norm(0);
     const int n = src.NVertex();
     for (int i = 0; i < n; i++)
     {
@@ -154,11 +159,14 @@ bool VertexBufferGL33::Init(const Shape& src, VBType type)
         return false;
     }
 
-    _dynamic = (type == VBDynamic || type == VBSmallDiscardable);
     // Skinned only when the master switch is on AND the shape carries a full
     // per-vertex binding table (built by Skeleton::Prepare).  Off -> classic
     // SVertex path, unchanged.
     _skinned = GpuSkinningEnabled() && src.HasSkin();
+    // Skinned buffers hold the static bind pose (the palette animates on the GPU),
+    // so they never need a per-frame re-upload -> force GL_STATIC_DRAW and skip
+    // Update().  This removes the dynamic vertex-streaming cost for the view mesh.
+    _dynamic = (type == VBDynamic || type == VBSmallDiscardable) && !_skinned;
     _vertexCount = src.NVertex();
 
     // Core profile requires a non-zero VAO bound before any
@@ -250,6 +258,14 @@ bool VertexBufferGL33::Init(const Shape& src, VBType type)
 
 void VertexBufferGL33::Update(const Shape& src, bool dynamic)
 {
+    // Skinned buffers are the static bind pose — never re-upload.  This is the
+    // per-frame dynamic-streaming (~libgallium) cost the GPU-skinning change
+    // removes: the CPU may still write bufferDirty, but we intentionally ignore it.
+    if (_skinned)
+    {
+        bufferDirty = false;
+        return;
+    }
     if (_dynamic || dynamic || bufferDirty)
     {
         CopyVertices(src);
