@@ -1,7 +1,7 @@
 version=11;
 class Mission
 {
-	randomSeed=200101;
+	randomSeed=13242371;
 	class Intel
 	{
 	};
@@ -30,21 +30,21 @@ class Mission
 };
 class Intro
 {
-	randomSeed=200102;
+	randomSeed=13976579;
 	class Intel
 	{
 	};
 };
 class OutroWin
 {
-	randomSeed=200103;
+	randomSeed=453123;
 	class Intel
 	{
 	};
 };
 class OutroLoose
 {
-	randomSeed=200104;
+	randomSeed=6027267;
 	class Intel
 	{
 	};

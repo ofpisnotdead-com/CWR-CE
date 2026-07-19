@@ -626,7 +626,8 @@ void Head::SetFace(const HeadType& type, bool women, LODShape* lShape, RString n
     {
         if (player.GetLength() > 0)
         {
-            RString face = Poseidon::BuildNetworkPlayerAssetTmpPath(player, RString("face.paa"));
+            RString relativeFace = Poseidon::BuildNetworkPlayerAssetTmpPath(player, RString("face.paa"));
+            RString face = relativeFace.GetLength() > 0 ? Poseidon::GetUserDirectory() + relativeFace : RString();
             if (face.GetLength() > 0 && QIFStream::FileExists(face))
             {
                 Ref<Texture> text = GlobLoadTexture(face);
@@ -637,7 +638,8 @@ void Head::SetFace(const HeadType& type, bool women, LODShape* lShape, RString n
             }
             else
             {
-                face = Poseidon::BuildNetworkPlayerAssetTmpPath(player, RString("face.jpg"));
+                relativeFace = Poseidon::BuildNetworkPlayerAssetTmpPath(player, RString("face.jpg"));
+                face = relativeFace.GetLength() > 0 ? Poseidon::GetUserDirectory() + relativeFace : RString();
                 if (face.GetLength() > 0 && QIFStream::FileExists(face))
                 {
                     Ref<Texture> text = GlobLoadTexture(face);

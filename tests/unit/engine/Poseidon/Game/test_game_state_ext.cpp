@@ -663,7 +663,7 @@ TEST_CASE("Advanced product PBO exposes metadata and config payload", "[game][ga
     const QFProperty sourceProperties[] = {
         {"product", "Advanced Product"},
     };
-    const auto bankPath = CreateTempAddonBank("poseidon_advanced_product_ok", "UnitTestGeneratedAdvancedAddon",
+    const auto bankPath = CreateTempAddonBank("poseidon_advanced_product_metadata", "UnitTestGeneratedAdvancedAddon",
                                               sourceProperties, std::size(sourceProperties), false);
 
     const auto properties = ReadRawPboProperties(bankPath.string());
@@ -694,8 +694,9 @@ TEST_CASE("Advanced product PBO follows addon acceptance rules", "[game][gameSta
 
     SECTION("accepted without encryption requirement")
     {
-        const auto bankPath = CreateTempAddonBank("poseidon_advanced_product_ok", "UnitTestGeneratedAdvancedAddon",
-                                                  properties, std::size(properties), false);
+        const auto bankPath =
+            CreateTempAddonBank("poseidon_advanced_product_acceptance", "UnitTestGeneratedAdvancedAddon", properties,
+                                std::size(properties), false);
         Ref<AddonAcceptanceContext> context = new AddonAcceptanceContext{productList, false};
         QFBank bank;
         REQUIRE(bank.open(RString(bankPath.string().substr(0, bankPath.string().size() - 4).c_str()),

@@ -1,9 +1,14 @@
 version=11;
 class Mission
 {
-	randomSeed=200101;
+	randomSeed=12345;
 	class Intel
 	{
+		viewDistance=900;
+		month=7;
+		day=5;
+		hour=12;
+		minute=0;
 	};
 	class Groups
 	{
@@ -17,6 +22,7 @@ class Mission
 				class Item0
 				{
 					position[]={6710.527832,82.907585,5408.891602};
+					azimut=0.000000;
 					id=0;
 					side="WEST";
 					vehicle="SoldierWB";
@@ -28,24 +34,6 @@ class Mission
 		};
 	};
 };
-class Intro
-{
-	randomSeed=200102;
-	class Intel
-	{
-	};
-};
-class OutroWin
-{
-	randomSeed=200103;
-	class Intel
-	{
-	};
-};
-class OutroLoose
-{
-	randomSeed=200104;
-	class Intel
-	{
-	};
-};
+class Intro{};
+class OutroWin{};
+class OutroLoose{};

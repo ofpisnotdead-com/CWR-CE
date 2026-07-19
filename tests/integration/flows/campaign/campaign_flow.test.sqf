@@ -13,7 +13,7 @@ triAssert [(triGetControlEnabled 115)]
 triClick 101
 triAssertEq [(triDisplay), 43]
 triWaitFrames 5
-triClick 2
+triSendKey 41
 triSimUntil { triDisplay == 0 }
 triAssertEq [(triDisplay), 0]
 triEndTest
