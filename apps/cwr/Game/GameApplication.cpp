@@ -1381,8 +1381,7 @@ void GameApplication::RunMainLoop()
         const bool missionReachedPlay = networkManager.WasServerPlaying() ||
                                         networkManager.GetServerState() >= NGSPlay ||
                                         networkManager.GetGameState() >= NGSPlay;
-        if (missionReachedPlay)
-            m_exitCode = 0;
+        m_exitCode = ResolveMultiplayerAutoTestExitCode(m_exitCode, missionReachedPlay, m_cleanTestEndRequested);
         networkManager.Close();
         Sleep(100);
         LOG_INFO(Core, "MP auto-test: exiting with code {}", m_exitCode);
@@ -1451,6 +1450,7 @@ void GameApplication::RegisterAudioBackends()
     Poseidon::RegisterTextAudioBackend();
     Poseidon::RegisterOpenALAudioBackend();
     Poseidon::RegisterOpenALVoiceBackend();
+    Poseidon::RegisterTestToneVoiceBackend();
 }
 
 void GameApplication::RegisterGraphicsBackends()

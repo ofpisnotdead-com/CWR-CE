@@ -8,8 +8,11 @@
 #include <Poseidon/Foundation/Logging/Logging.hpp>
 #include <Poseidon/Foundation/Framework/DebugLog.hpp> // gSoftAssert
 #include <Poseidon/Core/Config/Config.hpp>
+#include <Poseidon/Core/ModSystem.hpp>
+#include <Poseidon/Core/Version.hpp>
 #include <Poseidon/Dev/Diag/PerfTrace.hpp>
 #include <Poseidon/Core/TaskPool.hpp>
+#include <Poseidon/Network/NetworkImpl.hpp>
 #include <thread>
 #include <Poseidon/IO/Streams/QBStream.hpp>          // GUseFileBanks
 #include <Poseidon/Foundation/Platform/FPUSetup.hpp> // InitFPU
@@ -17,6 +20,7 @@
 #include <Poseidon/IO/ParamFile/InitLibraryElement.hpp>
 #include <string>
 #include <Poseidon/Foundation/Framework/Log.hpp>
+#include <cstdio>
 #include <filesystem>
 
 #ifdef _WIN32
@@ -29,6 +33,22 @@ namespace Poseidon
 {
 void ApplyGamePathsToLegacyGlobals();
 }
+
+namespace
+{
+void PrintMPCompatibilityTuple(const Poseidon::Application& app)
+{
+    const auto& appConfig = Poseidon::Foundation::AppConfig::Instance();
+    std::printf("mp_actual_version=%d\n", MP_VERSION_ACTUAL);
+    std::printf("mp_required_version=%d\n", MP_VERSION_REQUIRED);
+    std::printf("version_tag=%s\n", (const char*)Poseidon::GetVersionTag());
+    std::printf("version_string=%s\n", (const char*)Poseidon::GetVersionString());
+    std::printf("dev_mode=%s\n", appConfig.DevMode() ? "true" : "false");
+    std::printf("demo=%s\n", app.IsDemo() ? "true" : "false");
+    std::printf("mod_names=%s\n", (const char*)Poseidon::ModSystem::GetModNames());
+    std::printf("mod_paths=%s\n", (const char*)Poseidon::ModSystem::GetModList());
+}
+} // namespace
 
 bool GameBase::InitializeMemorySystem()
 {
@@ -117,6 +137,13 @@ bool GameBase::ParseCommandLine(const char* commandLine)
 
     if (!workDir.empty())
         LOG_INFO(Core, "Changed working directory to: {}", workDir);
+
+    if (AppConfig::Instance().PrintMPVersion())
+    {
+        PrintMPCompatibilityTuple(*this);
+        m_startupExitCode = 0;
+        return false;
+    }
 
     const std::string oldPathsRoot = std::filesystem::current_path().string();
     GamePaths::Instance().Initialize("CWR", "ColdWarAssault", "Cold War Assault", AppConfig::Instance().OldPaths(),

@@ -1164,7 +1164,7 @@ static bool SendChat(ChatChannel channel, NetworkObject* object, AIUnit* sender,
 {
     if (audible)
     {
-        GChatList.Add(channel, sender, message, false, true);
+        GChatList.Add(channel, sender, DecodeLegacyTextToRString(message, GLanguage), false, true);
     }
     // Not sent over the network: this drives title-effect-style chat, activated locally on each client.
     return true;
@@ -1179,11 +1179,11 @@ static bool SendChat(ChatChannel channel, NetworkObject* object, RString identit
     }
 
     // used only in GChatList.Add - write directly display name
-    RString sender = *cfg >> "name";
+    RString sender = DecodeLegacyTextToRString(*cfg >> "name", GLanguage);
 
     if (audible)
     {
-        GChatList.Add(channel, sender, message, false, true);
+        GChatList.Add(channel, sender, DecodeLegacyTextToRString(message, GLanguage), false, true);
     }
     // Not sent over the network: this drives title-effect-style chat, activated locally on each client.
     return true;

@@ -235,40 +235,31 @@ impl GameInstance {
 
     /// Wait for the game process to exit and return the exit code.
     ///
-    /// The shutdown budget is decoupled from the per-test assertion
-    /// timeout: even fast tests (`timeout = 30` in their TOML) get
-    /// at least [`EXIT_GRACE`] for the engine to tear down GL,
-    /// flush audio, save config, etc.  Under parallel load (3
-    /// games sharing a GPU + audio device) shutdown can take
-    /// 30+ seconds even for a test whose body ran in 5 s.
+    /// The caller's timeout is the hard shutdown budget. Tests use this
+    /// to keep a wedged SQF flow from consuming the whole suite after the
+    /// test body should already have finished.
     pub async fn wait_exit(&mut self, timeout: Duration) -> Result<i32> {
-        const EXIT_GRACE: Duration = Duration::from_secs(60);
-        let effective = timeout.max(EXIT_GRACE);
-        match tokio::time::timeout(effective, self.process.wait()).await {
+        match tokio::time::timeout(timeout, self.process.wait()).await {
             Ok(Ok(status)) => Ok(status.code().unwrap_or(-1)),
             Ok(Err(e)) => Err(e.into()),
             Err(_) => {
                 tracing::warn!("Game didn't exit within timeout, killing");
                 self.process.kill().await.ok();
-                anyhow::bail!("game process didn't exit within {effective:?}")
+                anyhow::bail!("game process didn't exit within {timeout:?}")
             }
         }
     }
 
-    /// Aggressive shutdown after an assertion failure — sends a
-    /// graceful `triEndTest` with a short deadline, then force-kills
-    /// the game if it doesn't go quietly.  Avoids the 60-second
-    /// `EXIT_GRACE` of `wait_exit`, which is sized for clean test
-    /// completions under GPU/audio contention — on a known-failing
-    /// test, waiting that long is pure latency, and parallel runners
-    /// stack the latency to ~16 minutes for 14 failures.  Caller has
-    /// already established the test failed; this just reclaims the
-    /// slot.
+    /// Aggressive shutdown after an assertion failure — gives `triEndTest`
+    /// a brief chance to work, then force-kills the game if it doesn't go
+    /// quietly. Caller has already established the test failed; this just
+    /// reclaims the slot quickly instead of spending the full test timeout
+    /// on cleanup.
     pub async fn kill_after_failure(&mut self) {
-        // Try graceful first (5s budget) — many failures still leave
-        // a healthy harness loop that can respond to triEndTest, and
-        // a clean exit lets the engine save audio.cfg / etc.
-        const GRACEFUL_DEADLINE: Duration = Duration::from_secs(5);
+        // Many failures still leave a healthy harness loop that can respond
+        // to triEndTest. Keep the window short so a 30s test timeout still
+        // reports before an outer runner's hard cap.
+        const GRACEFUL_DEADLINE: Duration = Duration::from_millis(500);
         if let Some(client) = self.client.as_mut() {
             let _ = tokio::time::timeout(GRACEFUL_DEADLINE, client.exec("triEndTest")).await;
         }
@@ -279,7 +270,7 @@ impl GameInstance {
         // has actually reaped the process before we return.
         tracing::warn!("kill_after_failure: forcing termination");
         self.process.kill().await.ok();
-        let _ = tokio::time::timeout(Duration::from_secs(5), self.process.wait()).await;
+        let _ = tokio::time::timeout(Duration::from_secs(1), self.process.wait()).await;
     }
 
     /// Get the port this instance is running on.
@@ -421,7 +412,43 @@ async fn read_harness_port(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Instant;
     use tempfile::TempDir;
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn wait_exit_uses_requested_timeout() {
+        let child = Command::new("sh")
+            .arg("-c")
+            .arg("sleep 5")
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        let mut game = GameInstance {
+            process: child,
+            client: None,
+            port: 0,
+            game_binary: PathBuf::from("sh"),
+            work_dir: PathBuf::new(),
+            config: ClientConfig::default(),
+        };
+
+        let started = Instant::now();
+        let result = tokio::time::timeout(
+            Duration::from_secs(2),
+            game.wait_exit(Duration::from_millis(50)),
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "wait_exit ignored the requested timeout for pid {pid:?}"
+        );
+        let err = result.unwrap().unwrap_err().to_string();
+        assert!(err.contains("50ms"), "{err}");
+        assert!(started.elapsed() < Duration::from_secs(2));
+    }
 
     #[test]
     fn find_binary_not_found() {

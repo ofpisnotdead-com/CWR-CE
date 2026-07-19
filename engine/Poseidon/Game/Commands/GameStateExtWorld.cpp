@@ -797,7 +797,7 @@ GameValue EndGame(const GameState* state)
 
     // In mp-assign mode, endGame means the mission completed successfully
     if (!AppConfig::Instance().GetMPAssign().empty())
-        GApp->m_exitCode = 0;
+        GApp->m_exitCode = ResolveMultiplayerAutomationExitCode(GApp->m_exitCode, GApp->m_closeRequest, true);
     GApp->m_closeRequest = true;
     return NOTHING;
 }

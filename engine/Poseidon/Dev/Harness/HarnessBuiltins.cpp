@@ -29,12 +29,15 @@ using namespace Poseidon;
 #include <Poseidon/Network/NetworkConfig.hpp>
 #include <Poseidon/Network/MasterServerServiceClient.hpp>
 #include <Poseidon/Network/MasterServerBrowser.hpp>
+#include <Poseidon/AI/AIUnit.hpp>
 #include <Poseidon/Core/ModId.hpp>
 #include <Poseidon/Core/ServerModResolve.hpp>
 #include <Poseidon/Core/PendingConnect.hpp>
 #include <Poseidon/Core/Application.hpp>
 #include <Poseidon/UI/UITestEngine.hpp>
 #include <Poseidon/UI/Controls/UIControls.hpp>
+#include <Poseidon/World/Entities/Infantry/Person.hpp>
+#include <Poseidon/AI/EntityAI.hpp>
 #include <Evaluator/express.hpp>
 
 #include <SDL3/SDL.h>
@@ -133,6 +136,31 @@ std::string AnswerNetworkQuery(const char* what)
         }
         return HarnessProtocol::JsonResponse(resp);
     }
+    if (std::strcmp(what, "von_state") == 0)
+    {
+        cJSON* resp = cJSON_CreateObject();
+        cJSON* arr = cJSON_AddArrayToObject(resp, "speakers");
+        try
+        {
+            INetworkManager& netMgr = GetNetworkManager();
+            AutoArray<NetVoiceSpeakerInfo, Foundation::MemAllocSA> speakers;
+            netMgr.GetVoiceSpeakers(speakers);
+            for (int i = 0; i < speakers.Size(); i++)
+            {
+                cJSON* pobj = cJSON_CreateObject();
+                cJSON_AddNumberToObject(pobj, "dpid", speakers[i].player);
+                cJSON_AddBoolToObject(pobj, "active", speakers[i].active);
+                cJSON_AddNumberToObject(pobj, "level", speakers[i].level);
+                const PlayerIdentity* identity = netMgr.FindIdentity(speakers[i].player);
+                cJSON_AddStringToObject(pobj, "name", identity ? identity->GetName() : "");
+                cJSON_AddItemToArray(arr, pobj);
+            }
+        }
+        catch (...)
+        {
+        }
+        return HarnessProtocol::JsonResponse(resp);
+    }
     if (std::strcmp(what, "mission") == 0)
     {
         cJSON* resp = cJSON_CreateObject();
@@ -166,6 +194,53 @@ std::string AnswerNetworkQuery(const char* what)
         {
             cJSON_AddNumberToObject(resp, "server_state", -1);
             cJSON_AddNumberToObject(resp, "client_state", -1);
+        }
+        return HarnessProtocol::JsonResponse(resp);
+    }
+    if (std::strcmp(what, "play_state") == 0)
+    {
+        cJSON* resp = cJSON_CreateObject();
+        try
+        {
+            INetworkManager& netMgr = GetNetworkManager();
+            cJSON_AddNumberToObject(resp, "server_state", static_cast<int>(netMgr.GetServerState()));
+            cJSON_AddNumberToObject(resp, "client_state", static_cast<int>(netMgr.GetGameState()));
+            cJSON_AddBoolToObject(resp, "has_role", netMgr.GetMyPlayerRole() != nullptr);
+        }
+        catch (...)
+        {
+            cJSON_AddNumberToObject(resp, "server_state", -1);
+            cJSON_AddNumberToObject(resp, "client_state", -1);
+            cJSON_AddBoolToObject(resp, "has_role", false);
+        }
+
+        UITestEngine ui;
+        ControlsContainer* display = ui.GetActiveDisplay();
+        cJSON_AddNumberToObject(resp, "display", display ? display->IDD() : -1);
+        cJSON_AddBoolToObject(resp, "in_gameplay", GApp && GApp->IsInGameplay());
+        cJSON_AddBoolToObject(resp, "has_world", GWorld != nullptr);
+        cJSON_AddNumberToObject(resp, "world_mode", GWorld ? static_cast<int>(GWorld->GetMode()) : -1);
+        cJSON_AddNumberToObject(resp, "frame", GEngine ? GEngine->GetFrameCounter() : 0);
+        cJSON_AddNumberToObject(resp, "time_ms", Glob.time.toInt());
+
+        Person* player = GWorld ? GWorld->GetRealPlayer() : nullptr;
+        AIUnit* brain = player ? player->Brain() : nullptr;
+        EntityAI* vehicle = brain ? brain->GetVehicle() : nullptr;
+        cJSON_AddBoolToObject(resp, "has_player", player != nullptr);
+        cJSON_AddBoolToObject(resp, "player_local", player && player->IsLocal());
+        cJSON_AddBoolToObject(resp, "player_destroyed", player && player->IsDammageDestroyed());
+        cJSON_AddBoolToObject(resp, "has_brain", brain != nullptr);
+        cJSON_AddBoolToObject(resp, "has_vehicle", vehicle != nullptr);
+        cJSON_AddBoolToObject(resp, "vehicle_local", vehicle && vehicle->IsLocal());
+        cJSON_AddBoolToObject(resp, "player_active", GWorld && player && GWorld->PlayerOn() == player);
+        if (player)
+        {
+            Vector3Val pos = player->Position();
+            Vector3Val speed = player->Speed();
+            cJSON_AddNumberToObject(resp, "player_x", pos.X());
+            cJSON_AddNumberToObject(resp, "player_z", pos.Z());
+            cJSON_AddNumberToObject(resp, "player_speed_x", speed.X());
+            cJSON_AddNumberToObject(resp, "player_speed_z", speed.Z());
         }
         return HarnessProtocol::JsonResponse(resp);
     }
