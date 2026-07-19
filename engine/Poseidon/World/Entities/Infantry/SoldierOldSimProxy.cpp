@@ -974,7 +974,18 @@ void Man::Animate(int level)
                                           legsRes.Size());
         }
 
-        AnimationRT::ApplyMatrices(type->GetWeights(), _shape, level, matrix);
+        // CPU-skin the shape's vertices — UNLESS this LOD is GPU-skinned.  A
+        // GPU-skinned LOD's VBO holds the static bind pose and the vertex shader
+        // skins from the bone palette (retained below), so the per-vertex CPU
+        // transform is pure waste for it; skipping it removes the
+        // ApplyMatricesComplex cost for the drawn view LOD.  HasSkin() is true
+        // only for infantry graphical LODs (Skeleton::Prepare gpuSkin gating), so
+        // coarse LODs (collision/shadow/bounding) still CPU-skin here, unchanged.
+        const bool gpuSkinned = ENGINE_CONFIG.enableGpuSkinning && shape->HasSkin();
+        if (!gpuSkinned)
+        {
+            AnimationRT::ApplyMatrices(type->GetWeights(), _shape, level, matrix);
+        }
 
         // GPU skinning: retain this frame's bone palette on the object so the
         // skinned view-LOD draw can upload it (see Man::GetBonePalette).  Gated
