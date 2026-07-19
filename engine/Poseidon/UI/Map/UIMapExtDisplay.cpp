@@ -8,6 +8,7 @@
 #include <Poseidon/Core/resincl.hpp>
 #include <Poseidon/Input/ControllerUiLayout.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
 
 #include <Poseidon/World/Terrain/Landscape.hpp>
@@ -540,12 +541,12 @@ void DisplayArcadeMap::OnButtonClicked(int idc)
                     RString directory;
                     char buffer[256];
                     snprintf(buffer, sizeof(buffer), "%s", (const char*)GetMissionsDirectory());
-                    ::CreateDirectory(buffer, nullptr);
+                    CreateDirectoryUtf8(buffer);
                     strncat(buffer, Glob.header.filename, sizeof(buffer) - strlen(buffer) - 1);
                     strncat(buffer, ".", sizeof(buffer) - strlen(buffer) - 1);
                     strncat(buffer, Glob.header.worldname, sizeof(buffer) - strlen(buffer) - 1);
                     directory = buffer;
-                    ::CreateDirectory(directory, nullptr);
+                    CreateDirectoryUtf8(directory);
                     strncat(buffer, "\\mission.sqm", sizeof(buffer) - strlen(buffer) - 1);
                     SaveTemplates(buffer);
 
@@ -2206,12 +2207,12 @@ void DisplayArcadeMap::OnChildDestroyed(int idd, int exit)
                     RString directory;
                     char buffer[256];
                     snprintf(buffer, sizeof(buffer), "%s", (const char*)GetMissionsDirectory());
-                    ::CreateDirectory(buffer, nullptr);
+                    CreateDirectoryUtf8(buffer);
                     strncat(buffer, text, sizeof(buffer) - strlen(buffer) - 1);
                     strncat(buffer, ".", sizeof(buffer) - strlen(buffer) - 1);
                     strncat(buffer, Glob.header.worldname, sizeof(buffer) - strlen(buffer) - 1);
                     directory = buffer;
-                    ::CreateDirectory(directory, nullptr);
+                    CreateDirectoryUtf8(directory);
                     strncat(buffer, "\\mission.sqm", sizeof(buffer) - strlen(buffer) - 1);
                     SaveTemplates(buffer);
 

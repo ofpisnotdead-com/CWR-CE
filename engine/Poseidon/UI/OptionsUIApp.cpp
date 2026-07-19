@@ -1834,7 +1834,18 @@ void DisplayModDownload::ApplyView()
     else if (s.done)
         _phase = PhaseDone;
 
-    DownloadDialogView v = BuildDownloadDialogView(s, (const char*)_unitNoun);
+    // Hold the localized labels in locals so the view's const char* fields stay valid
+    // for the BuildDownloadDialogView call.
+    RString lblComplete = LocalizeString("STR_DISP_MODS_DL_COMPLETE");
+    RString lblCancelled = LocalizeString("STR_DISP_MODS_DL_CANCELLED");
+    RString lblStarting = LocalizeString("STR_DISP_MODS_DL_STARTING");
+    RString lblFailed = LocalizeString("STR_DISP_MODS_DL_FAILED");
+    DownloadDialogLabels labels;
+    labels.complete = lblComplete;
+    labels.cancelled = lblCancelled;
+    labels.starting = lblStarting;
+    labels.failed = lblFailed;
+    DownloadDialogView v = BuildDownloadDialogView(s, (const char*)_unitNoun, labels);
     SetNotebookText(IDC_MODS_DL_CURRENT_LABEL, v.currentLine.c_str());
     SetNotebookText(IDC_MODS_DL_OVERALL_LABEL, v.overallLine.c_str());
     SetNotebookText(IDC_MODS_DL_STATUS, v.statusLine.c_str());
