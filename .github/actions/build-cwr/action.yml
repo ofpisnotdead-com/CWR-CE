@@ -98,6 +98,7 @@ runs:
       shell: pwsh
       env:
         CTEST_EXCLUDE: ${{ inputs.ctest-exclude }}
+        ALSOFT_DRIVERS: "null"
       run: |
         if ("$env:CTEST_EXCLUDE") {
           ctest --test-dir '${{ inputs.build-dir }}' --output-on-failure -E "$env:CTEST_EXCLUDE"

@@ -1,2 +1,2 @@
-tags = ["exclusive", "headless"]
+tags = ["exclusive", "headless", "ci-host-blocked"]
 extra_args = ["--no-strict"]
