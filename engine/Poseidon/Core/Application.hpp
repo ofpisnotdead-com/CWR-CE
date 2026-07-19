@@ -78,9 +78,10 @@ class Application
     HWND m_hwnd = 0;
 
     // Quit/close state (public for backwards compatibility shim)
-    bool m_validateQuit = false; // User really wants to quit (not accidental ESC)
-    bool m_closeRequest = false; // Close has been requested
-    int m_exitCode = 0;          // Exit code for process termination
+    bool m_validateQuit = false;          // User really wants to quit (not accidental ESC)
+    bool m_closeRequest = false;          // Close has been requested
+    int m_exitCode = 0;                   // Exit code for process termination
+    bool m_cleanTestEndRequested = false; // triEndTest initiated shutdown before any failure did
 
     // Application state (public for backwards compatibility shim)
     bool m_appActive = false;
@@ -173,6 +174,25 @@ inline bool ShouldReportInGameplayForWindowClose(bool hasWorld, bool introMode, 
                                                  bool startupProgressActive)
 {
     return hasWorld && !introMode && uiEnabled && !startupProgressActive;
+}
+
+inline int ResolveMultiplayerAutoTestExitCode(int exitCode, bool missionReachedPlay, bool cleanTestEndRequested)
+{
+    // Auto-assign uses 2 while waiting for play. Only an explicit clean harness end may
+    // consume that sentinel; real failure codes remain authoritative.
+    constexpr int pendingMissionExitCode = 2;
+    if (exitCode == pendingMissionExitCode && missionReachedPlay && cleanTestEndRequested)
+        return 0;
+    return exitCode;
+}
+
+inline int ResolveMultiplayerAutomationExitCode(int exitCode, bool shutdownAlreadyRequested, bool successfulOutcome)
+{
+    // Auto-assign starts at 2 while waiting for play. A new outcome may replace that
+    // sentinel, but a path reached after shutdown was requested must preserve its result.
+    if (shutdownAlreadyRequested)
+        return exitCode;
+    return successfulOutcome ? 0 : 2;
 }
 
 // Global application pointer (like Unreal's GEngine, CryEngine's gEnv)
