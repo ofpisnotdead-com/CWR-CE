@@ -688,8 +688,8 @@ mod tests {
         let entry = store
             .publish_mod(&super::PublishModInput {
                 name: "Synthetic Core Pack".to_string(),
-                app_name: Some("CWR-CE".to_string()),
-                actver: Some(301),
+                app_name: Some("CWR".to_string()),
+                actver: Some(302),
                 version_tag: Some("rc1".to_string()),
                 version: Some("1.0".to_string()),
                 description: Some("demo".to_string()),
@@ -700,8 +700,8 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(entry.mod_id, "synthetic-core-pack-1.0");
-        assert_eq!(entry.app_name.as_deref(), Some("CWR-CE"));
-        assert_eq!(entry.actver, Some(301));
+        assert_eq!(entry.app_name.as_deref(), Some("CWR"));
+        assert_eq!(entry.actver, Some(302));
         assert_eq!(entry.version_tag.as_deref(), Some("rc1"));
 
         let fetched = store

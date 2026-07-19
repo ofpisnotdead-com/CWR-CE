@@ -1,7 +1,7 @@
-mission = "tests/integration/missions/mp_browser_basic.Demo"
+mission = "tests/integration/missions/jip_basic.Demo"
 data_dir = "packages/Demo"
 game_port = 0
-timeout = 75
+timeout = 90
 
 tags = ["headful", "ci-host-blocked"]
 
@@ -31,12 +31,16 @@ interval_secs = 1
 timeout_ms = 500
 prune_max_age_secs = 60
 
+# Passworded AND modded dedicated server: the hardest join stack the game
+# supports in one row.
 [[instances]]
 name = "dedicated"
 type = "server"
 after = "master"
 extra_args = [
     "--no-strict",
+    "--log-format",
+    "jsonl",
     "--public",
     "--master-server",
     "${master.url}",
@@ -48,46 +52,37 @@ extra_args = [
     "../../tests/fixtures/mods",
     "--mod",
     "@fixturemod",
+    "--password",
+    "tri-secret",
 ]
 
 [[instances]]
-name = "client"
+name = "client1"
 type = "client"
 after = "dedicated"
 use_mission = false
 start_delay_ms = 3000
 no_autotest = true
+machine_id = "trident:full_stack_modded_media_join:client1"
 extra_args = [
     "--no-strict",
     "--lang",
     "English",
-    "--master-server",
-    "${master.url}",
+    "--name",
+    "client1",
     "--mp-assign",
     "WEST:1",
-    "--mods-dir",
-    "${output}/client-local-mods",
-    "--workshop-dir",
-    "${output}/client-workshop",
-]
-
-[[instances]]
-name = "client2"
-type = "client"
-after = "dedicated"
-use_mission = false
-start_delay_ms = 3000
-no_autotest = true
-extra_args = [
-    "--no-strict",
-    "--lang",
-    "English",
+    "--log-format",
+    "jsonl",
     "--master-server",
     "${master.url}",
-    "--mp-assign",
-    "WEST:2",
     "--mods-dir",
-    "${output}/client2-local-mods",
+    "${output}/client1-local-mods",
     "--workshop-dir",
-    "${output}/client2-workshop",
+    "${output}/client1-workshop",
+]
+copy_files = [
+  { source = "client1/UserInfo.cfg", target = "Users/client1/UserInfo.cfg" },
+  { source = "client1/face.jpg", target = "Users/client1/face.jpg" },
+  { source = "client1/Sound/tri_mp_ping.wav", target = "Users/client1/Sound/tri_mp_ping.wav" },
 ]
