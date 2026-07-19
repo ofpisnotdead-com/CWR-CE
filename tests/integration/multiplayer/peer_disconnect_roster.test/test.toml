@@ -1,0 +1,34 @@
+mission = "tests/integration/missions/jip_basic.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 60
+
+tags = ["headful", "network"]
+
+# Peer-visible mid-mission disconnect: two clients reach play; the leaver hard-
+# drops (triEndTest _exits without a network goodbye) and the stayer must observe
+# its roster shrink from "stayer|leaver" to "stayer" while still in the mission.
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl"]
+name = "server"
+type = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "stayer", "--log-format", "jsonl"]
+name = "stayer"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:1"
+machine_id = "trident:peer_disconnect_roster:stayer"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "leaver", "--log-format", "jsonl"]
+name = "leaver"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:2"
+machine_id = "trident:peer_disconnect_roster:leaver"

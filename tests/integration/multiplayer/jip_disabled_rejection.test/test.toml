@@ -1,0 +1,33 @@
+mission = "tests/integration/missions/mp_browser_basic.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 60
+
+tags = ["headful", "network"]
+
+# The fixture omits joinInProgress, so the running server must reject a late
+# connection while the initial player remains active.
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl", "--mp-auto-start", "1"]
+name = "server"
+type = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "anchor", "--log-format", "jsonl"]
+name = "anchor"
+type = "client"
+connect = "server"
+after = "server"
+mp_assign = "WEST:1"
+machine_id = "trident:jip_disabled_rejection:anchor"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "late", "--log-format", "jsonl"]
+name = "late"
+type = "client"
+use_mission = false
+no_autotest = true
+after = "server"
+wait_ngs = 13
+start_delay_ms = 2000
+machine_id = "trident:jip_disabled_rejection:late"

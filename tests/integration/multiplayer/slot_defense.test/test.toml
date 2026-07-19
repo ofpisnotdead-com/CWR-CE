@@ -1,0 +1,35 @@
+mission = "tests/integration/missions/jip_basic.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 60
+
+tags = ["headful", "network"]
+
+# Slot-ownership defense: the holder of WEST:1 must keep its bound person when a
+# second client tries to claim the same slot. The server's RoleSwapAllowed gate
+# rejects taking a role held by another live player; if it didn't, the holder
+# would lose its person (triAssertMissionPlayable -> FAIL:no_player).
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl"]
+name = "server"
+type = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "holder", "--log-format", "jsonl"]
+name = "holder"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:1"
+machine_id = "trident:slot_defense:holder"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "thief", "--log-format", "jsonl"]
+name = "thief"
+type = "client"
+use_mission = false
+no_autotest = true
+after = "server"
+start_delay_ms = 14000
+machine_id = "trident:slot_defense:thief"

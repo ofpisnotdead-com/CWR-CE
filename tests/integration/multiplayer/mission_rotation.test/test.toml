@@ -1,0 +1,31 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 60
+
+tags = ["headful", "network"]
+
+# Two-mission classic rotation: rot_one ends itself via an END1 trigger at
+# time > 25, and the next cycle must load the NEXT template. The client rides
+# debriefing -> lobby -> briefing into rot_two and confirms missionName
+# switched from rot_one to rot_two.
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl", "--config", "${output}/server/user/server.cfg"]
+name = "server"
+type = "server"
+use_mission = false
+copy_files = [
+  { source = "server.cfg", target = "server.cfg" },
+  { source = "rot_one.Demo.pbo", target = "content/MPMissions/rot_one.Demo.pbo" },
+  { source = "rot_two.Demo.pbo", target = "content/MPMissions/rot_two.Demo.pbo" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "client1", "--log-format", "jsonl"]
+name = "client1"
+type = "client"
+use_mission = false
+connect = "server"
+after = "server"
+start_delay_ms = 4000
+mp_assign = "WEST:1"
+machine_id = "trident:mission_rotation:client1"

@@ -1,0 +1,36 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 120
+
+tags = ["headful", "network"]
+
+[[instances]]
+extra_args = [
+  "--no-strict",
+  "--log-format",
+  "jsonl",
+  "--config",
+  "${output}/server/user/server.cfg",
+]
+name = "server"
+type = "server"
+use_mission = false
+copy_files = [
+  { source = "server.cfg", target = "server.cfg" },
+  { source = "jip_stress.Demo.pbo", target = "content/MPMissions/jip_stress.Demo.pbo" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "client1", "--log-format", "jsonl"]
+name = "client1"
+type = "client"
+use_mission = false
+connect = "server"
+after = "server"
+start_delay_ms = 4000
+mp_assign = "WEST:1"
+machine_id = "trident:custom_face_restart_respawn:client1"
+copy_files = [
+  { source = "UserInfo.cfg", target = "Users/client1/UserInfo.cfg" },
+  { source = "face.paa", target = "Users/client1/face.paa" },
+]
