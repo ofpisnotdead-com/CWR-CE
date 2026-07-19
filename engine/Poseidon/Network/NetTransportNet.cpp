@@ -1,6 +1,7 @@
 #include <Poseidon/Network/NetTransportNetDecls.hpp>
 #include <Poseidon/Network/NetTransportNetInternal.hpp>
 #include <Poseidon/Network/NetTransportClientVoiceInit.hpp>
+#include <Poseidon/Network/NetTransportPlayerValidationPolicy.hpp>
 #include <Poseidon/Network/NetTransportServerVoiceRouting.hpp>
 #ifndef _WIN32
 #include <arpa/inet.h>
@@ -181,6 +182,37 @@ static NetPeer* getServerPeer()
     return serverPeer;
 }
 
+static bool SendRawMagicPacket(NetPeer* peer, NetChannel* channel, unsigned32& serial, int magic, BYTE* buffer,
+                               int bufferSize)
+{
+    if (!peer || !channel || bufferSize < 0)
+    {
+        return false;
+    }
+    const int dataSize = static_cast<int>(sizeof(unsigned32)) + bufferSize;
+    if (dataSize > channel->maxMessageData())
+    {
+        return false;
+    }
+    Ref<NetMessage> msg = NetMessagePool::pool()->newMessage(dataSize, channel);
+    if (!msg)
+    {
+        return false;
+    }
+    AutoArray<char> payload;
+    payload.Resize(dataSize);
+    memcpy(payload.Data(), &magic, sizeof(unsigned32));
+    if (bufferSize > 0)
+    {
+        memcpy(payload.Data() + sizeof(unsigned32), buffer, bufferSize);
+    }
+    msg->setFlags(MSG_ALL_FLAGS, MSG_MAGIC_FLAG);
+    msg->setData(reinterpret_cast<unsigned8*>(payload.Data()), payload.Size());
+    msg->send();
+    ++serial;
+    return true;
+}
+
 void decodeURLAddress(RString address, RString& ip, int& port)
 {
     const char* ptr = strrchr(address, ':');
@@ -337,6 +369,27 @@ NetStatus serverReceive(NetMessage* msg, NetStatus event, void* data)
                 }
                 _server->leaveUsr();
                 break; // don't need to lock this..
+            }
+            default:
+            {
+                _server->enterUsr();
+                int player = _server->channelToPlayer(msg->getChannel());
+                _server->leaveUsr();
+                if (player >= 0 && len >= sizeof(unsigned32))
+                {
+                    _server->enterRcv();
+                    int index = _server->rawMagicReceived.Add();
+                    RawMagicMessage& item = _server->rawMagicReceived[index];
+                    item.from = player;
+                    item.magic = magic;
+                    item.data.Resize(len - sizeof(unsigned32));
+                    if (item.data.Size() > 0)
+                    {
+                        memcpy(item.data.Data(), (const char*)msg->getData() + sizeof(unsigned32), item.data.Size());
+                    }
+                    _server->leaveRcv();
+                }
+                break;
             }
         }
 
@@ -507,22 +560,16 @@ NetStatus ctrlReceive(NetMessage* msg, NetStatus event, void* data)
                     _server->leaveUsr();
                     break;
                 }
-                ConnectResult result;
-                // check new player's attributes:
-                if (cpp->actualVersion < _server->session.requiredVersion ||
-                    _server->session.actualVersion < cpp->requiredVersion ||
-                    (_server->session.equalModRequired & 1) && stricmp(_server->session.mod, cpp->mod) != 0 ||
-                    stricmp(_server->session.versionTag, cpp->versionTag) != 0)
+                ConnectResult result =
+                    EvaluateNetTransportCreatePlayerRequest(_server->session, _server->_password, *cpp);
+                if (result == CRVersion)
                 {
-                    result = CRVersion;
-                }
-                else if (strncmp(cpp->password, _server->_password, LEN_PASSWORD_NAME) != 0)
-                {
-                    result = CRPassword;
-                }
-                else
-                {
-                    result = CROK;
+                    LOG_INFO(Network,
+                             "CreatePlayer rejected by version/mod check: server actual={} required={} mod='{}' "
+                             "tag='{}'; client actual={} required={} mod='{}' tag='{}'; equalModRequired={}",
+                             _server->session.actualVersion, _server->session.requiredVersion, _server->session.mod,
+                             _server->session.versionTag, cpp->actualVersion, cpp->requiredVersion, cpp->mod,
+                             cpp->versionTag, _server->session.equalModRequired);
                 }
                 // create a new player:
                 int player = 0; // dummy player ID
@@ -822,6 +869,7 @@ NetClient::NetClient() : LockInit(sndCs, "NetClient::sndCs", true), LockInit(rcv
     split = lastSplit = nullptr;
     splitUrgent = lastSplitUrgent = nullptr;
     sent = nullptr;
+    rawMagicSerial = 0x70000000;
     sessionTerminated = false;
     whySessionTerminated = NTROther;
     magicApp = 0;
@@ -947,16 +995,57 @@ bool NetClient::InitVoice()
 
 bool NetClient::IsVoicePlaying(int player)
 {
-    auto* c = _vonSystem.client();
-    if (!c)
-        return false;
-    return c->hasChannel(static_cast<uint32_t>(player));
+    PumpVoiceSpeakers();
+    auto found = _vonSpeakers.find(static_cast<uint32_t>(player));
+    return found != _vonSpeakers.end() && found->second && found->second->active && found->second->level > 0.001f;
 }
 
 bool NetClient::IsVoiceRecording()
 {
     auto* c = _vonSystem.client();
     return c && c->isTransmitting();
+}
+
+void NetClient::GetVoiceSpeakers(AutoArray<NetVoiceSpeakerInfo, Poseidon::Foundation::MemAllocSA>& speakers)
+{
+    PumpVoiceSpeakers();
+    for (auto& [player, speaker] : _vonSpeakers)
+    {
+        if (!speaker)
+        {
+            continue;
+        }
+        NetVoiceSpeakerInfo info;
+        info.player = static_cast<int>(player);
+        const auto channel = _vonSpeakerChannels.find(player);
+        info.channel = channel != _vonSpeakerChannels.end() ? static_cast<int>(channel->second)
+                                                            : static_cast<int>(VoNChatChannel::Global);
+        info.active = speaker->active && speaker->level > 0.001f;
+        info.level = speaker->level;
+        speakers.Add(info);
+    }
+}
+
+void NetClient::PumpVoiceSpeakers()
+{
+    auto* c = _vonSystem.client();
+    if (!c)
+        return;
+
+    DWORD now = GlobalTickCount();
+    if (_lastVoicePumpTime != 0 && now - _lastVoicePumpTime < 15)
+        return;
+    _lastVoicePumpTime = now;
+
+    for (auto& [ch, spk] : _vonSpeakers)
+    {
+        if (!spk)
+            continue;
+
+        const auto channel = _vonSpeakerChannels.find(ch);
+        spk->setChannel(channel != _vonSpeakerChannels.end() ? channel->second : VoNChatChannel::Global);
+        spk->feed(c, ch);
+    }
 }
 
 NetTranspSound3DBuffer* NetClient::Create3DSoundBuffer(int player)
@@ -975,6 +1064,8 @@ NetTranspSound3DBuffer* NetClient::Create3DSoundBuffer(int player)
         spk->init();
         LOG_INFO(Network, "VoN: created speaker for player {}", player);
     }
+    _vonSpeakerChannels[ch] = VoNChatChannel::Direct;
+    spk->setChannel(VoNChatChannel::Direct);
     return new VoNSound3DBuffer(spk.get());
 }
 
@@ -984,7 +1075,12 @@ void NetClient::SetVoiceChannel(int channel)
     if (c)
     {
         c->setChatChannel(NetTransportChatChannelToVoN(channel));
-        LOG_DEBUG(Network, "VoN: SetVoiceChannel({})", channel);
+        LOG_DEBUG(Network, "VoN# net SetVoiceChannel game={} von={}", channel,
+                  static_cast<int>(NetTransportChatChannelToVoN(channel)));
+    }
+    else
+    {
+        LOG_WARN(Network, "VoN# net SetVoiceChannel({}) NO-CLIENT", channel);
     }
 }
 
@@ -994,7 +1090,10 @@ void NetClient::SetVoiceTransmit(bool on)
     if (c)
     {
         c->setTransmit(on);
-        LOG_DEBUG(Network, "VoN: SetVoiceTransmit({})", on);
+    }
+    else
+    {
+        LOG_WARN(Network, "VoN# net SetVoiceTransmit({}) NO-CLIENT", on);
     }
 }
 
@@ -1002,6 +1101,12 @@ int NetClient::SendVoiceTestTone(int frames, int amplitude)
 {
     auto* c = _vonSystem.client();
     return c ? c->sendTestTone(frames, amplitude) : 0;
+}
+
+int NetClient::GetVoiceTransmitHealth()
+{
+    auto* c = _vonSystem.client();
+    return c ? static_cast<int>(c->transmitHealth()) : static_cast<int>(VoNTransmitHealth::Off);
 }
 
 NetStatus clientReceive(NetMessage* msg, NetStatus event, void* data)
@@ -1055,7 +1160,8 @@ NetStatus clientReceive(NetMessage* msg, NetStatus event, void* data)
                 }
                 break; // don't need to lock this..
 
-            case MAGIC_TERMINATE_SESSION: // Session terminate
+            case MAGIC_TERMINATE_SESSION:
+            { // Session terminate
                 // check additional data (if present)
                 NetTerminationReason reason = NTROther;
                 if (len >= 2 * sizeof(unsigned32))
@@ -1066,6 +1172,23 @@ NetStatus clientReceive(NetMessage* msg, NetStatus event, void* data)
                 _client->sessionTerminated = true;
                 _client->whySessionTerminated = reason;
                 _client->leaveSnd();
+                break;
+            }
+            default:
+                if (len >= sizeof(unsigned32))
+                {
+                    _client->enterRcv();
+                    int index = _client->rawMagicReceived.Add();
+                    RawMagicMessage& item = _client->rawMagicReceived[index];
+                    item.from = 0;
+                    item.magic = magic;
+                    item.data.Resize(len - sizeof(unsigned32));
+                    if (item.data.Size() > 0)
+                    {
+                        memcpy(item.data.Data(), (const char*)msg->getData() + sizeof(unsigned32), item.data.Size());
+                    }
+                    _client->leaveRcv();
+                }
                 break;
         }
 
@@ -1373,6 +1496,8 @@ bool NetClient::SendMsg(BYTE* buffer, int bufferSize, DWORD& msgID, NetMsgFlags 
         return false;
     }
     int maxMessage = channel->maxMessageData();
+    int maxGuaranteedPayload =
+        maxMessage > NetTransportReliableFragmentPayload ? NetTransportReliableFragmentPayload : maxMessage;
     if (!vim && bufferSize > maxMessage)
     {
         leaveSnd();
@@ -1391,7 +1516,7 @@ bool NetClient::SendMsg(BYTE* buffer, int bufferSize, DWORD& msgID, NetMsgFlags 
     if (vim)
     { // guaranteed message
         unsigned fl = MSG_VIM_FLAG | (urgent ? MSG_URGENT_FLAG : 0);
-        if (bufferSize > maxMessage)
+        if (bufferSize > maxGuaranteedPayload)
         { // split too big message:
 #ifdef NET_LOG_MERGE
 #ifdef NET_LOG_BRIEF
@@ -1406,7 +1531,7 @@ bool NetClient::SendMsg(BYTE* buffer, int bufferSize, DWORD& msgID, NetMsgFlags 
             fl |= MSG_PART_FLAG;
             do
             {
-                packet = (toSent > maxMessage) ? maxMessage : toSent;
+                packet = (toSent > maxGuaranteedPayload) ? maxGuaranteedPayload : toSent;
                 toSent -= packet;
                 msg = NetMessagePool::pool()->newMessage(packet, channel);
                 if (!msg)
@@ -1452,18 +1577,18 @@ bool NetClient::SendMsg(BYTE* buffer, int bufferSize, DWORD& msgID, NetMsgFlags 
     return true;
 }
 
-void NetClient::GetSendQueueInfo(int& nMsg, int& nBytes, int& nMsgG, int& nBytesG)
+bool NetClient::SendRawMagic(int magic, BYTE* buffer, int bufferSize)
 {
     enterSnd();
-    if (channel)
-    {
-        channel->getOutputQueueStatistics(nMsg, nBytes, nMsgG, nBytesG);
-    }
-    else
-    {
-        nMsg = nBytes = nMsgG = nBytesG = 0;
-    }
+    NetPeer* peer = getClientPeer();
+    bool ok = SendRawMagicPacket(peer, channel, rawMagicSerial, magic, buffer, bufferSize);
     leaveSnd();
+    return ok;
+}
+
+void NetClient::GetSendQueueInfo(int& nMsg, int& nBytes, int& nMsgG, int& nBytesG)
+{
+    nMsg = nBytes = nMsgG = nBytesG = 0;
 }
 
 bool NetClient::GetConnectionInfo(int& latencyMS, int& throughputBPS)
@@ -1633,6 +1758,7 @@ void NetClient::ProcessUserMessages(UserMessageClientCallback* callback, void* c
                 VoNDataPacket hdr;
                 std::memcpy(&hdr, msg->getData(), VoNDataPacket::HEADER_SIZE);
                 c->onDataPacket(hdr, reinterpret_cast<const uint8_t*>(msg->getData()) + VoNDataPacket::HEADER_SIZE);
+                _vonSpeakerChannels[hdr.channel] = hdr.chatChan;
                 LOG_TRACE(Network, "VoN: rx voice pkt ch={} origin={} size={}B", hdr.channel, hdr.origin, hdr.size);
 
                 // Auto-create speaker if we don't have one for this sender
@@ -1643,6 +1769,7 @@ void NetClient::ProcessUserMessages(UserMessageClientCallback* callback, void* c
                     spk->init();
                     LOG_INFO(Network, "VoN: auto-created speaker for channel {}", hdr.channel);
                 }
+                spk->setChannel(hdr.chatChan);
             }
         }
         else
@@ -1658,12 +1785,7 @@ void NetClient::ProcessUserMessages(UserMessageClientCallback* callback, void* c
     if (auto* c = _vonSystem.client())
     {
         c->update();
-        // Pull decoded audio to OpenAL speakers
-        for (auto& [ch, spk] : _vonSpeakers)
-        {
-            if (spk)
-                spk->feed(c, ch);
-        }
+        PumpVoiceSpeakers();
     }
 }
 
@@ -1696,6 +1818,34 @@ void NetClient::insertReceived(NetMessage* msg)
     }
 }
 
+void NetClient::ProcessRawMagicMessages(RawMagicClientCallback* callback, void* context)
+{
+    if (!callback)
+    {
+        return;
+    }
+    while (true)
+    {
+        enterRcv();
+        if (rawMagicReceived.Size() <= 0)
+        {
+            leaveRcv();
+            break;
+        }
+        RawMagicMessage item;
+        item.from = rawMagicReceived[0].from;
+        item.magic = rawMagicReceived[0].magic;
+        item.data.Resize(rawMagicReceived[0].data.Size());
+        if (item.data.Size() > 0)
+        {
+            memcpy(item.data.Data(), rawMagicReceived[0].data.Data(), item.data.Size());
+        }
+        rawMagicReceived.Delete(0);
+        leaveRcv();
+        (*callback)(item.magic, item.data.Data(), item.data.Size(), context);
+    }
+}
+
 void NetClient::RemoveUserMessages()
 {
     enterRcv();
@@ -1706,6 +1856,7 @@ void NetClient::RemoveUserMessages()
         received->next = nullptr; // don't need this message anymore, somebody will recycle it later
         received = tmp;
     }
+    rawMagicReceived.Clear();
     leaveRcv();
 }
 
@@ -1830,6 +1981,7 @@ NetServer::NetServer()
     enterUsr();
     received = nullptr;
     sent = nullptr;
+    rawMagicSerial = 0x71000000;
     session.actualVersion = 0;
     session.requiredVersion = 0;
     session.gameState = 0;
@@ -2205,7 +2357,10 @@ void NetServer::SetTransmitTargets(int from, AutoArray<int, MemAllocSA>& to, int
     auto* srv = _vonSystem.server();
     if (srv)
         srv->setRouting(static_cast<uint32_t>(from), NetTransportChatChannelToVoN(channel), targets);
-    LOG_DEBUG(Network, "VoN srv: SetTransmitTargets from={} channel={} targets={}", from, channel, to.Size());
+    else
+        LOG_WARN(Network, "VoN# srv SetTransmitTargets from={} NO-SERVER", from);
+    LOG_DEBUG(Network, "VoN# srv SetTransmitTargets from={} gameCh={} vonCh={} targets={}", from, channel,
+              static_cast<int>(NetTransportChatChannelToVoN(channel)), to.Size());
 }
 
 void NetServer::ProcessVoicePlayers(CreateVoicePlayerCallback* callback, void* context)
@@ -2342,6 +2497,8 @@ bool NetServer::SendMsg(int to, BYTE* buffer, int bufferSize, DWORD& msgID, NetM
     bool vim = (flags & NMFGuaranteed) > 0;
     bool urgent = (flags & NMFHighPriority) > 0;
     int maxMessage = getServerPeer()->maxMessageData();
+    int maxGuaranteedPayload =
+        maxMessage > NetTransportReliableFragmentPayload ? NetTransportReliableFragmentPayload : maxMessage;
     if ((!vim || to == DPNID_ALL_PLAYERS_GROUP) && bufferSize > maxMessage)
     {
 #ifdef NET_LOG_MERGE
@@ -2422,7 +2579,7 @@ bool NetServer::SendMsg(int to, BYTE* buffer, int bufferSize, DWORD& msgID, NetM
             leaveUsr();
             return false;
         }
-        if (bufferSize > maxMessage)
+        if (bufferSize > maxGuaranteedPayload)
         { // split too big message:
 #ifdef NET_LOG_MERGE
 #ifdef NET_LOG_BRIEF
@@ -2437,7 +2594,7 @@ bool NetServer::SendMsg(int to, BYTE* buffer, int bufferSize, DWORD& msgID, NetM
             fl |= MSG_PART_FLAG;
             do
             {
-                packet = (toSent > maxMessage) ? maxMessage : toSent;
+                packet = (toSent > maxGuaranteedPayload) ? maxGuaranteedPayload : toSent;
                 toSent -= packet;
                 msg = NetMessagePool::pool()->newMessage(packet, channel);
                 if (!msg)
@@ -2485,6 +2642,17 @@ bool NetServer::SendMsg(int to, BYTE* buffer, int bufferSize, DWORD& msgID, NetM
     msgID = (DWORD)msg->id;
     leaveUsr();
     return true;
+}
+
+bool NetServer::SendRawMagic(int to, int magic, BYTE* buffer, int bufferSize)
+{
+    enterUsr();
+    RefD<NetChannel> channel;
+    bool found = users.get(to, channel);
+    NetPeer* peer = getServerPeer();
+    bool ok = found && SendRawMagicPacket(peer, channel, rawMagicSerial, magic, buffer, bufferSize);
+    leaveUsr();
+    return ok;
 }
 
 void NetServer::CancelAllMessages()
@@ -2552,20 +2720,35 @@ int NetServer::channelToPlayer(NetChannel* ch)
 
 RString NetServer::GetPlayerHostIP(int player)
 {
+    char buffer[24] = {};
+    if (!GetPlayerHostIP(player, buffer, sizeof(buffer)))
+    {
+        return RString();
+    }
+    return RString(buffer);
+}
+
+bool NetServer::GetPlayerHostIP(int player, char* buffer, int bufferSize)
+{
     enterUsr();
     RefD<NetChannel> ch;
     const bool found = users.get(player, ch);
     leaveUsr();
+    if (!buffer || bufferSize <= 0)
+    {
+        return false;
+    }
+    buffer[0] = 0;
     if (!found || !ch)
     {
-        return RString();
+        return false;
     }
     struct sockaddr_in distant;
     ((NetChannel*)ch)->getDistantAddress(distant);
-    char buffer[24];
-    snprintf(buffer, sizeof(buffer), "%u.%u.%u.%u", (unsigned)IP4(distant), (unsigned)IP3(distant),
-             (unsigned)IP2(distant), (unsigned)IP1(distant));
-    return RString(buffer);
+    snprintf(buffer, bufferSize, "%u.%u.%u.%u", (unsigned)IP4(distant), (unsigned)IP3(distant), (unsigned)IP2(distant),
+             (unsigned)IP1(distant));
+    buffer[bufferSize - 1] = 0;
+    return true;
 }
 
 void NetServer::ProcessUserMessages(UserMessageServerCallback* callback, void* context)
@@ -2631,6 +2814,34 @@ void NetServer::ProcessUserMessages(UserMessageServerCallback* callback, void* c
     leaveRcv();
 }
 
+void NetServer::ProcessRawMagicMessages(RawMagicServerCallback* callback, void* context)
+{
+    if (!callback)
+    {
+        return;
+    }
+    while (true)
+    {
+        enterRcv();
+        if (rawMagicReceived.Size() <= 0)
+        {
+            leaveRcv();
+            break;
+        }
+        RawMagicMessage item;
+        item.from = rawMagicReceived[0].from;
+        item.magic = rawMagicReceived[0].magic;
+        item.data.Resize(rawMagicReceived[0].data.Size());
+        if (item.data.Size() > 0)
+        {
+            memcpy(item.data.Data(), rawMagicReceived[0].data.Data(), item.data.Size());
+        }
+        rawMagicReceived.Delete(0);
+        leaveRcv();
+        (*callback)(item.from, item.magic, item.data.Data(), item.data.Size(), context);
+    }
+}
+
 void NetServer::insertReceived(NetMessage* msg)
 // must be called inside enterRcv()
 {
@@ -2670,6 +2881,7 @@ void NetServer::RemoveUserMessages()
         received->next = nullptr; // don't need this message anymore, somebody will recycle it later
         received = tmp;
     }
+    rawMagicReceived.Clear();
     leaveRcv();
 }
 
