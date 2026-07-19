@@ -20,6 +20,7 @@ use crate::client::GameInstance;
 use crate::scenarios::ScenarioResult;
 use anyhow::{Context, Result};
 use std::cmp::Reverse;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -52,18 +53,18 @@ pub struct IntegrationTest {
 }
 
 impl IntegrationTest {
-    /// Number of game instances this test needs (1 for Sqf/Mission/Seq, N for Multi).
+    /// Number of renderer processes this test needs (1 for Sqf/Mission/Seq).
     /// Seq runs its phases one at a time, so it never holds more than one instance.
     pub fn instance_count(&self) -> u32 {
         match &self.kind {
             TestKind::Sqf(_) | TestKind::Mission(_) | TestKind::Seq(_) => 1,
-            TestKind::Multi(dir) => super::multi::instance_count(dir),
+            TestKind::Multi(dir) => super::multi::gui_instance_count(dir),
         }
     }
 
     /// Semaphore slots this test reserves in the parallel runner.
     ///
-    /// Multi-instance tests reserve one slot per game process. Tests that need
+    /// Multi-instance tests reserve one slot per renderer process. Tests that need
     /// full isolation can opt out of overlap with `tags = ["exclusive"]`.
     pub fn parallel_slots(&self, max_slots: u32) -> u32 {
         match &self.kind {
@@ -904,6 +905,12 @@ pub async fn run_test(
     render: Option<&str>,
     cli_game_args: &[String],
 ) -> Result<ScenarioResult> {
+    let test_output_dir = test_output_dir(output_dir, &test.name);
+    if !matches!(&test.kind, TestKind::Multi(_)) {
+        std::fs::create_dir_all(&test_output_dir)
+            .with_context(|| format!("failed to create {}", test_output_dir.display()))?;
+    }
+
     match &test.kind {
         TestKind::Sqf(sqf_file) => {
             run_sqf_test(
@@ -912,7 +919,7 @@ pub async fn run_test(
                 game_dir,
                 data_dir,
                 port,
-                output_dir,
+                &test_output_dir,
                 render,
                 cli_game_args,
                 None,
@@ -926,7 +933,7 @@ pub async fn run_test(
                 game_dir,
                 data_dir,
                 port,
-                output_dir,
+                &test_output_dir,
                 render,
                 cli_game_args,
             )
@@ -939,7 +946,7 @@ pub async fn run_test(
                 game_dir,
                 data_dir,
                 port,
-                output_dir,
+                &test_output_dir,
                 render,
                 cli_game_args,
             )
@@ -958,6 +965,65 @@ pub async fn run_test(
             .await
         }
     }
+}
+
+fn test_output_dir(output_dir: &Path, test_name: &str) -> PathBuf {
+    output_dir.join(super::multi::safe_output_name(test_name))
+}
+
+fn retry_output_dir(output_dir: &Path, attempt: usize) -> PathBuf {
+    output_dir.join(format!("retry-{attempt}"))
+}
+
+fn insert_effective_data_dir(
+    dirs: &mut BTreeSet<PathBuf>,
+    override_dir: Option<&str>,
+    default_dir: Option<&str>,
+) {
+    if let Some(data_dir) = override_dir.or(default_dir) {
+        dirs.insert(super::multi::resolve_data_dir_path(data_dir));
+    }
+}
+
+fn effective_data_dirs(
+    tests: &[IntegrationTest],
+    default_dir: Option<&str>,
+) -> Result<Vec<PathBuf>> {
+    let mut dirs = BTreeSet::new();
+    for test in tests {
+        match &test.kind {
+            TestKind::Sqf(path) | TestKind::Mission(path) => {
+                let meta = load_test_meta(path);
+                insert_effective_data_dir(&mut dirs, meta.data_dir.as_deref(), default_dir);
+            }
+            TestKind::Multi(path) => {
+                let configured = super::multi::configured_data_dir(path)?;
+                insert_effective_data_dir(&mut dirs, configured.as_deref(), default_dir);
+            }
+            TestKind::Seq(path) => {
+                for entry in std::fs::read_dir(path)
+                    .with_context(|| format!("failed to read seq dir {}", path.display()))?
+                {
+                    let phase = entry?.path();
+                    if is_test_sqf(&phase) {
+                        let meta = load_test_meta(&phase);
+                        insert_effective_data_dir(&mut dirs, meta.data_dir.as_deref(), default_dir);
+                    }
+                }
+            }
+        }
+    }
+    Ok(dirs.into_iter().collect())
+}
+
+fn clear_legacy_network_asset_dirs(
+    tests: &[IntegrationTest],
+    default_dir: Option<&str>,
+) -> Result<()> {
+    for data_dir in effective_data_dirs(tests, default_dir)? {
+        super::multi::clear_legacy_network_asset_tmp(&data_dir)?;
+    }
+    Ok(())
 }
 
 /// Run a `.test.{island}` mission test — game loads the mission, mission scripts drive via tri*.
@@ -1538,12 +1604,9 @@ async fn run_sqf_test(
                 assert_timeout.as_secs_f64()
             );
             // Kill the game and report failure.  `kill_after_failure`
-            // sends triEndTest with a short deadline then force-kills,
-            // skipping the 60s EXIT_GRACE that `wait_exit` budgets
-            // for clean shutdowns under load.  Stacks linearly across
-            // failures under -j parallelism, so saving 55s per failed
-            // test is the difference between "ran for the whole
-            // EXIT_GRACE" and "freed the slot for the next test".
+            // sends triEndTest with a short deadline then force-kills.
+            // Failed assertions do not need the full per-test timeout
+            // again during cleanup.
             game.kill_after_failure().await;
             let elapsed = start.elapsed();
             return Ok(ScenarioResult {
@@ -1662,6 +1725,11 @@ pub async fn run_all(
     render: Option<&str>,
     cli_game_args: &[String],
 ) -> Result<Vec<(String, ScenarioResult)>> {
+    // Remove obsolete package-level network caches before any scenario starts.
+    // Per-test package overrides are included and aliases are deduplicated, so
+    // cleanup never races another scenario's network transfer.
+    clear_legacy_network_asset_dirs(tests, data_dir)?;
+
     let total = tests.len();
     let concurrency = match jobs {
         0 => std::thread::available_parallelism()
@@ -1835,7 +1903,7 @@ pub async fn run_all(
                     &gdir,
                     ddir.as_deref(),
                     0,
-                    &out,
+                    &retry_output_dir(&out, attempt),
                     render.as_deref(),
                     &game_args,
                 )
@@ -1962,7 +2030,7 @@ async fn run_all_sequential(
                 game_dir,
                 data_dir,
                 0,
-                output_dir,
+                &retry_output_dir(output_dir, attempt),
                 render,
                 cli_game_args,
             )
@@ -2291,6 +2359,101 @@ mod tests {
             names,
             ["mp/jip", "ui/menu", "scripting/basic", "ui/display"]
         );
+    }
+
+    #[test]
+    fn output_paths_isolate_tests_and_retry_attempts() {
+        let output = Path::new("artifacts");
+
+        assert_eq!(
+            test_output_dir(output, "multiplayer/first join"),
+            output.join("multiplayer_first_join")
+        );
+        assert_eq!(retry_output_dir(output, 1), output.join("retry-1"));
+        assert_eq!(
+            test_output_dir(&retry_output_dir(output, 2), "ui/menu"),
+            output.join("retry-2").join("ui_menu")
+        );
+    }
+
+    #[test]
+    fn effective_data_dirs_include_default_and_each_test_override() {
+        let dir = TempDir::new().unwrap();
+        let default_data = dir.path().join("default-data");
+        let sqf_data = dir.path().join("sqf-data");
+        let multi_data = dir.path().join("multi-data");
+        let seq_data = dir.path().join("seq-data");
+        for data_dir in [&default_data, &sqf_data, &multi_data, &seq_data] {
+            fs::create_dir_all(data_dir).unwrap();
+        }
+
+        sqf(dir.path(), "default.test.sqf");
+        sqf(dir.path(), "override.test.sqf");
+        toml(
+            dir.path(),
+            "override.test.toml",
+            &format!(
+                "data_dir = {}\n",
+                toml::Value::String(sqf_data.to_string_lossy().into())
+            ),
+        );
+
+        let multi = dir.path().join("network.test");
+        fs::create_dir_all(&multi).unwrap();
+        fs::write(
+            multi.join("test.toml"),
+            format!(
+                "data_dir = {}\n[[instances]]\nname = \"server\"\ntype = \"server\"\n",
+                toml::Value::String(multi_data.to_string_lossy().into())
+            ),
+        )
+        .unwrap();
+
+        let seq = dir.path().join("restart.seq");
+        sqf(&seq, "01_boot.test.sqf");
+        toml(
+            &seq,
+            "01_boot.test.toml",
+            &format!(
+                "data_dir = {}\n",
+                toml::Value::String(seq_data.to_string_lossy().into())
+            ),
+        );
+
+        let tests = vec![
+            IntegrationTest {
+                name: "default".into(),
+                kind: TestKind::Sqf(dir.path().join("default.test.sqf")),
+                tags: Vec::new(),
+            },
+            IntegrationTest {
+                name: "override".into(),
+                kind: TestKind::Sqf(dir.path().join("override.test.sqf")),
+                tags: Vec::new(),
+            },
+            IntegrationTest {
+                name: "network".into(),
+                kind: TestKind::Multi(multi),
+                tags: Vec::new(),
+            },
+            IntegrationTest {
+                name: "restart".into(),
+                kind: TestKind::Seq(seq),
+                tags: Vec::new(),
+            },
+        ];
+
+        let actual = effective_data_dirs(&tests, default_data.to_str()).unwrap();
+        let expected: Vec<_> = BTreeSet::from([
+            fs::canonicalize(default_data).unwrap(),
+            fs::canonicalize(sqf_data).unwrap(),
+            fs::canonicalize(multi_data).unwrap(),
+            fs::canonicalize(seq_data).unwrap(),
+        ])
+        .into_iter()
+        .collect();
+
+        assert_eq!(actual, expected);
     }
 
     fn sqf(base: &Path, rel: &str) {

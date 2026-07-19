@@ -35,6 +35,17 @@ pub enum Command {
     #[serde(rename = "query")]
     Query { what: String },
 
+    #[serde(rename = "query")]
+    MpJoin {
+        what: String,
+        address: String,
+        port: u16,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        password: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        modpath: Option<String>,
+    },
+
     #[serde(rename = "screenshot")]
     Screenshot { path: String },
 
