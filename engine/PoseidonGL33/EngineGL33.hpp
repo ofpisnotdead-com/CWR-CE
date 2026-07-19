@@ -100,7 +100,8 @@ enum VertexShaderID
 {
     VSScreen,
     VSTransform,
-    VSShadow, // unlit transform, shadow path
+    VSShadow,  // unlit transform, shadow path
+    VSSkinned, // GPU-skinned variant of VSTransform (BonePalette UBO)
     NVertexShaders,
     VSNone = NVertexShaders
 };
@@ -477,6 +478,9 @@ class EngineGL33 : public Engine
     PSConstants _psConstants;
 
     VertexShaderID _vertexShaderSel = VSNone;
+    // While true, mesh VS selection remaps VSTransform -> VSSkinned (GPU skinning).
+    // Bracketed around one skinned shape's section draws by SelectSkinnedMesh().
+    bool _meshSkinnedActive = false;
     // _frameState.fogParams[] is the single source of truth for the shader fog
     // uniform; SetShaderFogEnabled mutates it in place so subsequent
     // UploadFrameConstants re-uploads (e.g. from EnableSunLight) preserve
@@ -809,6 +813,7 @@ class EngineGL33 : public Engine
     }
     void UploadWorldInstances(const float* matrices, int count);
     void UploadBonePalette(const float* mats, int count) override;
+    void SelectSkinnedMesh(bool on) override;
     // Run accumulation: Scene adds model-to-world transforms; the engine
     // converts (camera-relative GfxMatrix) and uploads on BeginInstancedRunUpload.
     void InstancedRunReset() override { _instPending = 0; }

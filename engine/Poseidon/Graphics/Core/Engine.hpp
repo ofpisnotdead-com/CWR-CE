@@ -491,6 +491,10 @@ class Engine : public IGraphicsEngine
     // Upload the per-object bone palette for the next skinned mesh draw (model-
     // space bone matrices, 16 floats each).  No-op on backends without skinning.
     virtual void UploadBonePalette(const float* mats, int count) {}
+    // Route the following mesh section draws through the GPU-skinning vertex
+    // shader (on) and back to the normal mesh shader (off).  Bracket one skinned
+    // shape's section draws.  No-op on backends without skinning.
+    virtual void SelectSkinnedMesh(bool on) {}
 
     virtual int HowLongIdle() { return 0; }
     virtual size_t GetDrawItemCount() const { return 0; }

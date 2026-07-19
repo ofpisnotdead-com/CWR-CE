@@ -303,7 +303,13 @@ void EngineGL33::ApplyPipeline(const Poseidon::render::RenderPassDescriptor& d)
             break;
     }
     if (vs != VSNone)
+    {
+        // GPU skinning: a skinned shape's section draws go through VSSkinned
+        // instead of the normal mesh VS (SelectSkinnedMesh brackets it).
+        if (_meshSkinnedActive && vs == VSTransform)
+            vs = VSSkinned;
         SelectVertexShader(vs);
+    }
     if (ps != PSNone)
         SelectPixelShader(ps);
     SetMultiTexturing(fmt);

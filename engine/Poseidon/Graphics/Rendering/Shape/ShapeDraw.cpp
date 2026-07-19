@@ -116,6 +116,8 @@ void Shape::Draw(class IAnimator* matSource, const LightList& lights, ClipFlags 
                 int palCount = 0;
                 matSource->GetBonePalette(pal, palCount);
                 engine->UploadBonePalette(reinterpret_cast<const float*>(pal), palCount);
+                // Route this shape's section draws through the skinning VS.
+                engine->SelectSkinnedMesh(true);
             }
             // check first face properties
             int secBeg = -1;
@@ -187,6 +189,11 @@ void Shape::Draw(class IAnimator* matSource, const LightList& lights, ClipFlags 
                 GEngine->DrawSectionTL(*this, secBeg, secEnd);
             }
 
+            if (_buffer->IsSkinned())
+            {
+                // Restore the normal mesh VS for subsequent (non-skinned) draws.
+                engine->SelectSkinnedMesh(false);
+            }
             engine->EndMeshTL(*this);
         }
     }

@@ -195,6 +195,156 @@ void main() {
 }
 )";
 
+// vsSkinned — GPU-skinned variant of vsTransform.  Identical UBOs / outs / lit
+// body; the only difference is that `pos`/`normal` are first transformed by the
+// per-vertex bone-matrix blend (BonePalette UBO, binding 3) before the world
+// transform.  Kept as a full standalone shader so vsTransform (the hot default
+// path) is never touched.  Bone attributes are integer (locations 3/4); the
+// weight byte is rescaled by 1/128 (AnimationRTPair::WeightScale), matching the
+// CPU ApplyMatricesComplex quantization exactly.  Because the (normalized)
+// weights sum to 1, blending the matrices then transforming reproduces the CPU's
+// per-bone transform-then-sum.  Requires the VBO to hold bind-pose (OrigPos).
+static const char s_vsSkinnedGLSL[] = R"(#version 330 core
+layout(std140) uniform VSConstants {
+    mat4 proj;          // c0-c3
+    mat4 view;          // c4-c7
+    mat4 world;         // c8-c11
+    vec4 sunDir;        // c12
+    vec4 ambient;       // c13
+    vec4 diffuse;       // c14
+    vec4 emissive;      // c15
+    vec4 fogParam;      // c16: {start, invRange, enabled, 0}
+    vec4 camPos;        // c17
+    vec4 specular;      // c18: rgb + power(w)
+    vec4 specEn;        // c19: {enabled, 0, 0, 0}
+    vec4 sunEn;         // c20: {enabled, 0, 0, 0}
+    vec4 vpScale;       // c21: {2/width, 2/height, 0, 0} — VSScreen only, declared here for layout parity
+    vec4 _pad22;
+    vec4 _pad23;
+    mat4 texMat0;       // c24-c27
+    mat4 texMat1;       // c28-c31
+    vec4 texCtrl;       // c32: {genTex0, genTex1, 0, 0}
+    vec4 lightCount;        // c33: x = active local light count
+    vec4 lightPos[8];       // c34-c41: xyz world pos, w = startAtten
+    vec4 lightDiffuse[8];   // c42-c49: diffuse * nightEffect
+    vec4 lightAmbient[8];   // c50-c57: ambient * nightEffect
+    vec4 localLightDir[8];  // c58-c65: xyz beam dir (world), w = isSpot
+    mat4 lightVP;           // c66-c69: shadow-map light view-projection (sampled per fragment)
+};
+
+layout(std140) uniform WorldInstances {
+    mat4 worldArr[256];
+};
+
+layout(std140) uniform BonePalette {
+    mat4 bones[128];
+};
+
+layout(location = 0) in vec3 pos;
+layout(location = 1) in vec3 normal;
+layout(location = 2) in vec2 uv;
+layout(location = 3) in uvec4 boneIdx;
+layout(location = 4) in uvec4 boneWeight;
+
+out vec4 vColor;
+out vec4 vSpecColor;
+out vec2 vUV0;
+out vec2 vUV1;
+out float vFogTC;
+out vec3 vWorldRel;
+
+void main() {
+    // Blend the (up to 4) influencing bone matrices by weight; the weight byte is
+    // the CPU AnimationRTPair::_weight (weight * 128).  Unweighted vertices (all
+    // weights 0) fall back to the bind pose.
+    float w0 = float(boneWeight.x) * (1.0 / 128.0);
+    float w1 = float(boneWeight.y) * (1.0 / 128.0);
+    float w2 = float(boneWeight.z) * (1.0 / 128.0);
+    float w3 = float(boneWeight.w) * (1.0 / 128.0);
+    float wsum = w0 + w1 + w2 + w3;
+    vec3 sp;
+    vec3 sn;
+    if (wsum > 0.0) {
+        mat4 skinMat = bones[boneIdx.x] * w0 + bones[boneIdx.y] * w1
+                     + bones[boneIdx.z] * w2 + bones[boneIdx.w] * w3;
+        sp = (skinMat * vec4(pos, 1.0)).xyz;
+        sn = mat3(skinMat) * normal;
+    } else {
+        sp = pos;
+        sn = normal;
+    }
+
+    vec4 worldPos    = worldArr[gl_InstanceID] * vec4(sp, 1.0);
+    vec3 worldNormal = normalize(mat3(worldArr[gl_InstanceID]) * sn);
+    vec4 viewPos     = view * worldPos;
+    gl_Position      = proj * viewPos;
+    vWorldRel        = worldPos.xyz; // camera-relative world pos for cascade shadow lookup
+
+    float NdotL = max(0.0, dot(worldNormal, -sunDir.xyz));
+    vec4 litColor;
+    litColor.rgb = emissive.rgb + ambient.rgb * sunEn.x + diffuse.rgb * NdotL * sunEn.x;
+    litColor.a   = emissive.a   + ambient.a   * sunEn.x + diffuse.a   * NdotL * sunEn.x;
+
+    const float MIN_INSIDE2 = 0.95677279; // (cos 12deg)^2
+    const float MAX_INSIDE2 = 0.98063081; // (cos 8deg)^2
+    int nLights = int(lightCount.x);
+    for (int i = 0; i < nLights; i++)
+    {
+        vec3 toLight = lightPos[i].xyz - worldPos.xyz;
+        float size2 = dot(toLight, toLight);
+        float startAtten2 = lightPos[i].w * lightPos[i].w;
+        float endAtten2 = startAtten2 * 100.0;
+        if (size2 >= endAtten2)
+            continue;
+
+        float cone = 1.0;
+        if (localLightDir[i].w > 0.5)
+        {
+            float inside = -dot(toLight, localLightDir[i].xyz);
+            if (inside <= 0.0)
+                continue;
+            float cos2 = (inside * inside) / size2;
+            if (cos2 < MIN_INSIDE2)
+                continue;
+            cone = clamp((cos2 - MIN_INSIDE2) / (MAX_INSIDE2 - MIN_INSIDE2), 0.0, 1.0);
+        }
+
+        float atten = (size2 >= startAtten2) ? (startAtten2 / size2) : 1.0;
+        float cosFi = dot(toLight, worldNormal);
+        vec3 contrib;
+        if (cosFi > 0.0)
+        {
+            cosFi *= inversesqrt(size2);
+            contrib = (lightDiffuse[i].rgb * cosFi + lightAmbient[i].rgb) * (atten * cone);
+        }
+        else
+        {
+            contrib = lightAmbient[i].rgb * atten;
+        }
+        litColor.rgb += contrib;
+    }
+
+    vColor = clamp(litColor, 0.0, 1.0);
+
+    vec3 spec = vec3(0.0);
+    if (specEn.x > 0.5 && sunEn.x > 0.0) {
+        vec3 viewDir = normalize(camPos.xyz - worldPos.xyz);
+        vec3 halfVec = normalize(-sunDir.xyz + viewDir);
+        float NdotH = max(0.0, dot(worldNormal, halfVec));
+        float specPow = max(1.0, specular.w);
+        spec = specular.rgb * pow(NdotH, specPow) * sunEn.x;
+    }
+    vSpecColor = vec4(clamp(spec, 0.0, 1.0), 0.0);
+
+    float dist = length(worldPos.xyz - camPos.xyz);
+    float fogFactor = clamp(1.0 - (dist - fogParam.x) * fogParam.y, 0.0, 1.0);
+    vFogTC = (fogParam.z > 0.5) ? fogFactor : 1.0;
+
+    vUV0 = (texCtrl.x > 0.5) ? (texMat0 * vec4(uv, 0, 1)).xy : uv;
+    vUV1 = (texCtrl.y > 0.5) ? (texMat1 * vec4(uv, 0, 1)).xy : uv;
+}
+)";
+
 // PSNormal — diffuse * texture + specular + fog + night vision
 static const char s_psNormalGLSL[] = R"(#version 330 core
 layout(std140) uniform PSConstants {
@@ -821,12 +971,14 @@ void EngineGL33::UploadPSConstant(int reg, const float* data)
 static GLuint s_vsScreenObj = 0;
 static GLuint s_vsTransformObj = 0;
 static GLuint s_vsShadowObj = 0;
+static GLuint s_vsSkinnedObj = 0;
 
 void EngineGL33::InitVertexShaders()
 {
     s_vsScreenObj = CompileGLShader(GL_VERTEX_SHADER, s_vsScreenGLSL, "vsScreen");
     s_vsTransformObj = CompileGLShader(GL_VERTEX_SHADER, s_vsTransformGLSL, "vsTransform");
     s_vsShadowObj = CompileGLShader(GL_VERTEX_SHADER, s_vsShadowGLSL, "vsShadow");
+    s_vsSkinnedObj = CompileGLShader(GL_VERTEX_SHADER, s_vsSkinnedGLSL, "vsSkinned");
 
     // Bind the VS UBO to base 0 once; subsequent FlushVSConstants only
     // update buffer contents.
@@ -871,6 +1023,11 @@ void EngineGL33::DeinitVertexShaders()
         glDeleteShader(s_vsShadowObj);
         s_vsShadowObj = 0;
     }
+    if (s_vsSkinnedObj)
+    {
+        glDeleteShader(s_vsSkinnedObj);
+        s_vsSkinnedObj = 0;
+    }
     if (s_vsUBO)
     {
         glDeleteBuffers(1, &s_vsUBO);
@@ -893,6 +1050,25 @@ void EngineGL33::SelectVertexShader(VertexShaderID vs)
     GL33Bind::Vao(vs == VSScreen ? _vaoScreen : _vaoMesh);
     // Rebind combined program for the new VS
     DoSelectPixelShader(_pixelShaderSel, _pixelShaderModeSel, _pixelShaderSpecularSel);
+}
+
+void EngineGL33::SelectSkinnedMesh(bool on)
+{
+    // The per-section ApplyPassState remaps VSTransform -> VSSkinned while this
+    // flag is set (so re-selection during the section loop keeps the skinned
+    // program).  Apply immediately too, in case no ApplyPassState runs before the
+    // first section draw.  Only the normal mesh VS is remapped: the shadow pass
+    // (VSShadow) is left alone — skinned buffers exist only for the view LOD.
+    _meshSkinnedActive = on;
+    if (on)
+    {
+        if (_vertexShaderSel == VSTransform)
+            SelectVertexShader(VSSkinned);
+    }
+    else if (_vertexShaderSel == VSSkinned)
+    {
+        SelectVertexShader(VSTransform);
+    }
 }
 
 void EngineGL33::UploadVSScreenConstants()
@@ -1367,6 +1543,7 @@ uint64_t HashShaderSources()
     add(s_vsScreenGLSL);
     add(s_vsTransformGLSL);
     add(s_vsShadowGLSL);
+    add(s_vsSkinnedGLSL);
     add(s_psNormalGLSL);
     add(s_psDetailGLSL);
     add(s_psGrassGLSL);
@@ -1540,6 +1717,9 @@ void EngineGL33::InitPixelShaders()
         GLuint wiBlock = glGetUniformBlockIndex(prog, "WorldInstances");
         if (wiBlock != GL_INVALID_INDEX)
             glUniformBlockBinding(prog, wiBlock, 2);
+        GLuint bpBlock = glGetUniformBlockIndex(prog, "BonePalette");
+        if (bpBlock != GL_INVALID_INDEX)
+            glUniformBlockBinding(prog, bpBlock, 3);
         GLuint vsBlock = glGetUniformBlockIndex(prog, "VSConstants");
         GLuint psBlock = glGetUniformBlockIndex(prog, "PSConstants");
         if (vsBlock != GL_INVALID_INDEX)
@@ -1560,7 +1740,7 @@ void EngineGL33::InitPixelShaders()
     };
 
     // Build combined programs: one per (vs x specular x mode x shader) = 2*2*2*5 = 40
-    GLuint vsObjs[NVertexShaders] = {s_vsScreenObj, s_vsTransformObj, s_vsShadowObj};
+    GLuint vsObjs[NVertexShaders] = {s_vsScreenObj, s_vsTransformObj, s_vsShadowObj, s_vsSkinnedObj};
     for (int v = 0; v < NVertexShaders; v++)
     {
         if (!vsObjs[v])
