@@ -226,6 +226,14 @@ struct SSkinnedVertex
 // `<dir>/<name>.glsl` over the inline source.  Empty = inline only.
 void SetShaderOverrideDir(const std::string& dir);
 
+// GPU-skinning master switch (default OFF).  When ON, per-shape VBOs built from
+// shapes that carry skin bindings (Shape::HasSkin) use the SSkinnedVertex layout
+// and upload static bone attributes; the skinning VS + view-LOD static path
+// complete the feature.  While OFF the mesh path is byte-identical to the CPU
+// T&L renderer.
+void SetGpuSkinningEnabled(bool on);
+bool GpuSkinningEnabled();
+
 class EngineGL33 : public Engine
 {
     typedef Engine base;

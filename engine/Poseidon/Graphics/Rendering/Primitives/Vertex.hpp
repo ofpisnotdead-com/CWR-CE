@@ -96,6 +96,18 @@ public:
 	virtual void Update(const Shape &src, bool dynamic) = 0;
 };
 
+// Per-vertex bone binding for GPU skinning: up to 4 (boneIndex, weight)
+// influences, quantized exactly as AnimationRTPair {char _sel; unsigned char
+// _weight} (_weight = weight * WeightScale, WeightScale=128).  Raw bytes only —
+// kept dependency-free so the Graphics layer carries them without pulling in the
+// Animation module.  A vertex with no influence has all weights 0; the skinning
+// VS treats a zero weight-sum as bind pose (identity).
+struct SkinVertexBinding
+{
+	unsigned char idx[4];
+	unsigned char weight[4];
+};
+
 // array of vertices, corresponds to vertex buffer
 
 class VertexTable : public RefCount
@@ -126,6 +138,10 @@ protected:
 	AutoArray<Vector3> _norm;
 
 	AutoArray<UVPair> _tex;
+
+	// Per-vertex GPU-skinning bone bindings, parallel to _pos.  Empty unless the
+	// shape was prepared for skinning (see Skeleton::Prepare); static per model/LOD.
+	AutoArray<SkinVertexBinding> _skin;
 
 	ClipFlags _orHints, _andHints; // we can do some optimizations based on this
 
@@ -233,6 +249,25 @@ public:
 
 	const UVPair &UV(int i) const { return _tex[i]; }
 	void SetUV(int i, float u, float v){ _tex[i].u = u, _tex[i].v = v; }
+
+	// GPU-skinning bone bindings.  HasSkin() is true only when a full per-vertex
+	// binding table has been built (parallel to _pos).  AllocSkin() sizes and
+	// zero-clears the table (all-zero = unweighted = bind pose); Skin()/SkinRW()
+	// access one vertex.
+	bool HasSkin() const { return _skin.Size() == _pos.Size() && _pos.Size() > 0; }
+	const SkinVertexBinding &Skin(int i) const { return _skin[i]; }
+	SkinVertexBinding &SkinRW(int i) { return _skin[i]; }
+	void AllocSkin(int nPos)
+	{
+		_skin.Realloc(nPos);
+		_skin.Resize(nPos);
+		for (int i = 0; i < nPos; i++)
+		{
+			SkinVertexBinding &b = _skin[i];
+			b.idx[0] = b.idx[1] = b.idx[2] = b.idx[3] = 0;
+			b.weight[0] = b.weight[1] = b.weight[2] = b.weight[3] = 0;
+		}
+	}
 
 	// vertex buffer style access
 	// add vertex, Objektiv point index known

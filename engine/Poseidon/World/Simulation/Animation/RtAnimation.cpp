@@ -757,6 +757,30 @@ void Skeleton::Prepare(LODShape* lShape, WeightInfo& weights)
         }
         // normalize loaded weighting information
         weights[level].Normalize();
+
+        // Publish per-vertex bone bindings onto the shape for GPU skinning.  The
+        // quantization matches the CPU ApplyMatrices path exactly (bone index =
+        // AnimationRTPair::GetSel(), weight byte = _weight = weight*WeightScale),
+        // so the skinning VS reproduces the CPU skin bit-for-bit in intent.
+        // Unweighted vertices keep the all-zero binding AllocSkin() cleared them
+        // to (weight-sum 0 -> the VS falls back to bind pose).
+        const AnimationRTWeights& w = weights[level];
+        shape->AllocSkin(shape->NPos());
+        for (int i = 0; i < shape->NPos(); i++)
+        {
+            const AnimationRTWeight& e = w[i];
+            SkinVertexBinding& b = shape->SkinRW(i);
+            int n = e.Size();
+            if (n > 4)
+            {
+                n = 4;
+            }
+            for (int j = 0; j < n; j++)
+            {
+                b.idx[j] = static_cast<unsigned char>(e[j].GetSel());
+                b.weight[j] = e[j]._weight;
+            }
+        }
     }
 }
 
