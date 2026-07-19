@@ -24,6 +24,18 @@ struct DownloadDialogView
     std::string statusLine;
 };
 
-DownloadDialogView BuildDownloadDialogView(const DownloadSnapshot& snapshot, const char* unitNoun = "addon");
+// Terminal status-line labels. Kept out of the pure builder so it stays UI-free and
+// unit-testable; the caller passes localized text (defaults are the English source
+// strings). The failure line appends ": <error>" to `failed` when an error is known.
+struct DownloadDialogLabels
+{
+    const char* complete = "Complete";
+    const char* cancelled = "Cancelled";
+    const char* starting = "Starting...";
+    const char* failed = "Download failed";
+};
+
+DownloadDialogView BuildDownloadDialogView(const DownloadSnapshot& snapshot, const char* unitNoun = "addon",
+                                           const DownloadDialogLabels& labels = {});
 
 } // namespace Poseidon

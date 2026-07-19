@@ -26,7 +26,8 @@ std::string Pluralize(const char* noun, int count)
 }
 } // namespace
 
-DownloadDialogView BuildDownloadDialogView(const DownloadSnapshot& snapshot, const char* unitNoun)
+DownloadDialogView BuildDownloadDialogView(const DownloadSnapshot& snapshot, const char* unitNoun,
+                                           const DownloadDialogLabels& labels)
 {
     DownloadDialogView view;
     view.currentFraction = snapshot.currentFraction;
@@ -53,15 +54,15 @@ DownloadDialogView BuildDownloadDialogView(const DownloadSnapshot& snapshot, con
 
     if (snapshot.failed)
     {
-        view.statusLine = snapshot.error.empty() ? "Download failed" : ("Download failed: " + snapshot.error);
+        view.statusLine = snapshot.error.empty() ? labels.failed : (std::string(labels.failed) + ": " + snapshot.error);
     }
     else if (snapshot.done)
     {
-        view.statusLine = "Complete";
+        view.statusLine = labels.complete;
     }
     else if (snapshot.cancelled)
     {
-        view.statusLine = "Cancelled";
+        view.statusLine = labels.cancelled;
     }
     else if (snapshot.itemCount > 0)
     {
@@ -69,7 +70,7 @@ DownloadDialogView BuildDownloadDialogView(const DownloadSnapshot& snapshot, con
             view.statusLine = DownloadProgress::FormatSpeed(snapshot.speedBytesPerSec) + "   ETA " +
                               DownloadProgress::FormatEta(snapshot.etaSeconds);
         else
-            view.statusLine = "Starting...";
+            view.statusLine = labels.starting;
     }
 
     return view;

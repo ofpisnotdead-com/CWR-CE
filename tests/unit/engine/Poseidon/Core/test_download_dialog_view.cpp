@@ -7,6 +7,7 @@
 
 using Catch::Matchers::WithinAbs;
 using Poseidon::BuildDownloadDialogView;
+using Poseidon::DownloadDialogLabels;
 using Poseidon::DownloadDialogView;
 using Poseidon::DownloadSnapshot;
 
@@ -81,6 +82,41 @@ TEST_CASE("DownloadDialogView: cancellation is reported", "[download][view]")
 
     DownloadDialogView v = BuildDownloadDialogView(s);
     CHECK(v.statusLine == "Cancelled");
+}
+
+TEST_CASE("DownloadDialogView: terminal status labels come from the caller (localization)", "[download][view]")
+{
+    // The UI passes localized text; the builder must not hardcode English. Czech here.
+    DownloadDialogLabels labels;
+    labels.complete = "Dokon\xC4\x8D"
+                      "eno"; // "Dokončeno"
+    labels.cancelled = "Zru\xC5\xA1"
+                       "eno";                              // "Zrušeno"
+    labels.starting = "Spou\xC5\xA1t\xC4\x9Bn\xC3\xAD..."; // "Spouštění..."
+    labels.failed = "Stahov\xC3\xA1n\xC3\xAD selhalo";     // "Stahování selhalo"
+
+    DownloadSnapshot done;
+    done.itemCount = 1;
+    done.done = true;
+    CHECK(BuildDownloadDialogView(done, "addon", labels).statusLine == "Dokon\xC4\x8D"
+                                                                       "eno");
+
+    DownloadSnapshot cancelled;
+    cancelled.itemCount = 1;
+    cancelled.cancelled = true;
+    CHECK(BuildDownloadDialogView(cancelled, "addon", labels).statusLine == "Zru\xC5\xA1"
+                                                                            "eno");
+
+    DownloadSnapshot starting;
+    starting.itemCount = 1;
+    starting.speedBytesPerSec = 0.0;
+    CHECK(BuildDownloadDialogView(starting, "addon", labels).statusLine == "Spou\xC5\xA1t\xC4\x9Bn\xC3\xAD...");
+
+    DownloadSnapshot failed;
+    failed.itemCount = 1;
+    failed.failed = true;
+    failed.error = "reset";
+    CHECK(BuildDownloadDialogView(failed, "addon", labels).statusLine == "Stahov\xC3\xA1n\xC3\xAD selhalo: reset");
 }
 
 TEST_CASE("DownloadDialogView: an empty/idle snapshot yields blank lines", "[download][view]")
