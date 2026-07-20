@@ -315,6 +315,23 @@ class Ref
         }
         _ref = source;
     }
+    __forceinline Ref(Ref&& sRef) noexcept
+    {
+        _ref = sRef._ref;
+        sRef._ref = nullptr;
+    }
+    __forceinline void operator=(Ref&& sRef) noexcept
+    {
+        if (this != &sRef)
+        {
+            if (_ref)
+            {
+                _ref->Release();
+            }
+            _ref = sRef._ref;
+            sRef._ref = nullptr;
+        }
+    }
     __forceinline bool NotNull() const { return _ref != nullptr; }
     __forceinline bool IsNull() const { return _ref == nullptr; }
     __forceinline ~Ref() { Free(); }
