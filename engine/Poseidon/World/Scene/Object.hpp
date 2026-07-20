@@ -293,6 +293,12 @@ class Object: public NetworkObject, public FrameBase, public IAnimator
 	virtual void Animate( int level );
 	virtual void Deanimate( int level );
 
+protected:
+	// Snap ClipLand vertices onto the landscape surface, or restore them.
+	void ApplyLandClip( int level );
+	void RestoreLandClip( int level );
+public:
+
 	// Get min-max of object after animate. Default (generic) implementation may be slow when shape is complex.
 	virtual void AnimatedMinMax( int level, Vector3 *minMax );
 	// Get bounding sphere of object after animate. Default (generic) implementation may be slow when shape is complex.
