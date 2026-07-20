@@ -375,6 +375,12 @@ void Object::Animate(int level)
         bRadius *= sFactor;
         shape->SetMinMax(min, max, bCenter, bRadius);
     }
+    ApplyLandClip(level);
+}
+
+void Object::ApplyLandClip(int level)
+{
+    Shape* shape = _shape->Level(level);
     // check if object needs surface animation
     if ((shape->GetAndHints() & ClipLandMask) == ClipLandOn)
     {
@@ -508,6 +514,14 @@ void Object::Deanimate(int level)
         shape->RestoreOriginalPos();
         shape->RestoreMinMax();
     }
+    RestoreLandClip(level);
+
+    shape->RestoreMinMax();
+}
+
+void Object::RestoreLandClip(int level)
+{
+    Shape* shape = _shape->Level(level);
     if ((shape->GetAndHints() & ClipLandMask) == ClipLandOn)
     {
         // no animation required: will be done during SurfaceSplit
@@ -520,8 +534,6 @@ void Object::Deanimate(int level)
         shape->InvalidateBuffer();
         shape->RestoreMinMax();
     }
-
-    shape->RestoreMinMax();
 }
 
 bool Object::Invisible() const
