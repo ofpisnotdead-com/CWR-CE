@@ -117,7 +117,7 @@ void Shape::Draw(class IAnimator* matSource, const LightList& lights, ClipFlags 
                 matSource->GetBonePalette(pal, palCount);
                 if (palCount > 0)
                 {
-                    engine->UploadBonePalette(reinterpret_cast<const float*>(pal), palCount);
+                    engine->UploadBonePalette(pal, palCount);
                     engine->SelectSkinnedMesh(true);
                     skinnedActive = true;
                 }

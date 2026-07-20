@@ -1282,14 +1282,20 @@ void EngineGL33::UploadWorldInstances(const float* matrices, int count)
     glBufferSubData(GL_UNIFORM_BUFFER, 0, count * 64, matrices);
 }
 
-void EngineGL33::UploadBonePalette(const float* mats, int count)
+void EngineGL33::UploadBonePalette(const Matrix4* mats, int count)
 {
     if (!s_boneUBO || count <= 0 || !mats)
         return;
     if (count > 128)
         count = 128;
+    // Convert each Poseidon Matrix4 into the GfxMatrix (GLSL) layout the shader
+    // reads — exactly what worldArr/view/proj get via ConvertMatrix.  Uploading
+    // raw Matrix4 bytes transposes the bones and garbles the skin.
+    GfxMatrix conv[128];
+    for (int i = 0; i < count; i++)
+        ConvertMatrix(conv[i], mats[i]);
     glBindBuffer(GL_UNIFORM_BUFFER, s_boneUBO);
-    glBufferSubData(GL_UNIFORM_BUFFER, 0, count * 64, mats);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, count * static_cast<int>(sizeof(GfxMatrix)), conv);
 }
 
 void EngineGL33::UploadVSWorldMatrix(const float worldMatrix[16])
