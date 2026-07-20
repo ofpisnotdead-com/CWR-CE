@@ -107,7 +107,7 @@ void Shape::Draw(class IAnimator* matSource, const LightList& lights, ClipFlags 
             // check if shape is dynamic or not
             bool dynamic = matSource->GetAnimated(*this);
             engine->BeginMeshTL(*this, spec, dynamic);
-            bool skinnedActive = false;
+            bool wantSkinned = false;
             if (_buffer->IsSkinned())
             {
                 // GPU skinning: push the object's bone palette to the backend once
@@ -118,14 +118,20 @@ void Shape::Draw(class IAnimator* matSource, const LightList& lights, ClipFlags 
                 if (palCount > 0)
                 {
                     engine->UploadBonePalette(pal, palCount);
-                    engine->SelectSkinnedMesh(true);
-                    skinnedActive = true;
+                    wantSkinned = true;
                 }
                 // palCount == 0 (no active animation): draw the static bind pose
                 // through the normal mesh VS — the skinned VAO's locations 0-2 read
                 // pos/norm/uv fine — instead of skinning from a stale shared
                 // BonePalette UBO left by a previous object.
             }
+            // Select the skinned/normal mesh VS for this shape.  Batched: this is a
+            // no-op when the state is unchanged, so a run of consecutive skinned
+            // shapes (a crowd of soldiers) shares ONE program bind instead of two
+            // program switches per shape — the switch happens only at a
+            // skinned<->non-skinned boundary.  There is deliberately no per-shape
+            // restore; the next shape (or a pass boundary) sets the correct state.
+            engine->SelectSkinnedMesh(wantSkinned);
             // check first face properties
             int secBeg = -1;
             int secEnd = -1;
@@ -196,11 +202,6 @@ void Shape::Draw(class IAnimator* matSource, const LightList& lights, ClipFlags 
                 GEngine->DrawSectionTL(*this, secBeg, secEnd);
             }
 
-            if (skinnedActive)
-            {
-                // Restore the normal mesh VS for subsequent (non-skinned) draws.
-                engine->SelectSkinnedMesh(false);
-            }
             engine->EndMeshTL(*this);
         }
     }
