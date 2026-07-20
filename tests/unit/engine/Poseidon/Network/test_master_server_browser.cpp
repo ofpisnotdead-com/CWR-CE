@@ -131,7 +131,15 @@ TEST_CASE("MasterServerBrowser clear discards an in-flight fetch result", "[netw
     }
 
     ClearMasterServerBrowser(browser);
-    ThinkMasterServerBrowser(browser);
+
+    // The worker sets fetchDone after the fetch stub signals GFetchReturned, so a
+    // single Think can still see the fetch in flight and bail. Think is polled
+    // every frame in production; poll it here until the worker's result is reaped.
+    for (int i = 0; i < 200 && GetMasterServerBrowserState(browser) != MasterServerBrowserState::Idle; ++i)
+    {
+        ThinkMasterServerBrowser(browser);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
 
     REQUIRE(GetMasterServerBrowserState(browser) == MasterServerBrowserState::Idle);
     REQUIRE(GetMasterServerBrowserCount(browser) == 0);
