@@ -243,6 +243,12 @@ bool Object::IsAnimatedShadow(int level) const
     return false;
 }
 
+bool Object::HasLandClip(int level) const
+{
+    Shape* shape = _shape->Level(level);
+    return shape && (shape->GetOrHints() & (ClipLandKeep | ClipLandOn)) && GLOB_LAND;
+}
+
 Vector3 Object::AnimatePoint(int level, int index) const
 {
     Shape* shape = _shape->LevelOpaque(level);
@@ -429,6 +435,18 @@ void Object::Animate(int level)
 
 void Object::AnimatedMinMax(int level, Vector3* minMax)
 {
+    // The engine reuses the "animate" path for both real animation and snapping a shape to the
+    // landscape surface (ClipLand). A land-clipped shape does not move after level load, so its
+    // bounds are fixed and can be cached (excluding damage/destruction).
+    const bool destroying = _isDestroyed && _destroyPhase > 0;
+    const bool cacheable = HasLandClip(level) && GetTotalDammage() == 0 && !destroying;
+    if (cacheable && _animBBoxLevel == level)
+    {
+        minMax[0] = _animBBoxMin;
+        minMax[1] = _animBBoxMax;
+        return;
+    }
+
     // default implementation - slow, but robust
     Animate(level);
 
@@ -449,6 +467,13 @@ void Object::AnimatedMinMax(int level, Vector3* minMax)
         shape->MinMaxDynamic(minMax);
     }
     Deanimate(level);
+
+    if (cacheable)
+    {
+        _animBBoxMin = minMax[0];
+        _animBBoxMax = minMax[1];
+        _animBBoxLevel = level;
+    }
 }
 
 void Object::AnimatedBSphere(int level, Vector3& bCenter, float& bRadius, bool isAnimated)
@@ -604,11 +629,13 @@ void Object::DeanimateLandContact()
 
 void Object::Move(Matrix4Par transform)
 {
+    _animBBoxLevel = -1;
     GLOB_LAND->MoveObject(this, transform);
 }
 
 void Object::Move(Vector3Par position)
 {
+    _animBBoxLevel = -1;
     GLOB_LAND->MoveObject(this, position);
 }
 

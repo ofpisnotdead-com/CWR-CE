@@ -245,6 +245,11 @@ class Object: public NetworkObject, public FrameBase, public IAnimator
 	bool _isDestroyed:1; // object is already destructed
 	bool _static:1; // object is static (never changing position)
 
+	// Cached animated bbox for static terrain-conform objects (invalidated on Move); level -1 = invalid.
+	int _animBBoxLevel = -1;
+	Vector3 _animBBoxMin;
+	Vector3 _animBBoxMax;
+
 	SRef<DammageRegions> _dammage; // dammage information
 
 	// optimizes inserting/deleting from the list of objects drawn during Scene rendering
@@ -295,6 +300,9 @@ class Object: public NetworkObject, public FrameBase, public IAnimator
 
 	virtual bool IsAnimated( int level ) const; // appearence changed with Animate
 	virtual bool IsAnimatedShadow( int level ) const; // shadow changed with Animate
+
+	// True when the shape snaps to the landscape surface (ClipLandKeep/ClipLandOn).
+	bool HasLandClip( int level ) const;
 
 	// Change object position. Used when object is already present in landscape.
 	virtual void Move(Matrix4Par transform);
