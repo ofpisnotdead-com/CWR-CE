@@ -993,8 +993,13 @@ void Man::Animate(int level)
         if (ENGINE_CONFIG.enableGpuSkinning)
         {
             const int nb = matrix.Size();
-            _bonePalette.Realloc(nb);
-            _bonePalette.Resize(nb);
+            // Reallocate only when the bone count actually changes (it is constant
+            // per skeleton) — a per-frame Realloc for every unit was heap churn.
+            if (_bonePalette.Size() != nb)
+            {
+                _bonePalette.Realloc(nb);
+                _bonePalette.Resize(nb);
+            }
             for (int i = 0; i < nb; i++)
             {
                 _bonePalette[i] = matrix[i];

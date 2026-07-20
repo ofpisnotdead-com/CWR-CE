@@ -1295,6 +1295,11 @@ void EngineGL33::UploadBonePalette(const Matrix4* mats, int count)
     for (int i = 0; i < count; i++)
         ConvertMatrix(conv[i], mats[i]);
     glBindBuffer(GL_UNIFORM_BUFFER, s_boneUBO);
+    // Orphan the store before writing: this UBO is shared across all skinned
+    // objects and re-written once per object per frame.  Without orphaning, each
+    // write stalls on the previous object's draw still reading it (write-after-read
+    // hazard), serializing CPU and GPU.  A fresh store lets the driver double-buffer.
+    glBufferData(GL_UNIFORM_BUFFER, 128 * 64, nullptr, GL_DYNAMIC_DRAW);
     glBufferSubData(GL_UNIFORM_BUFFER, 0, count * static_cast<int>(sizeof(GfxMatrix)), conv);
 }
 
