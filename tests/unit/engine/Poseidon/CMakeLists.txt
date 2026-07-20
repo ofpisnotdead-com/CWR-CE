@@ -475,6 +475,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     UI/test_gameModule.cpp
     UI/test_viewer_cursor_overlay.cpp
     UI/test_game_cursor_overlay.cpp
+    UI/test_presets_page.cpp
     UI/InGame/test_inGameUI.cpp
     # Vehicles tests
     World/Entities/Vehicles/test_transport.cpp
