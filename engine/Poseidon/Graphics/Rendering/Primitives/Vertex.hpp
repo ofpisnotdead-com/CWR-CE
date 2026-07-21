@@ -80,10 +80,8 @@ using Poseidon::Foundation::RemoveLLinks;
 
 enum VBType
 {
-	VBDynamic, // fully dynamic - animated, but never discarded
-	VBStatic, // fully static - never animated, never discarded
-	VBBigDiscardable, // never animated, may be discarded, big (may afford separate
-	VBSmallDiscardable, // never animated, may be discarded, small
+	VBDynamic, // animated, re-uploaded every frame
+	VBStatic, // never animated, uploaded once
 };
 
 class VertexBuffer : public RemoveLLinks
