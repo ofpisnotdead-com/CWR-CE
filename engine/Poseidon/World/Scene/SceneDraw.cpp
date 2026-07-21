@@ -18,6 +18,7 @@
 #include <Poseidon/Foundation/Math/MathOpt.hpp>
 #include <Poseidon/Foundation/Memory/CheckMem.hpp>
 #include <algorithm>
+#include <cstdlib>
 #include <map>
 #include <string>
 #include <vector>
@@ -868,6 +869,29 @@ static bool FarEnoughForOcclusion(const SortObject* oi)
 
 void Scene::AdjustComplexity()
 {
+    // Benchmark aid: POSEIDON_LOD_FIX freezes the adaptive detail scaler so per-frame
+    // draw-call and buffer-upload counts are reproducible. A positive numeric value pins
+    // _lodInvWidth directly (clamped to the quality band); any other value pins to the
+    // highest-detail bound. Unset = normal frame-rate-driven adaptation.
+    static const float lodFix = []() -> float
+    {
+        const char* e = std::getenv("POSEIDON_LOD_FIX");
+        if (!e)
+            return 0.0f;
+        const float v = static_cast<float>(std::atof(e));
+        return v > 0.0f ? v : -1.0f; // -1 == pin to highest detail (_minLodInvWidth)
+    }();
+    if (lodFix != 0.0f)
+    {
+        _lodInvWidth = lodFix > 0.0f ? lodFix : _minLodInvWidth;
+        saturate(_lodInvWidth, _minLodInvWidth, _maxLodInvWidth);
+        // Still assign each object's draw/shadow LOD at the pinned density; only the
+        // frame-time-driven adjustment of _lodInvWidth below is skipped.
+        AdjustComplexity(_drawObjects);
+        AdjustShadowComplexity(_drawObjects);
+        return;
+    }
+
     float oldLodInvWidth = _lodInvWidth;
 
     // adjust lodInvWidth so we are on the line given by points
