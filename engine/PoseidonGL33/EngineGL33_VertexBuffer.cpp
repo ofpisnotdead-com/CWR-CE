@@ -116,7 +116,7 @@ bool VertexBufferGL33::Init(const Shape& src, VBType type)
         return false;
     }
 
-    _dynamic = (type == VBDynamic || type == VBSmallDiscardable);
+    _dynamic = (type == VBDynamic);
     _vertexCount = src.NVertex();
 
     // Core profile requires a non-zero VAO bound before any
