@@ -62,6 +62,13 @@ impl IntegrationTest {
         }
     }
 
+    /// The test's on-disk path (sqf file or scenario directory).
+    pub fn path(&self) -> &Path {
+        match &self.kind {
+            TestKind::Sqf(p) | TestKind::Mission(p) | TestKind::Multi(p) | TestKind::Seq(p) => p,
+        }
+    }
+
     /// Semaphore slots this test reserves in the parallel runner.
     ///
     /// Multi-instance tests reserve one slot per renderer process. Tests that need
@@ -479,6 +486,64 @@ pub fn filter_tests_by_tags(
             included && !excluded
         })
         .collect()
+}
+
+/// Parse a `--shard I/N` spec into a 1-based `(index, total)`.
+pub fn parse_shard(spec: &str) -> anyhow::Result<(usize, usize)> {
+    let (i, n) = spec
+        .split_once('/')
+        .ok_or_else(|| anyhow::anyhow!("invalid --shard '{spec}', expected I/N (e.g. 1/4)"))?;
+    let index: usize = i
+        .trim()
+        .parse()
+        .map_err(|_| anyhow::anyhow!("invalid shard index in '{spec}'"))?;
+    let total: usize = n
+        .trim()
+        .parse()
+        .map_err(|_| anyhow::anyhow!("invalid shard total in '{spec}'"))?;
+    anyhow::ensure!(
+        total >= 1 && index >= 1 && index <= total,
+        "shard must be 1..=N (got '{spec}')"
+    );
+    Ok((index, total))
+}
+
+/// Weight used to balance shards: the test's declared timeout (seconds), which is
+/// a generic, tag-agnostic proxy for how slow a test is — a slow test declares a
+/// larger timeout regardless of how it is tagged.
+fn shard_weight(test: &IntegrationTest) -> u64 {
+    load_test_meta(test.path()).timeout.unwrap_or(120).max(1)
+}
+
+/// Balance tests across `total` shards by weight (longest-processing-time
+/// bin-packing) and return those assigned to shard `index` (1-based). Deterministic:
+/// heavier scenarios are placed first, each into the currently-lightest shard, so
+/// slow tests spread evenly across shards instead of clustering in one.
+pub fn select_shard(
+    tests: Vec<IntegrationTest>,
+    index: usize,
+    total: usize,
+) -> Vec<IntegrationTest> {
+    if total <= 1 {
+        return tests;
+    }
+    let mut weighted: Vec<(u64, IntegrationTest)> = tests
+        .into_iter()
+        .map(|test| (shard_weight(&test), test))
+        .collect();
+    weighted.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.name.cmp(&b.1.name)));
+    let mut loads = vec![0u64; total];
+    let mut keep = Vec::new();
+    for (weight, test) in weighted {
+        let target = (0..total)
+            .min_by_key(|&shard| (loads[shard], shard))
+            .unwrap();
+        loads[target] += weight;
+        if target + 1 == index {
+            keep.push(test);
+        }
+    }
+    keep
 }
 
 /// Load sidecar TOML metadata for a test.
@@ -2301,6 +2366,54 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::TempDir;
+
+    fn fake_test(name: &str) -> IntegrationTest {
+        IntegrationTest {
+            name: name.to_string(),
+            kind: TestKind::Sqf(PathBuf::from(format!("/x/{name}.test.sqf"))),
+            tags: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn shards_cover_every_test_exactly_once_and_deterministically() {
+        let mk_all = || {
+            (0..37)
+                .map(|i| fake_test(&format!("t{i:02}")))
+                .collect::<Vec<_>>()
+        };
+        let total = 4;
+        let mut seen = std::collections::BTreeSet::new();
+        for index in 1..=total {
+            for test in select_shard(mk_all(), index, total) {
+                assert!(
+                    seen.insert(test.name.clone()),
+                    "'{}' assigned to >1 shard",
+                    test.name
+                );
+            }
+        }
+        let expected: std::collections::BTreeSet<String> =
+            mk_all().into_iter().map(|t| t.name).collect();
+        assert_eq!(seen, expected, "union of shards must equal the full set");
+
+        let names = |i| {
+            select_shard(mk_all(), i, total)
+                .into_iter()
+                .map(|t| t.name)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(names(1), names(1), "same code must produce the same shard");
+    }
+
+    #[test]
+    fn parse_shard_accepts_valid_and_rejects_invalid() {
+        assert_eq!(parse_shard("1/4").unwrap(), (1, 4));
+        assert_eq!(parse_shard("4/4").unwrap(), (4, 4));
+        for bad in ["0/4", "5/4", "1/0", "x/4", "1", "1/2/3"] {
+            assert!(parse_shard(bad).is_err(), "'{bad}' should be rejected");
+        }
+    }
 
     #[test]
     fn eta_average_rate_is_sane() {

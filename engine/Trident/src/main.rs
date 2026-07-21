@@ -83,6 +83,15 @@ enum Commands {
         #[arg(long, default_value = "3")]
         retries: usize,
 
+        /// Run only shard I of N (1-based), e.g. --shard 1/4. Scenarios are
+        /// balanced across shards by declared timeout so slow tests spread evenly.
+        #[arg(long, value_name = "I/N")]
+        shard: Option<String>,
+
+        /// Print the selected test names (after tag/shard filtering) and exit.
+        #[arg(long)]
+        list: bool,
+
         /// Output directory for screenshots and artifacts (default: tmp/tri/<timestamp>)
         #[arg(long, env = "TRI_OUTPUT_DIR")]
         output_dir: Option<String>,
@@ -212,6 +221,8 @@ async fn main() -> anyhow::Result<()> {
             data_dir,
             jobs,
             retries,
+            shard,
+            list,
             output_dir,
             render,
             game_args,
@@ -221,11 +232,22 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("Output: {}", out_dir.display());
 
             let path_refs: Vec<&str> = paths.iter().map(String::as_str).collect();
-            let tests = scenarios::integration::filter_tests_by_tags(
+            let mut tests = scenarios::integration::filter_tests_by_tags(
                 scenarios::integration::resolve_tests(&path_refs)?,
                 &tags,
                 &skip_tags,
             );
+            if let Some(spec) = shard.as_deref() {
+                let (index, total) = scenarios::integration::parse_shard(spec)?;
+                tests = scenarios::integration::select_shard(tests, index, total);
+                println!("  \x1b[36mshard {index}/{total}\x1b[0m");
+            }
+            if list {
+                for test in &tests {
+                    println!("{}", test.name);
+                }
+                return Ok(());
+            }
             if tests.is_empty() {
                 if tags.is_empty() {
                     println!("No tests found");
