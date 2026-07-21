@@ -52,7 +52,10 @@ TEST_CASE("Metal cutouts preserve coverage without transparent depth writes", "[
     const size_t shadowShader = bootstrap.find("vertex VSOutMesh vsShadow", blendShader);
     REQUIRE(shadowShader != std::string::npos);
     const std::string blendRegion = bootstrap.substr(blendShader, shadowShader - blendShader);
-    REQUIRE(blendRegion.find("if (in.color.a * texColor.a < (18.0 / 255.0))") != std::string::npos);
+    // Texture alpha only -- in.color.a is the sun's ambient brightness, not opacity, and
+    // must not affect whether depth is written (GitHub #60: dawn's dim ambient collapsed
+    // this term and discarded real geometry's depth).
+    REQUIRE(blendRegion.find("if (texColor.a < (18.0 / 255.0))") != std::string::npos);
     REQUIRE(blendRegion.find("discard_fragment();") != std::string::npos);
 
     const size_t cutoutShader = bootstrap.find("fragment float4 fsMeshOpaque");
@@ -60,7 +63,7 @@ TEST_CASE("Metal cutouts preserve coverage without transparent depth writes", "[
     REQUIRE(cutoutShader < blendShader);
     const std::string cutoutRegion = bootstrap.substr(cutoutShader, blendShader - cutoutShader);
     REQUIRE(bootstrap.find("constant float kSolidCutoutCoverage = 0.5;") != std::string::npos);
-    REQUIRE(cutoutRegion.find("float coverage = in.color.a * texColor.a;") != std::string::npos);
+    REQUIRE(cutoutRegion.find("float coverage = texColor.a;") != std::string::npos);
     REQUIRE(cutoutRegion.find("if (coverage < kSolidCutoutCoverage)") != std::string::npos);
     REQUIRE(cutoutRegion.find("float coverageThreshold = fract(") != std::string::npos);
     REQUIRE(cutoutRegion.find("if (coverage <= coverageThreshold)") != std::string::npos);
