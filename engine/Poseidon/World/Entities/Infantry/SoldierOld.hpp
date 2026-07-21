@@ -509,15 +509,8 @@ class Man: public Person
 	Matrix4 _legTrans;
 	bool _headTransIdent,_gunTransIdent;
 
-	// Retained per-frame GPU-skinning bone palette (model-space bone matrices),
-	// built in Man::Animate and consumed by the skinned draw via GetBonePalette.
-	// Empty while GPU skinning is off (ENGINE_CONFIG.enableGpuSkinning).
-	AutoArray<Matrix4> _bonePalette;
-	void GetBonePalette(const Matrix4 *&mats, int &count) const override
-	{
-		mats = _bonePalette.Data();
-		count = _bonePalette.Size();
-	}
+	// GPU-skinning bone palette is retained on the shared Object base (via
+	// RetainBonePalette / GetBonePalette); Man::Animate fills it below.
 
 	Vector3 _aimingPositionWorld;
 	Vector3 _cameraPositionWorld;

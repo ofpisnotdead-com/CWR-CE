@@ -987,23 +987,12 @@ void Man::Animate(int level)
             AnimationRT::ApplyMatrices(type->GetWeights(), _shape, level, matrix);
         }
 
-        // GPU skinning: retain this frame's bone palette on the object so the
-        // skinned view-LOD draw can upload it (see Man::GetBonePalette).  Gated
-        // so the default CPU-skinning path pays nothing.
+        // GPU skinning: retain this frame's bone palette on the shared Object
+        // base so the skinned view-LOD draw can upload it (see GetBonePalette).
+        // Gated so the default CPU-skinning path pays nothing.
         if (ENGINE_CONFIG.enableGpuSkinning)
         {
-            const int nb = matrix.Size();
-            // Reallocate only when the bone count actually changes (it is constant
-            // per skeleton) — a per-frame Realloc for every unit was heap churn.
-            if (_bonePalette.Size() != nb)
-            {
-                _bonePalette.Realloc(nb);
-                _bonePalette.Resize(nb);
-            }
-            for (int i = 0; i < nb; i++)
-            {
-                _bonePalette[i] = matrix[i];
-            }
+            RetainBonePalette(matrix.Data(), matrix.Size());
         }
     }
 

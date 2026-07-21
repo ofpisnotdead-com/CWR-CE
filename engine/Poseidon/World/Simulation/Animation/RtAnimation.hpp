@@ -272,9 +272,15 @@ class AnimationRT: public RefCount, public CLDLink
 		const Matrix4Array &matrices, int pointIndex
 	);
 
+	// skinTarget: when non-null and GPU skinning is enabled for this LOD
+	// (Object retains a palette + shape->HasSkin()), the per-vertex CPU skin is
+	// skipped and this frame's palette is retained on skinTarget for the vertex
+	// shader to skin from a static bind-pose VBO. Default (null) keeps the pure
+	// CPU path, unchanged, for every existing caller.
 	void Apply
 	(
-		const WeightInfo &lWeights, LODShape *lShape, int level, float time
+		const WeightInfo &lWeights, LODShape *lShape, int level, float time,
+		class Object *skinTarget = nullptr
 	) const;
 	void Matrix
 	(
