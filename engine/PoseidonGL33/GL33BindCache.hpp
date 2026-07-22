@@ -21,6 +21,7 @@ void Tex2DForSampling(int unit, unsigned int tex);
 // Bind a texture for any use, including modification.
 void Tex2D(int unit, unsigned int tex);
 void ActiveUnit(int unit);
+void UniformBuffer(unsigned int buf);
 void OnVaoDeleted(unsigned int vao);
 void OnTexDeleted(unsigned int tex);
 void Invalidate();

@@ -16,6 +16,7 @@ constexpr int kUnits = 8;
 unsigned int g_vao = kUnknown;
 unsigned int g_tex[kUnits] = {kUnknown, kUnknown, kUnknown, kUnknown, kUnknown, kUnknown, kUnknown, kUnknown};
 int g_activeUnit = -1;
+unsigned int g_uniformBuffer = kUnknown;
 
 unsigned long long g_vaoReq = 0, g_vaoBind = 0, g_texReq = 0, g_texBind = 0;
 
@@ -39,6 +40,14 @@ void ActiveUnit(int unit)
         return;
     glActiveTexture(GL_TEXTURE0 + unit);
     g_activeUnit = unit;
+}
+
+void UniformBuffer(unsigned int buf)
+{
+    if (buf == g_uniformBuffer)
+        return;
+    glBindBuffer(GL_UNIFORM_BUFFER, buf);
+    g_uniformBuffer = buf;
 }
 
 namespace
@@ -110,6 +119,7 @@ void Invalidate()
     for (int i = 0; i < kUnits; i++)
         g_tex[i] = kUnknown;
     g_activeUnit = -1;
+    g_uniformBuffer = kUnknown;
 }
 
 unsigned long long VaoRequests() { return g_vaoReq; }
