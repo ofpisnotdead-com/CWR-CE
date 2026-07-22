@@ -517,6 +517,15 @@ class Shape: public Poseidon::VertexTable
 	void SetPhase( float time, float baseTime ); // interpolate between two nearest phases
 
 	bool IsAnimated() const {return _phase.Size()>1;}
+
+	// True when land clip deforms this shape's vertices
+	bool HasDeformingLandClip() const
+	{
+		// The all-ClipLandOn case is baked via SurfaceSplit, so it is excluded.
+		return (GetOrHints() & (ClipLandKeep | ClipLandOn)) &&
+		       (GetAndHints() & ClipLandMask) != ClipLandOn;
+	}
+
 	void SetPhaseIndex( int index );
 	int NAnimationPhases() const {return _phase.Size();}
 
@@ -875,6 +884,8 @@ class LODShape: public RefCountWithLinks
 	void SetAutoCenter( bool autoCenter ) {_autoCenter=autoCenter;}
 	void AllowAnimation( bool allow=true ) {_allowAnimation=allow;} // non static usage detected
 	bool GetAllowAnimation() const {return _allowAnimation;} // non static usage detected
+	// True when land clip is the only reason the shape is animated
+	bool IsLandClipOnlyAnim() const;
 
 	void OptimizeRendering();
 	void CalculateBoundingSphere();
