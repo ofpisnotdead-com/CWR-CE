@@ -17,6 +17,7 @@
 #include <Poseidon/IO/Streams/QBStream.hpp>          // GUseFileBanks
 #include <Poseidon/Foundation/Platform/FPUSetup.hpp> // InitFPU
 #include <Poseidon/Foundation/Platform/CrashHandler.hpp>
+#include <Poseidon/Foundation/Platform/StartupError.hpp>
 #include <Poseidon/IO/ParamFile/InitLibraryElement.hpp>
 #include <string>
 #include <Poseidon/Foundation/Framework/Log.hpp>
@@ -96,6 +97,8 @@ bool GameBase::ParseCommandLine(const char* commandLine)
 #endif
         {
             LOG_ERROR(Core, "Failed to change working directory to: {}", workDir);
+            Poseidon::Foundation::ShowStartupError("Cold War Assault - Startup Error",
+                                                   ("Failed to change working directory to:\n" + workDir).c_str());
             m_startupExitCode = 2;
             return false;
         }
@@ -107,6 +110,9 @@ bool GameBase::ParseCommandLine(const char* commandLine)
     if (AppConfig::Instance().HasParseFatalError())
     {
         LOG_ERROR(Core, "Command-line parsing failed: {}", AppConfig::Instance().GetParseFatalError());
+        Poseidon::Foundation::ShowStartupError(
+            "Cold War Assault - Startup Error",
+            ("Command-line error:\n" + AppConfig::Instance().GetParseFatalError()).c_str());
         m_startupExitCode = AppConfig::Instance().GetParseFatalExitCode();
         return false;
     }
@@ -150,9 +156,46 @@ bool GameBase::ParseCommandLine(const char* commandLine)
                                      oldPathsRoot.c_str());
     Poseidon::ApplyGamePathsToLegacyGlobals();
 
-    // Refresh the crash handler after path setup. Linux uses the user dir for reports; Windows
-    // keeps minidumps beside the executable.
-    Poseidon::Foundation::InstallCrashHandler(GamePaths::Instance().UserDir().c_str());
+    // Diagnostics go to the discoverable user-content folder (Documents on Windows,
+    // XDG data on Linux): logs under logs/, crash reports under crashes/.
+    const std::string diagDir = GamePaths::Instance().UserContentDir();
+    const std::string crashesDir = (std::filesystem::path(diagDir) / "crashes").string();
+    std::error_code crashesEc;
+    std::filesystem::create_directories(crashesDir, crashesEc); // crash-time handler cannot create it
+    Poseidon::Foundation::InstallCrashHandler(crashesDir.c_str());
+
+    // Keep diagnostics from growing without bound (A3-style keep-last-N).
+    constexpr int kLogKeepN = 10;
+    constexpr int kCrashKeepN = 10;
+    Poseidon::Foundation::WipeOldFiles(crashesDir, "crash_", ".txt", kCrashKeepN); // Linux crash reports
+#ifdef _WIN32
+    Poseidon::Foundation::WipeOldFiles(crashesDir, "crash-", ".dmp", kCrashKeepN); // Windows minidumps
+#endif
+
+    // On a console-less launch (Steam/GUI) capture logs to a per-run file. --log-file
+    // overrides it; terminals, tests, the tri harness, and --check stay console-only.
+    if (AppConfig::Instance().GetLogFile().empty() && !AppConfig::Instance().NoLogFile() &&
+        Poseidon::Foundation::ShouldWriteAutoLog())
+    {
+        const std::string logsDir = (std::filesystem::path(diagDir) / "logs").string();
+        const std::string logPath =
+            (std::filesystem::path(logsDir) / Poseidon::Foundation::MakeTimestampedLogName("cwr")).string();
+        GetLoggingSystem().AttachFileSink(logPath.c_str());
+        if (Poseidon::Foundation::LoggingSystem::GetLogFilePath()[0])
+            LOG_INFO(Core, "Log file: {}", logPath);
+        // Trim after opening this run's file so keep-last-N counts the current run.
+        Poseidon::Foundation::WipeOldFiles(logsDir, "cwr_", ".log", kLogKeepN);
+    }
+
+    // A typo'd launch flag is otherwise dropped silently; surface it (now that any log
+    // file is attached) so the player can see it wasn't applied.
+    if (const auto& unknown = AppConfig::Instance().GetUnrecognizedArgs(); !unknown.empty())
+    {
+        std::string joined;
+        for (const std::string& arg : unknown)
+            joined += (joined.empty() ? "" : " ") + arg;
+        LOG_WARN(Core, "Ignoring unrecognized launch argument(s): {}", joined);
+    }
 
     LOG_INFO(Core, "Command-line parsing complete");
     LOG_INFO(Core, "  user_dir:  {}", GamePaths::Instance().UserDir());
