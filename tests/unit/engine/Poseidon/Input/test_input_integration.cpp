@@ -336,6 +336,48 @@ TEST_CASE("InputSubsystem Update isolates vehicle movement from infantry binding
     sub.SetContext(savedContext);
 }
 
+TEST_CASE("InputSubsystem folds Turbo into vehicle fast-forward per context", "[input][integration]")
+{
+    auto& sub = InputSubsystem::Instance();
+    ProfileSnapshot carSnap(sub, InputContext::CarDriver);
+    float savedW = GInput.keyboard.keys[SDL_SCANCODE_W];
+    float savedE = GInput.keyboard.keys[SDL_SCANCODE_E];
+    float savedShift = GInput.keyboard.keys[SDL_SCANCODE_LSHIFT];
+
+    auto& car = sub.GetProfile(InputContext::CarDriver);
+    car.ClearBindings(UAMoveForward);
+    car.ClearBindings(UAMoveFastForward);
+    car.ClearBindings(UATurbo);
+    car.Bind(UAMoveForward, InputCode::Key(SDL_SCANCODE_W));
+    car.Bind(UAMoveFastForward, InputCode::Key(SDL_SCANCODE_E));
+    car.Bind(UATurbo, InputCode::Key(SDL_SCANCODE_LSHIFT));
+
+    const InputContext ctx = InputContext::CarDriver;
+
+    // Forward alone: normal throttle, nothing in fast-forward.
+    GInput.keyboard.keys[SDL_SCANCODE_W] = 1.0f;
+    GInput.keyboard.keys[SDL_SCANCODE_E] = 0.0f;
+    GInput.keyboard.keys[SDL_SCANCODE_LSHIFT] = 0.0f;
+    CHECK(sub.GetMoveForward(ctx) == 1.0f);
+    CHECK(sub.GetMoveFastForward(ctx) == 0.0f);
+
+    // Turbo + forward: bare forward drops to zero, its weight moves to fast-forward.
+    GInput.keyboard.keys[SDL_SCANCODE_LSHIFT] = 1.0f;
+    CHECK(sub.GetMoveForward(ctx) == 0.0f);
+    CHECK(sub.GetMoveFastForward(ctx) == 1.0f);
+
+    // The dedicated fast-forward key is full throttle on its own.
+    GInput.keyboard.keys[SDL_SCANCODE_W] = 0.0f;
+    GInput.keyboard.keys[SDL_SCANCODE_LSHIFT] = 0.0f;
+    GInput.keyboard.keys[SDL_SCANCODE_E] = 1.0f;
+    CHECK(sub.GetMoveForward(ctx) == 0.0f);
+    CHECK(sub.GetMoveFastForward(ctx) == 1.0f);
+
+    GInput.keyboard.keys[SDL_SCANCODE_W] = savedW;
+    GInput.keyboard.keys[SDL_SCANCODE_E] = savedE;
+    GInput.keyboard.keys[SDL_SCANCODE_LSHIFT] = savedShift;
+}
+
 TEST_CASE("InputSubsystem key queries on zeroed GInput", "[input][integration]")
 {
     auto& sub = InputSubsystem::Instance();

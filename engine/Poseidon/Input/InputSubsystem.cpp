@@ -612,6 +612,20 @@ bool InputSubsystem::GetActionToDo(UserAction action, bool reset, bool checkFocu
     return QueryProfileActionToDo(GInput, profiles_[idx], action, actionDoneByContext_[idx][action], reset, checkFocus);
 }
 
+float InputSubsystem::GetMoveForward(InputContext ctx) const
+{
+    // Turbo held promotes MoveForward into fast-forward, so bare forward is zero.
+    return GetAction(ctx, UATurbo) > 0 ? 0.0f : GetAction(ctx, UAMoveForward);
+}
+
+float InputSubsystem::GetMoveFastForward(InputContext ctx) const
+{
+    float fast = GetAction(ctx, UAMoveFastForward);
+    if (GetAction(ctx, UATurbo) > 0)
+        fast += GetAction(ctx, UAMoveForward);
+    return fast;
+}
+
 bool InputSubsystem::IsKeyDown(SDL_Scancode sc) const
 {
     int idx = static_cast<int>(sc);

@@ -27,11 +27,15 @@ const UserAction kOnFoot[] = {
     // HUD
     UABinocular, UANightVision, UAN};
 
-const UserAction kVehicles[] = {UAMoveForward,  UAMoveBack,      UATurnLeft,         UATurnRight,   UATurbo,
-                                UAFire,         UALockTarget,    UALockTargets,      UAAction,      UAZoomIn,
-                                UAZoomOut,      UALookAround,    UALookAroundToggle, UALookCenter,  UALookLeft,
-                                UALookRight,    UALookUp,        UALookDown,         UALookLeftUp,  UALookRightUp,
-                                UALookLeftDown, UALookRightDown, UAHeadlights,       UANightVision, UAN};
+const UserAction kVehicles[] = {UAMoveForward,     UAMoveBack,     UAMoveFastForward,
+                                UAMoveSlowForward, UATurbo,        UATurnLeft,
+                                UATurnRight,       UAFire,         UALockTarget,
+                                UALockTargets,     UAAction,       UAZoomIn,
+                                UAZoomOut,         UALookAround,   UALookAroundToggle,
+                                UALookCenter,      UALookLeft,     UALookRight,
+                                UALookUp,          UALookDown,     UALookLeftUp,
+                                UALookRightUp,     UALookLeftDown, UALookRightDown,
+                                UAHeadlights,      UANightVision,  UAN};
 
 const UserAction kPilot[] = {
     UAMoveForward,      UAMoveBack,     UATurnLeft,      UATurnRight,   UAMoveLeft, UAMoveRight, UAMoveUp,

@@ -1821,8 +1821,8 @@ void Tank::KeyboardPilot(AIUnit* unit, float deltaT)
     }
 
     constexpr InputContext ctx = InputContext::TankDriver;
-    float forward = (input.GetAction(ctx, UAMoveForward) - input.GetAction(ctx, UAMoveBack)) * 0.75f;
-    forward += input.GetAction(ctx, UAMoveFastForward);
+    float forward = (input.GetMoveForward(ctx) - input.GetAction(ctx, UAMoveBack)) * 0.75f;
+    forward += input.GetMoveFastForward(ctx);
     forward += input.GetAction(ctx, UAMoveSlowForward) * 0.33f;
 
     if (ModelSpeed()[2] > 2 && forward < -0.5)

@@ -103,6 +103,17 @@ TEST_CASE("ControlsCategory: Walk (UASlow) shows under OnFoot only", "[Input][Co
     CHECK_FALSE(IsActionInControlsCategory(UASlow, ControlsCategoryCommon));
 }
 
+TEST_CASE("ControlsCategory: throttle keys and Turbo are bindable under Vehicles", "[Input][ControlsCategory]")
+{
+    // A vehicle obeys the throttle keys (E fast-forward, Q slow-forward) and the
+    // Turbo modifier, so all three must be visible and rebindable in the category.
+    for (UserAction a : {UAMoveFastForward, UAMoveSlowForward, UATurbo})
+    {
+        CHECK(IsActionInControlsCategory(a, ControlsCategoryOnFoot));
+        CHECK(IsActionInControlsCategory(a, ControlsCategoryVehicles));
+    }
+}
+
 TEST_CASE("ControlsCategory: VoN toggle and push-to-talk are adjacent Common actions", "[Input][ControlsCategory]")
 {
     const UserAction* actions = GetControlsCategoryActions(ControlsCategoryCommon);
