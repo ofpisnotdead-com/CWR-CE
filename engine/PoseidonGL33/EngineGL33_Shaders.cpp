@@ -785,7 +785,7 @@ void EngineGL33::FlushVSConstants()
         return;
     // glBindBufferBase is sticky — done once at UBO creation in
     // InitVertexShaders.  Per-flush we only update buffer contents.
-    glBindBuffer(GL_UNIFORM_BUFFER, s_vsUBO);
+    GL33Bind::UniformBuffer(s_vsUBO);
 #ifdef __APPLE__
     glBufferData(GL_UNIFORM_BUFFER, sizeof(s_vsShadow), nullptr, GL_STREAM_DRAW);
 #endif
@@ -807,7 +807,7 @@ void EngineGL33::FlushPSConstants()
     static GLuint s_psUploadedUBO = 0;
     if (s_psEverUploaded && s_psUploadedUBO == s_psUBO && memcmp(s_psUploaded, s_psShadow, sizeof(s_psShadow)) == 0)
         return;
-    glBindBuffer(GL_UNIFORM_BUFFER, s_psUBO);
+    GL33Bind::UniformBuffer(s_psUBO);
 #ifdef __APPLE__
     glBufferData(GL_UNIFORM_BUFFER, sizeof(s_psShadow), nullptr, GL_STREAM_DRAW);
 #endif
@@ -1095,7 +1095,7 @@ void EngineGL33::UploadWorldInstances(const float* matrices, int count)
         return;
     if (count > 256)
         count = 256;
-    glBindBuffer(GL_UNIFORM_BUFFER, s_worldUBO);
+    GL33Bind::UniformBuffer(s_worldUBO);
 #ifdef __APPLE__
     glBufferData(GL_UNIFORM_BUFFER, 256 * 64, nullptr, GL_STREAM_DRAW);
 #endif
@@ -1109,7 +1109,7 @@ void EngineGL33::UploadVSWorldMatrix(const float worldMatrix[16])
     // the VSConstants world member stays as std140 padding.
     if (s_worldUBO)
     {
-        glBindBuffer(GL_UNIFORM_BUFFER, s_worldUBO);
+        GL33Bind::UniformBuffer(s_worldUBO);
 #ifdef __APPLE__
         glBufferData(GL_UNIFORM_BUFFER, 256 * 64, nullptr, GL_STREAM_DRAW);
 #endif
@@ -1122,7 +1122,7 @@ void EngineGL33::UploadVSWorldMatrix(const float worldMatrix[16])
     // writers (materials, lights, cascade VPs) still flush the full block.
     if (!s_vsUBO)
         return;
-    glBindBuffer(GL_UNIFORM_BUFFER, s_vsUBO);
+    GL33Bind::UniformBuffer(s_vsUBO);
     glBufferSubData(GL_UNIFORM_BUFFER, VSConst::SlotWorld * 4 * sizeof(float), 64, s_vsShadow + VSConst::SlotWorld * 4);
 }
 
