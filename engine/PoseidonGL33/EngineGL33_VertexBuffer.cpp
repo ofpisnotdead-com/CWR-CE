@@ -33,7 +33,8 @@ class VertexBufferGL33 : public VertexBuffer
     GLuint _vao = 0;
     GLuint _vbo = 0;
     GLuint _ibo = 0;
-    bool _dynamic = false;
+    bool _dynamic = false;          // dynamic storage: GL_DYNAMIC_DRAW + orphaning map
+    bool _reuploadPerFrame = false; // re-copy the source vertices every draw (VBDynamic)
     int _vertexCount = 0;
     int _indexCount = 0;
     AutoArray<VBSectionInfo> _sections;
@@ -93,6 +94,10 @@ void VertexBufferGL33::CopyVertices(const Shape& src)
     const UVPair* uv = &src.UV(0);
     const Vector3* pos = &src.Pos(0);
     const Vector3* norm = &src.Norm(0);
+    // ApplyLandClip clears the ClipLandKeep bit as it conforms, so read the
+    // saved original flags when a shape has been animated.
+    const bool useOrig = src.OriginalPosValid();
+    int vi = 0;
     for (int i = src.NVertex(); --i >= 0;)
     {
         sData->pos = Vector3P(pos->X(), pos->Y(), pos->Z());
@@ -102,6 +107,9 @@ void VertexBufferGL33::CopyVertices(const Shape& src)
         norm++;
         sData->t0 = *uv;
         uv++;
+        ClipFlags clip = useOrig ? src.OrigClip(vi) : src.Clip(vi);
+        sData->landClip = (clip & ClipLandKeep) ? 1 : ((clip & ClipLandOn) ? 2 : 0);
+        vi++;
         sData++;
     }
 
@@ -116,7 +124,8 @@ bool VertexBufferGL33::Init(const Shape& src, VBType type)
         return false;
     }
 
-    _dynamic = (type == VBDynamic);
+    _dynamic = (type != VBStatic);
+    _reuploadPerFrame = (type == VBDynamic);
     _vertexCount = src.NVertex();
 
     // Core profile requires a non-zero VAO bound before any
@@ -206,9 +215,9 @@ bool VertexBufferGL33::Init(const Shape& src, VBType type)
     return true;
 }
 
-void VertexBufferGL33::Update(const Shape& src, bool dynamic)
+void VertexBufferGL33::Update(const Shape& src, bool forceUpdate)
 {
-    if (_dynamic || dynamic || bufferDirty)
+    if (_reuploadPerFrame || forceUpdate || bufferDirty)
     {
         CopyVertices(src);
         bufferDirty = false;

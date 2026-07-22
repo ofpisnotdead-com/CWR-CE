@@ -17,6 +17,7 @@ class TextBankGL33;
 // GL33 has no D3D profiling scopes; the macro is a no-op here.
 #define PROFILE_DX_SCOPE(name)
 
+#include <cstddef>
 #include <vector>
 #include <Poseidon/Foundation/Containers/Array.hpp>
 #include <Poseidon/Foundation/Containers/StaticArray.hpp>
@@ -126,7 +127,8 @@ enum : int
     SlotSpecEn = 19,
     SlotSunEn = 20,
     SlotVpScale = 21,
-    // slots 22..23 reserved
+    SlotHmParams0 = 22, // terrain heightmap: {invGrid, camX, camZ, camY}
+    SlotHmParams1 = 23, // land clip: {boundingCenter.xyz, enable}
     SlotTexMat0 = 24, // 4 vec4s
     SlotTexMat1 = 28, // 4 vec4s
     SlotTexCtrl = 32,
@@ -148,7 +150,9 @@ static_assert(SlotView >= SlotProj + 4, "SlotView overlaps SlotProj");
 static_assert(SlotWorld >= SlotView + 4, "SlotWorld overlaps SlotView");
 static_assert(SlotSunDir >= SlotWorld + 4, "SlotSunDir overlaps SlotWorld");
 static_assert(SlotVpScale >= SlotSunEn + 1, "SlotVpScale overlaps SlotSunEn");
-static_assert(SlotTexMat0 >= SlotVpScale + 1, "SlotTexMat0 overlaps SlotVpScale");
+static_assert(SlotHmParams0 >= SlotVpScale + 1, "SlotHmParams0 overlaps SlotVpScale");
+static_assert(SlotHmParams1 >= SlotHmParams0 + 1, "SlotHmParams1 overlaps SlotHmParams0");
+static_assert(SlotTexMat0 >= SlotHmParams1 + 1, "SlotTexMat0 overlaps SlotHmParams1");
 static_assert(SlotTexMat1 >= SlotTexMat0 + 4, "SlotTexMat1 overlaps SlotTexMat0");
 static_assert(SlotTexCtrl >= SlotTexMat1 + 4, "SlotTexCtrl overlaps SlotTexMat1");
 static_assert(SlotLightCount >= SlotTexCtrl + 1, "SlotLightCount overlaps SlotTexCtrl");
@@ -201,7 +205,18 @@ struct SVertex
     Vector3P pos;
     Vector3P norm;
     Poseidon::UVPair t0;
+    // 0 rigid, 1 ClipLandKeep, 2 ClipLandOn
+    uint8_t landClip;
 };
+
+// GPU upload contract: SVertex is uploaded verbatim and read by vsTransform through
+// the SetupSVertexLayout() VAO. sizeof is the attribute stride and the offsets must
+// match the glVertexAttribPointer calls for locations 0..3.
+static_assert(sizeof(SVertex) == 36, "SVertex size must equal the VAO vertex stride");
+static_assert(offsetof(SVertex, pos) == 0, "SVertex.pos must be at offset 0 (attrib 0)");
+static_assert(offsetof(SVertex, norm) == 12, "SVertex.norm must be at offset 12 (attrib 1)");
+static_assert(offsetof(SVertex, t0) == 24, "SVertex.t0 must be at offset 24 (attrib 2)");
+static_assert(offsetof(SVertex, landClip) == 32, "SVertex.landClip must be at offset 32 (attrib 3)");
 
 // Free-function override for hot-reload — when set (typically via CLI
 // --shader-override-dir), GL33's CompileGLShader prefers
@@ -578,6 +593,9 @@ class EngineGL33 : public Engine
     void InitDraw(bool clear = false, PackedColor color = PackedColor(0)) override;
     void FinishDraw() override;
     void NextFrame() override;
+    void SetTerrainHeightmap(const float* heights, int width, int height, float invGrid) override;
+    bool LandClipInVS() const override;
+    void SetLandClipParams(float enable, Vector3Par boundingCenter) override;
     void DrawTestPattern(const char* name) override;
 
     void Pause() override;
@@ -670,6 +688,7 @@ class EngineGL33 : public Engine
     bool _shadowMapActive = false;                 // a depth pass ran this frame
     unsigned int _shadowMapTex = 0;                // GL depth texture ARRAY to sample
     int _shadowMapRes = 0;                         // its resolution
+    unsigned int _heightMapTex = 0;                // GL R32F terrain height texture
     int _shadowCascades = 0;                       // active cascade count this frame
     int _shadowOmniCount = 0;                      // leading omni (camera-sphere) tiers — distance-selected
     float _shadowMapVP[kShadowCascades * 16] = {}; // per-cascade light view-projections (column-major)
@@ -779,12 +798,13 @@ class EngineGL33 : public Engine
         return pure;
     }
     void UploadWorldInstances(const float* matrices, int count);
-    // Run accumulation: Scene adds model-to-world transforms; the engine
-    // converts (camera-relative GfxMatrix) and uploads on BeginInstancedRunUpload.
+    // Run accumulation: Scene adds model-to-world transforms; the engine converts
+    // (camera-relative GfxMatrix) and uploads on BeginInstancedRunUpload.
     void InstancedRunReset() override { _instPending = 0; }
     bool InstancedRunAdd(const Matrix4& modelToWorld) override;
     int InstancedRunPending() const { return _instPending; }
     void BeginInstancedRunUpload() override;
+    bool InstancedRunActive() const override { return _instCount > 1; }
     int _instCount = 0;
     bool _instImpure = false;
     int _instPending = 0;
@@ -911,7 +931,6 @@ class EngineGL33 : public Engine
     void SelectVertexShader(VertexShaderID vs);
     void UploadVSScreenConstants();
     void UploadVSProjection(const FrameState& frame);
-    void UploadVSViewConstants(const FrameState& frame);
     FrameState BuildFrameState(Camera* camera, LightSun* sun, int bias, const Color& fogColor, bool sunEnabled);
     PassState BuildPassState(const FrameState& frame, Poseidon::PassId passId);
     void UploadVSWorldMatrix(const float worldMatrix[16]);

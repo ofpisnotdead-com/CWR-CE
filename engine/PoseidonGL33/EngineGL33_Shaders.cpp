@@ -85,8 +85,8 @@ layout(std140) uniform VSConstants {
     vec4 specEn;        // c19: {enabled, 0, 0, 0}
     vec4 sunEn;         // c20: {enabled, 0, 0, 0}
     vec4 vpScale;       // c21: {2/width, 2/height, 0, 0} — VSScreen only, declared here for layout parity
-    vec4 _pad22;
-    vec4 _pad23;
+    vec4 hmParams0;     // c22: terrain heightmap {invGrid, camX, camZ, camY}
+    vec4 hmParams1;     // c23: land clip {boundingCenter.xyz, enable}
     mat4 texMat0;       // c24-c27
     mat4 texMat1;       // c28-c31
     vec4 texCtrl;       // c32: {genTex0, genTex1, 0, 0}
@@ -105,9 +105,12 @@ layout(std140) uniform WorldInstances {
     mat4 worldArr[256];
 };
 
+uniform sampler2D heightMap;
+
 layout(location = 0) in vec3 pos;
 layout(location = 1) in vec3 normal;
 layout(location = 2) in vec2 uv;
+layout(location = 3) in uint landClip;
 
 out vec4 vColor;
 out vec4 vSpecColor;
@@ -116,9 +119,51 @@ out vec2 vUV1;
 out float vFogTC;
 out vec3 vWorldRel;
 
+// Terrain height (.x, absolute) and world-space slope (.yz = dY/dx, dY/dz) at absolute
+// world XZ, matching Landscape::SurfaceY (two-triangle interpolation of the height grid).
+vec3 landClipSurface(vec2 absXZ) {
+    float invGrid = hmParams0.x;
+    vec2 rel = absXZ * invGrid;
+    ivec2 sz = textureSize(heightMap, 0);
+    ivec2 base = ivec2(floor(rel));
+    ivec2 i0 = clamp(base,            ivec2(0), sz - 1);
+    ivec2 i1 = clamp(base + ivec2(1), ivec2(0), sz - 1);
+    vec2 f = rel - vec2(base);
+    float y00 = texelFetch(heightMap, ivec2(i0.x, i0.y), 0).r;
+    float y01 = texelFetch(heightMap, ivec2(i1.x, i0.y), 0).r;
+    float y10 = texelFetch(heightMap, ivec2(i0.x, i1.y), 0).r;
+    float y11 = texelFetch(heightMap, ivec2(i1.x, i1.y), 0).r;
+    float h;
+    vec2 grad;
+    if (f.x <= 1.0 - f.y) {
+        h = y00 + (y10 - y00) * f.y + (y01 - y00) * f.x;
+        grad = vec2(y01 - y00, y10 - y00);
+    } else {
+        h = y10 + (y01 - y11) - (y10 - y11) * f.x - (y01 - y11) * f.y;
+        grad = vec2(y11 - y10, y11 - y01);
+    }
+    return vec3(h, grad * invGrid);
+}
+
 void main() {
     vec4 worldPos    = worldArr[gl_InstanceID] * vec4(pos, 1.0);
     vec3 worldNormal = normalize(mat3(worldArr[gl_InstanceID]) * normal);
+    // Land clip: snap terrain-following vertices onto the heightmap (matches Object::ApplyLandClip).
+    if (hmParams1.w > 0.5 && landClip != 0u && hmParams0.x > 0.0) {
+        vec3 surf = landClipSurface(worldPos.xz + hmParams0.yz);
+        if (landClip == 2u) {
+            worldPos.y = surf.x - hmParams0.w; // ClipLandOn: pin onto surface
+        } else {
+            // ClipLandKeep: keep the authored height above the terrain sampled at the object
+            // anchor (bounding centre), the reference Object::ApplyLandClip subtracts. worldArr
+            // is camera-relative, so re-add camXZ to get the absolute anchor.
+            vec2 anchorXZ = (worldArr[gl_InstanceID] * vec4(-hmParams1.xyz, 1.0)).xz + hmParams0.yz;
+            worldPos.y = worldPos.y + surf.x - landClipSurface(anchorXZ).x;
+        }
+        worldNormal = normalize(vec3(worldNormal.x - surf.y * worldNormal.y,
+                                     worldNormal.y,
+                                     worldNormal.z - surf.z * worldNormal.y));
+    }
     vec4 viewPos     = view * worldPos;
     gl_Position      = proj * viewPos;
     vWorldRel        = worldPos.xyz; // camera-relative world pos for cascade shadow lookup
@@ -605,8 +650,8 @@ layout(std140) uniform VSConstants {
     vec4 specEn;        // c19
     vec4 sunEn;         // c20
     vec4 vpScale;       // c21 — VSScreen only, declared for layout parity
-    vec4 _pad22;
-    vec4 _pad23;
+    vec4 hmParams0;     // c22: terrain heightmap {invGrid, camX, camZ, camY}
+    vec4 hmParams1;     // c23: land clip {boundingCenter.xyz, enable}
     mat4 texMat0;       // c24-c27
     mat4 texMat1;       // c28-c31
     vec4 texCtrl;       // c32
@@ -1071,15 +1116,57 @@ void EngineGL33::UpdateShadowMapLitState()
     FlushPSConstants();
 }
 
-void EngineGL33::UploadVSViewConstants(const FrameState& frame)
+void EngineGL33::SetTerrainHeightmap(const float* heights, int width, int height, float invGrid)
 {
-    memcpy(s_vsShadow + VSConst::SlotView * 4, &frame.view, 64);
-    memcpy(s_vsShadow + VSConst::SlotSunDir * 4, frame.sunDir, 16);
-    memcpy(s_vsShadow + VSConst::SlotCamPos * 4, frame.cameraPos, 12);
-    s_vsShadow[VSConst::SlotCamPos * 4 + 3] = 0;
-    float sunEn[4] = {frame.sunEnabled ? 1.0f : 0.0f, 0, 0, 0};
-    memcpy(s_vsShadow + VSConst::SlotSunEn * 4, sunEn, 16);
-    FlushVSConstants();
+    if (!heights || width <= 0 || height <= 0)
+    {
+        return;
+    }
+
+    if (_heightMapTex == 0)
+    {
+        glGenTextures(1, &_heightMapTex);
+    }
+
+    GL33Bind::Tex2D(kUploadUnit - GL_TEXTURE0, _heightMapTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, width, height, 0, GL_RED, GL_FLOAT, heights);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    GL33Bind::ActiveUnit(0);
+
+    // .yzw (camX/camZ/camY) are filled per frame in UploadFrameConstants
+    s_vsShadow[VSConst::SlotHmParams0 * 4 + 0] = invGrid;
+}
+
+bool EngineGL33::LandClipInVS() const
+{
+    // We need the heightmap to be loaded to do land clipping in the vertex shader.
+    return _heightMapTex != 0;
+}
+
+void EngineGL33::SetLandClipParams(float enable, Vector3Par boundingCenter)
+{
+    float v[4] = {0.0f, 0.0f, 0.0f, enable};
+    if (enable > 0.5f)
+    {
+        v[0] = boundingCenter.X();
+        v[1] = boundingCenter.Y();
+        v[2] = boundingCenter.Z();
+    }
+    float* dst = s_vsShadow + VSConst::SlotHmParams1 * 4;
+    if (memcmp(v, dst, sizeof(v)) == 0)
+    {
+        return;
+    }
+    memcpy(dst, v, sizeof(v));
+    if (!s_vsUBO)
+    {
+        return;
+    }
+    glBindBuffer(GL_UNIFORM_BUFFER, s_vsUBO);
+    glBufferSubData(GL_UNIFORM_BUFFER, VSConst::SlotHmParams1 * 4 * sizeof(float), sizeof(v), v);
 }
 
 void EngineGL33::UploadWorldInstances(const float* matrices, int count)
@@ -1270,7 +1357,16 @@ void EngineGL33::UploadFrameConstants(const FrameState& frame)
     float texCtrl[4] = {0, 0, 0, 0};
     memcpy(s_vsShadow + VSConst::SlotTexCtrl * 4, texCtrl, 16);
 
+    // Land clip reconstructs absolute world XZ (and Y) from the camera-relative worldPos.
+    s_vsShadow[VSConst::SlotHmParams0 * 4 + 1] = frame.cameraPos[0];
+    s_vsShadow[VSConst::SlotHmParams0 * 4 + 2] = frame.cameraPos[2];
+    s_vsShadow[VSConst::SlotHmParams0 * 4 + 3] = frame.cameraPos[1];
+
     FlushVSConstants();
+
+    if (_heightMapTex)
+        GL33Bind::Tex2D(3, _heightMapTex);
+    GL33Bind::ActiveUnit(0);
 
     UploadPSFogColor(Color(frame.fogColor[0], frame.fogColor[1], frame.fogColor[2], frame.fogColor[3]));
 }
@@ -1532,6 +1628,9 @@ void EngineGL33::InitPixelShaders()
         GLint locShadow = glGetUniformLocation(prog, "shadowMap");
         if (locShadow >= 0)
             glUniform1i(locShadow, 2); // shadow depth map on texture unit 2
+        GLint locHeight = glGetUniformLocation(prog, "heightMap");
+        if (locHeight >= 0)
+            glUniform1i(locHeight, 3); // terrain height map on texture unit 3
         glUseProgram(0);
     };
 

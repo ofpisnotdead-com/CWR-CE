@@ -67,6 +67,8 @@ inline void SetupSVertexLayout()
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(SVertex, norm)));
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(SVertex, t0)));
+    glEnableVertexAttribArray(3);
+    glVertexAttribIPointer(3, 1, GL_UNSIGNED_BYTE, stride, reinterpret_cast<void*>(offsetof(SVertex, landClip)));
 }
 
 } // namespace Poseidon::render::vao
