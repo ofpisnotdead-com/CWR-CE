@@ -8,6 +8,7 @@
 #include <Poseidon/Core/Config/Config.hpp>
 #include <Poseidon/Foundation/Platform/AppConfig.hpp>
 #include <Poseidon/Foundation/Platform/GamePaths.hpp>
+#include <Poseidon/Foundation/Platform/StartupError.hpp>
 #include <Poseidon/Audio/AudioFactory.hpp>
 #include <Poseidon/Audio/Voice/VoiceBackend.hpp>
 #include <Poseidon/UI/Settings/GameSettingsConfig.hpp>
@@ -617,14 +618,26 @@ int GameApplication::RunAfterArgumentParsing()
 {
     LOG_INFO(Core, "Game starting: version {}", (const char*)GetVersionString());
 
+    constexpr const char* kStartupErrorTitle = "Cold War Assault - Startup Error";
+
     if (!ReadConfiguration())
-        return 0;
+    {
+        Poseidon::Foundation::ShowStartupError(
+            kStartupErrorTitle, "Failed to load the game configuration.\nThe game data may be missing or invalid.");
+        return 1;
+    }
 
     if (!InitializeGraphicsEngine())
+    {
+        Poseidon::Foundation::ShowStartupError(kStartupErrorTitle, "Failed to initialize the graphics engine.");
         return 1;
+    }
 
     if (!CreateAndSetGraphicsEngine())
+    {
+        Poseidon::Foundation::ShowStartupError(kStartupErrorTitle, "Failed to create the graphics engine.");
         return 1;
+    }
 
     // Load display.cfg (eager-write defaults if missing) and apply
     // the persisted monitor / window-mode / resolution / refresh-rate
@@ -636,13 +649,22 @@ int GameApplication::RunAfterArgumentParsing()
     LoadAndApplyGraphicsConfig();
 
     if (!InitializeWorld())
+    {
+        Poseidon::Foundation::ShowStartupError(kStartupErrorTitle, "Failed to initialize the game world.");
         return 1;
+    }
 
     if (!InitializeSound())
+    {
+        Poseidon::Foundation::ShowStartupError(kStartupErrorTitle, "Failed to initialize sound.");
         return 1;
+    }
 
     if (!InitializeSubsystems())
+    {
+        Poseidon::Foundation::ShowStartupError(kStartupErrorTitle, "Failed to initialize a game subsystem.");
         return 1;
+    }
 
     ProgressFinish();
     EnableRendering();

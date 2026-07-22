@@ -147,7 +147,7 @@ int ServerApplication::RunServerStages()
         Poseidon::Foundation::gSoftAssert = true;
 
     if (!ReadConfiguration())
-        return 0;
+        return 1;
 
     // Configuration loading can reset engine flags, so set dedicated-server mode after it.
     ENGINE_CONFIG.doCreateDedicatedServer = true;
