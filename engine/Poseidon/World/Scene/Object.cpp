@@ -378,13 +378,38 @@ void Object::Animate(int level)
     ApplyLandClip(level);
 }
 
+namespace
+{
+// RAII guard for the render-draw land clip state.
+class LandClipScope
+{
+  public:
+    explicit LandClipScope(bool active) : _prev(_active) { _active = active; }
+    ~LandClipScope() { _active = _prev; }
+
+    // True when we're currently rendering the object and the render backend handles the land clip
+    static bool SkipCpuLandClip() { return _active && GEngine->LandClipInVS(); }
+
+  private:
+    const bool _prev;
+    static bool _active;
+};
+bool LandClipScope::_active = false;
+} // namespace
+
 void Object::ApplyLandClip(int level)
 {
+    if (LandClipScope::SkipCpuLandClip())
+    {
+        return;
+    }
+
     Shape* shape = _shape->Level(level);
     // check if object needs surface animation
     if ((shape->GetAndHints() & ClipLandMask) == ClipLandOn)
     {
         // no animation required: will be done during SurfaceSplit
+        return;
     }
     else if ((shape->GetOrHints() & (ClipLandKeep | ClipLandOn)) && GLOB_LAND)
     {
@@ -453,26 +478,28 @@ void Object::AnimatedMinMax(int level, Vector3* minMax)
         return;
     }
 
-    // default implementation - slow, but robust
-    Animate(level);
+    {
+        LandClipScope lc(false);
+        Animate(level);
 
-    Shape* shape = GetShape()->Level(level);
-    if (_isDestroyed && _destroyPhase > 0 && GetDestructType() != DestructTree)
-    {
-        // set minmax box and sphere
-        Vector3Val min = shape->MinOrig();
-        Vector3Val max = shape->MaxOrig();
-        // some space on borders required
-        Vector3Val cnt = (min + max) * 0.5f;
-        const float sFactor = 1.1;
-        minMax[0] = cnt + (min - cnt) * sFactor;
-        minMax[1] = cnt + (max - cnt) * sFactor;
+        Shape* shape = GetShape()->Level(level);
+        if (_isDestroyed && _destroyPhase > 0 && GetDestructType() != DestructTree)
+        {
+            // set minmax box and sphere
+            Vector3Val min = shape->MinOrig();
+            Vector3Val max = shape->MaxOrig();
+            // some space on borders required
+            Vector3Val cnt = (min + max) * 0.5f;
+            const float sFactor = 1.1;
+            minMax[0] = cnt + (min - cnt) * sFactor;
+            minMax[1] = cnt + (max - cnt) * sFactor;
+        }
+        else
+        {
+            shape->MinMaxDynamic(minMax);
+        }
+        Deanimate(level);
     }
-    else
-    {
-        shape->MinMaxDynamic(minMax);
-    }
-    Deanimate(level);
 
     if (cacheable)
     {
@@ -484,6 +511,14 @@ void Object::AnimatedMinMax(int level, Vector3* minMax)
 
 void Object::AnimatedBSphere(int level, Vector3& bCenter, float& bRadius, bool isAnimated)
 {
+    if (GEngine->LandClipInVS() && HasLandClip(level))
+    {
+        Vector3 mm[2];
+        AnimatedMinMax(level, mm);
+        bCenter = (mm[0] + mm[1]) * 0.5f;
+        bRadius = (mm[1] - mm[0]).Size() * 0.5f;
+        return;
+    }
     // isAnimated should be set
     // when function is called inside Animate/Deanimate block
     // default implementation - slow, but robust
@@ -521,6 +556,11 @@ void Object::Deanimate(int level)
 
 void Object::RestoreLandClip(int level)
 {
+    if (LandClipScope::SkipCpuLandClip())
+    {
+        return;
+    }
+
     Shape* shape = _shape->Level(level);
     if ((shape->GetAndHints() & ClipLandMask) == ClipLandOn)
     {
@@ -893,6 +933,7 @@ void Object::Draw(int forceLOD, ClipFlags clipFlags, const FrameBase& pos)
 
     // test if reference points to valid object
     // get object position in clipping coordinates
+    LandClipScope lcDraw(true);
     Animate(forceLOD);
 
     if (clipFlags)
@@ -919,6 +960,7 @@ void Object::Draw(int forceLOD, ClipFlags clipFlags, const FrameBase& pos)
 
     float constFog = -1;
     bool skip = false;
+    if (!GEngine->InstancedRunActive())
     {
         const render::LegacySpec specT = render::SplitLegacy(special);
         if (!render::Has(specT.routing, render::Routing::FogDisabled))
@@ -964,6 +1006,12 @@ void Object::Draw(int forceLOD, ClipFlags clipFlags, const FrameBase& pos)
 
         sShape->PrepareTextures(z2, special);
         // perform actual drawing
+
+        if (GEngine->LandClipInVS() && (sShape->GetOrHints() & ClipLandMask) != 0)
+        {
+            float enable = sShape->HasDeformingLandClip() ? 1.0f : 0.0f;
+            GEngine->SetLandClipParams(enable, _shape->BoundingCenter());
+        }
 
         // if neccessary, split it
         if (render::Has(specT.routing, render::Routing::OnSurface) &&

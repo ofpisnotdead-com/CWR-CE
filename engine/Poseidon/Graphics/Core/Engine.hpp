@@ -359,6 +359,16 @@ class Engine : public IGraphicsEngine
     /// from the sun's NightEffect; the lit shaders fade the shadow darkness by it.
     virtual void SetShadowMapSunFactor(float /*factor01*/) {}
 
+    // Upload the terrain height grid as a GPU texture. Default no-op for headless backends.
+    virtual void SetTerrainHeightmap(const float* /*heights*/, int /*width*/, int /*height*/, float /*invGrid*/) {}
+
+    // True when the backend snaps land-clipped geometry to the terrain in the vertex
+    // shader; when so, the render path skips the CPU land-clip deform. Default off.
+    virtual bool LandClipInVS() const { return false; }
+    // Land-clip params for the next draw: enable (1 = VS conforms) and the shape's model-space
+    // bounding centre (the VS samples the terrain there as the ClipLandKeep reference).
+    virtual void SetLandClipParams(float /*enable*/, Vector3Par /*boundingCenter*/) {}
+
   private:
     Engine(const Engine& src); // no copy
     void operator=(const Engine& src);
@@ -433,6 +443,7 @@ class Engine : public IGraphicsEngine
     virtual bool InstancedRunAdd(const Matrix4& /*modelToWorld*/) { return false; }
     virtual void BeginInstancedRunUpload() {}
     virtual bool EndInstancedRun() { return true; }
+    virtual bool InstancedRunActive() const { return false; }
 
     // Explicit pass-kind routing.  Producers (Man::DrawProxies for first-person,
     // vehicle cockpit draw, etc.) wrap a draw scope with `SetPassKindHint(Cockpit)`

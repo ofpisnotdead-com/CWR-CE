@@ -1633,15 +1633,20 @@ void Scene::DrawObjectsAndShadowsPass1()
 
 #if DRAW_OBJS
     {
-        // Instanced runs (perf effort 08): _drawMergers is shape-sorted, so
-        // identical static shapes arrive contiguously. A batchable run draws
-        // the head once inside Begin/EndInstancedRun — every TL section then
-        // renders all K instances from the WorldInstances matrix array. The
-        // predicate keeps per-object state out of batches: static, proxy-free,
-        // not OnSurface/IsColored, equal obj-special, no local lights in the
-        // scene, and a tight distance band so the head's constant-fog value
-        // is representative for the whole batch.
-        const bool noLocalLights = NLights() == 0;
+        // _drawMergers is shape-sorted, so identical static shapes arrive contiguously. A
+        // batchable run draws the head once inside Begin/EndInstancedRun; every TL section
+        // then renders all K instances from the WorldInstances matrix array.
+        LightList lightProbe(true);
+        auto litByLocalLight = [&](SortObject* o) -> bool
+        {
+            if (!o->object)
+            {
+                return false;
+            }
+            const LightList& sel = SelectLights(o->object->Transform(), o->object, o->drawLOD, lightProbe);
+            return sel.Size() > 0;
+        };
+        const int kMinInstanceRun = 2;
         for (int i = 0; i < _drawMergers.Size();)
         {
             SortObject* oi = _drawMergers[i];
@@ -1667,26 +1672,25 @@ void Scene::DrawObjectsAndShadowsPass1()
             int runEnd = i + 1;
             const int headSpecial = sShape->Special() | oi->object->GetObjSpecial();
             const render::LegacySpec headSpec = render::SplitLegacy(headSpecial);
-            const bool headBatchable = noLocalLights && oi->object->Static() && sShape->NProxies() == 0 &&
-                                       !render::Has(headSpec.routing, render::Routing::OnSurface) &&
-                                       !render::Has(headSpec.routing, render::Routing::IsColored) &&
-                                       oi->object != GWorld->CameraOn();
+            const bool landClip = (shape->GetOrHints() & ClipLandMask) != 0;
+            const bool landClipBatch = landClip && GEngine->LandClipInVS() && sShape->HasDeformingLandClip();
+            const bool cheapPass = (!landClip || landClipBatch) && oi->object->Static() && sShape->NProxies() == 0 &&
+                                   !render::Has(headSpec.routing, render::Routing::OnSurface) &&
+                                   !render::Has(headSpec.routing, render::Routing::IsColored) &&
+                                   oi->object != GWorld->CameraOn();
+            const bool lit = cheapPass && litByLocalLight(oi);
+            const bool headBatchable = cheapPass && !lit;
             if (headBatchable)
             {
                 GEngine->InstancedRunReset();
                 if (GEngine->InstancedRunAdd(oi->object->Transform()))
                 {
-                    // Fog band: keep members within ~5% of the head's distance so
-                    // the head's per-object constant fog approximates all of them.
-                    const float d2lo = oi->distance2 * 0.90f;
-                    const float d2hi = oi->distance2 * 1.10f;
                     while (runEnd < _drawMergers.Size())
                     {
                         SortObject* oj = _drawMergers[runEnd];
                         if (oj->object->GetShape() != shape || oj->drawLOD != oi->drawLOD ||
                             oj->passNum != oi->passNum || !oj->object->Static() ||
-                            (sShape->Special() | oj->object->GetObjSpecial()) != headSpecial || oj->distance2 < d2lo ||
-                            oj->distance2 > d2hi)
+                            (sShape->Special() | oj->object->GetObjSpecial()) != headSpecial || litByLocalLight(oj))
                         {
                             break;
                         }
@@ -1701,7 +1705,7 @@ void Scene::DrawObjectsAndShadowsPass1()
 
             const int runLen = runEnd - i;
             GSectionFilter = SectionClassFilter::OpaqueAndCutout;
-            if (headBatchable && runLen >= 4)
+            if (headBatchable && runLen >= kMinInstanceRun)
             {
                 GEngine->BeginInstancedRunUpload();
                 DrawSortObject(oi);
