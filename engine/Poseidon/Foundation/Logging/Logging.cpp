@@ -6,12 +6,14 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/base_sink.h>
 #include <spdlog/pattern_formatter.h>
+#include <algorithm>
 #include <atomic>
 #include <cstring>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <ctype.h>
+#include <filesystem>
 #include <spdlog/common.h>
 #include <spdlog/details/log_msg.h>
 #include <spdlog/formatter.h>
@@ -196,7 +198,7 @@ class JsonlSink : public spdlog::sinks::base_sink<std::mutex>
 class PoseidonFormatter : public spdlog::custom_flag_formatter
 {
   public:
-    explicit PoseidonFormatter(LoggingSystem* sys) : _sys(sys) {}
+    explicit PoseidonFormatter(LoggingSystem* sys, bool colored = true) : _sys(sys), _colored(colored) {}
 
     static LoggingSystem::Category MapCategoryPublic(const spdlog::string_view_t& name) { return MapCategory(name); }
 
@@ -205,23 +207,25 @@ class PoseidonFormatter : public spdlog::custom_flag_formatter
         // Map logger name to category enum for color lookup
         auto cat = MapCategory(msg.logger_name);
 
-        const char* appTag = LoggingSystem::GetAppTag();
+        const char* appTag = LoggingSystem::GetAppTag(); // always plain
         if (appTag[0])
         {
             dest.append(std::string_view(appTag));
             dest.push_back(' ');
         }
-        const char* lvl = LoggingSystem::GetFormattedLevel(msg.level);
+        const char* lvl =
+            _colored ? LoggingSystem::GetFormattedLevel(msg.level) : LoggingSystem::GetPlainLevel(msg.level);
         dest.append(std::string_view(lvl, strlen(lvl)));
         dest.push_back(' ');
-        const char* catTag = LoggingSystem::GetColoredCategoryTag(cat);
+        const char* catTag =
+            _colored ? LoggingSystem::GetColoredCategoryTag(cat) : LoggingSystem::GetPlainCategoryTag(cat);
         dest.append(std::string_view(catTag, strlen(catTag)));
         dest.push_back(' ');
     }
 
     [[nodiscard]] std::unique_ptr<custom_flag_formatter> clone() const override
     {
-        return std::make_unique<PoseidonFormatter>(_sys);
+        return std::make_unique<PoseidonFormatter>(_sys, _colored);
     }
 
   private:
@@ -249,12 +253,14 @@ class PoseidonFormatter : public spdlog::custom_flag_formatter
     }
 
     LoggingSystem* _sys;
+    bool _colored;
 };
 
 // Static per-process app tag — read by the log formatter/sink without a
 // LoggingSystem back-pointer (see GetAppTag in the header).
 char LoggingSystem::m_appTag[20] = {};
 char LoggingSystem::m_appTagRaw[12] = {};
+char LoggingSystem::m_logFilePath[1024] = {};
 
 LoggingSystem::LoggingSystem()
     : m_logger(nullptr), m_initialized(false), m_jsonlMode(false), m_hasFileSink(false), m_filterActive(false)
@@ -390,6 +396,26 @@ const char* LoggingSystem::GetLevelName(spdlog::level::level_enum level)
     if (idx < 0 || idx > 5)
         return "info";
     return names[idx];
+}
+
+const char* LoggingSystem::GetPlainLevel(spdlog::level::level_enum level)
+{
+    static thread_local char buffer[16];
+    const char* names[] = {"TRCE", "DBUG", "INFO", "WARN", "ERRR", "CRIT"};
+    int idx = static_cast<int>(level);
+    if (idx < 0 || idx > 5)
+        idx = 2;
+    snprintf(buffer, sizeof(buffer), "[%s]", names[idx]);
+    return buffer;
+}
+
+const char* LoggingSystem::GetPlainCategoryTag(Category category)
+{
+    static thread_local char buffer[32];
+    const char* name = GetCategoryName(category);
+    // Match GetColoredCategoryTag's layout (name padded to align to 9 chars), minus colour.
+    snprintf(buffer, sizeof(buffer), "[%s]%-*s", name, (int)(9 - strlen(name) - 2), "");
+    return buffer;
 }
 
 void LoggingSystem::Initialize(const char* logLevel, const char* categoryFilter, const char* logFormat,
@@ -556,7 +582,7 @@ void LoggingSystem::Initialize(const char* logLevel, const char* categoryFilter,
     {
         auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFile, true);
         auto formatter = std::make_unique<spdlog::pattern_formatter>();
-        formatter->add_flag<PoseidonFormatter>('*', this);
+        formatter->add_flag<PoseidonFormatter>('*', this, /*colored=*/false);
         formatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %*%v");
         file_sink->set_formatter(std::move(formatter));
         sinks.push_back(file_sink);
@@ -588,6 +614,116 @@ void LoggingSystem::Initialize(const char* logLevel, const char* categoryFilter,
     spdlog::set_default_logger(m_logger);
 
     m_initialized = true;
+}
+
+void LoggingSystem::AttachFileSink(const char* path)
+{
+    if (!m_initialized || !path || !path[0] || m_hasFileSink)
+        return;
+
+    try
+    {
+        std::filesystem::path p(path);
+        if (p.has_parent_path())
+        {
+            std::error_code ec;
+            std::filesystem::create_directories(p.parent_path(), ec);
+        }
+
+        auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path, true);
+        auto formatter = std::make_unique<spdlog::pattern_formatter>();
+        formatter->add_flag<PoseidonFormatter>('*', this, /*colored=*/false);
+        formatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %*%v");
+        file_sink->set_formatter(std::move(formatter));
+
+        // Runs single-threaded at boot, before any worker logs, so appending to each
+        // live logger's own sink vector in place is safe. Flush every line.
+        constexpr int catCount = static_cast<int>(LogCategory::_Count);
+        for (int i = 0; i < catCount; ++i)
+        {
+            if (m_categoryLoggers[i])
+            {
+                m_categoryLoggers[i]->sinks().push_back(file_sink);
+                m_categoryLoggers[i]->flush_on(spdlog::level::trace);
+            }
+        }
+        if (m_logger)
+        {
+            m_logger->sinks().push_back(file_sink);
+            m_logger->flush_on(spdlog::level::trace);
+        }
+
+        m_hasFileSink = true;
+        snprintf(m_logFilePath, sizeof(m_logFilePath), "%s", path);
+    }
+    catch (const std::exception& e)
+    {
+        LOG_WARN(Core, "Could not open log file {}: {}", path, e.what());
+    }
+}
+
+std::string MakeTimestampedLogName(const char* prefix)
+{
+    std::time_t t = std::time(nullptr);
+    struct tm tmNow;
+#ifdef _WIN32
+    localtime_s(&tmNow, &t);
+    const int pid = _getpid();
+#else
+    localtime_r(&t, &tmNow);
+    const int pid = getpid();
+#endif
+    // The pid suffix stops a same-second relaunch from truncating the previous
+    // run's file (basic_file_sink opens with truncate).
+    char buf[160];
+    snprintf(buf, sizeof(buf), "%s_%04d-%02d-%02d_%02d-%02d-%02d_%d.log", (prefix && prefix[0]) ? prefix : "log",
+             tmNow.tm_year + 1900, tmNow.tm_mon + 1, tmNow.tm_mday, tmNow.tm_hour, tmNow.tm_min, tmNow.tm_sec, pid);
+    return buf;
+}
+
+void WipeOldFiles(const std::string& dir, const char* prefix, const char* ext, int keepN)
+{
+    if (keepN < 0)
+        return;
+
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    if (!fs::is_directory(dir, ec))
+        return;
+
+    try
+    {
+        const std::string pre = (prefix && prefix[0]) ? prefix : "";
+        const std::string suf = (ext && ext[0]) ? ext : "";
+        std::vector<std::pair<fs::file_time_type, fs::path>> matches;
+        for (const auto& entry : fs::directory_iterator(dir, ec))
+        {
+            std::error_code fileEc;
+            if (!entry.is_regular_file(fileEc))
+                continue;
+            const std::string name = entry.path().filename().string();
+            if (!pre.empty() && name.rfind(pre, 0) != 0)
+                continue;
+            if (!suf.empty() &&
+                (name.size() < suf.size() || name.compare(name.size() - suf.size(), suf.size(), suf) != 0))
+                continue;
+            matches.emplace_back(entry.last_write_time(fileEc), entry.path());
+        }
+
+        if (static_cast<int>(matches.size()) <= keepN)
+            return;
+
+        std::sort(matches.begin(), matches.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+        for (size_t i = static_cast<size_t>(keepN); i < matches.size(); ++i)
+        {
+            std::error_code rmEc;
+            fs::remove(matches[i].second, rmEc);
+        }
+    }
+    catch (const std::exception& e)
+    {
+        LOG_WARN(Core, "Log cleanup in {} failed: {}", dir, e.what());
+    }
 }
 
 void LoggingSystem::Shutdown()

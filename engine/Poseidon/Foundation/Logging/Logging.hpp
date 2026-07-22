@@ -39,6 +39,13 @@ public:
 	/// Generates a tag like "app-1a2b" using PID. CLI --app-tag overrides.
 	void InitializeFromConfig(const char* appPrefix);
 
+	/// Attach a file sink to every logger after Initialize (the per-run log, once the
+	/// user dir is known). No-op if uninitialized, path empty, or already attached.
+	void AttachFileSink(const char* path);
+
+	/// Absolute path of the attached log file, or "" if none.
+	static const char* GetLogFilePath() { return m_logFilePath; }
+
 	/// Shutdown logging (flushes buffers)
 	void Shutdown();
 	
@@ -87,6 +94,9 @@ public:
 	static const char* GetColoredCategoryTag(Category category);
 	static const char* GetFormattedLevel(spdlog::level::level_enum level);
 	static const char* GetLevelName(spdlog::level::level_enum level);
+	// Plain (no ANSI) variants for file sinks; a log file must never carry colour codes.
+	static const char* GetPlainCategoryTag(Category category);
+	static const char* GetPlainLevel(spdlog::level::level_enum level);
 
 private:
 	std::shared_ptr<spdlog::logger> m_logger;
@@ -98,8 +108,17 @@ private:
 	bool m_filterActive;
 	static char m_appTag[20];
 	static char m_appTagRaw[12];
+	static char m_logFilePath[1024];
 };
 
 // LOG_* macros live in Poseidon/Foundation/Framework/Log.hpp.
+
+/// Build a per-run log filename like "<prefix>_YYYY-MM-DD_HH-MM-SS.log" from the
+/// local time. Chronological, so a lexical or mtime sort orders runs.
+std::string MakeTimestampedLogName(const char* prefix);
+
+/// Keep the newest `keepN` `dir` files matching `prefix`*`ext`; delete the rest,
+/// oldest first. Swallows all filesystem errors; never throws.
+void WipeOldFiles(const std::string& dir, const char* prefix, const char* ext, int keepN);
 
 } // namespace Poseidon::Foundation

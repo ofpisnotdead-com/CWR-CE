@@ -11,6 +11,10 @@
 #include <spdlog/spdlog.h>
 #include <stddef.h>
 #include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -245,4 +249,98 @@ TEST_CASE("strict mode: err-level log latches the trip; warn/info do not", "[log
     CHECK_FALSE(LS::StrictTripped());
 
     LS::SetStrictMode(false); // don't leak strict into sibling tests in this binary
+}
+
+TEST_CASE("AttachFileSink captures log lines into the file", "[logging][file]")
+{
+    namespace fs = std::filesystem;
+    const fs::path path = fs::temp_directory_path() / "cwr_attach_sink_test.log";
+    std::error_code ec;
+    fs::remove(path, ec);
+
+    Poseidon::Foundation::LoggingSystem logSys;
+    logSys.Initialize("info");
+    logSys.AttachFileSink(path.string().c_str());
+    CHECK(std::string(Poseidon::Foundation::LoggingSystem::GetLogFilePath()) == path.string());
+
+    LOG_INFO(Core, "attach sink probe 12345");
+    logSys.Shutdown();
+
+    std::ifstream in(path);
+    bool found = false;
+    bool hasAnsi = false;
+    std::string line;
+    while (std::getline(in, line))
+    {
+        if (line.find("attach sink probe 12345") != std::string::npos)
+            found = true;
+        if (line.find("\033[") != std::string::npos)
+            hasAnsi = true;
+    }
+    CHECK(found);
+    CHECK_FALSE(hasAnsi);
+
+    fs::remove(path, ec);
+}
+
+TEST_CASE("MakeTimestampedLogName builds a fixed-width dated .log name", "[logging][wiper]")
+{
+    const std::string name = Poseidon::Foundation::MakeTimestampedLogName("cwr");
+    // Shape: cwr_YYYY-MM-DD_HH-MM-SS_<pid>.log
+    CHECK(name.rfind("cwr_", 0) == 0);
+    CHECK(name.substr(name.size() - 4) == ".log");
+    CHECK(name[8] == '-');
+    CHECK(name[11] == '-');
+    CHECK(name[14] == '_');
+    CHECK(name[17] == '-');
+    CHECK(name[20] == '-');
+    CHECK(name[23] == '_');
+    CHECK(name.size() > 24);
+}
+
+TEST_CASE("WipeOldFiles keeps the newest N matching files and ignores the rest", "[logging][wiper]")
+{
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "cwr_wipe_test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root);
+
+    const auto base = fs::file_time_type::clock::now();
+    auto touch = [&](const char* fmt, int i, int secs)
+    {
+        char n[32];
+        snprintf(n, sizeof(n), fmt, i);
+        const fs::path p = root / n;
+        std::ofstream(p) << "x";
+        fs::last_write_time(p, base + std::chrono::seconds(secs));
+        return p;
+    };
+
+    std::vector<fs::path> logs;
+    for (int i = 0; i < 15; ++i)
+        logs.push_back(touch("cwr_%02d.log", i, i));
+    const fs::path other = root / "keepme.txt";
+    std::ofstream(other) << "y";
+
+    Poseidon::Foundation::WipeOldFiles(root.string(), "cwr_", ".log", 10);
+
+    for (int i = 0; i < 5; ++i)
+        CHECK_FALSE(fs::exists(logs[i]));
+    for (int i = 5; i < 15; ++i)
+        CHECK(fs::exists(logs[i]));
+    CHECK(fs::exists(other));
+
+    std::vector<fs::path> crashes;
+    for (int i = 0; i < 4; ++i)
+        crashes.push_back(touch("crash_%02d.txt", i, i));
+    Poseidon::Foundation::WipeOldFiles(root.string(), "crash_", ".txt", 2);
+    CHECK_FALSE(fs::exists(crashes[0]));
+    CHECK_FALSE(fs::exists(crashes[1]));
+    CHECK(fs::exists(crashes[2]));
+    CHECK(fs::exists(crashes[3]));
+    CHECK(fs::exists(logs[14]));
+    CHECK(fs::exists(other));
+
+    fs::remove_all(root, ec);
 }
