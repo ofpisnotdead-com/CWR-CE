@@ -231,6 +231,45 @@ AppConfig& AppConfig::Instance()
 
 AppConfig::AppConfig() {}
 
+std::string AppConfig::DescribeLaunchError(const std::string& cliError, int argc, const char* const* argv)
+{
+    std::string launchOptions;
+    bool attachedShort = false;
+    for (int i = 1; i < argc; ++i)
+    {
+        const char* a = argv[i];
+        if (!a || !a[0])
+            continue;
+        if (!launchOptions.empty())
+            launchOptions += ' ';
+        launchOptions += a;
+        if (a[0] == '-' && a[1] && a[1] != '-' && a[2])
+            attachedShort = true;
+    }
+
+    if (launchOptions.empty())
+        return cliError;
+
+    std::string expandedOption;
+    if (attachedShort && cliError.rfind("--", 0) == 0)
+    {
+        const size_t end = cliError.find_first_of(" :=", 2);
+        const std::string named = cliError.substr(0, end == std::string::npos ? cliError.size() : end);
+        if (named.size() > 2 && launchOptions.find(named) == std::string::npos)
+            expandedOption = named;
+    }
+
+    std::string message = cliError;
+    message += "\n\nYou launched with these options:\n" + launchOptions;
+    message += "\n\nIf you started the game from Steam or another launcher, open its "
+               "launch options and check them.";
+    if (!expandedOption.empty())
+        message += "\n\nA single dash takes the letters after it as the value, so -abc means -a bc "
+                   "(that is where " +
+                   expandedOption + " came from). Use two dashes for a long option.";
+    return message;
+}
+
 void AppConfig::ParseCommandLine(int argc, char** argv)
 {
     if (_parsed)
@@ -685,6 +724,7 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
                                             "Max 10 chars, padded for alignment."),
                    serverRole ? CliHelpVisibility::Basic : CliHelpVisibility::Full);
         loggingGroup->add_option("--log-file", _logFile, "Write log output to a file in addition to console");
+        loggingGroup->add_flag("--no-log-file", _noLogFile, "Disable the automatic per-run log file");
         showOption(loggingGroup->add_option("--perf-trace", _perfTracePath,
                                             "Write newline-delimited JSON of every ScopedTimer event to this path. "
                                             "Reads in DuckDB via read_json_auto for tabular analysis; convert to "
@@ -732,6 +772,10 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
                 normalizedArgv.push_back(arg.c_str());
 
             app.parse(static_cast<int>(normalizedArgv.size()), normalizedArgv.data());
+
+            // With allow_extras(), unmatched args are tolerated but otherwise dropped.
+            // Capture them so GameBase can warn the player once logging is up.
+            _unrecognizedArgs = app.remaining(true);
 
             // Track which options were explicitly provided
             _windowFlagExplicit = windowOpt->count() > 0;
@@ -910,30 +954,27 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
     }
     catch (const CLI::ParseError& e)
     {
-        // CLI11 throws ParseError for --help, --version, and actual errors
-        // The exit code tells us if it's success (0 for --help) or error (!=0)
+        // exitCode 0 is the clean --help/--version path; a real error routes through
+        // _parseFatalError so GameBase surfaces it instead of exiting inside the parser.
         int exitCode = e.get_exit_code();
-
-        // Output to stderr for errors
         if (exitCode != 0)
         {
             const char* usageHint = BuildInfo::ReleaseBuild
                                         ? "Use --help for basic usage or --help-full for advanced usage"
                                         : "Use --help for basic usage, --help-full for advanced usage, or --help --dev "
                                           "for developer options";
-#ifdef _WIN32
-            std::string errorMsg = "\nCommand-line error: " + std::string(e.what()) + "\n\n" + usageHint + "\n\n";
-            WriteCliText(STD_ERROR_HANDLE, stderr, errorMsg);
-#else
-            fprintf(stderr, "\nCommand-line error: %s\n\n%s\n\n", e.what(), usageHint);
-#endif
+            std::string msg = DescribeLaunchError(e.what(), argc, argv);
+            msg += "\n\n";
+            msg += usageHint;
+            _parseFatalError = msg;
+            _parseFatalExitCode = exitCode;
+            return;
         }
 
 #ifdef _WIN32
         Sleep(100);    // Brief delay to ensure output is flushed
         FreeConsole(); // Detach from console before exiting
 #endif
-
         std::exit(exitCode);
     }
     catch (const std::exception& e)
@@ -941,7 +982,7 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
         // Any other exception during setup or parsing. Do not print directly here:
         // GameBase initializes the normal logger after parsing and reports this
         // through the same log sinks as every other startup failure.
-        _parseFatalError = e.what();
+        _parseFatalError = DescribeLaunchError(e.what(), argc, argv);
         _parseFatalExitCode = 2;
         return;
     }
