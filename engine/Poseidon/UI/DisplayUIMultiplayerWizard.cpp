@@ -890,33 +890,7 @@ void DisplayWizardMap::OnSimulate(EntityAI* vehicle)
         float mouseY = 0.5 + InputSubsystem::Instance().GetCursorY() * 0.5;
 
         // automatic map movement on edges
-        float dif = 0.02 - mouseX;
-        if (dif > 0)
-        {
-            _map->ScrollX(0.003 * exp(dif * 100.0f));
-        }
-        else
-        {
-            dif = mouseX - 0.98;
-            if (dif > 0)
-            {
-                _map->ScrollX(-0.003 * exp(dif * 100.0f));
-            }
-        }
-
-        dif = 0.02 - mouseY;
-        if (dif > 0)
-        {
-            _map->ScrollY(0.003 * exp(dif * 100.0f));
-        }
-        else
-        {
-            dif = mouseY - 0.98;
-            if (dif > 0)
-            {
-                _map->ScrollY(-0.003 * exp(dif * 100.0f));
-            }
-        }
+        _map->ScrollOnEdges(mouseX, mouseY);
 
         IControl* ctrl = GetCtrl(mouseX, mouseY);
         if (ctrl && ctrl == _map)
