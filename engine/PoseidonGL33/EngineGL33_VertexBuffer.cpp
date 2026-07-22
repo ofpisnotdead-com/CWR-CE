@@ -316,18 +316,10 @@ void EngineGL33::EmitDraw(const Poseidon::render::frame::Draw& d)
 
     GL33Bind::Vao(d.mesh.vao);
 
-    // TEXTURE0 + TEXTURE1 binds.  Both handles were captured from the
-    // `SetTexture` / `SetMultiTexturing` callsites, so this rebinds
-    // the same multi-tex configuration regardless of what's currently
-    // bound.  Handle 0 is skipped (sentinel).  The TEXTURE1 bind ends
-    // with the active unit back on TEXTURE0 — every subsequent call
-    // assumes that.
     if (d.textures[1].id != 0)
-        GL33Bind::Tex2D(1, d.textures[1].id);
+        GL33Bind::Tex2DForSampling(1, d.textures[1].id);
     if (d.textures[0].id != 0)
-        GL33Bind::Tex2D(0, d.textures[0].id);
-    else
-        GL33Bind::ActiveUnit(0);
+        GL33Bind::Tex2DForSampling(0, d.textures[0].id);
 
     // Per-draw world-matrix upload from the typed `Draw.world` —
     // never inherited from whatever was last in `_currentDrawItem`.

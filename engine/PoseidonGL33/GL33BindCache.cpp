@@ -19,7 +19,7 @@ int g_activeUnit = -1;
 
 unsigned long long g_vaoReq = 0, g_vaoBind = 0, g_texReq = 0, g_texBind = 0;
 
-// Per-unit skip counter that paces the B-007 divergence readback (see Tex2D).
+// Per-unit skip counter; every 64th cache hit runs the divergence check in Tex2DBind.
 unsigned int g_texSkipCtr[kUnits] = {0};
 } // namespace
 
@@ -41,22 +41,24 @@ void ActiveUnit(int unit)
     g_activeUnit = unit;
 }
 
-void Tex2D(int unit, unsigned int tex)
+namespace
+{
+void Tex2DBind(int unit, unsigned int tex, bool samplingOnly)
 {
     ++g_texReq;
     if (unit >= 0 && unit < kUnits && g_tex[unit] == tex)
     {
-        ActiveUnit(unit);
-        // B-007 tripwire (active in every build, incl. RWDI/test): the skip is
-        // honest only if GL really holds `tex` on this unit. A mismatch is the
-        // divergence class from a deleted/recycled handle or a bind outside the
-        // cache without Invalidate. Non-fatal: the next non-skip bind
-        // self-corrects. The readback is on the renderer's hottest path, so sample
-        // 1 of every 64 skips per unit — a divergence is persistent (a poisoned
-        // binding stays wrong until rebound), so per-unit sampling still catches it
-        // within a sub-frame while keeping glGetIntegerv off the per-skip path.
+        if (!samplingOnly)
+        {
+            ActiveUnit(unit);
+        }
+        // A cache hit skips glBindTexture, so a stale entry (recycled handle,
+        // or a bind that skipped Invalidate()) would sample the wrong texture.
+        // Every 64th hit per unit, check the cache against the live GL binding
+        // and log any mismatch.
         if ((g_texSkipCtr[unit]++ & 63u) == 0)
         {
+            ActiveUnit(unit); // glGetIntegerv reads the active unit; cached no-op if already selected
             GLint live = 0;
             glGetIntegerv(GL_TEXTURE_BINDING_2D, &live);
             if (auto v = Poseidon::render::frame::DetectBindCacheDivergence(unit, tex, static_cast<unsigned int>(live)))
@@ -69,6 +71,17 @@ void Tex2D(int unit, unsigned int tex)
     if (unit >= 0 && unit < kUnits)
         g_tex[unit] = tex;
     ++g_texBind;
+}
+} // namespace
+
+void Tex2DForSampling(int unit, unsigned int tex)
+{
+    Tex2DBind(unit, tex, true);
+}
+
+void Tex2D(int unit, unsigned int tex)
+{
+    Tex2DBind(unit, tex, false);
 }
 
 void OnVaoDeleted(unsigned int vao)
