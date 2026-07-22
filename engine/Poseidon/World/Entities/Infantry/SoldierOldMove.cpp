@@ -1336,16 +1336,18 @@ void Man::ReactToDammage()
 
 namespace
 {
+
 bool isBinocular(const WeaponType& type)
 {
     const ParamEntry* param = type._parClass->FindEntry("isBinocular");
     if (param && (param->IsFloatValue() || param->IsIntValue()) && 1.0f == (float)*param)
         return true;
-    if (!strcmpi(type.GetName(),"binocular"))
+    if (!strcmpi(type.GetName(), "binocular"))
         return true;
     return false;
 }
-} // anonymous
+
+} // anonymous namespace
 
 bool Man::BinocularSelected() const
 {

@@ -954,11 +954,11 @@ bool isNVG(const WeaponType& type)
     const ParamEntry* param = type._parClass->FindEntry("isNVG");
     if (param && (param->IsFloatValue() || param->IsIntValue()) && 1.0f == (float)*param)
         return true;
-    if (!strcmpi(type.GetName(),"NVGoggles"))
+    if (!strcmpi(type.GetName(), "NVGoggles"))
         return true;
     return false;
 }
-} // anonymous
+} // anonymous namespace
 
 int Man::getNvgIdx() const
 {
@@ -977,7 +977,7 @@ int Man::getNvgIdx() const
 
 void Man::ScanNVG()
 {
-    bool found =  getNvgIdx() != -1;
+    bool found = getNvgIdx() != -1;
     _hasNVG = found;
     if (!_hasNVG)
     {
