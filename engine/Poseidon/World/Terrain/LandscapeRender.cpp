@@ -1827,8 +1827,27 @@ void Landscape::DrawClouds(Scene& scene)
     }
 }
 
+void Landscape::FlushHeightmapToRenderer()
+{
+    if (!_heightmapDirty || !_engine)
+    {
+        return;
+    }
+
+    int w = _data.GetXRange();
+    int h = _data.GetYRange();
+    if (w <= 0 || h <= 0)
+    {
+        return;
+    }
+    _engine->SetTerrainHeightmap(static_cast<const float*>(_data.RawData()), w, h, _invTerrainGrid);
+    _heightmapDirty = false;
+}
+
 void Landscape::Draw(Scene& scene)
 {
+    FlushHeightmapToRenderer();
+
     {
         Camera& camera = *scene.GetCamera();
 
