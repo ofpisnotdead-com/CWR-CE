@@ -1672,7 +1672,7 @@ void Scene::DrawObjectsAndShadowsPass1()
             int runEnd = i + 1;
             const int headSpecial = sShape->Special() | oi->object->GetObjSpecial();
             const render::LegacySpec headSpec = render::SplitLegacy(headSpecial);
-            const bool landClip = (shape->GetOrHints() & ClipLandMask) != 0;
+            const bool landClip = (sShape->GetOrHints() & ClipLandMask) != 0;
             const bool landClipBatch = landClip && GEngine->LandClipInVS() && sShape->HasDeformingLandClip();
             const bool cheapPass = (!landClip || landClipBatch) && oi->object->Static() && sShape->NProxies() == 0 &&
                                    !render::Has(headSpec.routing, render::Routing::OnSurface) &&
