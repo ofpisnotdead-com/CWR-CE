@@ -588,7 +588,7 @@
         const versionElement = document.getElementById("landing-version");
         const statusElement = document.getElementById("landing-browser-status");
         const browserLinkElement = document.getElementById("landing-browser-link");
-        if (!serviceElement || !publicCountElement || !publicStatusElement || !playerCountElement || !modCountElement ||
+        if (!publicCountElement || !publicStatusElement || !playerCountElement || !modCountElement ||
             !selfReportedCountElement || !unreachableCountElement || !rowsElement || !gameElement || !versionElement ||
             !statusElement || !browserLinkElement) {
             return;
@@ -603,7 +603,9 @@
             ]);
             const modsById = new Map(mods.map((mod) => [mod.modId, mod]));
 
-            serviceElement.textContent = `${meta.productName} / ${meta.serviceName} / ${meta.apiVersion}`;
+            if (serviceElement) {
+                serviceElement.textContent = `${meta.productName} / ${meta.serviceName} / ${meta.apiVersion}`;
+            }
             publicCountElement.textContent = String(summary.publicVerifiedServers);
             publicStatusElement.textContent =
                 "Public browser shows only observer-verified rows by default";
@@ -964,8 +966,19 @@
             .join("");
     }
 
+    function renderSiteFooter() {
+        if (document.querySelector(".site-footer")) {
+            return;
+        }
+        const footer = document.createElement("footer");
+        footer.className = "site-footer";
+        footer.innerHTML = 'Community project of <a href="https://ofpisnotdead.com">ofpisnotdead.com</a> group &lt;3.';
+        document.body.appendChild(footer);
+    }
+
     renderCommunityBanner();
     renderTopMenu();
+    renderSiteFooter();
 
     if (document.body.dataset.page === "landing") {
         loadLandingPage();

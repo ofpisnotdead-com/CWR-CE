@@ -1,0 +1,88 @@
+mission = "tests/integration/missions/jip_basic.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 90
+
+tags = ["headful", "ci-host-blocked"]
+
+[[services]]
+name = "master"
+type = "master-server"
+port = 0
+db = "${output}/master.sqlite3"
+extra_args = ["--mods-dir", "${output}/master-mods"]
+
+[[services.seed_mods]]
+id = "fixturemod"
+name = "Fixture Mod"
+version = "1.2.3"
+app = "CWR"
+actver = 303
+folder = "@fixturemod"
+source = "tests/fixtures/mods/@fixturemod"
+description = "Tiny downloadable fixture mod for Trident modded-server tests."
+authors = ["CWR test fixture"]
+
+[[services]]
+name = "probe"
+type = "master-probe"
+after = "master"
+interval_secs = 1
+timeout_ms = 500
+prune_max_age_secs = 60
+
+# Passworded AND modded dedicated server: the hardest join stack the game
+# supports in one row.
+[[instances]]
+name = "dedicated"
+type = "server"
+after = "master"
+extra_args = [
+    "--no-strict",
+    "--log-format",
+    "jsonl",
+    "--public",
+    "--master-server",
+    "${master.url}",
+    "--advertise-address",
+    "127.0.0.1",
+    "--mp-auto-start",
+    "1",
+    "--mods-dir",
+    "../../tests/fixtures/mods",
+    "--mod",
+    "@fixturemod",
+    "--password",
+    "tri-secret",
+]
+
+[[instances]]
+name = "client1"
+type = "client"
+after = "dedicated"
+use_mission = false
+start_delay_ms = 3000
+no_autotest = true
+machine_id = "trident:full_stack_modded_media_join:client1"
+extra_args = [
+    "--no-strict",
+    "--lang",
+    "English",
+    "--name",
+    "client1",
+    "--mp-assign",
+    "WEST:1",
+    "--log-format",
+    "jsonl",
+    "--master-server",
+    "${master.url}",
+    "--mods-dir",
+    "${output}/client1-local-mods",
+    "--workshop-dir",
+    "${output}/client1-workshop",
+]
+copy_files = [
+  { source = "client1/UserInfo.cfg", target = "Users/client1/UserInfo.cfg" },
+  { source = "client1/face.jpg", target = "Users/client1/face.jpg" },
+  { source = "client1/Sound/tri_mp_ping.wav", target = "Users/client1/Sound/tri_mp_ping.wav" },
+]

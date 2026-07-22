@@ -165,6 +165,23 @@ TEST_CASE("mission language detector finds voice in stock sound subdir layout", 
     CHECK(FlagsFor(info, "Czech").voice);
 }
 
+TEST_CASE("mission language detector finds differently cased loose sound files", "[ui][missions][languages]")
+{
+    const auto root = std::filesystem::temp_directory_path() /
+                      ("cwr-mission-language-case-" +
+                       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".Noe");
+    std::filesystem::create_directories(root / "sound");
+    std::ofstream(root / "description.ext") << "class CfgSounds { class Line { sound[] = {\"RADIO.ogg\", 1, 1}; }; };";
+    std::ofstream(root / "sound" / "radio.ogg") << "dummy";
+    std::ofstream(root / "sound" / "radio.Czech.ogg") << "dummy";
+
+    const auto info = MissionLanguageDetector::Detect(root.string().c_str());
+    std::filesystem::remove_all(root);
+
+    CHECK(FlagsFor(info, "English").voice);
+    CHECK(FlagsFor(info, "Czech").voice);
+}
+
 // The TXT/VO/VD localization-status block is a debug overlay;
 // players saw raw "$STR_"-style availability strings when it was always shown.
 // It must be hidden by default and only emitted when the dev-panel toggle is on.

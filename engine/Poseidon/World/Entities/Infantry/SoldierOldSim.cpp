@@ -478,8 +478,7 @@ void Man::Simulate(float deltaT, SimulationImportance prec)
                 {
                     // calculate landcontact point position
 
-                    int level = GetShape()->FindLandContactLevel();
-                    DoAssert(level >= 0);
+                    PoseidonAssert(GetShape()->FindLandContactLevel() >= 0);
 
                     _waterDepth = 0;
                     GroundCollisionBuffer retVal;

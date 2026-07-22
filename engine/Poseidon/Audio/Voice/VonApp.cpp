@@ -4,9 +4,37 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <string>
+#include <vector>
 
 namespace Poseidon
 {
+namespace
+{
+int DrainCapture(VoNCapture& capture)
+{
+    if (!capture.isCapturing())
+        return 0;
+
+    int drained = 0;
+    std::vector<int16_t> discard(1024);
+    while (capture.availableSamples() > 0)
+    {
+        int got = capture.read(discard.data(), static_cast<int>(discard.size()));
+        if (got <= 0)
+            break;
+        drained += got;
+    }
+    return drained;
+}
+
+// Diagnostic rate limit for per-packet VoN# traps: log the first few packets
+// of every stream/burst, then sample.
+bool TrapSample(uint32_t n)
+{
+    return n <= 3 || n % 50 == 0;
+}
+} // namespace
 
 // Default null; game sets this in GameApplication.cpp when harness is active.
 std::function<void(uint32_t, int)> gVonReceiveCallback;
@@ -58,32 +86,52 @@ VoNReplayer::VoNReplayer(std::unique_ptr<VoNCodec> codec, int jbCapacity)
     _decBuf.resize(_codec->frameSize());
 }
 
-void VoNReplayer::pushPacket(const VoNDataPacket& pkt, const uint8_t* payload)
+bool VoNReplayer::pushPacket(const VoNDataPacket& pkt, const uint8_t* payload)
 {
+    _dbgChannel = pkt.channel;
     int dec = _codec->decode(payload, pkt.size, _decBuf.data(), static_cast<int>(_decBuf.size()));
     if (dec <= 0)
     {
-        LOG_WARN(Audio, "VoN: decode failed (pkt size={} from ch={})", pkt.size, pkt.channel);
-        return;
+        LOG_WARN(Audio, "VoN# rx decode-fail ch={} bytes={}", pkt.channel, pkt.size);
+        return false;
     }
-    // Detect new transmission: origin resets to 0 while playback has progressed
-    // well past the initial frame. This avoids spurious resets from retransmitted
-    // first packets (which also have origin=0).
-    if (pkt.origin == 0 && _jitter.started() && _jitter.nextOrigin() > static_cast<uint64_t>(_codec->frameSize()))
+    if (pkt.origin == 0 && _jitter.started())
     {
         _jitter.reset();
-        LOG_DEBUG(Audio, "VoN: replayer reset for new transmission ch={}", pkt.channel);
+        LOG_DEBUG(Audio, "VoN# rx jb origin-reset ch={}", pkt.channel);
     }
-    _jitter.push(pkt.origin, _decBuf.data(), dec);
+    const VoNJitterPush res = _jitter.push(pkt.origin, _decBuf.data(), dec);
+    if (res == VoNJitterPush::Resync)
+    {
+        LOG_DEBUG(Audio, "VoN# rx jb RESYNC ch={} origin={} cursor-was-behind", pkt.channel, pkt.origin);
+    }
+    else if (res != VoNJitterPush::Accepted)
+    {
+        ++_jbDrops;
+        if (TrapSample(_jbDrops))
+            LOG_WARN(Audio, "VoN# rx jb DROP({}) ch={} origin={} cursor={} buffered={} drops={}", static_cast<int>(res),
+                     pkt.channel, pkt.origin, _jitter.nextOrigin(), _jitter.buffered(), _jbDrops);
+    }
+    if (!_playing)
+        LOG_TRACE(Audio, "VoN# rx stream-start ch={} origin={} jb={}", pkt.channel, pkt.origin, _jitter.buffered());
     _playing = true;
-    LOG_TRACE(Audio, "VoN: decoded frame ch={} origin={} dec={}", pkt.channel, pkt.origin, dec);
+    ++_rxSinceStart;
+    if (TrapSample(_rxSinceStart))
+        LOG_TRACE(Audio, "VoN# rx pkt ch={} n={} origin={} dec={} jb={}", pkt.channel, _rxSinceStart, pkt.origin, dec,
+                  _jitter.buffered());
+    return true;
 }
 
 int VoNReplayer::pull(int16_t* out, int maxSamples)
 {
     int n = _jitter.pull(out, maxSamples);
-    if (n == 0 && _jitter.empty())
+    if (n == 0 && _jitter.empty() && _playing)
+    {
         _playing = false;
+        LOG_TRACE(Audio, "VoN# rx stream-dry ch={} rxPkts={} underruns={}", _dbgChannel, _rxSinceStart,
+                  _jitter.underrunGapFrames());
+        _rxSinceStart = 0;
+    }
     return n;
 }
 
@@ -130,12 +178,35 @@ void VoNClient::closeCapture()
 void VoNClient::setTransmit(bool on)
 {
     if (on && !_capture.isCapturing())
+    {
         _capture.start();
+    }
+    int drained = 0;
+    if (on)
+    {
+        // The device keeps capturing between bursts (OpenAL stop/start
+        // cycles are unreliable), so the ring accumulates while PTT is
+        // released. Drain it on every press: the backlog is audio from
+        // outside the press — sending it both violates push-to-talk and
+        // floods receivers past their jitter window in a single update.
+        drained = DrainCapture(_capture);
+    }
+    if (on && !_transmitRequested)
+    {
+        _transmitStartAt = std::chrono::steady_clock::now();
+        _txBurstPackets = 0;
+        _txBlockedLogged = false;
+    }
+    _transmitRequested = on;
     if (_recorder)
         _recorder->setRecording(on);
-    if (!on && _capture.isCapturing())
-        _capture.stop();
-    LOG_DEBUG(Audio, "VoN: transmit {}", on ? "ON" : "OFF");
+    if (on)
+        LOG_DEBUG(Audio, "VoN# tx ON sender={} capOpen={} capturing={} drained={} origin={} sink={} rec={}", _senderId,
+                  _capture.isOpen(), _capture.isCapturing(), drained, _recorder ? _recorder->totalSamples() : 0,
+                  static_cast<bool>(_sink), _recorder != nullptr);
+    else
+        LOG_DEBUG(Audio, "VoN# tx OFF sender={} burstPkts={} origin={}", _senderId, _txBurstPackets,
+                  _recorder ? _recorder->totalSamples() : 0);
 }
 
 bool VoNClient::isTransmitting() const
@@ -143,12 +214,37 @@ bool VoNClient::isTransmitting() const
     return _recorder && _recorder->isRecording();
 }
 
+VoNTransmitHealth VoNClient::transmitHealth() const
+{
+    return transmitHealthAt(std::chrono::steady_clock::now());
+}
+
+VoNTransmitHealth VoNClient::transmitHealthAt(std::chrono::steady_clock::time_point now) const
+{
+    if (!_transmitRequested)
+        return VoNTransmitHealth::Off;
+    if (!_recorder || !_capture.isOpen())
+        return VoNTransmitHealth::NoCapture;
+    if (_senderId == 0 || !_sink)
+        return VoNTransmitHealth::NotConnected;
+    // Grace from transmit start, then a packet must have left recently.
+    const auto newest = std::max(_lastPacketAt, _transmitStartAt);
+    if (now - newest > kTransmitStallWindow)
+        return VoNTransmitHealth::Stalled;
+    return VoNTransmitHealth::Transmitting;
+}
+
 void VoNClient::onDataPacket(const VoNDataPacket& pkt, const uint8_t* payload)
 {
     // Client-local mute: drop a muted sender's voice before it is decoded,
     // queued, or reported to the harness (so it neither plays nor counts).
     if (IsVoiceMuted(static_cast<int>(pkt.channel)))
+    {
+        ++_muteDrops;
+        if (TrapSample(_muteDrops))
+            LOG_DEBUG(Audio, "VoN# rx MUTED ch={} drops={}", pkt.channel, _muteDrops);
         return;
+    }
 
     std::lock_guard<std::mutex> lk(_replayerLock);
     auto it = _replayers.find(pkt.channel);
@@ -156,12 +252,16 @@ void VoNClient::onDataPacket(const VoNDataPacket& pkt, const uint8_t* payload)
     {
         // Auto-create replayer on first packet from this sender
         if (!_codecFactory)
+        {
+            LOG_WARN(Audio, "VoN# rx NO-CODEC-FACTORY ch={}", pkt.channel);
             return;
+        }
         _replayers[pkt.channel] = std::make_unique<VoNReplayer>(_codecFactory());
         it = _replayers.find(pkt.channel);
-        LOG_DEBUG(Audio, "VoN: auto-created replayer for channel {}", pkt.channel);
+        LOG_DEBUG(Audio, "VoN# rx replayer-created ch={}", pkt.channel);
     }
-    it->second->pushPacket(pkt, payload);
+    if (!it->second->pushPacket(pkt, payload))
+        return;
 
     // Notify harness (if active) about received VoN data
     if (gVonReceiveCallback)
@@ -173,11 +273,31 @@ void VoNClient::update()
     if (!_recorder || !_recorder->isRecording())
         return;
 
+    // Without an assigned sender id the packets would be stamped with
+    // channel 0 and the server could never route them — don't send junk;
+    // transmitHealth() reports NotConnected instead.
+    if (_senderId == 0 || !_sink)
+    {
+        if (!_txBlockedLogged)
+        {
+            LOG_WARN(Audio, "VoN# tx BLOCKED sender={} sink={}", _senderId, static_cast<bool>(_sink));
+            _txBlockedLogged = true;
+        }
+        return;
+    }
+
     std::vector<uint8_t> packet;
     while (_recorder->update(_capture, _senderId, _chatChannel, packet))
     {
-        if (_sink)
-            _sink(packet);
+        _sink(packet);
+        _lastPacketAt = std::chrono::steady_clock::now();
+        ++_txBurstPackets;
+        if (TrapSample(_txBurstPackets))
+        {
+            const auto* pkt = reinterpret_cast<const VoNDataPacket*>(packet.data());
+            LOG_TRACE(Audio, "VoN# tx pkt sender={} n={} origin={} bytes={} ch={}", _senderId, _txBurstPackets,
+                      pkt->origin, pkt->size, static_cast<int>(pkt->chatChan));
+        }
     }
 }
 
@@ -277,11 +397,18 @@ void VoNServer::setRouting(uint32_t sender, VoNChatChannel ch, const std::vector
         // SetVoiceChannel are buffered (pending) instead of silently
         // routed to an empty target list.
         _routes.erase(sender);
-        LOG_DEBUG(Audio, "VoN srv: route removed sender={} ch={}", sender, static_cast<int>(ch));
+        LOG_DEBUG(Audio, "VoN# srv route- sender={} ch={}", sender, static_cast<int>(ch));
         return;
     }
     _routes[sender] = {ch, targets};
-    LOG_DEBUG(Audio, "VoN srv: routing sender={} ch={} targets={}", sender, static_cast<int>(ch), targets.size());
+    std::string targetList;
+    for (uint32_t t : targets)
+    {
+        if (!targetList.empty())
+            targetList += ',';
+        targetList += std::to_string(t);
+    }
+    LOG_DEBUG(Audio, "VoN# srv route+ sender={} ch={} targets=[{}]", sender, static_cast<int>(ch), targetList);
 
     // Flush any packets that arrived before routing was established
     flushPending(sender, _routes[sender]);
@@ -313,19 +440,29 @@ void VoNServer::onDataPacket(const void* raw, int rawSize)
         {
             pending.push_back({std::vector<uint8_t>(reinterpret_cast<const uint8_t*>(raw),
                                                     reinterpret_cast<const uint8_t*>(raw) + rawSize)});
-            LOG_TRACE(Audio, "VoN srv: buffered pkt for ch={} (pending={})", pkt.channel, pending.size());
+            if (pending.size() == 1 || pending.size() % 25 == 0)
+                LOG_DEBUG(Audio, "VoN# srv NO-ROUTE pend sender={} origin={} pending={}", pkt.channel, pkt.origin,
+                          pending.size());
+        }
+        else
+        {
+            LOG_WARN(Audio, "VoN# srv NO-ROUTE overflow-drop sender={} origin={} (cap {})", pkt.channel, pkt.origin,
+                     MAX_PENDING);
         }
         return;
     }
 
     if (it->second.channel != pkt.chatChan)
     {
-        LOG_DEBUG(Audio, "VoN srv: dropping pkt for sender={} ch={} routedCh={}", pkt.channel,
-                  static_cast<int>(pkt.chatChan), static_cast<int>(it->second.channel));
+        LOG_WARN(Audio, "VoN# srv CH-DROP sender={} pktCh={} routeCh={} origin={}", pkt.channel,
+                 static_cast<int>(pkt.chatChan), static_cast<int>(it->second.channel), pkt.origin);
         return;
     }
 
-    LOG_TRACE(Audio, "VoN srv: routing ch={} to {} targets ({}B)", pkt.channel, it->second.targets.size(), rawSize);
+    ++it->second.fwdCount;
+    if (TrapSample(it->second.fwdCount))
+        LOG_TRACE(Audio, "VoN# srv fwd sender={} n={} origin={} targets={} fwd-hook={}", pkt.channel,
+                  it->second.fwdCount, pkt.origin, it->second.targets.size(), static_cast<bool>(_forward));
     for (uint32_t target : it->second.targets)
     {
         if (target != pkt.channel && _forward)
@@ -347,7 +484,8 @@ void VoNServer::flushPending(uint32_t sender, const Route& route)
     if (pit == _pending.end() || pit->second.empty())
         return;
 
-    LOG_DEBUG(Audio, "VoN srv: flushing {} pending pkts for ch={}", pit->second.size(), sender);
+    int forwarded = 0;
+    int dropped = 0;
     for (auto& pp : pit->second)
     {
         if (static_cast<int>(pp.data.size()) < VoNDataPacket::HEADER_SIZE)
@@ -357,17 +495,18 @@ void VoNServer::flushPending(uint32_t sender, const Route& route)
         std::memcpy(&pkt, pp.data.data(), VoNDataPacket::HEADER_SIZE);
         if (!pkt.isValid() || pkt.chatChan != route.channel)
         {
-            LOG_DEBUG(Audio, "VoN srv: dropping pending pkt for sender={} ch={} routedCh={}", sender,
-                      static_cast<int>(pkt.chatChan), static_cast<int>(route.channel));
+            ++dropped;
             continue;
         }
 
+        ++forwarded;
         for (uint32_t target : route.targets)
         {
             if (target != sender && _forward)
                 _forward(target, pp.data.data(), static_cast<int>(pp.data.size()));
         }
     }
+    LOG_DEBUG(Audio, "VoN# srv flush sender={} fwd={} chDrop={}", sender, forwarded, dropped);
     _pending.erase(pit);
 }
 

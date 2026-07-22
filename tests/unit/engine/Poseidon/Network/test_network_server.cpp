@@ -5,6 +5,7 @@
 #include <Poseidon/Audio/Dummy/WaveDummy.hpp>
 #include <Poseidon/Core/ModSystem.hpp>
 #include <Poseidon/Network/NetworkImpl.hpp>
+#include <Poseidon/Network/NetworkManagerState.hpp>
 #include <Poseidon/Network/NetworkMissionTransfer.hpp>
 #include <Poseidon/Network/NetworkServerCommon.hpp>
 #include <Poseidon/Network/NetworkSoundReplication.hpp>
@@ -13,6 +14,7 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <random>
 #include <stdint.h>
 #include <stdio.h>
@@ -31,6 +33,7 @@ class TestNetworkComponent : public NetworkComponent
   public:
     TestNetworkComponent() : NetworkComponent(nullptr) {}
 
+    using NetworkComponent::HasReceivedFileSegment;
     using NetworkComponent::ReceiveFileSegment;
 
     int PendingReceivedBytes(const RString& path) const
@@ -152,10 +155,10 @@ TEST_CASE("Network constants are defined", "[network][networkServer]")
     REQUIRE(MAX_PLAYERS == 50);
     REQUIRE(LOCAL_PLAYER == 1);
     REQUIRE(TO_SERVER == 1);
+    REQUIRE(DSMinBandwidth == 8 * 1024 * 1024);
 }
 
-TEST_CASE("mission file transfer sends contiguous one kilobyte segments to invalid recipients",
-          "[network][mission][transfer]")
+TEST_CASE("mission file transfer sends contiguous segments and waits for client ack", "[network][mission][transfer]")
 {
     struct Player
     {
@@ -196,10 +199,12 @@ TEST_CASE("mission file transfer sends contiguous one kilobyte segments to inval
             static_cast<int>(players.size()), [&players](int index) -> Player& { return players[index]; }, NGSCreate);
 
     const int expectedSegments = Poseidon::GetNetworkMissionTransferSegmentCount(static_cast<int>(payload.size()));
-    REQUIRE(Poseidon::NetworkMissionTransferSegmentSize == 1024);
+    REQUIRE(Poseidon::NetworkMissionTransferSegmentSize == Poseidon::NetworkFileTransferSegmentSize);
+    REQUIRE((Poseidon::NetworkMissionTransferSendFlags & NMFGuaranteed) != 0);
+    REQUIRE((Poseidon::NetworkMissionTransferSendFlags & NMFHighPriority) == 0);
     REQUIRE(result.segmentCount == expectedSegments);
     REQUIRE(result.sentCount == expectedSegments * static_cast<int>(recipients.size()));
-    REQUIRE(result.markedCount == 3);
+    REQUIRE(result.markedCount == 0);
     REQUIRE(sent.size() == static_cast<size_t>(result.sentCount));
 
     for (int segment = 0; segment < expectedSegments; ++segment)
@@ -219,10 +224,120 @@ TEST_CASE("mission file transfer sends contiguous one kilobyte segments to inval
         }
     }
 
+    REQUIRE_FALSE(players[0].missionFileValid);
     REQUIRE_FALSE(players[1].missionFileValid);
-    REQUIRE(players[2].missionFileValid);
+    REQUIRE_FALSE(players[2].missionFileValid);
     REQUIRE(players[3].missionFileValid);
     REQUIRE_FALSE(players[4].missionFileValid);
+}
+
+TEST_CASE("multiplayer setup display keeps showing client transfer while server loads island",
+          "[network][mission][transfer][progress]")
+{
+    REQUIRE(Poseidon::ResolveMultiplayerSetupDisplayState(false, NGSLoadIsland, NGSTransferMission) ==
+            NGSTransferMission);
+    REQUIRE(Poseidon::ResolveMultiplayerSetupDisplayState(false, NGSTransferMission, NGSTransferMission) ==
+            NGSTransferMission);
+}
+
+TEST_CASE("multiplayer setup display still follows client once it reaches briefing",
+          "[network][mission][transfer][progress]")
+{
+    REQUIRE(Poseidon::ResolveMultiplayerSetupDisplayState(false, NGSLoadIsland, NGSBriefing) == NGSBriefing);
+    REQUIRE(Poseidon::ResolveMultiplayerSetupDisplayState(true, NGSLoadIsland, NGSTransferMission) == NGSLoadIsland);
+}
+TEST_CASE("mission file transfer gate waits for all selected players to ack", "[network][mission][transfer]")
+{
+    struct Player
+    {
+        int dpid;
+        NetworkGameState state;
+        bool missionFileValid;
+        bool jip;
+        bool hasRole;
+    };
+
+    std::vector<Player> players{{11, NGSTransferMission, true, false, true},
+                                {12, NGSTransferMission, false, false, true},
+                                {13, NGSCreate, false, false, true},
+                                {14, NGSTransferMission, false, true, false},
+                                {99, NGSTransferMission, false, false, true}};
+
+    int tracked = -1;
+    const auto getPlayer = [&players](int index) -> const Player& { return players[index]; };
+    const auto hasRole = [&players](int dpid)
+    {
+        const auto it =
+            std::find_if(players.begin(), players.end(), [dpid](const Player& player) { return player.dpid == dpid; });
+        return it != players.end() && it->hasRole;
+    };
+
+    REQUIRE_FALSE(Poseidon::AreTrackedNetworkMissionFilesValid(static_cast<int>(players.size()), getPlayer, 99,
+                                                               NGSTransferMission, hasRole, tracked));
+    REQUIRE(tracked == 2);
+
+    players[1].missionFileValid = true;
+    REQUIRE(Poseidon::AreTrackedNetworkMissionFilesValid(static_cast<int>(players.size()), getPlayer, 99,
+                                                         NGSTransferMission, hasRole, tracked));
+    REQUIRE(tracked == 2);
+}
+
+TEST_CASE("launch mission transfer sends only role-selected transfer participants", "[network][mission][transfer]")
+{
+    REQUIRE(Poseidon::GetNetworkMissionFileSendMinimumState(NO_PLAYER, NO_PLAYER, NGSCreate, NGSTransferMission) ==
+            NGSTransferMission);
+    REQUIRE(Poseidon::GetNetworkMissionFileSendMinimumState(42, NO_PLAYER, NGSCreate, NGSTransferMission) == NGSCreate);
+
+    struct Player
+    {
+        int dpid;
+        NetworkGameState state;
+        bool missionFileValid;
+    };
+
+    std::vector<Player> players{{11, NGSTransferMission, false},
+                                {12, NGSCreate, false},
+                                {13, NGSPrepareSide, false},
+                                {14, NGSTransferMission, true},
+                                {99, NGSTransferMission, false}};
+
+    std::vector<int> recipients;
+    const int count = Poseidon::CollectNetworkMissionFileRecipients(
+        static_cast<int>(players.size()), [&players](int index) -> const Player& { return players[index]; }, 99,
+        NGSTransferMission, [&recipients](int dpid) { recipients.push_back(dpid); });
+
+    REQUIRE(count == 1);
+    REQUIRE(recipients == std::vector<int>{11});
+}
+
+TEST_CASE("mission launch uses one ordinary guaranteed stream", "[network][mission][transfer][source]")
+{
+    const std::filesystem::path repository = std::filesystem::path(TESTS_ROOT_DIR).parent_path();
+    const std::string transfer = ReadBinaryFile(repository / "engine/Poseidon/Network/NetworkMissionTransfer.hpp");
+    const std::string mission = ReadBinaryFile(repository / "engine/Poseidon/Network/NetworkServerMission.cpp");
+    const std::string auth = ReadBinaryFile(repository / "engine/Poseidon/Network/NetworkServerAuth.hpp");
+    const std::string onMessage = ReadBinaryFile(repository / "engine/Poseidon/Network/NetworkServerMsgOnMessage.cpp");
+
+    REQUIRE_FALSE(transfer.empty());
+    REQUIRE_FALSE(mission.empty());
+    REQUIRE_FALSE(auth.empty());
+    REQUIRE_FALSE(onMessage.empty());
+
+    CHECK(mission.find("SendCurrentNetworkMissionFile<TransferMissionFileMessage>") != std::string::npos);
+    CHECK(mission.find("SendCurrentNetworkMissionRawFile<TransferMissionFileMessage>") == std::string::npos);
+
+    CHECK(transfer.find("ShouldSendNetworkMissionGameStateToPlayer") == std::string::npos);
+    CHECK(mission.find("ShouldSendNetworkMissionGameStateToPlayer") == std::string::npos);
+
+    CHECK(auth.find("MissionAckShouldReplayBriefing") == std::string::npos);
+    CHECK(auth.find("MissionAckShouldAdvanceLoadIsland") == std::string::npos);
+    CHECK(onMessage.find("MissionAckShouldReplayBriefing") == std::string::npos);
+    CHECK(onMessage.find("MissionAckShouldAdvanceLoadIsland") == std::string::npos);
+
+    CHECK(auth.find("DelayedRoleShouldStartMissionCatchUp") != std::string::npos);
+    CHECK(onMessage.find("DelayedRoleShouldStartMissionCatchUp") != std::string::npos);
+    CHECK(auth.find("ShouldIgnoreStaleMissionReadyState") != std::string::npos);
+    CHECK(onMessage.find("ShouldIgnoreStaleMissionReadyState") != std::string::npos);
 }
 
 TEST_CASE("mission transfer segment count scales linearly for benchmark payload sizes",
@@ -230,10 +345,301 @@ TEST_CASE("mission transfer segment count scales linearly for benchmark payload 
 {
     REQUIRE(Poseidon::GetNetworkMissionTransferSegmentCount(0) == 0);
     REQUIRE(Poseidon::GetNetworkMissionTransferSegmentCount(1) == 1);
-    REQUIRE(Poseidon::GetNetworkMissionTransferSegmentCount(1024) == 1);
-    REQUIRE(Poseidon::GetNetworkMissionTransferSegmentCount(1025) == 2);
+    REQUIRE(Poseidon::GetNetworkMissionTransferSegmentCount(Poseidon::NetworkMissionTransferSegmentSize) == 1);
+    REQUIRE(Poseidon::GetNetworkMissionTransferSegmentCount(Poseidon::NetworkMissionTransferSegmentSize + 1) == 2);
     REQUIRE(Poseidon::GetNetworkMissionTransferSegmentCount(1024 * 1024) == 1024);
-    REQUIRE(Poseidon::GetNetworkMissionTransferSegmentCount(5 * 1024 * 1024) == 5120);
+    REQUIRE(Poseidon::GetNetworkMissionTransferSegmentCount(5 * 1024 * 1024) == 5 * 1024);
+    REQUIRE(Poseidon::GetNetworkMissionBulkTransferSegmentCount(1024 * 1024) == 1166);
+    REQUIRE(Poseidon::GetNetworkMissionBulkTransferSegmentCount(5 * 1024 * 1024) == 5826);
+}
+
+TEST_CASE("mission raw bulk codec round-trips data segments", "[network][mission][transfer][raw]")
+{
+    TransferMissionFileMessage segment;
+    segment.path = "tmp/raw_send.Intro.pbo";
+    segment.totSize = 4096;
+    segment.totSegments = Poseidon::GetNetworkMissionBulkTransferSegmentCount(segment.totSize);
+    segment.curSegment = 2;
+    segment.offset = 2 * Poseidon::NetworkMissionBulkTransferSegmentSize;
+    segment.data.Resize(7);
+    memcpy(segment.data.Data(), "payload", 7);
+
+    AutoArray<char> payload;
+    REQUIRE(Poseidon::EncodeNetworkMissionBulkRawSegment(segment, payload));
+
+    Poseidon::NetworkMissionBulkRawPacket decoded;
+    REQUIRE(Poseidon::DecodeNetworkMissionBulkRawPayload(payload.Data(), payload.Size(), decoded));
+    REQUIRE(decoded.kind == Poseidon::NetworkMissionBulkRawKind::Data);
+    REQUIRE(decoded.totalSize == segment.totSize);
+    REQUIRE(decoded.totalSegments == segment.totSegments);
+    REQUIRE(decoded.curSegment == segment.curSegment);
+    REQUIRE(decoded.offset == segment.offset);
+    REQUIRE(decoded.transferPath == segment.path);
+    REQUIRE(decoded.dataSize == segment.data.Size());
+    REQUIRE(memcmp(decoded.data, segment.data.Data(), segment.data.Size()) == 0);
+}
+
+TEST_CASE("mission raw bulk codec keeps Windows cache path packets below socket ceiling",
+          "[network][mission][transfer][raw]")
+{
+    TransferMissionFileMessage segment;
+    segment.path = "C:\\Users\\josef\\AppData\\Local\\CWR/MPMissionsCache\\mfcti 1.16 everon.eden.pbo";
+    segment.totSize = 376417;
+    segment.totSegments = Poseidon::GetNetworkMissionBulkTransferSegmentCount(segment.totSize);
+    segment.curSegment = 0;
+    segment.offset = 0;
+    segment.data.Resize(Poseidon::NetworkMissionBulkTransferSegmentSize);
+    memset(segment.data.Data(), 'm', segment.data.Size());
+
+    AutoArray<char> payload;
+    REQUIRE(Poseidon::EncodeNetworkMissionBulkRawSegment(segment, payload));
+    REQUIRE(payload.Size() <= 1224);
+
+    Poseidon::NetworkMissionBulkRawPacket decoded;
+    REQUIRE(Poseidon::DecodeNetworkMissionBulkRawPayload(payload.Data(), payload.Size(), decoded));
+    REQUIRE(decoded.transferPath == segment.path);
+    REQUIRE(decoded.dataSize == Poseidon::NetworkMissionBulkTransferSegmentSize);
+}
+
+TEST_CASE("mission raw bulk codec bounds resend requests", "[network][mission][transfer][raw]")
+{
+    AutoArray<char> payload;
+    REQUIRE(Poseidon::EncodeNetworkMissionBulkRawRequest(10, 1000, 5 * 1024 * 1024, payload));
+
+    Poseidon::NetworkMissionBulkRawPacket decoded;
+    REQUIRE(Poseidon::DecodeNetworkMissionBulkRawPayload(payload.Data(), payload.Size(), decoded));
+    REQUIRE(decoded.kind == Poseidon::NetworkMissionBulkRawKind::Request);
+    REQUIRE(decoded.curSegment == 10);
+    REQUIRE(decoded.segmentCount == Poseidon::NetworkMissionBulkRetransmitMaxSegments);
+    REQUIRE(decoded.totalSegments == Poseidon::GetNetworkMissionBulkTransferSegmentCount(5 * 1024 * 1024));
+    REQUIRE(decoded.dataSize == 0);
+}
+
+TEST_CASE("mission raw bulk resend delay backs off repeated ranges", "[network][mission][transfer][raw]")
+{
+    REQUIRE(Poseidon::GetNetworkMissionBulkRetransmitDelayMs(10, 64, -1, 0) ==
+            Poseidon::NetworkMissionBulkRetransmitDelayMs);
+    REQUIRE(Poseidon::GetNetworkMissionBulkRetransmitDelayMs(10, 64, 10, 64) ==
+            Poseidon::NetworkMissionBulkRepeatedRetransmitDelayMs);
+    REQUIRE(Poseidon::NetworkMissionBulkRepeatedRetransmitDelayMs == 1000);
+    REQUIRE(Poseidon::GetNetworkMissionBulkRetransmitDelayMs(11, 64, 10, 64) ==
+            Poseidon::NetworkMissionBulkRepeatedRetransmitDelayMs);
+    REQUIRE(Poseidon::GetNetworkMissionBulkRetransmitDelayMs(10, 12, 10, 64) ==
+            Poseidon::NetworkMissionBulkRepeatedRetransmitDelayMs);
+    REQUIRE(Poseidon::GetNetworkMissionBulkRetransmitDelayMs(74, 12, 10, 64) ==
+            Poseidon::NetworkMissionBulkRetransmitDelayMs);
+}
+
+TEST_CASE("mission raw bulk waits before first missing-range request", "[network][mission][transfer][raw]")
+{
+    constexpr DWORD firstSegmentTime = 1000;
+    constexpr DWORD delay = Poseidon::NetworkMissionBulkRetransmitDelayMs;
+
+    REQUIRE(Poseidon::ShouldWaitForNetworkMissionBulkRetransmit(firstSegmentTime, firstSegmentTime, 0, 0, delay));
+    REQUIRE(Poseidon::ShouldWaitForNetworkMissionBulkRetransmit(firstSegmentTime + delay - 1, firstSegmentTime, 0, 0,
+                                                                delay));
+    REQUIRE_FALSE(
+        Poseidon::ShouldWaitForNetworkMissionBulkRetransmit(firstSegmentTime + delay, firstSegmentTime, 0, 0, delay));
+
+    constexpr DWORD lastRequestTime = 2000;
+    REQUIRE(Poseidon::ShouldWaitForNetworkMissionBulkRetransmit(lastRequestTime + delay - 1, firstSegmentTime,
+                                                                lastRequestTime, 0, delay));
+    REQUIRE_FALSE(Poseidon::ShouldWaitForNetworkMissionBulkRetransmit(lastRequestTime + delay, firstSegmentTime,
+                                                                      lastRequestTime, 0, delay));
+
+    constexpr DWORD lastSegmentTime = 3000;
+    REQUIRE(Poseidon::ShouldWaitForNetworkMissionBulkRetransmit(lastSegmentTime + delay - 1, firstSegmentTime,
+                                                                lastRequestTime, lastSegmentTime, delay));
+    REQUIRE_FALSE(Poseidon::ShouldWaitForNetworkMissionBulkRetransmit(lastSegmentTime + delay, firstSegmentTime,
+                                                                      lastRequestTime, lastSegmentTime, delay));
+}
+
+TEST_CASE("mission raw bulk missing scan avoids in-flight tail", "[network][mission][transfer][raw]")
+{
+    constexpr int totalSegments = 833;
+    constexpr int highestReceivedSegment = 120;
+    constexpr DWORD lastSegmentTime = 5000;
+    constexpr DWORD delay = Poseidon::NetworkMissionBulkRetransmitDelayMs;
+    constexpr DWORD quietDelay = Poseidon::NetworkMissionBulkRepeatedRetransmitDelayMs;
+
+    REQUIRE(Poseidon::GetNetworkMissionBulkMissingScanLimit(totalSegments, highestReceivedSegment,
+                                                            lastSegmentTime + delay - 1, lastSegmentTime, delay,
+                                                            quietDelay) == highestReceivedSegment);
+    REQUIRE(Poseidon::GetNetworkMissionBulkMissingScanLimit(
+                totalSegments, highestReceivedSegment, lastSegmentTime + delay, lastSegmentTime, delay, quietDelay) ==
+            highestReceivedSegment - Poseidon::NetworkMissionBulkInFlightSegmentGuard);
+    REQUIRE(Poseidon::GetNetworkMissionBulkMissingScanLimit(totalSegments, highestReceivedSegment,
+                                                            lastSegmentTime + quietDelay, lastSegmentTime, delay,
+                                                            quietDelay) == totalSegments - 1);
+    REQUIRE(Poseidon::GetNetworkMissionBulkMissingScanLimit(totalSegments, totalSegments - 1, lastSegmentTime + 1,
+                                                            lastSegmentTime, delay, quietDelay) == totalSegments - 1);
+    REQUIRE(Poseidon::GetNetworkMissionBulkMissingScanLimit(totalSegments, -1, lastSegmentTime + delay, lastSegmentTime,
+                                                            delay, quietDelay) == -1);
+}
+
+TEST_CASE("mission raw bulk resend requests use a smaller active-stream window", "[network][mission][transfer][raw]")
+{
+    constexpr DWORD lastSegmentTime = 5000;
+    constexpr DWORD delay = Poseidon::NetworkMissionBulkRetransmitDelayMs;
+
+    REQUIRE(
+        Poseidon::GetNetworkMissionBulkRetransmitSegmentLimit(lastSegmentTime + delay - 1, lastSegmentTime, delay) ==
+        Poseidon::NetworkMissionBulkActiveRetransmitMaxSegments);
+    REQUIRE(Poseidon::GetNetworkMissionBulkRetransmitSegmentLimit(lastSegmentTime + delay, lastSegmentTime, delay) ==
+            Poseidon::NetworkMissionBulkRetransmitMaxSegments);
+    REQUIRE(Poseidon::GetNetworkMissionBulkRetransmitSegmentLimit(lastSegmentTime + 1, 0, delay) ==
+            Poseidon::NetworkMissionBulkRetransmitMaxSegments);
+}
+
+TEST_CASE("mission raw bulk requested range tracker marks unique segments", "[network][mission][transfer][raw]")
+{
+    AutoArray<bool> requestedSegments;
+
+    REQUIRE(Poseidon::MarkNetworkMissionBulkRequestedRange(requestedSegments, 16, 4, 4) == 4);
+    REQUIRE(requestedSegments.Size() == 16);
+    REQUIRE_FALSE(Poseidon::WasNetworkMissionBulkSegmentRequested(requestedSegments, 3));
+    REQUIRE(Poseidon::WasNetworkMissionBulkSegmentRequested(requestedSegments, 4));
+    REQUIRE(Poseidon::WasNetworkMissionBulkSegmentRequested(requestedSegments, 7));
+    REQUIRE_FALSE(Poseidon::WasNetworkMissionBulkSegmentRequested(requestedSegments, 8));
+
+    REQUIRE(Poseidon::MarkNetworkMissionBulkRequestedRange(requestedSegments, 16, 6, 4) == 2);
+    REQUIRE(Poseidon::WasNetworkMissionBulkSegmentRequested(requestedSegments, 9));
+    REQUIRE(Poseidon::MarkNetworkMissionBulkRequestedRange(requestedSegments, 16, 20, 4) == 0);
+    REQUIRE(Poseidon::MarkNetworkMissionBulkRequestedRange(requestedSegments, 16, 14, 10) == 2);
+    REQUIRE(Poseidon::WasNetworkMissionBulkSegmentRequested(requestedSegments, 15));
+    REQUIRE_FALSE(Poseidon::WasNetworkMissionBulkSegmentRequested(requestedSegments, 16));
+
+    AutoArray<bool> duplicateSegments;
+    REQUIRE(Poseidon::MarkNetworkMissionBulkSegmentSeen(duplicateSegments, 16, 6));
+    REQUIRE_FALSE(Poseidon::MarkNetworkMissionBulkSegmentSeen(duplicateSegments, 16, 6));
+    REQUIRE(Poseidon::MarkNetworkMissionBulkSegmentSeen(duplicateSegments, 16, 7));
+    REQUIRE_FALSE(Poseidon::MarkNetworkMissionBulkSegmentSeen(duplicateSegments, 16, 16));
+}
+
+TEST_CASE("mission raw bulk send fans out encoded payloads to recipients", "[network][mission][transfer][raw]")
+{
+    struct SentPayload
+    {
+        int dpid;
+        std::vector<char> bytes;
+    };
+
+    std::string payload(4096, '\0');
+    for (size_t i = 0; i < payload.size(); ++i)
+    {
+        payload[i] = static_cast<char>('A' + (i % 26));
+    }
+    std::vector<int> recipients{11, 13};
+    std::vector<SentPayload> sent;
+
+    const Poseidon::NetworkMissionFileSendResult result =
+        Poseidon::SendCurrentNetworkMissionRawFile<TransferMissionFileMessage>(
+            "raw_send.Intro", payload.data(), static_cast<int>(payload.size()), static_cast<int>(recipients.size()),
+            [&recipients](int index) { return recipients[index]; }, 99, [&sent](int dpid, char* bytes, int size)
+            { sent.push_back({dpid, std::vector<char>(bytes, bytes + size)}); });
+
+    const int expectedSegments = Poseidon::GetNetworkMissionBulkTransferSegmentCount(static_cast<int>(payload.size()));
+    REQUIRE(result.segmentCount == expectedSegments);
+    REQUIRE(result.sentCount == expectedSegments * static_cast<int>(recipients.size()));
+    REQUIRE(sent.size() == static_cast<size_t>(result.sentCount));
+
+    for (int segment = 0; segment < expectedSegments; ++segment)
+    {
+        for (size_t recipient = 0; recipient < recipients.size(); ++recipient)
+        {
+            const SentPayload& item = sent[segment * recipients.size() + recipient];
+            REQUIRE(item.dpid == recipients[recipient]);
+
+            Poseidon::NetworkMissionBulkRawPacket decoded;
+            REQUIRE(Poseidon::DecodeNetworkMissionBulkRawPayload(item.bytes.data(), static_cast<int>(item.bytes.size()),
+                                                                 decoded));
+            REQUIRE(decoded.kind == Poseidon::NetworkMissionBulkRawKind::Data);
+            REQUIRE(decoded.transferPath == result.destinationPath);
+            REQUIRE(decoded.curSegment == segment);
+            REQUIRE(decoded.totalSegments == expectedSegments);
+            REQUIRE(decoded.offset == segment * Poseidon::NetworkMissionBulkTransferSegmentSize);
+        }
+    }
+}
+
+TEST_CASE("mission raw bulk retransmit sends only the requested range", "[network][mission][transfer][raw]")
+{
+    std::string payload(1024 * 1024, '\0');
+    for (size_t i = 0; i < payload.size(); ++i)
+    {
+        payload[i] = static_cast<char>('a' + (i % 26));
+    }
+    std::vector<std::vector<char>> sent;
+
+    const int sentCount = Poseidon::SendNetworkMissionRawFileSegmentRange<TransferMissionFileMessage>(
+        "tmp/raw_send.Intro.pbo", payload.data(), static_cast<int>(payload.size()), 10, 100,
+        [&sent](AutoArray<char>& bytes) { sent.emplace_back(bytes.Data(), bytes.Data() + bytes.Size()); });
+
+    REQUIRE(sentCount == Poseidon::NetworkMissionBulkRetransmitMaxSegments);
+    REQUIRE(sent.size() == static_cast<size_t>(Poseidon::NetworkMissionBulkRetransmitMaxSegments));
+
+    Poseidon::NetworkMissionBulkRawPacket first;
+    REQUIRE(Poseidon::DecodeNetworkMissionBulkRawPayload(sent.front().data(), static_cast<int>(sent.front().size()),
+                                                         first));
+    REQUIRE(first.curSegment == 10);
+    REQUIRE(first.transferPath == RString("tmp/raw_send.Intro.pbo"));
+    REQUIRE(first.offset == 10 * Poseidon::NetworkMissionBulkTransferSegmentSize);
+
+    Poseidon::NetworkMissionBulkRawPacket last;
+    REQUIRE(
+        Poseidon::DecodeNetworkMissionBulkRawPayload(sent.back().data(), static_cast<int>(sent.back().size()), last));
+    REQUIRE(last.curSegment == 10 + Poseidon::NetworkMissionBulkRetransmitMaxSegments - 1);
+    REQUIRE(last.transferPath == RString("tmp/raw_send.Intro.pbo"));
+    REQUIRE(last.totalSegments == Poseidon::GetNetworkMissionBulkTransferSegmentCount(payload.size()));
+}
+
+TEST_CASE("mission raw bulk codec rejects malformed payloads", "[network][mission][transfer][raw]")
+{
+    AutoArray<char> payload;
+    REQUIRE_FALSE(Poseidon::EncodeNetworkMissionBulkRawRequest(-1, 1, 100, payload));
+    REQUIRE_FALSE(Poseidon::EncodeNetworkMissionBulkRawRequest(0, 0, 100, payload));
+
+    TransferMissionFileMessage segment;
+    segment.path = "tmp/raw_send.Intro.pbo";
+    segment.totSize = 10;
+    segment.totSegments = 1;
+    segment.curSegment = 0;
+    segment.offset = 20;
+    segment.data.Resize(1);
+    REQUIRE_FALSE(Poseidon::EncodeNetworkMissionBulkRawSegment(segment, payload));
+
+    segment.offset = 0;
+    segment.path = "";
+    REQUIRE_FALSE(Poseidon::EncodeNetworkMissionBulkRawSegment(segment, payload));
+
+    Poseidon::NetworkMissionBulkRawPacket decoded;
+    REQUIRE_FALSE(Poseidon::DecodeNetworkMissionBulkRawPayload(nullptr, 0, decoded));
+    REQUIRE_FALSE(Poseidon::DecodeNetworkMissionBulkRawPayload("short", 5, decoded));
+}
+
+TEST_CASE("mission transfer cache path can be recovered from a server segment path", "[network][mission][transfer]")
+{
+    const RString path = Poseidon::BuildNetworkMissionTransferCachePboPathFromTransferPath(
+        "/var/lib/cwr/cache/ctf/MPMissionsCache/mfcti 1.16 everon.eden.pbo");
+    const RString windowsPath = Poseidon::BuildNetworkMissionTransferCachePboPathFromTransferPath(
+        "C:\\Users\\josef\\AppData\\Local\\CWR\\MPMissionsCache\\crcti_1.0_bw@dvd_1.79_everon.eden.pbo");
+
+    REQUIRE(path.GetLength() > 0);
+    REQUIRE(std::string((const char*)path).find("MPMissionsCache") != std::string::npos);
+    REQUIRE(std::string((const char*)path).find("mfcti 1.16 everon.eden.pbo") != std::string::npos);
+    REQUIRE(windowsPath.GetLength() > 0);
+    REQUIRE(std::string((const char*)windowsPath).find("MPMissionsCache") != std::string::npos);
+    REQUIRE(std::string((const char*)windowsPath).find("crcti_1.0_bw@dvd_1.79_everon.eden.pbo") != std::string::npos);
+    REQUIRE(Poseidon::BuildNetworkMissionTransferCachePboPathFromTransferPath("/tmp/no-extension").GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkMissionTransferCachePboPathFromTransferPath("/tmp/.pbo").GetLength() == 0);
+}
+
+TEST_CASE("mission transfer UI can use mission header size before first packet", "[network][mission][transfer]")
+{
+    REQUIRE(Poseidon::NetworkMissionHeaderTransferSize(376417, 0) == 376417);
+    REQUIRE(Poseidon::NetworkMissionHeaderTransferSize(0, 0) == 0);
+    REQUIRE(Poseidon::NetworkMissionHeaderTransferSize(-1, 0) == std::numeric_limits<int>::max());
+    REQUIRE(Poseidon::NetworkMissionHeaderTransferSize(0, 1) == std::numeric_limits<int>::max());
 }
 
 TEST_CASE("mission params preserve explicit server.cfg values over description defaults",
@@ -362,9 +768,12 @@ TEST_CASE("received file transfer segments tolerate duplicates and out-of-order 
     TransferFileMessage tail = MakeTransferSegment(outputPath, 6, 1, 2, 3, "DEF");
     REQUIRE(component.ReceiveFileSegment(tail) == 0);
     REQUIRE(component.PendingReceivedBytes(outputPath) == 3);
+    REQUIRE(component.HasReceivedFileSegment(outputPath, 1));
+    REQUIRE_FALSE(component.HasReceivedFileSegment(outputPath, 0));
     REQUIRE_FALSE(std::filesystem::exists(output));
 
     TransferFileMessage duplicateTail = MakeTransferSegment(outputPath, 6, 1, 2, 3, "DEF");
+    REQUIRE(component.HasReceivedFileSegment(outputPath, 1));
     REQUIRE(component.ReceiveFileSegment(duplicateTail) == 0);
     REQUIRE(component.PendingReceivedBytes(outputPath) == 3);
     REQUIRE_FALSE(std::filesystem::exists(output));

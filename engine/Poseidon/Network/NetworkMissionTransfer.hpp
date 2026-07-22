@@ -3,15 +3,56 @@
 #include <Poseidon/Network/NetworkFileTransfer.hpp>
 #include <Poseidon/Network/NetworkIface.hpp>
 #include <Poseidon/Network/NetworkScriptValueCodec.hpp>
+#include <Poseidon/Network/WireBounds.hpp>
 
 #include <Poseidon/Foundation/Containers/RStringArray.hpp>
 
 #include <Poseidon/Foundation/Strings/RString.hpp>
 
+#include <limits>
+
 namespace Poseidon
 {
 
 constexpr int NetworkMissionTransferSegmentSize = NetworkFileTransferSegmentSize;
+constexpr NetMsgFlags NetworkMissionTransferSendFlags = NMFGuaranteed;
+constexpr int NetworkMissionBulkTransferSegmentSize = 900;
+constexpr int NetworkMissionBulkRetransmitMaxSegments = 64;
+constexpr int NetworkMissionBulkActiveRetransmitMaxSegments = 8;
+constexpr int NetworkMissionBulkInFlightSegmentGuard = 8;
+constexpr DWORD NetworkMissionBulkRetransmitDelayMs = 150;
+constexpr DWORD NetworkMissionBulkRepeatedRetransmitDelayMs = 1000;
+constexpr int NetworkMissionBulkRawMagic = 0x4d50424f; // MPBO
+
+enum class NetworkMissionBulkRawKind : int
+{
+    Data = 1,
+    Request = 2,
+};
+
+struct NetworkMissionBulkRawPacket
+{
+    NetworkMissionBulkRawKind kind = NetworkMissionBulkRawKind::Data;
+    int totalSize = 0;
+    int totalSegments = 0;
+    int curSegment = 0;
+    int offset = 0;
+    int segmentCount = 0;
+    RString transferPath;
+    const char* data = nullptr;
+    int dataSize = 0;
+};
+
+struct NetworkMissionBulkRawHeader
+{
+    int kind;
+    int totalSize;
+    int totalSegments;
+    int curSegment;
+    int offset;
+    int segmentCount;
+    int transferPathSize;
+};
 
 struct NetworkMissionFileValidationResult
 {
@@ -196,6 +237,17 @@ inline bool DoesNetworkMissionFileMatchHeader(uint64_t fileSize, int fileCrc, in
            expectedFileSizeH == static_cast<int>(fileSize >> 32) && expectedFileCrc == fileCrc;
 }
 
+inline int NetworkMissionHeaderTransferSize(int fileSizeL, int fileSizeH)
+{
+    const uint64_t size = (static_cast<uint64_t>(static_cast<uint32_t>(fileSizeH)) << 32) |
+                          static_cast<uint32_t>(fileSizeL);
+    if (size > static_cast<uint64_t>(std::numeric_limits<int>::max()))
+    {
+        return std::numeric_limits<int>::max();
+    }
+    return static_cast<int>(size);
+}
+
 bool ValidateNetworkMissionFileOnDisk(const RString& missionPath, int expectedFileSizeL, int expectedFileSizeH,
                                       int expectedFileCrc);
 
@@ -206,6 +258,7 @@ NetworkMissionFileValidationResult ValidateNetworkMissionFileWithCache(const RSt
 
 RString BuildNetworkMissionTransferCacheBasePath(const char* missionFileName);
 RString BuildNetworkMissionTransferCachePboPath(const char* missionFileName);
+RString BuildNetworkMissionTransferCachePboPathFromTransferPath(const char* transferPath);
 RString BuildNetworkMissionTransferBankPath(const char* transferPath);
 RString BuildNetworkMissionTransferFailureMessage(const char* format, const char* playerName, const char* transferPath);
 RString BuildNetworkMissionBriefingErrorMessage(const char* loadErrorMessage, const char* missingAddonMessage);
@@ -258,12 +311,274 @@ inline int GetNetworkMissionTransferSegmentCount(int totalSize)
     return GetNetworkFileTransferSegmentCount(totalSize, NetworkMissionTransferSegmentSize);
 }
 
+inline int GetNetworkMissionBulkTransferSegmentCount(int totalSize)
+{
+    return GetNetworkFileTransferSegmentCount(totalSize, NetworkMissionBulkTransferSegmentSize);
+}
+
+template <typename SegmentMessage>
+bool EncodeNetworkMissionBulkRawSegment(const SegmentMessage& segment, AutoArray<char>& payload)
+{
+    if (!WireBounds::SegmentInBounds(segment.totSize, segment.totSegments, segment.curSegment, segment.offset,
+                                     segment.data.Size()) ||
+        segment.path.GetLength() <= 0)
+    {
+        return false;
+    }
+    NetworkMissionBulkRawHeader header;
+    header.kind = static_cast<int>(NetworkMissionBulkRawKind::Data);
+    header.totalSize = segment.totSize;
+    header.totalSegments = segment.totSegments;
+    header.curSegment = segment.curSegment;
+    header.offset = segment.offset;
+    header.segmentCount = 0;
+    header.transferPathSize = segment.path.GetLength();
+    payload.Resize(static_cast<int>(sizeof(header)) + header.transferPathSize + segment.data.Size());
+    memcpy(payload.Data(), &header, sizeof(header));
+    memcpy(payload.Data() + sizeof(header), (const char*)segment.path, header.transferPathSize);
+    if (segment.data.Size() > 0)
+    {
+        memcpy(payload.Data() + sizeof(header) + header.transferPathSize, segment.data.Data(), segment.data.Size());
+    }
+    return true;
+}
+
+inline bool EncodeNetworkMissionBulkRawRequest(int firstSegment, int segmentCount, int expectedSize,
+                                               AutoArray<char>& payload)
+{
+    if (firstSegment < 0 || segmentCount <= 0 || expectedSize < 0)
+    {
+        return false;
+    }
+    NetworkMissionBulkRawHeader header;
+    header.kind = static_cast<int>(NetworkMissionBulkRawKind::Request);
+    header.totalSize = expectedSize;
+    header.totalSegments = GetNetworkMissionBulkTransferSegmentCount(expectedSize);
+    header.curSegment = firstSegment;
+    header.offset = 0;
+    header.segmentCount = std::min(segmentCount, NetworkMissionBulkRetransmitMaxSegments);
+    header.transferPathSize = 0;
+    payload.Resize(static_cast<int>(sizeof(header)));
+    memcpy(payload.Data(), &header, sizeof(header));
+    return true;
+}
+
+inline DWORD GetNetworkMissionBulkRetransmitDelayMs(int firstSegment, int segmentCount, int previousFirstSegment,
+                                                    int previousSegmentCount)
+{
+    const int endSegment = firstSegment + segmentCount;
+    const int previousEndSegment = previousFirstSegment + previousSegmentCount;
+    const bool overlapsPrevious = firstSegment < previousEndSegment && previousFirstSegment < endSegment;
+    return overlapsPrevious ? NetworkMissionBulkRepeatedRetransmitDelayMs : NetworkMissionBulkRetransmitDelayMs;
+}
+
+inline bool ShouldWaitForNetworkMissionBulkRetransmit(DWORD now, DWORD firstSegmentTime, DWORD lastRequestTime,
+                                                      DWORD lastSegmentTime, DWORD delay)
+{
+    DWORD previousActivityTime = firstSegmentTime;
+    if (lastRequestTime != 0 && (previousActivityTime == 0 || lastRequestTime > previousActivityTime))
+    {
+        previousActivityTime = lastRequestTime;
+    }
+    if (lastSegmentTime != 0 && (previousActivityTime == 0 || lastSegmentTime > previousActivityTime))
+    {
+        previousActivityTime = lastSegmentTime;
+    }
+    return previousActivityTime != 0 && now - previousActivityTime < delay;
+}
+
+inline int GetNetworkMissionBulkMissingScanLimit(int totalSegments, int highestReceivedSegment, DWORD now,
+                                                 DWORD lastSegmentTime, DWORD activeDelay, DWORD quietDelay)
+{
+    if (totalSegments <= 0 || highestReceivedSegment < 0)
+    {
+        return -1;
+    }
+    const int lastSegment = totalSegments - 1;
+    if (highestReceivedSegment >= lastSegment)
+    {
+        return lastSegment;
+    }
+    if (lastSegmentTime != 0 && now - lastSegmentTime < activeDelay)
+    {
+        return std::min(highestReceivedSegment, lastSegment);
+    }
+    if (lastSegmentTime != 0 && now - lastSegmentTime < quietDelay)
+    {
+        return std::min(highestReceivedSegment - NetworkMissionBulkInFlightSegmentGuard, lastSegment);
+    }
+    return lastSegment;
+}
+
+inline int GetNetworkMissionBulkRetransmitSegmentLimit(DWORD now, DWORD lastSegmentTime, DWORD delay)
+{
+    if (lastSegmentTime != 0 && now - lastSegmentTime < delay)
+    {
+        return NetworkMissionBulkActiveRetransmitMaxSegments;
+    }
+    return NetworkMissionBulkRetransmitMaxSegments;
+}
+
+inline int MarkNetworkMissionBulkRequestedRange(AutoArray<bool>& requestedSegments, int totalSegments, int firstSegment,
+                                                int segmentCount)
+{
+    if (totalSegments <= 0 || firstSegment < 0 || segmentCount <= 0 || firstSegment >= totalSegments)
+    {
+        return 0;
+    }
+    if (requestedSegments.Size() != totalSegments)
+    {
+        requestedSegments.Resize(totalSegments);
+        for (int i = 0; i < requestedSegments.Size(); ++i)
+        {
+            requestedSegments[i] = false;
+        }
+    }
+
+    const int endSegment =
+        std::min(totalSegments, firstSegment + std::min(segmentCount, NetworkMissionBulkRetransmitMaxSegments));
+    int newlyMarked = 0;
+    for (int segment = firstSegment; segment < endSegment; ++segment)
+    {
+        if (!requestedSegments[segment])
+        {
+            requestedSegments[segment] = true;
+            ++newlyMarked;
+        }
+    }
+    return newlyMarked;
+}
+
+inline bool WasNetworkMissionBulkSegmentRequested(const AutoArray<bool>& requestedSegments, int segment)
+{
+    return segment >= 0 && segment < requestedSegments.Size() && requestedSegments[segment];
+}
+
+inline bool MarkNetworkMissionBulkSegmentSeen(AutoArray<bool>& segments, int totalSegments, int segment)
+{
+    if (totalSegments <= 0 || segment < 0 || segment >= totalSegments)
+    {
+        return false;
+    }
+    if (segments.Size() != totalSegments)
+    {
+        segments.Resize(totalSegments);
+        for (int i = 0; i < segments.Size(); ++i)
+        {
+            segments[i] = false;
+        }
+    }
+    if (segments[segment])
+    {
+        return false;
+    }
+    segments[segment] = true;
+    return true;
+}
+
+inline bool DecodeNetworkMissionBulkRawPayload(const char* payload, int payloadSize, NetworkMissionBulkRawPacket& packet)
+{
+    if (!payload || payloadSize < static_cast<int>(sizeof(NetworkMissionBulkRawHeader)))
+    {
+        return false;
+    }
+    NetworkMissionBulkRawHeader header;
+    memcpy(&header, payload, sizeof(header));
+    packet.kind = static_cast<NetworkMissionBulkRawKind>(header.kind);
+    packet.totalSize = header.totalSize;
+    packet.totalSegments = header.totalSegments;
+    packet.curSegment = header.curSegment;
+    packet.offset = header.offset;
+    packet.segmentCount = header.segmentCount;
+    packet.transferPath = RString();
+    packet.data = nullptr;
+    packet.dataSize = 0;
+
+    switch (packet.kind)
+    {
+        case NetworkMissionBulkRawKind::Data:
+        {
+            if (header.transferPathSize <= 0 ||
+                payloadSize < static_cast<int>(sizeof(NetworkMissionBulkRawHeader)) + header.transferPathSize)
+            {
+                return false;
+            }
+            packet.transferPath = RString(payload + sizeof(header), header.transferPathSize);
+            packet.data = payload + sizeof(header) + header.transferPathSize;
+            packet.dataSize =
+                payloadSize - static_cast<int>(sizeof(NetworkMissionBulkRawHeader)) - header.transferPathSize;
+            return WireBounds::SegmentInBounds(packet.totalSize, packet.totalSegments, packet.curSegment, packet.offset,
+                                               packet.dataSize);
+        }
+        case NetworkMissionBulkRawKind::Request:
+            packet.data = payload + sizeof(header);
+            packet.dataSize = payloadSize - static_cast<int>(sizeof(header));
+            return packet.curSegment >= 0 && packet.segmentCount > 0 && packet.totalSize >= 0 &&
+                   header.transferPathSize == 0 &&
+                   packet.totalSegments == GetNetworkMissionBulkTransferSegmentCount(packet.totalSize) &&
+                   packet.dataSize == 0;
+    }
+    return false;
+}
+
 template <typename MessageType, typename SendFn>
 int SendNetworkMissionFileSegments(const RString& destinationPath, const void* data, int totalSize,
                                    SendFn&& sendSegment)
 {
     return SendNetworkFileTransferSegments<MessageType>(destinationPath, data, totalSize, sendSegment,
                                                         NetworkMissionTransferSegmentSize);
+}
+
+template <typename MessageType, typename SendFn>
+int SendNetworkMissionRawFileSegments(const RString& destinationPath, const void* data, int totalSize,
+                                      SendFn&& sendSegment)
+{
+    return SendNetworkFileTransferSegments<MessageType>(
+        destinationPath, data, totalSize,
+        [&](MessageType& msg)
+        {
+            AutoArray<char> payload;
+            if (EncodeNetworkMissionBulkRawSegment(msg, payload))
+            {
+                std::forward<SendFn>(sendSegment)(payload);
+            }
+        },
+        NetworkMissionBulkTransferSegmentSize);
+}
+
+template <typename MessageType, typename SendFn>
+int SendNetworkMissionRawFileSegmentRange(const RString& destinationPath, const void* data, int totalSize,
+                                          int firstSegment, int segmentCount, SendFn&& sendSegment)
+{
+    const int totalSegments = GetNetworkMissionBulkTransferSegmentCount(totalSize);
+    if (!data || totalSize < 0 || firstSegment < 0 || segmentCount <= 0 || firstSegment >= totalSegments)
+    {
+        return 0;
+    }
+    const int endSegment =
+        std::min(totalSegments, firstSegment + std::min(segmentCount, NetworkMissionBulkRetransmitMaxSegments));
+    int sent = 0;
+    for (int segment = firstSegment; segment < endSegment; ++segment)
+    {
+        const int offset = segment * NetworkMissionBulkTransferSegmentSize;
+        const int size = std::min(NetworkMissionBulkTransferSegmentSize, totalSize - offset);
+        MessageType msg;
+        msg.path = destinationPath;
+        msg.totSize = totalSize;
+        msg.offset = offset;
+        msg.totSegments = totalSegments;
+        msg.curSegment = segment;
+        msg.data.Resize(size);
+        memcpy(msg.data.Data(), static_cast<const char*>(data) + offset, size);
+
+        AutoArray<char> payload;
+        if (EncodeNetworkMissionBulkRawSegment(msg, payload))
+        {
+            std::forward<SendFn>(sendSegment)(payload);
+            ++sent;
+        }
+    }
+    return sent;
 }
 
 template <class Buffer>
@@ -586,11 +901,10 @@ struct NetworkRemoteExecDispatchResult
 };
 
 template <typename State, class GetPlayerIdFn, class GetPlayerStateFn, class SendFn, class ExecuteServerFn>
-NetworkRemoteExecDispatchResult DispatchNetworkRemoteExecTarget(int target, int playerCount,
-                                                                GetPlayerIdFn&& getPlayerId,
-                                                                GetPlayerStateFn&& getPlayerState,
-                                                                State loadIslandState, SendFn&& sendToPlayer,
-                                                                ExecuteServerFn&& executeServer)
+NetworkRemoteExecDispatchResult
+DispatchNetworkRemoteExecTarget(int target, int playerCount, GetPlayerIdFn&& getPlayerId,
+                                GetPlayerStateFn&& getPlayerState, State loadIslandState, SendFn&& sendToPlayer,
+                                ExecuteServerFn&& executeServer)
 {
     NetworkRemoteExecDispatchResult result;
     if (target == 0)
@@ -650,16 +964,18 @@ NetworkRemoteExecDispatchResult DispatchNetworkRemoteExecTarget(int target, int 
 
 template <typename State, class GetPlayerIdFn, class GetPlayerStateFn, class SendFn, class ExecuteServerFn,
           class GetObjectOwnerFn>
-NetworkRemoteExecDispatchResult DispatchNetworkRemoteExecTargetSelector(
-    const RemoteExecTargetSelector& selector, int playerCount, GetPlayerIdFn&& getPlayerId,
-    GetPlayerStateFn&& getPlayerState, State loadIslandState, SendFn&& sendToPlayer, ExecuteServerFn&& executeServer,
-    GetObjectOwnerFn&& getObjectOwner)
+NetworkRemoteExecDispatchResult
+DispatchNetworkRemoteExecTargetSelector(const RemoteExecTargetSelector& selector, int playerCount,
+                                        GetPlayerIdFn&& getPlayerId, GetPlayerStateFn&& getPlayerState,
+                                        State loadIslandState, SendFn&& sendToPlayer, ExecuteServerFn&& executeServer,
+                                        GetObjectOwnerFn&& getObjectOwner)
 {
     NetworkRemoteExecDispatchResult result;
     AutoArray<int> sentPlayers;
     bool serverExecuted = false;
 
-    auto sendOnce = [&](int dpid) {
+    auto sendOnce = [&](int dpid)
+    {
         for (int i = 0; i < sentPlayers.Size(); ++i)
         {
             if (sentPlayers[i] == dpid)
@@ -671,7 +987,8 @@ NetworkRemoteExecDispatchResult DispatchNetworkRemoteExecTargetSelector(
         sendToPlayer(dpid);
         result.sentToClient = true;
     };
-    auto executeServerOnce = [&]() {
+    auto executeServerOnce = [&]()
+    {
         if (serverExecuted)
         {
             return;
@@ -681,13 +998,15 @@ NetworkRemoteExecDispatchResult DispatchNetworkRemoteExecTargetSelector(
         result.executedOnServer = true;
     };
 
-    auto dispatchScalar = [&](int target) {
+    auto dispatchScalar = [&](int target)
+    {
         NetworkRemoteExecDispatchResult scalarResult = DispatchNetworkRemoteExecTarget(
             target, playerCount, getPlayerId, getPlayerState, loadIslandState, sendOnce, executeServerOnce);
         result.acceptedClientTarget = result.acceptedClientTarget || scalarResult.acceptedClientTarget;
     };
 
-    auto dispatchOwner = [&](NetworkId id) {
+    auto dispatchOwner = [&](NetworkId id)
+    {
         if (id.IsNull())
         {
             return;
@@ -704,7 +1023,8 @@ NetworkRemoteExecDispatchResult DispatchNetworkRemoteExecTargetSelector(
         }
     };
 
-    auto visit = [&](auto&& self, const RemoteExecTargetSelector& current) -> void {
+    auto visit = [&](auto&& self, const RemoteExecTargetSelector& current) -> void
+    {
         if (current.kind == RemoteExecTargetKind::Scalar)
         {
             dispatchScalar(current.scalar);
@@ -1354,6 +1674,35 @@ template <typename GetPlayerFn>
 int MarkTrackedNetworkMissionFilePlayersValid(int playerCount, GetPlayerFn&& getPlayer, int botClient,
                                               int minimumTransferState);
 
+template <typename GetPlayerFn, typename HasRoleFn>
+bool AreTrackedNetworkMissionFilesValid(int playerCount, GetPlayerFn&& getPlayer, int botClient,
+                                        int minimumTransferState, HasRoleFn&& hasRole, int& trackedCount)
+{
+    trackedCount = 0;
+    for (int i = 0; i < playerCount; ++i)
+    {
+        const auto& info = getPlayer(i);
+        if (info.dpid == botClient || !hasRole(info.dpid) || info.state < minimumTransferState)
+        {
+            continue;
+        }
+
+        ++trackedCount;
+        if (!info.missionFileValid)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+template <typename State>
+State GetNetworkMissionFileSendMinimumState(int player, int noPlayer, State createState, State transferMissionState)
+{
+    return player == noPlayer ? transferMissionState : createState;
+}
+
 template <typename MessageType, typename GetRecipientFn, typename SendFn, typename GetPlayerFn>
 NetworkMissionFileSendResult SendCurrentNetworkMissionFile(const char* missionFileName, const void* data, int totalSize,
                                                            int recipientCount, GetRecipientFn&& getRecipient,
@@ -1369,8 +1718,25 @@ NetworkMissionFileSendResult SendCurrentNetworkMissionFile(const char* missionFi
             result.sentCount += SendNetworkMissionFileSegmentToRecipients(recipientCount, getRecipient, botClient,
                                                                           [&](int dpid) { sendMessage(dpid, msg); });
         });
-    result.markedCount =
-        MarkTrackedNetworkMissionFilePlayersValid(playerCount, getPlayer, botClient, minimumTransferState);
+    return result;
+}
+
+template <typename MessageType, typename GetRecipientFn, typename SendFn>
+NetworkMissionFileSendResult SendCurrentNetworkMissionRawFile(const char* missionFileName, const void* data,
+                                                              int totalSize, int recipientCount,
+                                                              GetRecipientFn&& getRecipient, int botClient,
+                                                              SendFn&& sendRaw)
+{
+    NetworkMissionFileSendResult result;
+    result.destinationPath = BuildNetworkMissionTransferCachePboPath(missionFileName);
+    result.segmentCount = SendNetworkMissionRawFileSegments<MessageType>(
+        result.destinationPath, data, totalSize,
+        [&](AutoArray<char>& payload)
+        {
+            result.sentCount += SendNetworkMissionFileSegmentToRecipients(
+                recipientCount, getRecipient, botClient,
+                [&](int dpid) { sendRaw(dpid, payload.Data(), payload.Size()); });
+        });
     return result;
 }
 

@@ -7,6 +7,7 @@
 #include <SDL3/SDL_scancode.h>
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
+#include <Poseidon/IO/Filesystem/DirTree.hpp>
 #include <Random/randomGen.hpp>
 #include <Poseidon/Foundation/Strings/StrFormat.hpp>
 #include <Poseidon/Game/Scripting/Scripts.hpp>
@@ -60,13 +61,7 @@ namespace
 
 void AddWizardTemplate(C3DListBox* lbox, const MissionTemplateEntry& templ)
 {
-    RString missionDirectory;
-    if (templ.bank)
-        missionDirectory = CreateSingleMissionBank(templ.basePath);
-    else
-        missionDirectory = templ.basePath + RString("\\");
-
-    int index = lbox->AddString(ResolveMissionTemplateDisplayName(missionDirectory, templ.name));
+    int index = lbox->AddString(GetMissionTemplateSelectorText(templ));
     lbox->SetData(index, templ.name);
     lbox->SetValue(index, templ.bank ? 1 : 0);
 }
@@ -656,14 +651,15 @@ static void SaveFile(const FileInfoO& fi, const FileBankType* files, void* conte
     file.open(*sc->bank, fi.name);
     // note: file may be compressed - auto handled by bank
 
-    RString outFilename = sc->folder + RString("\\") + RString(fi.name);
+    std::string outFilename = std::string((const char*)sc->folder) + PATH_SEP_STR + std::string(fi.name);
+    platformPath(outFilename);
     // note file name may contain subfolder
     char folderName[1024];
-    snprintf(folderName, sizeof(folderName), "%s", (const char*)outFilename);
+    snprintf(folderName, sizeof(folderName), "%s", outFilename.c_str());
     *GetFilenameExt(folderName) = 0;
     if (strlen(folderName) > 0)
     {
-        if (folderName[strlen(folderName) - 1] == '\\')
+        if (folderName[strlen(folderName) - 1] == PATH_SEP)
         {
             folderName[strlen(folderName) - 1] = 0;
         }
@@ -672,7 +668,7 @@ static void SaveFile(const FileInfoO& fi, const FileBankType* files, void* conte
         ::CreateDirectory(folderName, nullptr);
     }
     //
-    FILE* tgt = fopen(outFilename, "wb");
+    FILE* tgt = fopen(outFilename.c_str(), "wb");
     if (!tgt)
     {
         return;

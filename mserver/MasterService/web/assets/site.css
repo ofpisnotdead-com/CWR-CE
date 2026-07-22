@@ -27,6 +27,13 @@ a:hover {
     text-decoration: underline;
 }
 
+.site-footer {
+    margin-top: 24px;
+    padding-top: 8px;
+    border-top: 1px solid #0e9b0e;
+    color: #79b979;
+}
+
 .top-menu {
     display: flex;
     gap: 12px;

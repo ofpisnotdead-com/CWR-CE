@@ -536,34 +536,44 @@ void SoundSystemOAL::SetEnvironment(const SoundEnvironment& env)
 bool SoundSystemOAL::EnableEAX(bool val)
 {
     std::lock_guard<std::recursive_mutex> lk(_audioMutex);
-    // DX8 parity (soundDX8.cpp:1916-1932) minus _hwEnabled check
-    if (!_canEAX)
+    if (!val)
     {
-        LOG_DEBUG(Audio, "EnableEAX({}): rejected — EFX not available", val);
-        return false;
-    }
-    if (_eaxEnabled == val)
-        return _eaxEnabled;
+        if (!_eaxEnabled)
+            return false;
 
-    _eaxEnabled = val;
-    if (_eaxEnabled)
-    {
-        if (!InitEFX())
-            _eaxEnabled = false;
-    }
-    else
-    {
-        // Disconnect all sources from the effect slot before destroying it
+        _eaxEnabled = false;
         for (auto* wave : _waves)
         {
             if (wave)
                 wave->DetachEFX();
         }
         DeinitEFX();
+        LOG_INFO(Audio, "EAX disabled");
+        return false;
     }
+
+    if (!_canEAX)
+    {
+        LOG_DEBUG(Audio, "EnableEAX(true): rejected — EFX not available");
+        return false;
+    }
+    if (_eaxEnabled)
+        return _eaxEnabled;
+
+    _eaxEnabled = true;
+    if (!InitEFX())
+        _eaxEnabled = false;
 
     LOG_INFO(Audio, "EAX {}", _eaxEnabled ? "enabled" : "disabled");
     return _eaxEnabled;
+}
+
+bool SoundSystemOAL::EnableHWAccel(bool val)
+{
+    std::lock_guard<std::recursive_mutex> lk(_audioMutex);
+    if (!val)
+        _hwAccel = false;
+    return false;
 }
 
 bool SoundSystemOAL::ApplyEFXByName(const char* presetName, float size)

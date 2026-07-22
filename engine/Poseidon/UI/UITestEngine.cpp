@@ -106,6 +106,32 @@ std::string UITestEngine::GetControlText(IControl* ctrl)
     return {};
 }
 
+std::string UITestEngine::GetHtmlText(IControl* ctrl)
+{
+    auto* html = dynamic_cast<CHTMLContainer*>(ctrl);
+    if (!html)
+        return {};
+
+    // HTML controls (mission/overview preview) carry their text in parsed
+    // section fields; concatenate them so a test can read the rendered content
+    // (e.g. assert the wizard overview switched to the selected template).
+    std::string text;
+    for (int s = 0; s < html->NSections(); ++s)
+    {
+        const HTMLSection& section = html->GetSection(s);
+        for (int f = 0; f < section.fields.Size(); ++f)
+        {
+            const char* fieldText = section.fields[f].text;
+            if (!fieldText || !*fieldText)
+                continue;
+            if (!text.empty())
+                text += ' ';
+            text += fieldText;
+        }
+    }
+    return text;
+}
+
 void UITestEngine::SetSemanticControlText(IControl* ctrl, const char* text)
 {
     if (!ctrl)

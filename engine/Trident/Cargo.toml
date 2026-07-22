@@ -22,6 +22,7 @@ glob = "0.3"
 indicatif = "0.17"
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
 papa-bear-archive = { path = "../../mserver/Archive" }
+papa-bear-client = { path = "../../mserver/Client" }
 zstd = "0.13"
 
 [dev-dependencies]

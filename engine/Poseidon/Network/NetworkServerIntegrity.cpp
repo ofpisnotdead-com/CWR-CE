@@ -726,6 +726,19 @@ void NetworkServer::OnPlayerDestroy(int dpid)
         }
     }
 
+    for (int i = 0; i < _pendingMessages.Size();)
+    {
+        NetPendingMessage& pending = _pendingMessages[i];
+        if (pending.player->player == dpid)
+        {
+            _pendingMessages.Delete(i);
+        }
+        else
+        {
+            i++;
+        }
+    }
+
     for (int i = 0; i < _objects.Size(); i++)
     {
         NetworkObjectInfo& oInfo = *_objects[i];

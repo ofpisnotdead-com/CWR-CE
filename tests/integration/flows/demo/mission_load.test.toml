@@ -1,9 +1,7 @@
 binary = "PoseidonGameDemo"
 no_menu = true
-# Under ASan the demo world load (~100s) blocks the main thread, so the
-# triAssertViewDistance eval issued right after "Play" only returns once the load
-# finishes — assert_timeout must exceed that, and the run needs HARNESS_CMD_TIMEOUT_SEC
-# raised (game-side command-response window). Measured ~122s end-to-end.
-timeout = 240
-assert_timeout = 200
+# Fail fast if the menu flow does not reach the Play action or the gameplay
+# view-distance readback. This test is a smoke gate, not a full mission soak.
+timeout = 45
+assert_timeout = 30
 tags = ["headful"]

@@ -23,7 +23,16 @@ triAssertIncludes [(triVisibleTexts), "Scarica ed entra"]    // the OK button (C
 // mod row mid-line — no line starts with it (revert the fix → this assert fails,
 // "1 lines"). Teeth on that engine fix.
 triAssertControlLineStarts [136, "Verrà disattivato"]
+triAssertControlLinesExclude [136, "\n"]
+triAssertControlLinesExclude [136, "\r"]
 
 triClick 2                         // IDC_CANCEL
 triAssertEq [(triDisplay), 0]                 // dialog dismissed, back at the menu
+
+triOpenJoinRequirements 1
+triAssertEq [(triDisplay), 75]
+triAssertIncludes [(triVisibleTexts), "Configura ed entra"]
+triClick 2
+triAssertEq [(triDisplay), 0]
+
 triEndTest

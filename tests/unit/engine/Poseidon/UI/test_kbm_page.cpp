@@ -11,6 +11,7 @@
 #include <Poseidon/Input/InputContext.hpp>
 #include <Poseidon/Input/InputProfile.hpp>
 #include <Poseidon/Input/KeyInput.hpp>
+#include <Poseidon/UI/DisplayUI.hpp>
 #include <Poseidon/UI/Options/KbmPage.hpp>
 #include <Poseidon/UI/Options/OptionsScrollList.hpp>
 #include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
@@ -35,6 +36,7 @@ class UserKeysSnapshot
   public:
     UserKeysSnapshot()
         : savedContext(InputSubsystem::Instance().GetContext()),
+          savedMenuProfile(InputSubsystem::Instance().GetProfile(InputContext::Menu)),
           savedInfantryProfile(InputSubsystem::Instance().GetProfile(InputContext::Infantry)),
           savedCarProfile(InputSubsystem::Instance().GetProfile(InputContext::CarDriver)),
           savedTankProfile(InputSubsystem::Instance().GetProfile(InputContext::TankDriver)),
@@ -47,6 +49,7 @@ class UserKeysSnapshot
     {
         auto& sub = InputSubsystem::Instance();
         sub.SetContext(savedContext);
+        sub.GetProfile(InputContext::Menu) = savedMenuProfile;
         sub.GetProfile(InputContext::Infantry) = savedInfantryProfile;
         sub.GetProfile(InputContext::CarDriver) = savedCarProfile;
         sub.GetProfile(InputContext::TankDriver) = savedTankProfile;
@@ -57,6 +60,7 @@ class UserKeysSnapshot
 
   private:
     InputContext savedContext;
+    InputProfile savedMenuProfile;
     InputProfile savedInfantryProfile;
     InputProfile savedCarProfile;
     InputProfile savedTankProfile;
@@ -89,6 +93,17 @@ void LoadMainMenuStringtable()
     LoadStringtable("global", csv.string().c_str(), 0.0f, true);
     SetLanguage("English");
     loaded = true;
+}
+
+int RowForCommonAction(UserAction action)
+{
+    const UserAction* actions = GetControlsCategoryActions(ControlsCategoryCommon);
+    for (int i = 0; actions[i] != UAN; i++)
+    {
+        if (actions[i] == action)
+            return i + 1;
+    }
+    return -1;
 }
 } // namespace
 
@@ -236,6 +251,24 @@ TEST_CASE("KbmPage: changing category through SetRowValue rebinds the row list",
     CHECK(p.RowValue(0) == ControlsCategoryCount - 1);
     p.SetRowValue(0, ControlsCategoryCount + 2);
     CHECK(p.RowValue(0) == 2);
+}
+
+TEST_CASE("KbmPage: Common lists VoN toggle next to default push-to-talk", "[UI][KbmPage]")
+{
+    UserKeysSnapshot snap;
+    TestableKbmPage page;
+    auto& p = page.Provider();
+
+    auto& menu = InputSubsystem::Instance().GetProfile(InputContext::Menu);
+    menu.LoadDefaults();
+
+    p.SetRowValue(0, (int)ControlsCategoryCommon);
+    const int toggleRow = RowForCommonAction(UAVoiceOverNet);
+    REQUIRE(toggleRow > 0);
+    REQUIRE(RowForCommonAction(UAVoiceOverNetPushToTalk) == toggleRow + 1);
+
+    CHECK(std::string(p.BindingPrimary(toggleRow)).empty());
+    CHECK(std::string(p.BindingPrimary(toggleRow + 1)) == (const char*)GetKeyName(SDL_SCANCODE_CAPSLOCK));
 }
 
 TEST_CASE("KbmPage: vehicle movement capture writes driver profiles", "[UI][KbmPage]")

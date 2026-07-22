@@ -572,10 +572,7 @@ void AICenter::Init(ArcadeTemplate& t, AutoArray<VehicleInitCmd, MemAllocSA>& in
 
     BeginArcade(t, inits);
 
-    if (!AssertValid())
-    {
-        Fail("Structure invalid after init");
-    }
+    PoseidonAssert(AssertValid());
 }
 
 void AICenter::InitSensors(bool initialize)

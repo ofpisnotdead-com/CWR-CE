@@ -2962,6 +2962,7 @@ dependencies = [
  "glob",
  "indicatif",
  "papa-bear-archive",
+ "papa-bear-client",
  "predicates",
  "reqwest",
  "rustyline",

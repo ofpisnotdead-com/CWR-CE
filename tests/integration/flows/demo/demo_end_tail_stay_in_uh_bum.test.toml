@@ -2,4 +2,4 @@ no_menu = true
 extra_args = ["--nosound"]
 tags = ["gl-21", "demo", "headless"]
 mission = "tests/integration/missions/demo_end_tail_stay_in_uh.Demo"
-timeout = 240
+timeout = 75

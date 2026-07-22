@@ -103,6 +103,20 @@ TEST_CASE("ControlsCategory: Walk (UASlow) shows under OnFoot only", "[Input][Co
     CHECK_FALSE(IsActionInControlsCategory(UASlow, ControlsCategoryCommon));
 }
 
+TEST_CASE("ControlsCategory: VoN toggle and push-to-talk are adjacent Common actions", "[Input][ControlsCategory]")
+{
+    const UserAction* actions = GetControlsCategoryActions(ControlsCategoryCommon);
+    for (int i = 0; actions[i] != UAN; i++)
+    {
+        if (actions[i] == UAVoiceOverNet)
+        {
+            REQUIRE(actions[i + 1] == UAVoiceOverNetPushToTalk);
+            return;
+        }
+    }
+    FAIL("VoiceOverNet action missing from Common controls");
+}
+
 TEST_CASE("ControlsCategory: every bindable action is reachable from some category", "[Input][ControlsCategory]")
 {
     // Every keyboard-bindable action must appear in some category, else it's

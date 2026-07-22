@@ -4,10 +4,12 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 #include <Poseidon/Foundation/Containers/Bitmask.hpp>
 #include <Poseidon/Network/NetTransportClientVoiceInit.hpp>
+#include <Poseidon/Network/NetTransportMessageSend.hpp>
 #include <Poseidon/Network/NetTransportServerVoiceRouting.hpp>
 #include <Poseidon/Network/RateLimit.hpp>
 #include <Poseidon/Network/NetworkConfig.hpp>
@@ -172,6 +174,52 @@ TEST_CASE("a wire server name is rendered as data, never as a format", "[network
     int n = snprintf(out, sizeof(out), "%s", name);
     REQUIRE(n == (int)strlen(name));
     REQUIRE(strcmp(out, "%s%s%s%n") == 0); // conversion specifiers were not interpreted
+}
+
+TEST_CASE("reliable transport fragments payloads before the channel maximum", "[network][transport]")
+{
+    struct FakeMessage
+    {
+        DWORD id = 0;
+        int payloadSize = 0;
+        unsigned16 flags = 0;
+
+        void setFlags(unsigned16, unsigned16 value) { flags = value; }
+        void setOrderedPrevious() {}
+        void setData(unsigned8*, int size) { payloadSize = size; }
+    };
+
+    std::vector<int> payloadSizes;
+    std::vector<unsigned16> packetFlags;
+    std::vector<unsigned8> payload(1460, 0x42);
+    unsigned8* cursor = payload.data();
+    DWORD nextId = 0;
+    std::shared_ptr<FakeMessage> outMessage;
+
+    const bool sent = TrySendNetTransportGuaranteedBuffer(
+        outMessage, static_cast<int>(payload.size()), 2048, BuildNetTransportGuaranteedMessageFlags(false), cursor,
+        [&](int size)
+        {
+            auto message = std::make_shared<FakeMessage>();
+            message->id = ++nextId;
+            message->payloadSize = size;
+            return message;
+        },
+        [&](FakeMessage& message)
+        {
+            payloadSizes.push_back(message.payloadSize);
+            packetFlags.push_back(message.flags);
+        });
+
+    REQUIRE(sent);
+    REQUIRE(payloadSizes == std::vector<int>{512, 512, 436});
+    REQUIRE((packetFlags[0] & MSG_PART_FLAG) != 0);
+    REQUIRE((packetFlags[0] & MSG_CLOSING_FLAG) == 0);
+    REQUIRE((packetFlags[1] & MSG_PART_FLAG) != 0);
+    REQUIRE((packetFlags[1] & MSG_CLOSING_FLAG) == 0);
+    REQUIRE((packetFlags[2] & MSG_PART_FLAG) != 0);
+    REQUIRE((packetFlags[2] & MSG_CLOSING_FLAG) != 0);
+    REQUIRE(cursor == payload.data() + payload.size());
 }
 
 TEST_CASE("VoN transport routes preserve selected chat channel", "[network][transport][VoN]")

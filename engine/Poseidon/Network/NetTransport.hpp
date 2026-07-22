@@ -52,6 +52,14 @@ struct SessionInfo
   RString versionTag;
 };
 
+struct NetVoiceSpeakerInfo
+{
+    int player = 0;
+    int channel = 0;
+    bool active = false;
+    float level = 0.0f;
+};
+
 #define MOD_LENGTH  80
 #define VERSION_TAG_LENGTH 24
 
@@ -102,6 +110,8 @@ enum NetMsgFlags
 	NMFStatsAlreadyDone=4
 };
 
+constexpr int NetTransportReliableFragmentPayload = 512;
+
 enum NetTerminationReason
 {
 	NTRTimeout,
@@ -109,6 +119,7 @@ enum NetTerminationReason
 	NTRKicked,
 	NTRBanned,
 	NTRMissingAddon,
+	NTRVersion,
 	NTROther, // must be last
 };
 
@@ -150,6 +161,8 @@ struct RemoteHostAddress
 
 typedef void UserMessageClientCallback(char *buffer, int bufferSize, void *context);
 typedef void UserMessageServerCallback(int from, char *buffer, int bufferSize, void *context);
+typedef void RawMagicClientCallback(int magic, const char *buffer, int bufferSize, void *context);
+typedef void RawMagicServerCallback(int from, int magic, const char *buffer, int bufferSize, void *context);
 typedef void SendCompleteCallback(DWORD msgID, bool ok, void *context);
 typedef void CreatePlayerCallback(int player, bool botClient, const char *name, const char *mod, void *context);
 typedef void DeletePlayerCallback(int player, void *context);
@@ -204,6 +217,7 @@ public:
 	virtual bool InitVoice() = 0;
 
 	virtual bool SendMsg(BYTE *buffer, int bufferSize, DWORD &msgID, NetMsgFlags flags) = 0;
+	virtual bool SendRawMagic(int magic, BYTE *buffer, int bufferSize) { return false; }
 	virtual void GetSendQueueInfo(int &nMsg, int &nBytes, int &nMsgG, int &nBytesG) = 0;
 	virtual bool GetConnectionInfo(int &latencyMS, int &throughputBPS) = 0;
 	virtual bool GetConnectionInfoRaw(int &latencyMS, int &throughputBPS)
@@ -224,12 +238,16 @@ public:
 
 	virtual bool IsVoicePlaying(int player) = 0;
 	virtual bool IsVoiceRecording() = 0;
+	virtual void GetVoiceSpeakers(AutoArray<NetVoiceSpeakerInfo, Poseidon::Foundation::MemAllocSA> &speakers) {}
 	virtual NetTranspSound3DBuffer *Create3DSoundBuffer(int player) = 0;
 	virtual void SetVoiceChannel(int channel) {}
 	virtual void SetVoiceTransmit(bool on) {}
 	virtual int SendVoiceTestTone(int frames, int amplitude) { return 0; }
+	// Poseidon::VoNTransmitHealth as int (0 = Off / voice not initialized).
+	virtual int GetVoiceTransmitHealth() { return 0; }
 
 	virtual void ProcessUserMessages(UserMessageClientCallback *callback, void *context) = 0;
+	virtual void ProcessRawMagicMessages(RawMagicClientCallback *callback, void *context) {}
 	virtual void RemoveUserMessages() = 0;
 	virtual void ProcessSendComplete(SendCompleteCallback *callback, void *context) = 0;
 	virtual void RemoveSendComplete() = 0;
@@ -267,6 +285,7 @@ public:
 	virtual int GetSessionPort() = 0;
 
 	virtual bool SendMsg(int to, BYTE *buffer, int bufferSize, DWORD &msgID, NetMsgFlags flags) = 0;
+	virtual bool SendRawMagic(int to, int magic, BYTE *buffer, int bufferSize) { return false; }
 	virtual void CancelAllMessages() = 0;
 	virtual void GetSendQueueInfo(int to, int &nMsg, int &nBytes, int &nMsgG, int &nBytesG) = 0;
 	virtual bool GetConnectionInfo(int to, int &latencyMS, int &throughputBPS) = 0;
@@ -282,6 +301,7 @@ public:
 	virtual void KickOff(int player, NetTerminationReason reason) = 0;
 	// Dotted IPv4 of a connected player's remote address ("" if unknown). Used for IP bans.
 	virtual RString GetPlayerHostIP(int player) { return RString(); }
+	virtual bool GetPlayerHostIP(int player, char* buffer, int bufferSize) { return false; }
 	// Retrieves URL of server
 	virtual bool GetURL(char *address, DWORD addressLen) = 0;
 
@@ -289,6 +309,7 @@ public:
 	virtual void SetTransmitTargets(int from, AutoArray<int, Poseidon::Foundation::MemAllocSA> &to, int channel) = 0;
 
 	virtual void ProcessUserMessages(UserMessageServerCallback *callback, void *context) = 0;
+	virtual void ProcessRawMagicMessages(RawMagicServerCallback *callback, void *context) {}
 	virtual void RemoveUserMessages() = 0;
 	virtual void ProcessSendComplete(SendCompleteCallback *callback, void *context) = 0;
 	virtual void RemoveSendComplete() = 0;

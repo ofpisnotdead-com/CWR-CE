@@ -11,10 +11,10 @@ VoNJitterBuffer::VoNJitterBuffer(int capacity, int frameSamples) : _capacity(cap
         f.pcm.resize(frameSamples, 0);
 }
 
-void VoNJitterBuffer::push(uint64_t origin, const int16_t* pcm, int samples)
+VoNJitterPush VoNJitterBuffer::push(uint64_t origin, const int16_t* pcm, int samples)
 {
     if (samples != _frameSamples)
-        return;
+        return VoNJitterPush::BadSize;
 
     if (!_started)
     {
@@ -27,30 +27,41 @@ void VoNJitterBuffer::push(uint64_t origin, const int16_t* pcm, int samples)
     {
         int behind = static_cast<int>((_nextOrigin - origin) / _frameSamples);
         if (behind >= _capacity)
-            return;           // too old
+            return VoNJitterPush::TooOld;
         _nextOrigin = origin; // shift base back
     }
 
-    // Reject if too far ahead
+    // Far ahead of the play cursor: the sender skipped past the buffer
+    // window (burst gap, capture backlog, sustained loss). Voice frames
+    // are unreliable and never retransmitted, so the frames the cursor
+    // waits for can no longer arrive — resync to the new stream position
+    // instead of muting the sender forever.
+    bool resynced = false;
     int ahead = static_cast<int>((origin - _nextOrigin) / _frameSamples);
     if (ahead >= _capacity)
-        return;
+    {
+        for (auto& f : _ring)
+            f.valid = false;
+        _nextOrigin = origin;
+        resynced = true;
+    }
 
     // Duplicate check + find free slot (linear scan, origin-keyed)
     int freeSlot = -1;
     for (int i = 0; i < _capacity; ++i)
     {
         if (_ring[i].valid && _ring[i].origin == origin)
-            return; // duplicate
+            return VoNJitterPush::Duplicate;
         if (!_ring[i].valid && freeSlot < 0)
             freeSlot = i;
     }
     if (freeSlot < 0)
-        return; // buffer full
+        return VoNJitterPush::Full;
 
     _ring[freeSlot].origin = origin;
     _ring[freeSlot].valid = true;
     std::memcpy(_ring[freeSlot].pcm.data(), pcm, samples * sizeof(int16_t));
+    return resynced ? VoNJitterPush::Resync : VoNJitterPush::Accepted;
 }
 
 int VoNJitterBuffer::pull(int16_t* out, int maxSamples)

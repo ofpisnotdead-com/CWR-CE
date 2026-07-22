@@ -275,10 +275,14 @@ void C3DStatic::FormatText()
             {
                 return;
             }
-            if (c == '\n')
+            if (c == '\r' || c == '\n')
             {
-                // Explicit line break — start the next line after the newline,
+                // Explicit line break - start the next line after the newline,
                 // regardless of width (width-wrap still applies within a line).
+                if (c == '\r' && *p == '\n')
+                {
+                    p++;
+                }
                 _lines.Add(p - (const char*)_text);
                 break;
             }
@@ -441,7 +445,7 @@ RString C3DStatic::GetLine(int i) const
 
     int from = _lines[i];
     int to = i + 1 < _lines.Size() ? _lines[i + 1] : _text.GetLength();
-    return _text.Substring(from, to);
+    return ControlLineTextWithoutTrailingBreaks(_text, from, to);
 }
 
 void C3DStatic::DrawText(const char* text, Vector3Par top, Vector3Par down, PackedColor color)
@@ -2244,13 +2248,14 @@ void C3DListBox::DrawItem(Vector3Par position, Vector3Par down, int i, float alp
     Vector3 up = -_size * down;
     Vector3 right = 0.75 * up.Size() * _right.Normalized();
     float x2c = (rightSBSize - 2.0 * border.Size()) / right.Size();
+    constexpr float descenderMargin = 0.25f;
     float y1ct = 0;
-    float y2ct = 1;
+    float y2ct = 1 + descenderMargin;
     if (y1c > top)
     {
         y1ct = (y1c - top) / _size;
     }
-    if (y2c < top + _size)
+    if (y2c < top + _size * (1 + descenderMargin))
     {
         y2ct = (y2c - top) / _size;
     }

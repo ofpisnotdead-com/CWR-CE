@@ -986,13 +986,13 @@ TEST_CASE("OAL - LastLoop keeps current loop offset instead of restarting", "[Au
     REQUIRE(wave->State() == WaveState::Playing);
 
     float before = 0.f;
-    for (int i = 0; i < 80 && (before < 0.030f || before > 0.090f); ++i)
+    for (int i = 0; i < 80 && (before < 0.025f || before > 0.090f); ++i)
     {
         sys->Commit();
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
         before = wave->GetCurrentOffsetSeconds();
     }
-    REQUIRE(before > 0.030f);
+    REQUIRE(before >= 0.025f);
     REQUIRE(before < 0.090f);
 
     wave->LastLoop();

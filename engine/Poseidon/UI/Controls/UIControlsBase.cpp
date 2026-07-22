@@ -8,6 +8,7 @@
 #include <Poseidon/Foundation/Strings/RString.hpp>
 #include <Poseidon/Foundation/Time/Time.hpp>
 #include <Poseidon/Foundation/Types/Pointers.hpp>
+#include <cstring>
 
 using namespace Poseidon;
 namespace Poseidon
@@ -44,6 +45,15 @@ RString FindShape(RString name);
 //
 //	 Implementation
 //
+int ResolveLegacyControlInt(const ParamEntry& entry)
+{
+    const RStringB raw = entry.GetValueRaw();
+    const char* rawText = raw;
+    if (rawText && strcmp(rawText, "IDC_STATIC") == 0)
+        return -1;
+    return entry.GetInt();
+}
+
 void DrawFrame(Texture* corner, PackedColor color, const Rect2DPixel& frame);
 // for listbox and combobox
 #define SCROLL_SPEED 100.0
@@ -145,7 +155,7 @@ Control::Control(ControlsContainer* parent, int type, int idc, const ParamEntry&
     _timer = UITIME_MAX;
     _scale = 1.0;
 
-    _style = cls >> "style";
+    _style = ResolveLegacyControlInt(cls >> "style");
     _x = cls >> "x";
     _y = cls >> "y";
     _w = cls >> "w";
@@ -810,8 +820,8 @@ bool ControlObjectContainer::OnSetFocus(bool up, bool def)
 
 Control* ControlObjectContainer::LoadControl(const ParamEntry& ctrlCls)
 {
-    int type = ctrlCls >> "type";
-    int idc = ctrlCls >> "idc";
+    int type = ResolveLegacyControlInt(ctrlCls >> "type");
+    int idc = ResolveLegacyControlInt(ctrlCls >> "idc");
     Control* ctrl = _parent->OnCreateCtrl(type, idc, ctrlCls);
     if (ctrl != nullptr)
     {

@@ -6,3 +6,4 @@
 // This tests that both clients coordinate correctly and don't deadlock.
 
 triAssertNgsClient 14
+triAssertMissionPlayable

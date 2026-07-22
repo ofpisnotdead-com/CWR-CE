@@ -1,5 +1,6 @@
 #include <Poseidon/Core/Profile/ProfileManager.hpp>
 #include <Poseidon/Core/Profile/UserConfig.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <algorithm>
 #include <filesystem>
 #include <cstdlib>
@@ -24,13 +25,36 @@ static std::string usersDir(const std::string& basePath)
     return ensureTrailingSep(basePath) + "Users";
 }
 
+static fs::path fsPathFromUtf8(const std::string& path)
+{
+#ifdef _WIN32
+    return fs::path(Utf8PathToWide(path.c_str()));
+#else
+    return fs::path(path);
+#endif
+}
+
+static std::string fsPathToUtf8(const fs::path& path)
+{
+#ifdef _WIN32
+    return WidePathToUtf8(path.wstring().c_str());
+#else
+    return path.string();
+#endif
+}
+
+static fs::path usersFsPath(const std::string& basePath)
+{
+    return fsPathFromUtf8(usersDir(basePath));
+}
+
 namespace ProfileManager
 {
 
 std::vector<ProfileInfo> EnumerateProfiles(const std::string& basePath)
 {
     std::vector<ProfileInfo> profiles;
-    std::string uDir = usersDir(basePath);
+    fs::path uDir = usersFsPath(basePath);
 
     std::error_code ec;
     if (!fs::is_directory(uDir, ec))
@@ -41,7 +65,7 @@ std::vector<ProfileInfo> EnumerateProfiles(const std::string& basePath)
         if (!entry.is_directory())
             continue;
 
-        std::string name = entry.path().filename().string();
+        std::string name = fsPathToUtf8(entry.path().filename());
         if (name.empty() || name[0] == '.')
             continue;
         if (IsServerProfileName(name))
@@ -49,8 +73,8 @@ std::vector<ProfileInfo> EnumerateProfiles(const std::string& basePath)
 
         ProfileInfo info;
         info.name = name;
-        info.path = ensureTrailingSep(entry.path().string());
-        info.cfgPath = entry.path().string() + "/UserInfo.cfg";
+        info.path = ensureTrailingSep(fsPathToUtf8(entry.path()));
+        info.cfgPath = fsPathToUtf8(entry.path() / "UserInfo.cfg");
         profiles.push_back(std::move(info));
     }
 
@@ -75,7 +99,7 @@ bool CreateProfile(const std::string& basePath, const std::string& name)
     if (!IsValidProfileName(name))
         return false;
 
-    std::string dirPath = usersDir(basePath) + "/" + name;
+    fs::path dirPath = usersFsPath(basePath) / fsPathFromUtf8(name);
 
     std::error_code ec;
     if (fs::exists(dirPath, ec))
@@ -85,9 +109,11 @@ bool CreateProfile(const std::string& basePath, const std::string& name)
         return false;
 
     // Write default UserInfo.cfg
-    std::string cfgPath = dirPath + "/UserInfo.cfg";
+    std::string cfgPath = fsPathToUtf8(dirPath / "UserInfo.cfg");
     UserConfig defaults;
     defaults.SaveToFile(cfgPath.c_str());
+    if (!fs::is_regular_file(dirPath / "UserInfo.cfg", ec))
+        return false;
     return true;
 }
 
@@ -96,7 +122,7 @@ bool DeleteProfile(const std::string& basePath, const std::string& name)
     if (!IsValidProfileName(name))
         return false;
 
-    std::string dirPath = usersDir(basePath) + "/" + name;
+    fs::path dirPath = usersFsPath(basePath) / fsPathFromUtf8(name);
 
     std::error_code ec;
     if (!fs::exists(dirPath, ec))
@@ -111,8 +137,8 @@ bool RenameProfile(const std::string& basePath, const std::string& oldName, cons
     if (!IsValidProfileName(oldName) || !IsValidProfileName(newName))
         return false;
 
-    std::string oldPath = usersDir(basePath) + "/" + oldName;
-    std::string newPath = usersDir(basePath) + "/" + newName;
+    fs::path oldPath = usersFsPath(basePath) / fsPathFromUtf8(oldName);
+    fs::path newPath = usersFsPath(basePath) / fsPathFromUtf8(newName);
 
     std::error_code ec;
     if (!fs::exists(oldPath, ec))

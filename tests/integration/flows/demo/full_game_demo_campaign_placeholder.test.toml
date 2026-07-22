@@ -1,1 +1,2 @@
-tags = ["demo", "headless"]
+tags = ["demo", "exclusive", "headless"]
+assert_timeout = 30

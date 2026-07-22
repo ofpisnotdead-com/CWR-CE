@@ -1,0 +1,22 @@
+mission = "tests/integration/multiplayer/dedicated_init_order_probe.test/dedicated-init-order-probe.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 90
+
+tags = ["headful", "network", "exclusive"]
+
+[[instances]]
+extra_args = ["--no-strict", "--mp-auto-start", "1", "--log-format", "jsonl"]
+name = "server"
+type = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "init-order-client", "--log-format", "jsonl"]
+name = "client"
+type = "client"
+connect = "server"
+after = "server"
+start_delay_ms = 1000
+use_mission = false
+no_autotest = true
+machine_id = "trident:dedicated_init_order_probe:client"

@@ -188,11 +188,15 @@ jobs:
         run: cargo test --locked
 
   trident-test:
-    name: Linux Trident
+    name: Linux Trident (shard ${{ matrix.shard }})
     runs-on: ubuntu-24.04
     needs:
       - build-linux
       - trident
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     steps:
       - name: Checkout
@@ -284,6 +288,8 @@ jobs:
             exe/tri test \
             --output-dir "$TRI_OUTPUT_DIR" \
             --render "$TRIDENT_RENDER" \
+            --jobs 2 \
+            --shard ${{ matrix.shard }}/4 \
             --retries 2 \
             --skip-tag ci-host-blocked \
             --game-arg --audio \
@@ -295,7 +301,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: trident-output-${{ steps.build_metadata.outputs.sha_short }}
+          name: trident-output-${{ steps.build_metadata.outputs.sha_short }}-shard${{ matrix.shard }}
           path: trident-output
           if-no-files-found: ignore
 

@@ -187,6 +187,36 @@ GameValue TriGetPixelMaxDiff(const GameState* /*state*/, GameValuePar arg)
     return GameValue(static_cast<float>(mx));
 }
 
+/// triAssertPixelNotWhite [u, v, threshold] — passes when at least one RGB
+/// channel is below threshold. Useful for catching missing white placeholder
+/// textures without depending on the exact face artwork.
+GameValue TriAssertPixelNotWhite(const GameState* /*state*/, GameValuePar arg)
+{
+    if (!GEngine)
+        return GameValue("FAIL:no_engine");
+    const GameArrayType& a = arg;
+    if (a.Size() < 2)
+        return GameValue("FAIL:need [u,v,(threshold)]");
+    const float u = static_cast<float>(static_cast<GameScalarType>(a[0]));
+    const float v = static_cast<float>(static_cast<GameScalarType>(a[1]));
+    const int threshold = a.Size() >= 3 ? static_cast<int>(static_cast<GameScalarType>(a[2])) : 245;
+    const int w = GEngine->Width();
+    const int h = GEngine->Height();
+    if (w <= 0 || h <= 0)
+        return GameValue("FAIL:no_backbuffer");
+    const int px = static_cast<int>(u * static_cast<float>(w - 1));
+    const int py = static_cast<int>(v * static_cast<float>(h - 1));
+    uint8_t rgb[3] = {0, 0, 0};
+    if (!GEngine->SamplePixel(px, py, rgb))
+        return GameValue("FAIL:sample");
+    const int mn = std::min({static_cast<int>(rgb[0]), static_cast<int>(rgb[1]), static_cast<int>(rgb[2])});
+    if (mn < threshold)
+        return GameValue("OK");
+    char buf[64];
+    snprintf(buf, sizeof(buf), "FAIL:white:%d,%d,%d", rgb[0], rgb[1], rgb[2]);
+    return GameValue(buf);
+}
+
 // ============================================================================
 // UI / controls getters
 // ============================================================================
@@ -495,6 +525,7 @@ INIT_MODULE(GameStateExtTestGetters, 3)
     // Pixel
     GGameState.NewFunction(GameFunction(GameScalar, "triGetPixelMaxChannel", TriGetPixelMaxChannel, GameArray));
     GGameState.NewFunction(GameFunction(GameScalar, "triGetPixelMaxDiff", TriGetPixelMaxDiff, GameArray));
+    GGameState.NewFunction(GameFunction(GameString, "triAssertPixelNotWhite", TriAssertPixelNotWhite, GameArray));
 
     // UI / controls
     GGameState.NewFunction(GameFunction(GameString, "triGetControlVisible", TriGetControlVisible, GameScalar));

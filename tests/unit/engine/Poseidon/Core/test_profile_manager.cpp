@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <Poseidon/Core/Profile/ProfileManager.hpp>
 #include <Poseidon/Core/Profile/UserConfig.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <filesystem>
 #include <fstream>
 #include <cstdlib>
@@ -18,6 +19,15 @@
 #endif
 
 namespace fs = std::filesystem;
+
+static fs::path pathFromUtf8(const std::string& path)
+{
+#ifdef _WIN32
+    return fs::path(Poseidon::Utf8PathToWide(path.c_str()));
+#else
+    return fs::path(path);
+#endif
+}
 
 static std::string makeTempDir()
 {
@@ -73,8 +83,9 @@ TEST_CASE("Poseidon::ProfileManager::CreateProfile", "[profile]")
     SECTION("creates directory for UTF-8 profile names")
     {
         REQUIRE(Poseidon::ProfileManager::CreateProfile(tmp.path, "Šárka"));
-        REQUIRE(fs::is_directory(fs::path(tmp.path) / "Users" / "Šárka"));
-        REQUIRE(fs::is_regular_file(fs::path(tmp.path) / "Users" / "Šárka" / "UserInfo.cfg"));
+        fs::path profileDir = fs::path(tmp.path) / "Users" / pathFromUtf8("Šárka");
+        REQUIRE(fs::is_directory(profileDir));
+        REQUIRE(fs::is_regular_file(profileDir / "UserInfo.cfg"));
     }
 
     SECTION("fails if profile already exists")
@@ -153,7 +164,7 @@ TEST_CASE("Poseidon::ProfileManager::RenameProfile", "[profile]")
     {
         REQUIRE(Poseidon::ProfileManager::RenameProfile(tmp.path, "OldName", "Řehoř"));
         REQUIRE_FALSE(fs::exists(tmp.path + "/Users/OldName"));
-        REQUIRE(fs::exists(fs::path(tmp.path) / "Users" / "Řehoř"));
+        REQUIRE(fs::exists(fs::path(tmp.path) / "Users" / pathFromUtf8("Řehoř")));
     }
 
     SECTION("fails if target exists")

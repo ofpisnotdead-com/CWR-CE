@@ -858,6 +858,7 @@ void DisplayMultiplayerSetup::OnDraw(EntityAI* vehicle, float alpha)
     else
     {
         Display::OnDraw(vehicle, alpha);
+        GChatList.OnDraw();
 
         if (_dragging)
         {
@@ -1153,6 +1154,12 @@ void DisplayClientGetReady::OnButtonClicked(int idc)
     }
 }
 
+void DisplayClientGetReady::OnDraw(EntityAI* vehicle, float alpha)
+{
+    base::OnDraw(vehicle, alpha);
+    GChatList.OnDraw();
+}
+
 void DisplayClientGetReady::OnSimulate(EntityAI* vehicle)
 {
     // update player list
@@ -1212,8 +1219,11 @@ void DisplayClientGetReady::OnSimulate(EntityAI* vehicle)
         lbox->SortItemsByValue();
     }
 
-    NetworkGameState gameState = GetNetworkManager().GetServerState();
-    switch (gameState)
+    const NetworkGameState serverState = GetNetworkManager().GetServerState();
+    const NetworkGameState clientState = GetNetworkManager().GetGameState();
+    const NetworkGameState effectiveState =
+        serverState < NGSBriefing && clientState >= NGSBriefing ? clientState : serverState;
+    switch (effectiveState)
     {
         case NGSNone:
         case NGSCreating:
@@ -1225,8 +1235,9 @@ void DisplayClientGetReady::OnSimulate(EntityAI* vehicle)
         case NGSPrepareOK:
         case NGSDebriefing:
         case NGSTransferMission:
-        case NGSLoadIsland:
             OnButtonClicked(IDC_AUTOCANCEL);
+            break;
+        case NGSLoadIsland:
             break;
         case NGSBriefing:
             // Auto-ready after delay when --mp-assign is active
@@ -1240,22 +1251,7 @@ void DisplayClientGetReady::OnSimulate(EntityAI* vehicle)
             }
             break;
         case NGSPlay:
-            // User already confirmed — exit to mission
-            if (_launched)
-            {
-                Exit(IDC_OK);
-                break;
-            }
-            // Auto-ready countdown for automated tests (--mp-assign)
-            if (_autoReadyFrames > 0)
-                _autoReadyFrames--;
-            else if (_autoReadyFrames == 0 && !_autoReadySent)
-            {
-                LOG_DEBUG(Network, "[mp-assign] Auto-ready in play state");
-                OnButtonClicked(IDC_OK);
-                _autoReadySent = true;
-            }
-            // else: wait for user to click "I'm Ready"
+            Exit(IDC_OK);
             break;
     }
     base::OnSimulate(vehicle);

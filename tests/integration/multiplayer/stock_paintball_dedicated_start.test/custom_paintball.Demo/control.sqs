@@ -1,0 +1,7 @@
+~2
+A0 = 1
+publicVariable "A0"
+~6
+A2 = 1
+publicVariable "A2"
+exit

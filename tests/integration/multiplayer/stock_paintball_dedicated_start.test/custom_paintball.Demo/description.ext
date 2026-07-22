@@ -1,0 +1,12 @@
+respawn = "BASE";
+respawndelay = 5;
+
+titleParam1 = "Time limit";
+valuesParam1[] = {300, 600, 1800, 3600};
+defValueParam1 = 1800;
+textsParam1[] = {"5 min", "10 min", "30 min", "60 min"};
+
+titleParam2 = "Score to win";
+valuesParam2[] = {5, 10, 15, 20};
+defValueParam2 = 15;
+textsParam2[] = {"5", "10", "15", "20"};

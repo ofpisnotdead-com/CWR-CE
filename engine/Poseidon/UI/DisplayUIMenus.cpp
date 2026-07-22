@@ -340,9 +340,6 @@ DisplayNewUser::DisplayNewUser(ControlsContainer* parent, RString name, bool edi
     _head->SetFace(_face);
     _head->SetGlasses(_glasses);
 
-    // Squad field hidden — CD key verification removed
-    GetCtrl(IDC_NEW_USER_SQUAD)->ShowCtrl(false);
-    GetCtrl(IDC_NEW_USER_SQUAD_TEXT)->ShowCtrl(false);
     _langCbToken = RegisterLanguageChangedCallback([this]() { RefreshLanguage(); });
 }
 

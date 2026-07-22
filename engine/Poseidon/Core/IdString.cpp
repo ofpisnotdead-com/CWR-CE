@@ -7,9 +7,11 @@ IdStringTable::IdStringTable() = default;
 
 IdStringTable::IdStringTable(const RStringB* strings, int count)
 {
+    _strings.Realloc(count);
     for (int i = 0; i < count; i++)
     {
         _enum.AddValue(strings[i]);
+        _strings.Add(strings[i]);
     }
     _enum.Close();
 }
@@ -24,14 +26,13 @@ int IdStringTable::GetId(const char* string)
 const RStringB& IdStringTable::GetString(int id) const
 {
     // Callers may pass an attacker-derived id (network string-table refs decode a
-    // wire varint), so keep it inside the populated range; GetName() indexes its
-    // name array unchecked. FirstInvalidValue() is the count of valid entries.
-    if (id < 0 || id >= _enum.FirstInvalidValue())
+    // wire varint), so keep it inside the populated range.
+    if (id < 0 || id >= _strings.Size())
     {
         static const RStringB empty;
         return empty;
     }
-    return _enum.GetName(id);
+    return _strings[id];
 }
 
 IdString IdStringTable::GetIdString(const char* string)

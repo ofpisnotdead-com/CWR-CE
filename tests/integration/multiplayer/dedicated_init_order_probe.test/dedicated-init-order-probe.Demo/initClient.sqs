@@ -1,0 +1,11 @@
+probeClientScanDuplicate = format ["%1", probeClientScanSeen] == "1"
+probeClientScanSeen = 1
+
+probeObjectInitAtScan = format ["%1", probeObjectInitSeen] == "1"
+probeRoleLeaderAtScan = leader probeGroup == probeWest
+probePlayerIsRoleAtScan = player == probeWest
+probePlayerLocalAtScan = local player
+probePlayerGroupAtScan = group player == probeGroup
+
+? player == leader probeGroup : [player] exec "playerInit.sqs"
+exit

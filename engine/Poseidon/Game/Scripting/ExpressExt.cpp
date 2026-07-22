@@ -1,5 +1,6 @@
 #include <Evaluator/express.hpp>
 
+#include <Poseidon/Core/BuildInfo.hpp>
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
 #include <Poseidon/Core/Application.hpp>
 #include <Poseidon/Foundation/Platform/AppConfig.hpp>
@@ -8,6 +9,8 @@
 #include <Poseidon/Foundation/Framework/AppFrame.hpp>
 #include <Poseidon/Foundation/Framework/Log.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
+
+#include <cstring>
 
 using Poseidon::LocalizeString;
 
@@ -142,6 +145,8 @@ RString GameStateStringtableInfoFunctions::GetTypeName(GameType type) const
 
 void GameStateStringtableInfoFunctions::DisplayErrorMessage(const char* position, const char* error) const
 {
+    const bool showInGame = std::strcmp(Poseidon::BuildInfo::BuildType, "RelWithDebInfo") == 0 &&
+                            Poseidon::Foundation::AppConfig::Instance().DevMode();
     extern bool AutoTest;
     if (AutoTest)
     {
@@ -168,7 +173,8 @@ void GameStateStringtableInfoFunctions::DisplayErrorMessage(const char* position
     {
         LOG_WARN(Script, "Script error at '{}': {}", position, error);
     }
-    GlobalShowMessage(10000, "'%s': Error %s", position, error);
+    if (showInGame)
+        GlobalShowMessage(10000, "'%s': Error %s", position, error);
 }
 
 void GameStateStringtableInfoFunctions::DisplayDebugMessage(const char* content, int timeMs) const

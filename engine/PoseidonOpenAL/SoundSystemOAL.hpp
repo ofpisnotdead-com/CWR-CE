@@ -178,11 +178,7 @@ class SoundSystemOAL : public IAudioSystem
     void SetVoiceBudgetCounters(int evictedThisFrame, int pausedThisFrame) override;
     void FlushBank(QFBank*) override {}
 
-    bool EnableHWAccel(bool v) override
-    {
-        _hwAccel = v;
-        return false;
-    }
+    bool EnableHWAccel(bool v) override;
     bool EnableEAX(bool val) override;
     bool GetEAX() const override { return _eaxEnabled; }
     bool ApplyEFXByName(const char* presetName, float size) override;

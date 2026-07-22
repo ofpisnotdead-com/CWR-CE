@@ -1,0 +1,34 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 120
+tags = ["headful", "network"]
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl", "--config", "${output}/server/user/server.cfg"]
+name = "server"
+type = "server"
+use_mission = false
+copy_files = [
+  { source = "server.cfg", target = "server.cfg" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "client1", "--log-format", "jsonl"]
+name = "client1"
+type = "client"
+use_mission = false
+connect = "server"
+after = "server"
+start_delay_ms = 4000
+machine_id = "trident:stock_flagfight_first_load:client1"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "client2", "--log-format", "jsonl"]
+name = "client2"
+type = "client"
+use_mission = false
+connect = "server"
+after = "server"
+start_delay_ms = 1000
+mp_assign = "WEST:2"
+machine_id = "trident:stock_flagfight_first_load:client2"

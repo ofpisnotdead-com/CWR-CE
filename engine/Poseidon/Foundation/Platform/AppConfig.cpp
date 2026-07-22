@@ -4,6 +4,7 @@
 #include <Poseidon/Core/Config/EngineConfig.hpp>
 #include <Poseidon/Core/ModCollection.hpp>
 #include <Poseidon/Core/ModSystem.hpp>
+#include <Poseidon/Core/Version.hpp>
 #include <Poseidon/Audio/AudioFactory.hpp>
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <Poseidon/Foundation/Common/PlatformPaths.hpp>
@@ -254,12 +255,15 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
         const CliHelpMode helpMode = DetectHelpMode(normalizedArgs);
         const CliAppRole appRole = DetectAppRole(normalizedArgs);
         const bool serverRole = appRole == CliAppRole::Server;
+        const std::string versionForVersionFlag = (const char*)Poseidon::GetVersionStringForState(
+            ContainsCliArg(normalizedArgs, "--dev"), GApp != nullptr && GApp->IsDemo());
 
         CLI::App app{serverRole ? "Arma: Cold War Assault - Remastered Dedicated Server"
                                 : "Arma: Cold War Assault - Remastered"};
 
         // Disable default help flag so we can reuse -h for --height
         app.set_help_flag("--help,--help-full", "Print help and exit");
+        app.set_version_flag("--version", versionForVersionFlag);
         if (serverRole)
             app.usage("[OPTIONS]");
         if (BuildInfo::ReleaseBuild)
@@ -417,6 +421,8 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
         showOption(multiplayerGroup->add_flag("--force-jip", _forceJIP,
                                               "Force Join In Progress on all missions (server, for testing)"),
                    CliHelpVisibility::Dev);
+        multiplayerGroup->add_flag("--mp-version", _printMPVersion,
+                                   "Print the exact MP compatibility tuple used by the network handshake and exit");
 
         bool showBanner = true;
         showOption(multiplayerGroup->add_flag("--banner,!--no-banner", showBanner,
@@ -891,13 +897,13 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
         catch (const CLI::CallForVersion&)
         {
             // --version was requested
+            const std::string version = "\nArma: Cold War Assault - Remastered v" + versionForVersionFlag + "\n";
 #ifdef _WIN32
-            std::string version = "\nArma: Cold War Assault - Remastered v3.0\n";
             WriteCliText(STD_OUTPUT_HANDLE, stdout, version);
             Sleep(50);
             FreeConsole();
 #else
-            fprintf(stdout, "\nArma: Cold War Assault - Remastered v3.0\n");
+            fprintf(stdout, "%s", version.c_str());
 #endif
             std::exit(0);
         }

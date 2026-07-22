@@ -59,6 +59,8 @@ class UITestEngine
 
     // Get text from a control (handles dynamic_cast to known types)
     static std::string GetControlText(IControl* ctrl);
+    // Concatenated text of an HTML control's parsed section fields ("" if not HTML)
+    static std::string GetHtmlText(IControl* ctrl);
     static void SetSemanticControlText(IControl* ctrl, const char* text);
     static void ClearSemanticControlText(IControl* ctrl);
 

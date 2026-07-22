@@ -1,0 +1,38 @@
+mission = "tests/integration/missions/jip_basic.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 120
+render = "dummy"
+
+tags = ["headful", "network"]
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl", "--config", "${output}/server/user/server.cfg"]
+name = "server"
+type = "server"
+copy_files = [
+  { source = "server.cfg", target = "server.cfg" },
+]
+
+# Logs in as admin and kicks the second client by name.
+[[instances]]
+extra_args = ["--no-strict", "--name", "client1", "--log-format", "jsonl"]
+name = "client1"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:1"
+machine_id = "trident:admin_kick:client1"
+
+# Joins via triMpJoin without the mp-assign automation, so losing the session to
+# the kick shows the disconnect UI instead of auto-exiting the process.
+[[instances]]
+extra_args = ["--no-strict", "--name", "kicked", "--log-format", "jsonl"]
+name = "kicked"
+type = "client"
+use_mission = false
+no_autotest = true
+after = "server"
+wait_ngs = 13
+machine_id = "trident:admin_kick:kicked"

@@ -8,6 +8,7 @@ set(POSEIDON_BASE_TEST_SOURCES
     Algorithms/test_spline.cpp
     Enums/test_enumNames.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/IO/Filesystem/test_dir_scanner.cpp
+    ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/IO/Filesystem/test_dir_tree.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/IO/Filesystem/test_file_ops.cpp
     Common/test_netglobal.cpp
     Modules/test_modules_lifecycle.cpp
@@ -48,6 +49,7 @@ set(POSEIDON_BASE_TEST_SOURCES
     Containers/test_traits_staticarray_ops.cpp
     Framework/test_potime.cpp
     Strings/test_strings.cpp
+    Strings/test_locale_collate.cpp
     Types/test_enum_decl.cpp
     Types/test_llinks.cpp
     Types/test_pointers.cpp

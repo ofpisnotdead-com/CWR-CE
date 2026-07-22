@@ -66,4 +66,4 @@ using ::Poseidon::FindSound;
 
 // Defined at global scope in Game/Chat.cpp.
 Poseidon::AbstractOptionsUI *CreateChatUI();
-Poseidon::AbstractOptionsUI *CreateVoiceChatUI();
+Poseidon::AbstractOptionsUI *CreateVoiceChatUI(bool pushToTalk = false);

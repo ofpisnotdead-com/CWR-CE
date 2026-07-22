@@ -5,6 +5,7 @@
 #include <Poseidon/World/World.hpp>
 #include <Poseidon/World/WorldChatInput.hpp>
 #include <Poseidon/Network/Network.hpp>
+#include <Poseidon/Audio/Voice/VonNet.hpp>
 #include <Poseidon/Core/resincl.hpp>
 #include <Poseidon/AI/AI.hpp>
 #include <Poseidon/World/Entities/Vehicles/Transport.hpp>
@@ -28,6 +29,7 @@
 #include <Poseidon/Foundation/Math/MathOpt.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 
+#include <algorithm>
 #define CHAT_ITEMS 100
 #define CHAT_ITEMS_VISIBLE 4
 
@@ -68,6 +70,40 @@ RString GetFullPlayerName(Person* person)
     }
 }
 
+static ChatChannel VoNChatChannelToChatChannel(int channel)
+{
+    switch (static_cast<VoNChatChannel>(channel))
+    {
+        case VoNChatChannel::Direct:
+            return CCDirect;
+        case VoNChatChannel::Vehicle:
+            return CCVehicle;
+        case VoNChatChannel::Group:
+            return CCGroup;
+        case VoNChatChannel::Side:
+            return CCSide;
+        case VoNChatChannel::Global:
+        default:
+            return CCGlobal;
+    }
+}
+
+static AutoArray<SpeakingIndication>& TestSpeakingIndications()
+{
+    static AutoArray<SpeakingIndication> speakers;
+    return speakers;
+}
+
+void SetTestSpeakingIndications(const AutoArray<SpeakingIndication>& speakers)
+{
+    auto& testSpeakers = TestSpeakingIndications();
+    testSpeakers.Clear();
+    for (int i = 0; i < speakers.Size(); i++)
+    {
+        testSpeakers.Append() = speakers[i];
+    }
+}
+
 ChatList::ChatList()
 {
     SetRows(CHAT_ITEMS_VISIBLE);
@@ -84,6 +120,7 @@ ChatList::ChatList()
     _enable = true;
 
     _offset = -1;
+    _lastSpeaking = Poseidon::Foundation::UITime(0);
 }
 
 void ChatList::BrowseUp()
@@ -279,12 +316,46 @@ void ChatList::OnDraw()
     }
 
     float top = _y + (_rows - 1) * _h;
+    int row = _rows - 1;
+
+    GetSpeakingPlayers();
+    if (_speaking.Size() > 0 || _lastSpeaking > Glob.uiTime - 2.0f)
+    {
+        MipInfo mip = GLOB_ENGINE->TextBank()->UseMipmap(nullptr, 0, 0);
+        const float border = 0.004f;
+        const float space = GEngine->GetTextWidth(_size, _font, " ");
+        float left = _x + border;
+        float lineWidth = _w;
+        for (int i = 0; i < _speaking.Size(); i++)
+        {
+            const SpeakingIndication& item = _speaking[i];
+            const float textWidth = GEngine->GetTextWidth(_size, _font, item.name);
+            const float cellWidth = textWidth + 2.0f * border;
+            if (cellWidth > lineWidth)
+            {
+                break;
+            }
+
+            GEngine->Draw2D(mip, _bgColor, Rect2DPixel((left - border) * w, top * h, cellWidth * w, _h * h));
+            GEngine->DrawText(Point2DFloat(left, top), _size, Rect2DFloat(left - border, top, cellWidth, _h), _font,
+                              _colors[item.channel], item.name);
+            left += cellWidth + space;
+            lineWidth -= cellWidth + space;
+        }
+
+        row--;
+        if (row < 0)
+        {
+            return;
+        }
+        top -= _h;
+    }
+
     int n = Size();
     if (n == 0)
     {
         return;
     }
-    int row = _rows - 1;
     int begin = _offset;
     saturate(begin, 0, n - 1);
     for (int i = begin; i < n; i++)
@@ -386,6 +457,73 @@ void ChatList::OnDraw()
             top -= _h;
         }
     }
+}
+
+void ChatList::GetSpeakingPlayers()
+{
+    AutoArray<NetVoiceSpeakerInfo, Poseidon::Foundation::MemAllocSA> activeSpeakers;
+    GetNetworkManager().GetVoiceSpeakers(activeSpeakers);
+
+    AutoArray<SpeakingIndication> speaking;
+    auto& testSpeakers = TestSpeakingIndications();
+    for (int i = 0; i < testSpeakers.Size(); i++)
+    {
+        SpeakingIndication item = testSpeakers[i];
+        item.lastSpeaking = Glob.uiTime;
+        speaking.Append() = item;
+        _lastSpeaking = Glob.uiTime;
+    }
+
+    for (int i = 0; i < activeSpeakers.Size(); i++)
+    {
+        const NetVoiceSpeakerInfo& speaker = activeSpeakers[i];
+        if (!speaker.active)
+        {
+            continue;
+        }
+
+        SpeakingIndication& item = speaking.Append();
+        const PlayerIdentity* identity = GetNetworkManager().FindIdentity(speaker.player);
+        item.name = identity ? identity->GetName() : Format("Player %d", speaker.player);
+        item.channel = VoNChatChannelToChatChannel(speaker.channel);
+        item.lastSpeaking = Glob.uiTime;
+        _lastSpeaking = Glob.uiTime;
+    }
+
+    for (int i = 0; i < speaking.Size(); i++)
+    {
+        const SpeakingIndication& item = speaking[i];
+        bool alreadyThere = false;
+        for (int j = 0; j < _speaking.Size(); j++)
+        {
+            SpeakingIndication& stable = _speaking[j];
+            if (strcmp(stable.name, item.name) == 0)
+            {
+                stable.lastSpeaking = item.lastSpeaking;
+                stable.channel = item.channel;
+                alreadyThere = true;
+                break;
+            }
+        }
+        if (!alreadyThere)
+        {
+            _speaking.Append() = item;
+        }
+    }
+
+    int dst = 0;
+    for (int src = 0; src < _speaking.Size(); src++)
+    {
+        if (_speaking[src].lastSpeaking >= Glob.uiTime - 1.0f)
+        {
+            if (dst != src)
+            {
+                _speaking[dst] = _speaking[src];
+            }
+            dst++;
+        }
+    }
+    _speaking.Resize(dst);
 }
 
 static void WhatUnitsVehicle(RefArray<NetworkObject>& units, Transport* veh)
@@ -833,8 +971,8 @@ ChatList GChatList;
 
 bool DisplayChatLine::OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
 {
-    // catch RETURN, ESC, UP, DOWN, PAGE UP, PAGE DOWN (avoid transmit into game)
-    if (nChar == 0x0D || nChar == 0x1B || nChar == 0x26 || nChar == 0x28 || nChar == 0x21 || nChar == 0x22)
+    // catch submit/cancel/channel/scroll keys so they don't transmit into the game
+    if (Poseidon::IsChatConsumedKey(nChar))
     {
         return true;
     }
@@ -846,7 +984,7 @@ bool IsPlayerDead();
 
 bool DisplayChatLine::OnKeyUp(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
 {
-    if (nChar == SDLK_RETURN)
+    if (Poseidon::IsChatSubmitKey(nChar))
     {
         OnButtonClicked(IDC_OK);
         return true;
@@ -925,7 +1063,7 @@ AbstractOptionsUI* CreateChatUI()
 class DisplayVoiceChat : public Display
 {
   public:
-    DisplayVoiceChat(ControlsContainer* parent);
+    DisplayVoiceChat(ControlsContainer* parent, bool pushToTalk);
     bool OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags) override;
     bool OnKeyUp(unsigned nChar, unsigned nRepCnt, unsigned nFlags) override;
     void OnSimulate(EntityAI* vehicle) override;
@@ -933,9 +1071,16 @@ class DisplayVoiceChat : public Display
     void DestroyHUD(int exit) override;
 
     void ResetHUD() override;
+
+  private:
+    void UpdateTransmitIndicator();
+
+    bool _pushToTalk = false;
+    int _lastTransmitHealth = -1;
 };
 
-DisplayVoiceChat::DisplayVoiceChat(ControlsContainer* parent) : Display(parent)
+DisplayVoiceChat::DisplayVoiceChat(ControlsContainer* parent, bool pushToTalk)
+    : Display(parent), _pushToTalk(pushToTalk)
 {
     Load("RscDisplayVoiceChat");
     SetCursor(nullptr);
@@ -955,7 +1100,10 @@ bool DisplayVoiceChat::OnKeyUp(unsigned nChar, unsigned nRepCnt, unsigned nFlags
 
 void DisplayVoiceChat::OnSimulate(EntityAI* vehicle)
 {
-    if (InputSubsystem::Instance().GetActionToDo(UAVoiceOverNet, true, false) && !_destroyed)
+    auto& input = InputSubsystem::Instance();
+    bool close = _pushToTalk ? input.GetAction(UAVoiceOverNetPushToTalk, false) <= 0
+                             : input.GetActionToDo(UAVoiceOverNet, true, false);
+    if (close && !_destroyed)
     {
         // Destroy() frees *this via GWorld->DestroyVoiceChat(); SimulateHUD() still holds
         // the raw ptr and reads GetExitCode() after OnSimulate() returns — UAF.
@@ -963,7 +1111,35 @@ void DisplayVoiceChat::OnSimulate(EntityAI* vehicle)
         GetNetworkManager().SetVoiceChannel(CCNone);
         Display::Destroy();
         Exit(0);
+        return;
     }
+
+    UpdateTransmitIndicator();
+}
+
+void DisplayVoiceChat::UpdateTransmitIndicator()
+{
+    // The indicator must reflect the voice pipeline, not the key state: with
+    // a dead microphone or an unassigned voice identity the key is held, the
+    // HUD shows, and nothing is sent — turn the indicator red so the sender
+    // knows the transmission is failing.
+    const int health = GetNetworkManager().GetVoiceTransmitHealth();
+    if (health == _lastTransmitHealth)
+        return;
+    _lastTransmitHealth = health;
+
+    const bool failing = health == static_cast<int>(VoNTransmitHealth::NoCapture) ||
+                         health == static_cast<int>(VoNTransmitHealth::NotConnected) ||
+                         health == static_cast<int>(VoNTransmitHealth::Stalled);
+    CStatic* text = dynamic_cast<CStatic*>(GetCtrl(IDC_VOICE_CHAT));
+    if (text)
+    {
+        // Red is not a chat-channel color, so a failing transmit cannot be
+        // mistaken for any channel tint.
+        text->SetFtColor(failing ? PackedColor(Color(0.9, 0.1, 0.1, 1)) : GChatList.GetColor(ActualChatChannel()));
+    }
+    if (failing)
+        LOG_WARN(Network, "VoN: transmit requested but not sending (health={})", health);
 }
 
 void DisplayVoiceChat::Destroy()
@@ -1009,7 +1185,7 @@ void DisplayVoiceChat::DestroyHUD(int exit)
     GWorld->DestroyVoiceChat(exit);
 }
 
-AbstractOptionsUI* CreateVoiceChatUI()
+AbstractOptionsUI* CreateVoiceChatUI(bool pushToTalk)
 {
-    return new DisplayVoiceChat(nullptr);
+    return new DisplayVoiceChat(nullptr, pushToTalk);
 }

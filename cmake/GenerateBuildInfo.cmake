@@ -4,6 +4,9 @@ endif()
 if(NOT DEFINED OUTPUT_FILE)
     message(FATAL_ERROR "OUTPUT_FILE is required")
 endif()
+if(NOT DEFINED BUILD_TYPE)
+    set(BUILD_TYPE "")
+endif()
 
 execute_process(
     COMMAND git -c safe.directory=${SOURCE_DIR} rev-parse --short=7 HEAD
@@ -26,7 +29,7 @@ if(VERSION_TAG STREQUAL "")
     set(TAG_SOURCE "git")
     set(RELEASE_BUILD "false")
 elseif(VERSION_TAG MATCHES "^[Rr][Ee][Ll][Ee][Aa][Ss][Ee]$")
-    set(EFFECTIVE_TAG "")
+    set(EFFECTIVE_TAG "release")
     set(TAG_SOURCE "release")
     set(RELEASE_BUILD "true")
 else()
@@ -48,6 +51,7 @@ namespace Poseidon::BuildInfo
 {
 inline constexpr char GitSha[] = "@GIT_SHA@";
 inline constexpr char VersionTag[] = "@EFFECTIVE_TAG@";
+inline constexpr char BuildType[] = "@BUILD_TYPE@";
 inline constexpr bool ReleaseBuild = @RELEASE_BUILD@;
 } // namespace Poseidon::BuildInfo
 ]=])

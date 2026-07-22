@@ -1,0 +1,44 @@
+mission = "tests/integration/missions/jip_basic.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 90
+
+tags = ["headful", "network"]
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl"]
+name = "server"
+type = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "client1", "--log-format", "jsonl"]
+name = "client1"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:1"
+machine_id = "trident:three_client_late_join:client1"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "client2", "--log-format", "jsonl"]
+name = "client2"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:2"
+machine_id = "trident:three_client_late_join:client2"
+
+# Deliberately late: spawns 20s after the first pair so it joins a mission the
+# server already started and the other two clients already inhabit.
+[[instances]]
+extra_args = ["--no-strict", "--name", "client3", "--log-format", "jsonl"]
+name = "client3"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+start_delay_ms = 20000
+mp_assign = "WEST:3"
+machine_id = "trident:three_client_late_join:client3"
