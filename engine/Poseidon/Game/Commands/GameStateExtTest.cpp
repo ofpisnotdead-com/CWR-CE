@@ -1534,6 +1534,20 @@ GameValue TriControlText(const GameState* state, GameValuePar arg)
     return GameValue(text.c_str());
 }
 
+/// triControlDisplayText <idc>: the on-screen text of a control (clipped or
+/// marquee'd), where triControlText returns the semantic test value.
+GameValue TriControlDisplayText(const GameState* /*state*/, GameValuePar arg)
+{
+    int idc = static_cast<int>(static_cast<GameScalarType>(arg));
+    auto* display = GetActiveDisplayForSQF();
+    if (!display)
+        return GameValue("");
+    IControl* ctrl = display->GetCtrl(idc);
+    if (!ctrl)
+        return GameValue("");
+    return GameValue(UITestEngine::GetControlDisplayText(ctrl).c_str());
+}
+
 /// triAssertControlLeftOf [innerIdc, anchorIdc, maxGap] — assert the inner control
 /// sits immediately to the left of the anchor on the same row (|dY| within half the
 /// anchor height) and no further than maxGap from its left edge. Used to verify the

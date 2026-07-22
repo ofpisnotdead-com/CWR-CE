@@ -70,6 +70,32 @@ TEST_CASE("ContextControlsConfig: Save then Load round-trips separate context pr
     std::filesystem::remove(path);
 }
 
+TEST_CASE("ContextControlsConfig: Save then Load preserves an empty positional slot",
+          "[Settings][ContextControlsConfig]")
+{
+    const std::string path = TmpPath("context_controls_empty_slot.cfg");
+    std::filesystem::remove(path);
+
+    // A cleared primary that keeps its alt: empty slot 0, a real binding in slot 1.
+    // The empty placeholder must survive the round-trip so the alt does not shift
+    // up into the primary on reload.
+    ContextControlsConfig src;
+    src.profiles[(int)InputContext::Infantry].Bind(UAMoveForward, InputBinding{});
+    src.profiles[(int)InputContext::Infantry].Bind(UAMoveForward, InputCode::Key(SDL_SCANCODE_UP));
+
+    REQUIRE(src.Save(path));
+
+    ContextControlsConfig dst;
+    REQUIRE(dst.Load(path));
+
+    const auto& move = dst.profiles[(int)InputContext::Infantry].GetBindingEntries(UAMoveForward);
+    REQUIRE(move.size() == 2);
+    CHECK_FALSE(move[0].code.valid());                      // empty primary slot kept
+    CHECK(move[1].code == InputCode::Key(SDL_SCANCODE_UP)); // alt still in slot 1
+
+    std::filesystem::remove(path);
+}
+
 // Regression: a real, full contextControls.cfg captured from a user profile that
 // predates UAVoiceOverNetPushToTalk. Loading it and copying the profiles is the
 // exact path InputSubsystem::LoadKeys runs (`profiles_ = contextControls.profiles`).

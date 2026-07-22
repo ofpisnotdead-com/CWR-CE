@@ -82,6 +82,13 @@ std::string UITestEngine::GetControlText(IControl* ctrl)
         return {};
     if (ctrl->HasSemanticTestText())
         return std::string((const char*)ctrl->GetSemanticTestText());
+    return GetControlDisplayText(ctrl);
+}
+
+std::string UITestEngine::GetControlDisplayText(IControl* ctrl)
+{
+    if (!ctrl)
+        return {};
 
     // Try each known text-bearing type (RString has operator const char*)
     if (auto* b = dynamic_cast<CButton*>(ctrl))

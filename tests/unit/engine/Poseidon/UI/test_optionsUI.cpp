@@ -89,6 +89,36 @@ TEST_CASE("UITestEngine returns semantic text when controls render a clipped mar
     CHECK(UITestEngine::GetControlText(&ctrl).empty());
 }
 
+TEST_CASE("OptionsScrollList::FormatCell clips idle cells and marquees focused overflow", "[optionsUI][UI]")
+{
+    char buf[80];
+
+    // A value within the budget is passed through untouched, idle or focused.
+    OptionsScrollList::FormatCell("UP", OptionsScrollList::kBindingAltInnerChars, false, 0, buf, sizeof(buf));
+    CHECK(std::string(buf) == "UP");
+    OptionsScrollList::FormatCell("UP", OptionsScrollList::kBindingAltInnerChars, true, 0, buf, sizeof(buf));
+    CHECK(std::string(buf) == "UP");
+
+    // "Left Shift" (10) overflows the 6-char alt budget: clipped to the head
+    // when idle, and also at the start of the marquee cycle (offset 0).
+    OptionsScrollList::FormatCell("Left Shift", OptionsScrollList::kBindingAltInnerChars, false, 0, buf, sizeof(buf));
+    CHECK(std::string(buf) == "Left S");
+    OptionsScrollList::FormatCell("Left Shift", OptionsScrollList::kBindingAltInnerChars, true, 0, buf, sizeof(buf));
+    CHECK(std::string(buf) == "Left S");
+
+    // After the start pause plus a few scroll steps the focused window has
+    // advanced past the head, so it no longer reads "Left S".
+    const DWORD advanced = (DWORD)OptionsScrollList::kPauseMs + (DWORD)OptionsScrollList::kScrollPeriodMs * 4;
+    OptionsScrollList::FormatCell("Left Shift", OptionsScrollList::kBindingAltInnerChars, true, advanced, buf,
+                                  sizeof(buf));
+    CHECK(std::string(buf) != "Left S");
+
+    // An idle cell never advances no matter the elapsed time.
+    OptionsScrollList::FormatCell("Left Shift", OptionsScrollList::kBindingAltInnerChars, false, advanced, buf,
+                                  sizeof(buf));
+    CHECK(std::string(buf) == "Left S");
+}
+
 TEST_CASE("OptionsPage cycle membership helper only accepts listed IDCs", "[optionsUI][UI]")
 {
     const int cycle[] = {1101, 1104, 1107};

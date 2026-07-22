@@ -248,7 +248,12 @@ bool ContextControlsConfig::Load(const std::string& path)
             {
                 InputCode code = InputCode::FromLegacy((int)(*entry)[i]);
                 if (!code.valid())
+                {
+                    // Preserve an empty positional slot (a cleared primary that
+                    // keeps its alt): gameplay skips it, the controls page shows a dash.
+                    profile.Bind(static_cast<UserAction>(a), InputBinding{});
                     continue;
+                }
 
                 int modRaw = -1;
                 if (modEntry && i < modEntry->GetSize())

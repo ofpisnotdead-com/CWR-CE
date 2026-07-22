@@ -202,6 +202,7 @@ GameValue TriBriefingClickAt(const GameState*, GameValuePar);
 GameValue TriMissionPlayerReady(const GameState*);
 GameValue TriAssertMissionPlayable(const GameState*);
 GameValue TriControlText(const GameState*, GameValuePar);
+GameValue TriControlDisplayText(const GameState*, GameValuePar);
 GameValue TriAssertControlLeftOf(const GameState*, GameValuePar);
 GameValue TriVisibleTexts(const GameState*);
 GameValue TriMpSetupMessage(const GameState*);
@@ -2961,6 +2962,7 @@ INIT_MODULE(GameStateExtTest, 3)
     GGameState.NewNularOp(GameNular(GameString, "triInGameplay", TriInGameplay));
     GGameState.NewFunction(GameFunction(GameString, "triAssertDisplay", TriAssertDisplay, GameScalar));
     GGameState.NewFunction(GameFunction(GameString, "triControlText", TriControlText, GameScalar));
+    GGameState.NewFunction(GameFunction(GameString, "triControlDisplayText", TriControlDisplayText, GameScalar));
     GGameState.NewFunction(GameFunction(GameString, "triAssertControlLeftOf", TriAssertControlLeftOf, GameArray));
     GGameState.NewNularOp(GameNular(GameString, "triVisibleTexts", TriVisibleTexts));
     GGameState.NewNularOp(GameNular(GameString, "triMpSetupMessage", TriMpSetupMessage));

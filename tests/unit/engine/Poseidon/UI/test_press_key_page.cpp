@@ -67,7 +67,7 @@ class TestPressKeyPage : public PressKeyPage
 };
 } // namespace
 
-TEST_CASE("PressKeyPage refuses modifier-only keys and stays listening", "[UI][PressKeyPage]")
+TEST_CASE("PressKeyPage captures a lone modifier key", "[UI][PressKeyPage]")
 {
     TestableOptionsShell shell;
     CaptureResult result;
@@ -76,9 +76,16 @@ TEST_CASE("PressKeyPage refuses modifier-only keys and stays listening", "[UI][P
 
     shell.PushPage(std::move(page));
 
+    // A modifier pressed on its own is a bindable key (Left Shift / Ctrl / Alt),
+    // captured with no modifier of its own, not refused.
     CHECK(raw->OnKeyDown(shell, SDLK_LSHIFT));
-    CHECK(raw->Listening());
-    CHECK(result.saveCalls == 0);
+    REQUIRE_FALSE(raw->Listening());
+
+    raw->OnButtonClicked(shell, 9301);
+
+    CHECK(result.saveCalls == 1);
+    CHECK(result.savedCode == (int)SDL_SCANCODE_LSHIFT);
+    CHECK(result.savedModifier == -1);
 }
 
 TEST_CASE("PressKeyPage captures a plain key without a modifier", "[UI][PressKeyPage]")

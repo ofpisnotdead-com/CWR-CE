@@ -2,8 +2,8 @@
 
 // Keyboard / mouse capture modal — captures one SDL scancode (or a
 // mouse button packed via INPUT_DEVICE_MOUSE+N) and stores the packed
-// int directly.  Modifier keys are ignored on their own (Ctrl alone
-// can't be a binding); held modifiers are saved as combo qualifiers.
+// int directly.  A modifier pressed on its own binds standalone; a real
+// key pressed while a modifier is held binds as a "Mod+Key" combo.
 
 #include <Poseidon/UI/Options/CapturePage.hpp>
 
@@ -33,6 +33,7 @@ class PressKeyPage : public CapturePage
     const char* PromptKey()  const override { return "STR_DISP_OPT_CAP_PRESS_KEY"; }
     const char* PromptVerb() const override { return "key"; }
     Result InterpretKey(unsigned nChar, int& outPackedCode, int& outModifier) const override;
+    bool IsBareModifierCode(int packedCode) const override;
 };
 
 } // namespace Poseidon

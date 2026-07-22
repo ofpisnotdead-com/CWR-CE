@@ -73,6 +73,7 @@ public:
 	Control* OnCreateCtrl(int type, int idc, const ParamEntry& cls) override;
 	void OnButtonClicked(int idc) override;
 	bool OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags) override;
+	bool DoControllerUiAction(ControllerUiAction action) override;
 	ControllerUiScene GetControllerUiScene() const override;
 	void OnSimulate(EntityAI* vehicle) override;
 	// Notebook close animation completed → finish the deferred Exit.

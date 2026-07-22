@@ -55,6 +55,7 @@ class BindingsPage : public ScrollListPage
                                       int slot,
                                       int packedCode,
                                       int modifier);
+    virtual bool ClearCaptureOverride(ControlsCategory category, UserAction action, int slot);
     virtual bool ResetCategoryOverride(ControlsCategory category);
     virtual std::unique_ptr<OptionsPage> MakeCaptureModal(
         std::string actionLabel,
@@ -64,11 +65,22 @@ class BindingsPage : public ScrollListPage
 
     OptionsScrollList::Provider& ProviderRef() override final { return m_withClose; }
 
+    // Binding rows can be cleared, so the list advertises the controller
+    // Delete capability ("Y Delete") on top of the scroll-list defaults.
+    ControllerUiScene GetControllerUiScene() const override
+    {
+        ControllerUiScene scene = ScrollListPage::GetControllerUiScene();
+        scene.activeSection.capabilities |= CtrlDelete;
+        scene.sceneCapabilities |= CtrlDelete;
+        return scene;
+    }
+
     void Mount(OptionsShell& shell) override;
     void Unmount(OptionsShell& shell) override;
 
     void ResetCurrentCategoryToDefaults();
     void ApplyCapture(int actionIdx, int slot, int packedCode, int modifier, bool replaceConflict);
+    void ClearCapture(int actionIdx, int slot);
 
   private:
     class Provider : public OptionsScrollList::Provider
@@ -96,6 +108,7 @@ class BindingsPage : public ScrollListPage
         const char* BindingPrimary(int row) const override;
         const char* BindingAlt(int row) const override;
         void OnBindingClicked(int row, int slot, Display& host) override;
+        void OnBindingCleared(int row, int slot) override;
         void OnRowAction(int row, Display& host) override;
         const char* FindBindingConflict(const char* formatted,
                                         int excludeRow,
