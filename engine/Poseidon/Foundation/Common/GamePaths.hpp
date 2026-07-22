@@ -69,6 +69,14 @@ public:
 	static ResolvedGamePaths Resolve(const char* codename, const char* cfgBase, const char* productName = nullptr,
 	                                 bool oldPaths = false, const char* oldPathsRoot = nullptr);
 
+	/// Resolve the user dir without Initialize() (POSEIDON_USER_DIR or platform
+	/// default, trailing-slash). Prefer UserDir() once initialized.
+	static std::string ResolveUserDir(const char* codename);
+
+	/// Resolve the user-content dir without Initialize() (Documents / XDG-data, or a
+	/// POSEIDON_USER_CONTENT_DIR / POSEIDON_USER_DIR override). Prefer UserContentDir().
+	static std::string ResolveUserContentDir(const char* codename, const char* product);
+
 	/// App codename used for directory paths (e.g. "CWR").
 	const std::string& Codename() const { return m_codename; }
 

@@ -1,7 +1,6 @@
 #include <Poseidon/Foundation/Platform/StartupError.hpp>
 
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
-#include <Poseidon/Foundation/Common/PlatformPaths.hpp>
 #include <Poseidon/Foundation/Logging/Logging.hpp>
 #include <Poseidon/Foundation/Platform/AppConfig.hpp>
 
@@ -34,13 +33,13 @@ bool TestHarnessEnv()
     return v && v[0] && strcmp(v, "0") != 0 && strcmp(v, "false") != 0 && strcmp(v, "off") != 0;
 }
 
-// Directory holding the log/crash files. Resolves the same folder without the
-// singleton, for failures before GamePaths is initialized.
+// The user-content folder holding the log/crash files. Resolves the same folder
+// without the singleton, for failures before GamePaths is initialized.
 std::string DiagnosticsDir()
 {
     if (GamePaths::Instance().IsInitialized())
-        return GamePaths::Instance().UserDir();
-    return getUserConfigDir("CWR");
+        return GamePaths::Instance().UserContentDir();
+    return GamePaths::ResolveUserContentDir("CWR", "Cold War Assault");
 }
 } // namespace
 
@@ -89,18 +88,15 @@ void ShowStartupError(const char* title, const char* message)
     const char* logPath = LoggingSystem::GetLogFilePath();
     const std::string diagDir = DiagnosticsDir();
 
+    // diagDir carries a trailing separator, so append leaf names directly.
     std::string body = message;
     body += "\n\n";
     if (logPath && logPath[0])
         body += std::string("Log file:\n") + logPath;
     else
-        body += std::string("Logs:\n") + diagDir + "/logs";
+        body += "Logs:\n" + diagDir + "logs";
     body += "\n\n";
-#ifdef _WIN32
-    body += "Crash reports:\nbeside the game executable";
-#else
-    body += "Crash reports:\n" + diagDir;
-#endif
+    body += "Crash reports:\n" + diagDir + "crashes";
 
     fprintf(stderr, "\n%s\n%s\n\n", title, body.c_str());
     fflush(stderr);

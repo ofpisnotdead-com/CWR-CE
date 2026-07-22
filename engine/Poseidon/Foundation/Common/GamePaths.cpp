@@ -48,6 +48,20 @@ GamePaths& GamePaths::Instance()
     return instance;
 }
 
+std::string GamePaths::ResolveUserDir(const char* codename)
+{
+    return resolveDir("POSEIDON_USER_DIR", getUserDataDir(codename));
+}
+
+std::string GamePaths::ResolveUserContentDir(const char* codename, const char* product)
+{
+    if (const char* env = std::getenv("POSEIDON_USER_CONTENT_DIR"); env && env[0] != '\0')
+        return resolveDir("POSEIDON_USER_CONTENT_DIR", "");
+    if (const char* env = std::getenv("POSEIDON_USER_DIR"); env && env[0] != '\0')
+        return resolveDir("", ResolveUserDir(codename) + "content");
+    return resolveDir("", getUserDocumentsDir(product));
+}
+
 ResolvedGamePaths GamePaths::Resolve(const char* codename, const char* cfgBase, const char* productName, bool oldPaths,
                                       const char* oldPathsRoot)
 {
@@ -78,7 +92,7 @@ ResolvedGamePaths GamePaths::Resolve(const char* codename, const char* cfgBase, 
 
     resolved.cacheDir = resolveDir("POSEIDON_CACHE_DIR", getUserCacheDir(codename));
     resolved.tempDir = resolveDir("POSEIDON_TEMP_DIR", getSystemTempDir(codename));
-    resolved.userDir = resolveDir("POSEIDON_USER_DIR", getUserDataDir(codename));
+    resolved.userDir = ResolveUserDir(codename);
 
     // Bulky, user-facing content (mods, editor missions) lives in a discoverable,
     // non-roaming root — Documents on Windows, XDG-data on Linux — NOT the
@@ -87,14 +101,7 @@ ResolvedGamePaths GamePaths::Resolve(const char* codename, const char* cfgBase, 
     //   2. sandboxed runs (POSEIDON_USER_DIR set, e.g. tests) keep content inside
     //      that sandbox so we never create folders in the real Documents;
     //   3. otherwise the platform Documents / XDG-data folder.
-    const char* contentEnv = std::getenv("POSEIDON_USER_CONTENT_DIR");
-    const char* userDirEnv = std::getenv("POSEIDON_USER_DIR");
-    if (contentEnv != nullptr && contentEnv[0] != '\0')
-        resolved.userContentDir = resolveDir("POSEIDON_USER_CONTENT_DIR", "");
-    else if (userDirEnv != nullptr && userDirEnv[0] != '\0')
-        resolved.userContentDir = resolveDir("", resolved.userDir + "content");
-    else
-        resolved.userContentDir = resolveDir("", getUserDocumentsDir(product.c_str()));
+    resolved.userContentDir = ResolveUserContentDir(codename, product.c_str());
 
     // ModsDir is independently overridable (POSEIDON_MODS_DIR) — the mod loader
     // reads it directly. Editor-mission folders, by contrast, are derived from

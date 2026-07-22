@@ -1,5 +1,5 @@
 #include <Poseidon/Foundation/Common/PlayerPrefs.hpp>
-#include <Poseidon/Foundation/Common/PlatformPaths.hpp>
+#include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <cstdlib>
 #include <fstream>
 #include <unordered_map>
@@ -10,14 +10,9 @@ namespace
 
 std::string prefsFilePath(const char* appName)
 {
-    // Honour POSEIDON_USER_DIR so prefs.cfg sits with the profiles and other
-    // user data (sandboxed/test runs set it). Without it, prefs would leak to
-    // the real roaming appdata while profiles live under the override, leaving
-    // the persisted profile name and the profile directories out of sync.
-    const char* env = std::getenv("POSEIDON_USER_DIR");
-    if (env != nullptr && env[0] != '\0')
-        return std::string(env) + "/prefs.cfg";
-    return Poseidon::Foundation::getUserConfigDir(appName) + "/prefs.cfg";
+    // Resolve via GamePaths so prefs.cfg honours POSEIDON_USER_DIR and stays with the
+    // profiles, instead of leaking to the real appdata under a test override.
+    return Poseidon::Foundation::GamePaths::ResolveUserDir(appName) + "prefs.cfg";
 }
 
 std::unordered_map<std::string, std::string> loadPrefs(const char* appName)
