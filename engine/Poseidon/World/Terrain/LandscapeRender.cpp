@@ -902,7 +902,7 @@ void Landscape::GenerateSegmentInto(LandSegment* seg, const LandBegEnd& rect, bo
             seg->_wTable.CalculateMinMax();
             seg->_wTable.FindSections(true);
             if (!deferGPU)
-                seg->_wTable.ConvertToVBuffer(VBBigDiscardable);
+                seg->_wTable.ConvertToVBuffer(VBStatic);
 
 #if LOG_SHARING
             int maxV = seg->_wTable.NFaces() * 3;
@@ -914,7 +914,7 @@ void Landscape::GenerateSegmentInto(LandSegment* seg, const LandBegEnd& rect, bo
         seg->_table.Optimize();
         seg->_table.FindSections(true);
         if (!deferGPU)
-            seg->_table.ConvertToVBuffer(VBBigDiscardable);
+            seg->_table.ConvertToVBuffer(VBStatic);
     }
     else
     {
@@ -1012,7 +1012,7 @@ void Landscape::GenerateSegmentInto(LandSegment* seg, const LandBegEnd& rect, bo
         }
         seg->_wTable.FindSections(true);
         if (!deferGPU)
-            seg->_wTable.ConvertToVBuffer(VBBigDiscardable);
+            seg->_wTable.ConvertToVBuffer(VBStatic);
 
 #if LOG_SHARING
         int maxV = seg->_wTable.NFaces() * 3;
@@ -1043,8 +1043,8 @@ void Landscape::GenerateSegmentInto(LandSegment* seg, const LandBegEnd& rect, bo
 
 void Landscape::FinalizeSegmentGPU(LandSegment* seg)
 {
-    seg->_table.ConvertToVBuffer(VBBigDiscardable);
-    seg->_wTable.ConvertToVBuffer(VBBigDiscardable);
+    seg->_table.ConvertToVBuffer(VBStatic);
+    seg->_wTable.ConvertToVBuffer(VBStatic);
 
     if (seg->_someWater)
     {
@@ -1827,8 +1827,27 @@ void Landscape::DrawClouds(Scene& scene)
     }
 }
 
+void Landscape::FlushHeightmapToRenderer()
+{
+    if (!_heightmapDirty || !_engine)
+    {
+        return;
+    }
+
+    int w = _data.GetXRange();
+    int h = _data.GetYRange();
+    if (w <= 0 || h <= 0)
+    {
+        return;
+    }
+    _engine->SetTerrainHeightmap(static_cast<const float*>(_data.RawData()), w, h, _invTerrainGrid);
+    _heightmapDirty = false;
+}
+
 void Landscape::Draw(Scene& scene)
 {
+    FlushHeightmapToRenderer();
+
     {
         Camera& camera = *scene.GetCamera();
 

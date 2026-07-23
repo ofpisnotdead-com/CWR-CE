@@ -137,17 +137,12 @@ void EngineGL33::SetAlphaTest(bool enable, DWORD ref, bool alphaToCoverage)
     }
 }
 
-// Atomic pipeline bind reading from `RenderPassDescriptor`.  Declares
-// the full backend state every draw needs and forwards to the state-
-// helper functions (`ApplyDepthMode`, `ApplyBlendMode`, etc.) which
-// keep their own per-state caches (`_vertexShaderSel`,
-// `_pixelShaderSel`, `_formatSet`, `_texGenMode`) to short-circuit
-// redundant work.
-//
-// Single source of truth: each helper's own cache.  ApplyPipeline
-// declares full state — partial state remains structurally impossible
-// — and forwards.  No outer diff layer: a second cache here would risk
-// falling out of sync with the helpers' caches.
+// Atomic pipeline bind reading from `RenderPassDescriptor`. The shader /
+// vertex-format / tex-gen / sampler / fog / polygon-offset helpers keep their
+// own caches and self-dedup, so they are forwarded unconditionally. Depth /
+// blend / cull / front-face have no helper cache, so re-issue only the one
+// whose descriptor field changed vs `_lastApplied.d` (all of them when the
+// cache was invalidated).
 //
 // Cull mode + front face come from `d.cull` / `d.frontFace` so
 // mirrored / shadow / double-sided draws bind the right winding
@@ -169,6 +164,9 @@ void EngineGL33::ApplyPipeline(const Poseidon::render::RenderPassDescriptor& d)
     if (_lastApplied.valid && ctxIn3d == _lastApplied.in3d && ctxA2c == _lastApplied.a2c &&
         vertexInput == _lastApplied.vertexInput && d == _lastApplied.d)
         return;
+
+    // Force full rebind after invalidation
+    const bool force = !_lastApplied.valid;
 
     // Validate the descriptor against the invariants listed in
     // `ValidateRenderPassDescriptor.hpp`.  Violations come from a
@@ -195,10 +193,12 @@ void EngineGL33::ApplyPipeline(const Poseidon::render::RenderPassDescriptor& d)
     // static_cast through the underlying type keeps the conversion
     // trivial.  A switch would be more defensive against future
     // reordering, but the static_asserts further down would catch that.
-    ApplyDepthMode(static_cast<DepthMode>(static_cast<int>(d.depth)));
+    if (force || d.depth != _lastApplied.d.depth)
+        ApplyDepthMode(static_cast<DepthMode>(static_cast<int>(d.depth)));
 
     // -- Blend ----------------------------------------------------------
-    ApplyBlendMode(static_cast<BlendMode>(static_cast<int>(d.blend)));
+    if (force || d.blend != _lastApplied.d.blend)
+        ApplyBlendMode(static_cast<BlendMode>(static_cast<int>(d.blend)));
 
     // -- Fog ------------------------------------------------------------
     SetShaderFogEnabled(d.fog == Poseidon::render::FogMode::Enabled);
@@ -308,33 +308,40 @@ void EngineGL33::ApplyPipeline(const Poseidon::render::RenderPassDescriptor& d)
         SelectPixelShader(ps);
     SetMultiTexturing(fmt);
 
-    // -- Surface attachment -> polygon offset (I-09 OnSurface decals) --
-    // Ground-projected shadows are also OnSurface but need a stronger,
-    // angle-independent constant bias (the decal slope term collapses at
-    // steep / 3rd-person view angles, dropping the shadow's depth test).
-    if (d.shader == Poseidon::render::ShaderFamily::Shadow)
-        Poseidon::render::pipeline::SetPolygonOffsetForShadows(true);
-    else
-        Poseidon::render::pipeline::SetPolygonOffsetForDecals(d.surface == Poseidon::render::SurfaceMode::OnSurface);
+    // OnSurface decals get polygon offset; shadows a stronger angle-independent bias.
+    // Depends only on shader + surface, so skip when neither changed.
+    if (force || d.shader != _lastApplied.d.shader || d.surface != _lastApplied.d.surface)
+    {
+        if (d.shader == Poseidon::render::ShaderFamily::Shadow)
+            Poseidon::render::pipeline::SetPolygonOffsetForShadows(true);
+        else
+            Poseidon::render::pipeline::SetPolygonOffsetForDecals(d.surface == Poseidon::render::SurfaceMode::OnSurface);
+    }
 
     // -- Cull mode + winding (descriptor owns this; no force-bind) -----
     // Per-mode helpers in Poseidon::render::cull set both enable + face atomically.
-    switch (d.cull)
+    if (force || d.cull != _lastApplied.d.cull)
     {
-        case Poseidon::render::CullMode::Back:
-            Poseidon::render::cull::Back();
-            break;
-        case Poseidon::render::CullMode::Front:
-            Poseidon::render::cull::Front();
-            break;
-        case Poseidon::render::CullMode::None:
-            Poseidon::render::cull::None();
-            break;
+        switch (d.cull)
+        {
+            case Poseidon::render::CullMode::Back:
+                Poseidon::render::cull::Back();
+                break;
+            case Poseidon::render::CullMode::Front:
+                Poseidon::render::cull::Front();
+                break;
+            case Poseidon::render::CullMode::None:
+                Poseidon::render::cull::None();
+                break;
+        }
     }
-    if (d.frontFace == Poseidon::render::FrontFaceMode::CW)
-        Poseidon::render::cull::FrontFaceCW();
-    else
-        Poseidon::render::cull::FrontFaceCCW();
+    if (force || d.frontFace != _lastApplied.d.frontFace)
+    {
+        if (d.frontFace == Poseidon::render::FrontFaceMode::CW)
+            Poseidon::render::cull::FrontFaceCW();
+        else
+            Poseidon::render::cull::FrontFaceCCW();
+    }
 
     _lastApplied.d = d;
     _lastApplied.in3d = ctxIn3d;
@@ -653,7 +660,7 @@ void EngineGL33::SetTexture(const TextureGL33* tex, const Poseidon::render::Lega
     // the frame layer's `EmitDraw` can rebind without crossing the GL33 layering.
     _currentDrawItem.backendTextureHandle = handle;
 
-    GL33Bind::Tex2D(0, handle);
+    GL33Bind::Tex2DForSampling(0, handle);
 
     const Poseidon::render::Backend backend = spec.backend;
     constexpr Poseidon::render::Backend mtMask = Poseidon::render::Backend::DetailTexture |
@@ -720,7 +727,7 @@ void EngineGL33::SetMultiTexturing(VFormatSet format)
             break;
         }
     }
-    GL33Bind::Tex2D(1, boundHandle);
+    GL33Bind::Tex2DForSampling(1, boundHandle);
     GL33Bind::ActiveUnit(0);
     // Snapshot for the frame capture: latch the resolved handle so the next TL
     // capture knows what's bound on TEXTURE1, even across the

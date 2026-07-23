@@ -58,6 +58,10 @@ class SortObject : public RefCount
 
     float zCoord; // alpha-pass sort key: camera-space depth; see AlphaSortOrder.hpp
 
+    // Cached sort keys, populated in Scene::AdjustComplexity
+    int sortComplexity; // GetShape()->Level(0)->NFaces()
+    int sortPassOrder;  // object->PassOrder(drawLOD)
+
     USE_FAST_ALLOCATOR
 };
 
@@ -147,6 +151,10 @@ class LightList : public FindArray<ActiveLightPointer, Foundation::MemAllocSS>
     LightList(bool staticStorage = false);
     LightList(const LightList& src);
 };
+
+// Max simultaneously active local lights.
+// The actual limit is the minimum between this and EngineConfig::maxLights. 
+static constexpr int MaxActiveLights = 64;
 
 class PreloadedTextures
 {

@@ -17,6 +17,8 @@ class TextBankGL33;
 // GL33 has no D3D profiling scopes; the macro is a no-op here.
 #define PROFILE_DX_SCOPE(name)
 
+#include <cstddef>
+#include <unordered_map>
 #include <vector>
 #include <Poseidon/Foundation/Containers/Array.hpp>
 #include <Poseidon/Foundation/Containers/StaticArray.hpp>
@@ -126,16 +128,14 @@ enum : int
     SlotSpecEn = 19,
     SlotSunEn = 20,
     SlotVpScale = 21,
-    // slots 22..23 reserved
+    SlotHmParams0 = 22, // terrain heightmap: {invGrid, camX, camZ, camY}
+    SlotHmParams1 = 23, // land clip: {boundingCenter.xyz, enable}
     SlotTexMat0 = 24, // 4 vec4s
     SlotTexMat1 = 28, // 4 vec4s
     SlotTexCtrl = 32,
-    // Local (point/spot) lights for night per-vertex illumination.
-    SlotLightCount = 33,   // .x = active local light count
-    SlotLightPos = 34,     // MaxLocalLights vec4: xyz world pos, w = startAtten
-    SlotLightDiffuse = 42, // MaxLocalLights vec4: diffuse * nightEffect
-    SlotLightAmbient = 50, // MaxLocalLights vec4: ambient * nightEffect
-    SlotLightDir = 58,     // MaxLocalLights vec4: xyz beam dir (world), w = isSpot
+    SlotMatDiffuseRaw = 33, // raw material diffuse, for local-light modulation
+    SlotMatAmbientRaw = 34, // raw material ambient, for local-light modulation
+    // c35-c65 reserved
     SlotLightVP = 66,      // 4 vec4s: light view-projection for shadow-map sampling
 };
 
@@ -148,15 +148,14 @@ static_assert(SlotView >= SlotProj + 4, "SlotView overlaps SlotProj");
 static_assert(SlotWorld >= SlotView + 4, "SlotWorld overlaps SlotView");
 static_assert(SlotSunDir >= SlotWorld + 4, "SlotSunDir overlaps SlotWorld");
 static_assert(SlotVpScale >= SlotSunEn + 1, "SlotVpScale overlaps SlotSunEn");
-static_assert(SlotTexMat0 >= SlotVpScale + 1, "SlotTexMat0 overlaps SlotVpScale");
+static_assert(SlotHmParams0 >= SlotVpScale + 1, "SlotHmParams0 overlaps SlotVpScale");
+static_assert(SlotHmParams1 >= SlotHmParams0 + 1, "SlotHmParams1 overlaps SlotHmParams0");
+static_assert(SlotTexMat0 >= SlotHmParams1 + 1, "SlotTexMat0 overlaps SlotHmParams1");
 static_assert(SlotTexMat1 >= SlotTexMat0 + 4, "SlotTexMat1 overlaps SlotTexMat0");
 static_assert(SlotTexCtrl >= SlotTexMat1 + 4, "SlotTexCtrl overlaps SlotTexMat1");
-static_assert(SlotLightCount >= SlotTexCtrl + 1, "SlotLightCount overlaps SlotTexCtrl");
-static_assert(SlotLightPos >= SlotLightCount + 1, "SlotLightPos overlaps SlotLightCount");
-static_assert(SlotLightDiffuse >= SlotLightPos + MaxLocalLights, "SlotLightDiffuse overlaps SlotLightPos");
-static_assert(SlotLightAmbient >= SlotLightDiffuse + MaxLocalLights, "SlotLightAmbient overlaps SlotLightDiffuse");
-static_assert(SlotLightDir >= SlotLightAmbient + MaxLocalLights, "SlotLightDir overlaps SlotLightAmbient");
-static_assert(SlotLightVP >= SlotLightDir + MaxLocalLights, "SlotLightVP overlaps SlotLightDir");
+static_assert(SlotMatDiffuseRaw >= SlotTexCtrl + 1, "SlotMatDiffuseRaw overlaps SlotTexCtrl");
+static_assert(SlotMatAmbientRaw >= SlotMatDiffuseRaw + 1, "SlotMatAmbientRaw overlaps SlotMatDiffuseRaw");
+static_assert(SlotLightVP >= SlotMatAmbientRaw + 1, "SlotLightVP overlaps material raw slots");
 }; // namespace VSConst
 
 struct TriQueue
@@ -201,7 +200,18 @@ struct SVertex
     Vector3P pos;
     Vector3P norm;
     Poseidon::UVPair t0;
+    // 0 rigid, 1 ClipLandKeep, 2 ClipLandOn
+    uint8_t landClip;
 };
+
+// GPU upload contract: SVertex is uploaded verbatim and read by vsTransform through
+// the SetupSVertexLayout() VAO. sizeof is the attribute stride and the offsets must
+// match the glVertexAttribPointer calls for locations 0..3.
+static_assert(sizeof(SVertex) == 36, "SVertex size must equal the VAO vertex stride");
+static_assert(offsetof(SVertex, pos) == 0, "SVertex.pos must be at offset 0 (attrib 0)");
+static_assert(offsetof(SVertex, norm) == 12, "SVertex.norm must be at offset 12 (attrib 1)");
+static_assert(offsetof(SVertex, t0) == 24, "SVertex.t0 must be at offset 24 (attrib 2)");
+static_assert(offsetof(SVertex, landClip) == 32, "SVertex.landClip must be at offset 32 (attrib 3)");
 
 // Free-function override for hot-reload — when set (typically via CLI
 // --shader-override-dir), GL33's CompileGLShader prefers
@@ -229,13 +239,13 @@ class EngineGL33 : public Engine
     bool _sunEnabled = false;
     Poseidon::TLMaterial _materialSet;
     int _materialSetSpec = 0;
-    // Signature of the LightList last uploaded by DoSetMaterial. SetMaterial's
+    // Signature of the LightList last uploaded by DoSetMaterialAndLights. SetMaterial's
     // cache must re-upload when the lights change, not only when the material
     // changes — otherwise a draw sharing a material with a prior lamp-less draw
     // reuses its empty light list and renders unlit (black road under a lamp).
     uint64_t _materialSetLightsSig = 0;
 #ifndef NDEBUG
-    // Debug tripwire: signature of the frame-constant lighting inputs DoSetMaterial
+    // Debug tripwire: signature of the frame-constant lighting inputs DoSetMaterialAndLights
     // folds in but leaves OUT of the per-draw cache key. Asserts on a cache hit
     // that they are unchanged — catches a cache that outlived its frame (a future
     // omitted-input bug like the black-road one, in the cross-frame direction).
@@ -262,7 +272,7 @@ class EngineGL33 : public Engine
                   const Poseidon::Rect2DAbs& clip) override;
     void DrawLine(int beg, int end) override;
 
-    void DoSetMaterial(const Poseidon::TLMaterial& mat, const LightList& lights,
+    void DoSetMaterialAndLights(const Poseidon::TLMaterial& mat, const LightList& lights,
                        const Poseidon::render::LegacySpec& spec);
     void SetMaterial(const Poseidon::TLMaterial& mat, const LightList& lights,
                      const Poseidon::render::LegacySpec& spec) override;
@@ -578,6 +588,9 @@ class EngineGL33 : public Engine
     void InitDraw(bool clear = false, PackedColor color = PackedColor(0)) override;
     void FinishDraw() override;
     void NextFrame() override;
+    void SetTerrainHeightmap(const float* heights, int width, int height, float invGrid) override;
+    bool LandClipInVS() const override;
+    void SetLandClipParams(float enable, Vector3Par boundingCenter) override;
     void DrawTestPattern(const char* name) override;
 
     void Pause() override;
@@ -670,6 +683,7 @@ class EngineGL33 : public Engine
     bool _shadowMapActive = false;                 // a depth pass ran this frame
     unsigned int _shadowMapTex = 0;                // GL depth texture ARRAY to sample
     int _shadowMapRes = 0;                         // its resolution
+    unsigned int _heightMapTex = 0;                // GL R32F terrain height texture
     int _shadowCascades = 0;                       // active cascade count this frame
     int _shadowOmniCount = 0;                      // leading omni (camera-sphere) tiers — distance-selected
     float _shadowMapVP[kShadowCascades * 16] = {}; // per-cascade light view-projections (column-major)
@@ -779,16 +793,21 @@ class EngineGL33 : public Engine
         return pure;
     }
     void UploadWorldInstances(const float* matrices, int count);
-    // Run accumulation: Scene adds model-to-world transforms; the engine
-    // converts (camera-relative GfxMatrix) and uploads on BeginInstancedRunUpload.
+    // Run accumulation: Scene adds model-to-world transforms; the engine converts
+    // (camera-relative GfxMatrix) and uploads on BeginInstancedRunUpload.
     void InstancedRunReset() override { _instPending = 0; }
-    bool InstancedRunAdd(const Matrix4& modelToWorld) override;
+    bool InstancedRunAdd(const Matrix4& modelToWorld, const LightList& lights) override;
     int InstancedRunPending() const { return _instPending; }
     void BeginInstancedRunUpload() override;
+    bool InstancedRunActive() const override { return _instCount > 1; }
     int _instCount = 0;
     bool _instImpure = false;
     int _instPending = 0;
     GfxMatrix _instArray[256];
+    // Per-instance packed light indices for the pending batch.
+    uint32_t _instLightIdx[256 * 4] = {};
+    // Light -> index into the LocalLights buffer, rebuilt each UploadLocalLights.
+    std::unordered_map<const Poseidon::Light*, int> _localLightIndices;
     void QueuePrepareTriangle(const Poseidon::MipInfo& absMip, int specFlags);
 
     void PrepareTriangle(const Poseidon::MipInfo& absMip, int specFlags) override;
@@ -911,18 +930,20 @@ class EngineGL33 : public Engine
     void SelectVertexShader(VertexShaderID vs);
     void UploadVSScreenConstants();
     void UploadVSProjection(const FrameState& frame);
-    void UploadVSViewConstants(const FrameState& frame);
     FrameState BuildFrameState(Camera* camera, LightSun* sun, int bias, const Color& fogColor, bool sunEnabled);
     PassState BuildPassState(const FrameState& frame, Poseidon::PassId passId);
     void UploadVSWorldMatrix(const float worldMatrix[16]);
     void UploadVSMaterialConstants(const Poseidon::TLMaterial& mat, bool sunEnabled);
-    void UploadVSLights(const LightList& lights, const Poseidon::TLMaterial& mat, float nightEffect);
+    void UploadLocalLights(const LightList& aLights) override;
+    int ResolveLocalLightIndices(const LightList& lights, int* out) const;
+    void SetLocalLightIndices(const int* indices, int count);
+    void PackInstanceLights(int slot, const LightList& lights);
+    void UploadInstanceLightIndices(int count);
     void UploadVSTexGenConstants(TexGenMode mode);
     void SetShaderFogEnabled(bool enabled);
 
     void UploadFrameConstants(const FrameState& frame);
     void UploadPassConstants(const PassState& pass);
-    void UploadObjectConstants(const DrawItem& item);
 
     void ApplyBlendMode(BlendMode mode);
     void ApplyDepthMode(DepthMode mode);

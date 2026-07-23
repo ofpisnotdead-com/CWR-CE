@@ -363,7 +363,7 @@ void TrackAccumulator::Terminate()
         {
             Shape* shape = lShape->Level(i);
             shape->FindSections();
-            shape->ConvertToVBuffer(VBSmallDiscardable);
+            shape->ConvertToVBuffer(VBStatic);
         }
         RegisterVBShape(lShape); // let auto-unregister (is link only)
 

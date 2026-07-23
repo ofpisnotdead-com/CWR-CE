@@ -238,14 +238,6 @@ TEST_CASE("PSConstants: constColor slot and white default", "[Graphics][GL33][su
     REQUIRE(def.constColor[3] == 1.0f);
 }
 
-TEST_CASE("SVertex: correct size for static mesh upload", "[Graphics][GL33]")
-{
-    REQUIRE(sizeof(SVertex) == 32);
-    REQUIRE(offsetof(SVertex, pos) == 0);
-    REQUIRE(offsetof(SVertex, norm) == 12);
-    REQUIRE(offsetof(SVertex, t0) == 24);
-}
-
 // Engine Constants Tests (shared across backends)
 
 TEST_CASE("SpecToPassId covers all spec flag bits", "[Graphics][GL33]")
@@ -867,11 +859,8 @@ TEST_CASE("SurfaceInfoGL33::CalculateSize: non-square texture", "[Graphics][GL33
 }
 
 // SVertex Layout Tests — must match vsTransform GLSL attribute layout
-
-TEST_CASE("SVertex: size is 32 bytes (pos+norm+uv)", "[GL33][VertexBuffer]")
-{
-    REQUIRE(sizeof(SVertex) == 32);
-}
+// (size and offsets are enforced at compile time by static_asserts next to the
+// SVertex definition in EngineGL33.hpp)
 
 TEST_CASE("SVertex: member offsets match VAO attribute pointers", "[GL33][VertexBuffer]")
 {

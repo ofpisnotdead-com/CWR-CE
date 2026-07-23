@@ -849,9 +849,9 @@ void Landscape::CreateAllVBuffers()
                 return;
             LandSegment* segi = slot.segment;
             if (!segi->_onlyWater)
-                segi->_table.ConvertToVBuffer(VBBigDiscardable);
+                segi->_table.ConvertToVBuffer(VBStatic);
             if (segi->_someWater)
-                segi->_wTable.ConvertToVBuffer(VBBigDiscardable);
+                segi->_wTable.ConvertToVBuffer(VBStatic);
             segi->_needsGPU = false;
         });
 }
@@ -874,9 +874,9 @@ void Landscape::CreateNearVBuffers(float cx, float cz, float radius)
             if (dx * dx + dz * dz > r2)
                 return;
             if (!segi->_onlyWater)
-                segi->_table.ConvertToVBuffer(VBBigDiscardable);
+                segi->_table.ConvertToVBuffer(VBStatic);
             if (segi->_someWater)
-                segi->_wTable.ConvertToVBuffer(VBBigDiscardable);
+                segi->_wTable.ConvertToVBuffer(VBStatic);
             segi->_needsGPU = false;
             created++;
         });
@@ -2846,7 +2846,7 @@ void RestoreVBuffers()
         for (int l = 0; l < lShape->NLevels(); l++)
         {
             Shape* shape = lShape->Level(l);
-            shape->ConvertToVBuffer(VBSmallDiscardable);
+            shape->ConvertToVBuffer(VBStatic);
         }
     }
 }

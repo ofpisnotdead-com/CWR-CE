@@ -33,7 +33,8 @@ class VertexBufferGL33 : public VertexBuffer
     GLuint _vao = 0;
     GLuint _vbo = 0;
     GLuint _ibo = 0;
-    bool _dynamic = false;
+    bool _dynamic = false;          // dynamic storage: GL_DYNAMIC_DRAW + orphaning map
+    bool _reuploadPerFrame = false; // re-copy the source vertices every draw (VBDynamic)
     int _vertexCount = 0;
     int _indexCount = 0;
     AutoArray<VBSectionInfo> _sections;
@@ -93,6 +94,10 @@ void VertexBufferGL33::CopyVertices(const Shape& src)
     const UVPair* uv = &src.UV(0);
     const Vector3* pos = &src.Pos(0);
     const Vector3* norm = &src.Norm(0);
+    // ApplyLandClip clears the ClipLandKeep bit as it conforms, so read the
+    // saved original flags when a shape has been animated.
+    const bool useOrig = src.OriginalPosValid();
+    int vi = 0;
     for (int i = src.NVertex(); --i >= 0;)
     {
         sData->pos = Vector3P(pos->X(), pos->Y(), pos->Z());
@@ -102,6 +107,9 @@ void VertexBufferGL33::CopyVertices(const Shape& src)
         norm++;
         sData->t0 = *uv;
         uv++;
+        ClipFlags clip = useOrig ? src.OrigClip(vi) : src.Clip(vi);
+        sData->landClip = (clip & ClipLandKeep) ? 1 : ((clip & ClipLandOn) ? 2 : 0);
+        vi++;
         sData++;
     }
 
@@ -116,7 +124,8 @@ bool VertexBufferGL33::Init(const Shape& src, VBType type)
         return false;
     }
 
-    _dynamic = (type == VBDynamic || type == VBSmallDiscardable);
+    _dynamic = (type != VBStatic);
+    _reuploadPerFrame = (type == VBDynamic);
     _vertexCount = src.NVertex();
 
     // Core profile requires a non-zero VAO bound before any
@@ -206,9 +215,9 @@ bool VertexBufferGL33::Init(const Shape& src, VBType type)
     return true;
 }
 
-void VertexBufferGL33::Update(const Shape& src, bool dynamic)
+void VertexBufferGL33::Update(const Shape& src, bool forceUpdate)
 {
-    if (_dynamic || dynamic || bufferDirty)
+    if (_reuploadPerFrame || forceUpdate || bufferDirty)
     {
         CopyVertices(src);
         bufferDirty = false;
@@ -307,34 +316,22 @@ void EngineGL33::EmitDraw(const Poseidon::render::frame::Draw& d)
 
     GL33Bind::Vao(d.mesh.vao);
 
-    // TEXTURE0 + TEXTURE1 binds.  Both handles were captured from the
-    // `SetTexture` / `SetMultiTexturing` callsites, so this rebinds
-    // the same multi-tex configuration regardless of what's currently
-    // bound.  Handle 0 is skipped (sentinel).  The TEXTURE1 bind ends
-    // with the active unit back on TEXTURE0 — every subsequent call
-    // assumes that.
     if (d.textures[1].id != 0)
-        GL33Bind::Tex2D(1, d.textures[1].id);
+        GL33Bind::Tex2DForSampling(1, d.textures[1].id);
     if (d.textures[0].id != 0)
-        GL33Bind::Tex2D(0, d.textures[0].id);
-    else
-        GL33Bind::ActiveUnit(0);
+        GL33Bind::Tex2DForSampling(0, d.textures[0].id);
 
-    // Per-draw world-matrix upload from the typed `Draw.world` —
-    // never inherited from whatever was last in `_currentDrawItem`.
-    // `UploadVSWorldMatrix` flushes VS constants internally;
-    // FlushPSConstants is explicit because PS-side state (material,
-    // sampler, texture-color routing) is bound by the descriptor /
-    // `ApplyPipeline` path.
-    UploadVSWorldMatrix(reinterpret_cast<const float*>(&d.world));
+    // Only upload the world matrix if this is a non-instanced draw
+    // (instanced objects read their matrices from a UBO)
+    if (_instCount <= 1) 
+    {
+        UploadVSWorldMatrix(reinterpret_cast<const float*>(&d.world));
+    }
     FlushPSConstants();
 
     const std::intptr_t offsetBytes = Poseidon::render::frame::ComputeIndexByteOffset(d.indexBegin, sizeof(VertexIndex));
     if (_instCount > 1)
     {
-        // Instanced run: the WorldInstances UBO already holds the matrices;
-        // the per-draw upload above wrote slot 0 (= matrices[0]) again,
-        // which is harmless. gl_InstanceID selects the rest.
         glDrawElementsInstanced(GL_TRIANGLES, d.indexCount, GL_UNSIGNED_SHORT, reinterpret_cast<void*>(offsetBytes),
                                 _instCount);
     }
