@@ -90,12 +90,10 @@ layout(std140) uniform VSConstants {
     mat4 texMat0;       // c24-c27
     mat4 texMat1;       // c28-c31
     vec4 texCtrl;       // c32: {genTex0, genTex1, 0, 0}
-    vec4 lightCount;        // c33: x = active local light count
-    vec4 lightPos[8];       // c34-c41: xyz world pos, w = startAtten
-    vec4 lightDiffuse[8];   // c42-c49: diffuse * nightEffect
-    vec4 lightAmbient[8];   // c50-c57: ambient * nightEffect
-    vec4 localLightDir[8];  // c58-c65: xyz beam dir (world), w = isSpot
-    mat4 lightVP;           // c66-c69: shadow-map light view-projection (sampled per fragment)
+    vec4 matDiffuseRaw; // c33: raw material diffuse, for local lights
+    vec4 matAmbientRaw; // c34: raw material ambient, for local lights
+    vec4 _padLights[31];// c35-c65: reserved
+    mat4 lightVP;       // c66-c69: shadow-map light view-projection (sampled per fragment)
 };
 
 // Per-instance world matrices (perf effort 08). Plain glDrawElements has
@@ -104,6 +102,21 @@ layout(std140) uniform VSConstants {
 layout(std140) uniform WorldInstances {
     mat4 worldArr[256];
 };
+
+// The view's active local lights (binding 4)
+layout(std140) uniform LocalLights {
+    vec4 count;        // .x = active light count
+    vec4 pos[64];      // xyz camera-relative world pos, w = startAtten
+    vec4 diffuse[64];  // raw diffuse
+    vec4 ambient[64];  // raw ambient
+    vec4 dir[64];      // xyz beam dir (world), w = isSpot
+} localLights;
+
+// Per gl_InstanceID: which local lights apply. arr[i] = {indices 0..3 as bytes in .x,
+// indices 4..7 in .y, count in .z}.
+layout(std140) uniform LightIndices {
+    uvec4 arr[256];
+} lightIdx;
 
 uniform sampler2D heightMap;
 
@@ -173,29 +186,31 @@ void main() {
     litColor.rgb = emissive.rgb + ambient.rgb * sunEn.x + diffuse.rgb * NdotL * sunEn.x;
     litColor.a   = emissive.a   + ambient.a   * sunEn.x + diffuse.a   * NdotL * sunEn.x;
 
-    // Local lights (street lamps, vehicle headlights) — per-vertex contribution
-    // mirroring the legacy LightPoint::Apply / LightReflector::Apply.  toLight =
-    // lightPos - vertex (world space); diffuse uses the outward-normal convention
-    // of the sun term above.  Quadratic falloff past startAtten, cut off at 100x.
-    // Spotlights (localLightDir.w > 0.5) additionally gate by a cone factor: full
-    // inside cos 8deg, zero outside cos 12deg, linear in cos^2 between.
+    // Local lights: per-vertex point/spot contribution mirroring LightPoint/LightReflector.
+    // Quadratic falloff past startAtten (cut at 100x); spotlights gate by a cone factor
+    // (full inside cos 8deg, zero outside cos 12deg). DisableSun materials (sunEn.x == 0)
+    // take the full-night strength the legacy SetupLights forced.
     const float MIN_INSIDE2 = 0.95677279; // (cos 12deg)^2
     const float MAX_INSIDE2 = 0.98063081; // (cos 8deg)^2
-    int nLights = int(lightCount.x);
+    float nightLocal = (sunEn.x > 0.5) ? sunEn.y : 1.0;
+    uvec4 li = lightIdx.arr[gl_InstanceID];
+    int nLights = int(li.z);
     for (int i = 0; i < nLights; i++)
     {
-        vec3 toLight = lightPos[i].xyz - worldPos.xyz;
+        uint idx = ((i < 4 ? li.x : li.y) >> (8u * uint(i & 3))) & 0xFFu;
+        vec4 lpos = localLights.pos[idx];
+        vec4 ldir = localLights.dir[idx];
+        vec3 toLight = lpos.xyz - worldPos.xyz;
         float size2 = dot(toLight, toLight);
-        float startAtten2 = lightPos[i].w * lightPos[i].w;
+        float startAtten2 = lpos.w * lpos.w;
         float endAtten2 = startAtten2 * 100.0;
         if (size2 >= endAtten2)
             continue;
 
         float cone = 1.0;
-        if (localLightDir[i].w > 0.5)
+        if (ldir.w > 0.5)
         {
-            // inside = (vertex - light) . beamDir; cos^2(angleFromAxis) = inside^2/size2
-            float inside = -dot(toLight, localLightDir[i].xyz);
+            float inside = -dot(toLight, ldir.xyz);
             if (inside <= 0.0)
                 continue;
             float cos2 = (inside * inside) / size2;
@@ -204,17 +219,19 @@ void main() {
             cone = clamp((cos2 - MIN_INSIDE2) / (MAX_INSIDE2 - MIN_INSIDE2), 0.0, 1.0);
         }
 
+        vec3 ldif = localLights.diffuse[idx].rgb * matDiffuseRaw.rgb * nightLocal;
+        vec3 lamb = localLights.ambient[idx].rgb * matAmbientRaw.rgb * nightLocal;
         float atten = (size2 >= startAtten2) ? (startAtten2 / size2) : 1.0;
         float cosFi = dot(toLight, worldNormal);
         vec3 contrib;
         if (cosFi > 0.0)
         {
             cosFi *= inversesqrt(size2);
-            contrib = (lightDiffuse[i].rgb * cosFi + lightAmbient[i].rgb) * (atten * cone);
+            contrib = (ldif * cosFi + lamb) * (atten * cone);
         }
         else
         {
-            contrib = lightAmbient[i].rgb * atten;
+            contrib = lamb * atten;
         }
         litColor.rgb += contrib;
     }
@@ -823,6 +840,18 @@ static GLuint s_vsUBO = 0;
 static GLuint s_worldUBO = 0;
 static GLuint s_psUBO = 0;
 
+// LightIndices UBO (binding 3): light indices packed as bytes (.x = 0..3, .y = 4..7) and a count in .z
+static GLuint s_lightIndicesUBO = 0;
+static uint32_t s_lightIndices[256 * 4] = {};
+
+static GLuint s_localLightsUBO = 0;
+// The LocalLights buffer holds every active light, so it must be at least as large as the
+// scene's active-light cap. Bytes index it, and it must fit the GL 3.3 guaranteed min UBO size.
+static constexpr int kMaxLocalLights = MaxActiveLights;
+static_assert(kMaxLocalLights <= 256, "light index packing uses one byte per index");
+static_assert((1 + 4 * kMaxLocalLights) * 16 <= 16384, "LocalLights UBO exceeds GL 3.3 minimum guaranteed size (16 KB)");
+static float s_localLights[(1 + 4 * kMaxLocalLights) * 4] = {};
+
 void EngineGL33::FlushVSConstants()
 {
     if (!s_vsUBO)
@@ -886,6 +915,19 @@ void EngineGL33::InitVertexShaders()
     glBindBuffer(GL_UNIFORM_BUFFER, s_worldUBO);
     glBufferData(GL_UNIFORM_BUFFER, 256 * 64, nullptr, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_UNIFORM_BUFFER, 2, s_worldUBO);
+
+    // LightIndices array UBO (binding 3)
+    glGenBuffers(1, &s_lightIndicesUBO);
+    glBindBuffer(GL_UNIFORM_BUFFER, s_lightIndicesUBO);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(s_lightIndices), s_lightIndices, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 3, s_lightIndicesUBO);
+
+    // LocalLights array UBO (binding 4)
+    glGenBuffers(1, &s_localLightsUBO);
+    glBindBuffer(GL_UNIFORM_BUFFER, s_localLightsUBO);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(s_localLights), nullptr, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 4, s_localLightsUBO);
+
 
     _vertexShaderSel = VSNone;
 }
@@ -982,6 +1024,7 @@ FrameState EngineGL33::BuildFrameState(Camera* camera, LightSun* sun, int bias, 
     frame.sunDir[2] = dir.Z();
     frame.sunDir[3] = 0;
     frame.sunEnabled = sunEnabled;
+    frame.nightEffect = sun->NightEffect();
 
     return frame;
 }
@@ -1215,6 +1258,11 @@ void EngineGL33::UploadVSMaterialConstants(const TLMaterial& mat, bool sunEnable
     memcpy(s_vsShadow + VSConst::SlotDiffuse * 4, diffuse, 16);
     memcpy(s_vsShadow + VSConst::SlotEmissive * 4, emissive, 16);
 
+    float matDiffuseRaw[4] = {mat.diffuse.R(), mat.diffuse.G(), mat.diffuse.B(), mat.diffuse.A()};
+    float matAmbientRaw[4] = {mat.ambient.R(), mat.ambient.G(), mat.ambient.B(), mat.ambient.A()};
+    memcpy(s_vsShadow + VSConst::SlotMatDiffuseRaw * 4, matDiffuseRaw, 16);
+    memcpy(s_vsShadow + VSConst::SlotMatAmbientRaw * 4, matAmbientRaw, 16);
+
     Color specCol = sun->Diffuse() * mat.specular;
     float spec[4] = {specCol.R(), specCol.G(), specCol.B(), static_cast<float>(mat.specularPower)};
     float specEn[4] = {mat.specularPower > 0 ? 1.0f : 0.0f, 0, 0, 0};
@@ -1225,64 +1273,134 @@ void EngineGL33::UploadVSMaterialConstants(const TLMaterial& mat, bool sunEnable
 }
 
 // Upload the active local (point) lights for per-vertex night illumination.
-// Diffuse/ambient are pre-scaled by NightEffect so daytime contributes nothing.
 // Positions are stored camera-relative to match the VS world transform, which
 // subtracts the camera position (PrepareMeshTLImpl camera-relative rendering).
-void EngineGL33::UploadVSLights(const LightList& lights, const TLMaterial& mat, float nightEffect)
+void EngineGL33::UploadLocalLights(const LightList& aLights)
 {
     const float* camPos = _frameState.cameraPos;
+    _localLightIndices.clear();
     int n = 0;
-    if (nightEffect > 0.0f)
+    for (int i = 0; i < aLights.Size() && n < kMaxLocalLights; i++)
     {
-        // Match the legacy ConvertLight: diffuse/ambient are scaled by NightEffect
-        // and modulated by the material, so the per-vertex contribution lands in
-        // the same space as the sun term (which also folds in mat.diffuse).
-        Color matDif = mat.diffuse * nightEffect;
-        Color matAmb = mat.ambient * nightEffect;
-        for (int i = 0; i < lights.Size() && n < VSConst::MaxLocalLights; i++)
-        {
-            Light* light = lights[i];
-            if (!light)
-                continue;
-            LightDescription desc;
-            light->GetDescription(desc);
-            bool isSpot = desc.type == LTSpotLight;
-            if (desc.type != LTPoint && !isSpot)
-                continue; // point + spot lights; directional (sun) handled separately
+        Light* light = aLights[i];
+        if (!light)
+            continue;
+        LightDescription desc;
+        light->GetDescription(desc);
+        bool isSpot = desc.type == LTSpotLight;
+        if (desc.type != LTPoint && !isSpot)
+            continue;
 
-            float* p = s_vsShadow + (VSConst::SlotLightPos + n) * 4;
-            p[0] = desc.pos.X() - camPos[0];
-            p[1] = desc.pos.Y() - camPos[1];
-            p[2] = desc.pos.Z() - camPos[2];
-            p[3] = desc.startAtten;
+        _localLightIndices[light] = n;
 
-            float* dir = s_vsShadow + (VSConst::SlotLightDir + n) * 4;
-            Vector3 beam = desc.dir;
-            beam.Normalize();
-            dir[0] = beam.X();
-            dir[1] = beam.Y();
-            dir[2] = beam.Z();
-            dir[3] = isSpot ? 1.0f : 0.0f;
+        float* p = s_localLights + (1 + n) * 4;
+        p[0] = desc.pos.X() - camPos[0];
+        p[1] = desc.pos.Y() - camPos[1];
+        p[2] = desc.pos.Z() - camPos[2];
+        p[3] = desc.startAtten;
 
-            Color dif = desc.diffuse * matDif;
-            float* df = s_vsShadow + (VSConst::SlotLightDiffuse + n) * 4;
-            df[0] = dif.R();
-            df[1] = dif.G();
-            df[2] = dif.B();
-            df[3] = 0.0f;
+        float* df = s_localLights + (1 + kMaxLocalLights + n) * 4;
+        df[0] = desc.diffuse.R();
+        df[1] = desc.diffuse.G();
+        df[2] = desc.diffuse.B();
+        df[3] = 0.0f;
 
-            Color amb = desc.ambient * matAmb;
-            float* am = s_vsShadow + (VSConst::SlotLightAmbient + n) * 4;
-            am[0] = amb.R();
-            am[1] = amb.G();
-            am[2] = amb.B();
-            am[3] = 0.0f;
+        float* am = s_localLights + (1 + 2 * kMaxLocalLights + n) * 4;
+        am[0] = desc.ambient.R();
+        am[1] = desc.ambient.G();
+        am[2] = desc.ambient.B();
+        am[3] = 0.0f;
 
-            n++;
-        }
+        float* dir = s_localLights + (1 + 3 * kMaxLocalLights + n) * 4;
+        Vector3 beam = desc.dir;
+        beam.Normalize();
+        dir[0] = beam.X();
+        dir[1] = beam.Y();
+        dir[2] = beam.Z();
+        dir[3] = isSpot ? 1.0f : 0.0f;
+
+        n++;
     }
-    s_vsShadow[VSConst::SlotLightCount * 4] = static_cast<float>(n);
-    FlushVSConstants();
+    s_localLights[0] = static_cast<float>(n);
+    if (!s_localLightsUBO)
+        return;
+    GL33Bind::UniformBuffer(s_localLightsUBO);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(s_localLights), s_localLights);
+}
+
+// Looks up the indices of the provided lights in the local light buffer,
+// returning the count of found lights and writing their indices to out[].
+int EngineGL33::ResolveLocalLightIndices(const LightList& lights, int* out) const
+{
+    int n = 0;
+    for (int i = 0; i < lights.Size() && n < VSConst::MaxLocalLights; i++)
+    {
+        Light* l = lights[i];
+        if (!l)
+            continue;
+        auto it = _localLightIndices.find(l);
+        if (it != _localLightIndices.end())
+            out[n++] = it->second;
+    }
+    return n;
+}
+
+// Pack up to 8 light indices into 4 uint32_t values, with the count in dst[2] and dst[3] unused.
+static void PackLightIndices(uint32_t dst[4], const int* indices, int count)
+{
+    uint32_t packed[2] = {0, 0};
+    for (int i = 0; i < count; i++)
+        packed[i >> 2] |= static_cast<uint32_t>(indices[i] & 0xFF) << (8 * (i & 3));
+    dst[0] = packed[0];
+    dst[1] = packed[1];
+    dst[2] = static_cast<uint32_t>(count);
+    dst[3] = 0;
+}
+
+// Set the current draw's local-light selection. Only used for non-instanced draws.
+void EngineGL33::SetLocalLightIndices(const int* indices, int count)
+{
+    if (count > VSConst::MaxLocalLights)
+        count = VSConst::MaxLocalLights;
+
+    uint32_t packed[4];
+    PackLightIndices(packed, indices, count);
+
+    // slot 0
+    uint32_t* dst = s_lightIndices;
+    if (dst[0] == packed[0] && dst[1] == packed[1] && dst[2] == packed[2])
+        return;
+
+    dst[0] = packed[0];
+    dst[1] = packed[1];
+    dst[2] = packed[2];
+
+    if (!s_lightIndicesUBO)
+        return;
+
+    GL33Bind::UniformBuffer(s_lightIndicesUBO);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, 16, dst);
+}
+
+
+void EngineGL33::PackInstanceLights(int slot, const LightList& lights)
+{
+    if (slot < 0 || slot >= 256)
+        return;
+    int idx[VSConst::MaxLocalLights];
+    int n = ResolveLocalLightIndices(lights, idx);
+    PackLightIndices(_instLightIdx + slot * 4, idx, n);
+}
+
+void EngineGL33::UploadInstanceLightIndices(int count)
+{
+    if (count <= 0 || !s_lightIndicesUBO)
+        return;
+    if (count > 256)
+        count = 256;
+    memcpy(s_lightIndices, _instLightIdx, count * 16);
+    GL33Bind::UniformBuffer(s_lightIndicesUBO);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, count * 16, s_lightIndices);
 }
 
 void EngineGL33::UploadVSTexGenConstants(TexGenMode mode)
@@ -1346,7 +1464,7 @@ void EngineGL33::UploadFrameConstants(const FrameState& frame)
 
     memcpy(s_vsShadow + VSConst::SlotSunDir * 4, frame.sunDir, 16);
 
-    float sunEn[4] = {frame.sunEnabled ? 1.0f : 0.0f, 0, 0, 0};
+    float sunEn[4] = {frame.sunEnabled ? 1.0f : 0.0f, frame.nightEffect, 0, 0};
     memcpy(s_vsShadow + VSConst::SlotSunEn * 4, sunEn, 16);
 
     memcpy(s_vsShadow + VSConst::SlotFogParam * 4, frame.fogParams, 16);
@@ -1612,6 +1730,12 @@ void EngineGL33::InitPixelShaders()
         GLuint wiBlock = glGetUniformBlockIndex(prog, "WorldInstances");
         if (wiBlock != GL_INVALID_INDEX)
             glUniformBlockBinding(prog, wiBlock, 2);
+        GLuint llBlock = glGetUniformBlockIndex(prog, "LocalLights");
+        if (llBlock != GL_INVALID_INDEX)
+            glUniformBlockBinding(prog, llBlock, 4);
+        GLuint liBlock = glGetUniformBlockIndex(prog, "LightIndices");
+        if (liBlock != GL_INVALID_INDEX)
+            glUniformBlockBinding(prog, liBlock, 3);
         GLuint vsBlock = glGetUniformBlockIndex(prog, "VSConstants");
         GLuint psBlock = glGetUniformBlockIndex(prog, "PSConstants");
         if (vsBlock != GL_INVALID_INDEX)

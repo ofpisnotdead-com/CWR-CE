@@ -39,7 +39,7 @@ void EngineGL33::UpdateProjection()
     }
 }
 
-bool EngineGL33::InstancedRunAdd(const Matrix4& modelToWorld)
+bool EngineGL33::InstancedRunAdd(const Matrix4& modelToWorld, const LightList& lights)
 {
     if (_instPending >= 256)
         return false;
@@ -48,6 +48,7 @@ bool EngineGL33::InstancedRunAdd(const Matrix4& modelToWorld)
     m._41 -= _frameState.cameraPos[0];
     m._42 -= _frameState.cameraPos[1];
     m._43 -= _frameState.cameraPos[2];
+    PackInstanceLights(_instPending, lights);
     ++_instPending;
     return true;
 }
@@ -55,6 +56,7 @@ bool EngineGL33::InstancedRunAdd(const Matrix4& modelToWorld)
 void EngineGL33::BeginInstancedRunUpload()
 {
     UploadWorldInstances(reinterpret_cast<const float*>(_instArray), _instPending);
+    UploadInstanceLightIndices(_instPending);
     BeginInstancedRun(_instPending);
 }
 
