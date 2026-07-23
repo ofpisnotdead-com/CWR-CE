@@ -944,7 +944,6 @@ class EngineGL33 : public Engine
 
     void UploadFrameConstants(const FrameState& frame);
     void UploadPassConstants(const PassState& pass);
-    void UploadObjectConstants(const DrawItem& item);
 
     void ApplyBlendMode(BlendMode mode);
     void ApplyDepthMode(DepthMode mode);
