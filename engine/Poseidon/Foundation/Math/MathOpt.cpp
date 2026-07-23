@@ -8,7 +8,21 @@
 
 #pragma optimize("t", on)
 
-#ifndef _KNI
+// Use the SSE rsqrtss + one Newton-Raphson step on x86 (SSE2 baseline); the
+// Graphics Gems table approximation below is the portable fallback.  rsqrtss
+// (~12-bit) with one refinement reaches ~23-bit accuracy, comparable to the
+// table's 2*LOOKUP_BITS, but is a single hardware instruction instead of a
+// table lookup plus bit manipulation and a memory load.  This SSE path already
+// existed below, gated on the long-dead _KNI (Intel KNI / Pentium III) macro.
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+#define POSEIDON_INVSQRT_SSE 1
+#include <xmmintrin.h>
+#endif
+
+namespace Poseidon::Foundation
+{
+
+#ifndef POSEIDON_INVSQRT_SSE
 
 // Fast inverse square root (Graphics Gems V).
 // note: LOOKUP_BITS 12 seems to be a little bit faster (1-2% overall)
@@ -34,8 +48,6 @@
 #define GET_EMANT(a) (((a) >> LOOKUP_POS) & LOOKUP_MASK)   // Extended mantissa MSB's
 #define SET_MANTSEED(a) (((unsigned long)(a)) << SEED_POS) // Set mantissa SEED_BITS MSB's
 
-namespace Poseidon::Foundation
-{
 class InverseSqrtCalculator
 {
     SEED_TYPE _iSqrt[TABLE_SIZE];
