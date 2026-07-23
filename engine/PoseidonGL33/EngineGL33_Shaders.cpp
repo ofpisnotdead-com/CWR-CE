@@ -779,17 +779,34 @@ static GLuint s_vsUBO = 0;
 static GLuint s_worldUBO = 0;
 static GLuint s_psUBO = 0;
 
+// Cached copy of s_worldUBO slot 0, used to dedupe matrix uploads
+static float s_worldSlot0[16] = {};
+static bool s_worldSlot0Valid = false;
 void EngineGL33::FlushVSConstants()
 {
     if (!s_vsUBO)
+    {
         return;
-    // glBindBufferBase is sticky — done once at UBO creation in
-    // InitVertexShaders.  Per-flush we only update buffer contents.
+    }
+
+    // Skip flushes that would re-upload identical contents
+    static float s_vsUploaded[sizeof(s_vsShadow) / sizeof(float)] = {};
+    static GLuint s_vsUploadedUBO = 0;
+
+    if (s_vsUploadedUBO == s_vsUBO && memcmp(s_vsShadow, s_vsUploaded, sizeof(s_vsShadow)) == 0)
+    {
+        return;
+    }
+
     GL33Bind::UniformBuffer(s_vsUBO);
 #ifdef __APPLE__
     glBufferData(GL_UNIFORM_BUFFER, sizeof(s_vsShadow), nullptr, GL_STREAM_DRAW);
 #endif
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(s_vsShadow), s_vsShadow);
+
+    // Update the cached copy
+    memcpy(s_vsUploaded, s_vsShadow, sizeof(s_vsShadow));
+    s_vsUploadedUBO = s_vsUBO;
 }
 
 void EngineGL33::FlushPSConstants()
@@ -848,6 +865,7 @@ void EngineGL33::InitVertexShaders()
     glBindBuffer(GL_UNIFORM_BUFFER, s_worldUBO);
     glBufferData(GL_UNIFORM_BUFFER, 256 * 64, nullptr, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_UNIFORM_BUFFER, 2, s_worldUBO);
+    s_worldSlot0Valid = false;
 
     _vertexShaderSel = VSNone;
 }
@@ -1100,6 +1118,9 @@ void EngineGL33::UploadWorldInstances(const float* matrices, int count)
     glBufferData(GL_UNIFORM_BUFFER, 256 * 64, nullptr, GL_STREAM_DRAW);
 #endif
     glBufferSubData(GL_UNIFORM_BUFFER, 0, count * 64, matrices);
+    // Record slot 0 so the head's per-draw upload dedupes.
+    memcpy(s_worldSlot0, matrices, 64);
+    s_worldSlot0Valid = true;
 }
 
 void EngineGL33::UploadVSWorldMatrix(const float worldMatrix[16])
@@ -1109,6 +1130,13 @@ void EngineGL33::UploadVSWorldMatrix(const float worldMatrix[16])
     // the VSConstants world member stays as std140 padding.
     if (s_worldUBO)
     {
+        // Skip if slot 0 already holds this matrix.
+        if (s_worldSlot0Valid && memcmp(s_worldSlot0, worldMatrix, 64) == 0)
+        {
+            return;
+        }
+        memcpy(s_worldSlot0, worldMatrix, 64);
+        s_worldSlot0Valid = true;
         GL33Bind::UniformBuffer(s_worldUBO);
 #ifdef __APPLE__
         glBufferData(GL_UNIFORM_BUFFER, 256 * 64, nullptr, GL_STREAM_DRAW);
@@ -1297,11 +1325,6 @@ void EngineGL33::UploadPassConstants(const PassState& pass)
     ApplyBlendMode(static_cast<BlendMode>(pass.blendMode));
     ApplyDepthMode(static_cast<DepthMode>(pass.depthMode));
     SetShaderFogEnabled(pass.fogMode == FogMode::Enabled);
-}
-
-void EngineGL33::UploadObjectConstants(const DrawItem& item)
-{
-    UploadVSWorldMatrix(reinterpret_cast<const float*>(&item.worldMatrix));
 }
 
 // Compiled FS objects
