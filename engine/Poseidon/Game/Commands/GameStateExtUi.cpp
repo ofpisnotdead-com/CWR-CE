@@ -2374,33 +2374,81 @@ GameValue ObjStop(const GameState* state, GameValuePar oper1, GameValuePar oper2
     return NOTHING;
 }
 
-GameValue ObjDisableAI(const GameState* state, GameValuePar oper1, GameValuePar oper2)
+namespace
+{
+bool getAiDisabledInfo(const GameState* state, GameValuePar oper1, GameValuePar oper2
+    , AIUnit::DisabledAI& s, int& dai, AIUnit*& unit)
 {
     Object* obj = GetObject(oper1);
     if (!obj)
     {
-        return NOTHING;
+        return false;
     }
     EntityAI* veh = dyn_cast<EntityAI>(obj);
     if (!veh)
     {
-        return NOTHING;
+        return false;
     }
-    AIUnit* unit = veh->CommanderUnit();
+    unit = veh->CommanderUnit();
     if (!unit)
     {
-        return NOTHING;
+        return false;
     }
+    // get value identified by string
     GameStringType str = oper2;
     const char* ss = str;
-    AIUnit::DisabledAI s = GetEnumValue<AIUnit::DisabledAI>(ss);
-    int dai = unit->GetAIDisabled();
+    s = GetEnumValue<AIUnit::DisabledAI>(ss);
+    dai = unit->GetAIDisabled();
     if (s == INT_MIN)
     {
         s = (AIUnit::DisabledAI)0;
     }
+    return true;
+}
+} // (anonymous namespace)
+
+GameValue ObjDisableAI(const GameState* state, GameValuePar oper1, GameValuePar oper2)
+{
+    AIUnit::DisabledAI s = (AIUnit::DisabledAI)0;
+    int dai = 0;
+    AIUnit* unit = nullptr;
+    const bool succeeded = getAiDisabledInfo(state, oper1, oper2, s, dai, unit);
+    if (!succeeded)
+    {
+        return NOTHING;
+    }
+
     unit->SetAIDisabled(dai | s);
     return NOTHING;
+}
+
+GameValue ObjEnableAI( const GameState *state, GameValuePar oper1, GameValuePar oper2 )
+{
+    AIUnit::DisabledAI s = (AIUnit::DisabledAI)0;
+    int dai = 0;
+    AIUnit* unit = nullptr;
+    const bool succeeded = getAiDisabledInfo(state, oper1, oper2, s, dai, unit);
+    if (!succeeded)
+    {
+        return NOTHING;
+    }
+
+    unit->SetAIDisabled(dai & ~s);
+    return NOTHING;
+}
+
+GameValue ObjCheckAIFeature(const GameState *state, GameValuePar oper1, GameValuePar oper2)
+{
+    AIUnit::DisabledAI s = (AIUnit::DisabledAI)0;
+    int dai = 0;
+    AIUnit* unit = nullptr;
+    const bool succeeded = getAiDisabledInfo(state, oper1, oper2, s, dai, unit);
+    if (!succeeded)
+    {
+        return NOTHING;
+    }
+
+    return (dai & s) != 0;
 }
 
 GameValue ObjLand(const GameState* state, GameValuePar oper1, GameValuePar oper2)
