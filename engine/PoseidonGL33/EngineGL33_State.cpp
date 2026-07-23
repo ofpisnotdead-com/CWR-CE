@@ -308,14 +308,15 @@ void EngineGL33::ApplyPipeline(const Poseidon::render::RenderPassDescriptor& d)
         SelectPixelShader(ps);
     SetMultiTexturing(fmt);
 
-    // -- Surface attachment -> polygon offset (I-09 OnSurface decals) --
-    // Ground-projected shadows are also OnSurface but need a stronger,
-    // angle-independent constant bias (the decal slope term collapses at
-    // steep / 3rd-person view angles, dropping the shadow's depth test).
-    if (d.shader == Poseidon::render::ShaderFamily::Shadow)
-        Poseidon::render::pipeline::SetPolygonOffsetForShadows(true);
-    else
-        Poseidon::render::pipeline::SetPolygonOffsetForDecals(d.surface == Poseidon::render::SurfaceMode::OnSurface);
+    // OnSurface decals get polygon offset; shadows a stronger angle-independent bias.
+    // Depends only on shader + surface, so skip when neither changed.
+    if (force || d.shader != _lastApplied.d.shader || d.surface != _lastApplied.d.surface)
+    {
+        if (d.shader == Poseidon::render::ShaderFamily::Shadow)
+            Poseidon::render::pipeline::SetPolygonOffsetForShadows(true);
+        else
+            Poseidon::render::pipeline::SetPolygonOffsetForDecals(d.surface == Poseidon::render::SurfaceMode::OnSurface);
+    }
 
     // -- Cull mode + winding (descriptor owns this; no force-bind) -----
     // Per-mode helpers in Poseidon::render::cull set both enable + face atomically.
