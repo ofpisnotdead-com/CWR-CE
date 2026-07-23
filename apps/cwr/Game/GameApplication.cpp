@@ -17,6 +17,8 @@
 #include <Poseidon/Core/TaskPool.hpp>
 #include <Poseidon/Core/Progress.hpp>
 #include <Poseidon/Core/Global.hpp>
+#include <chrono>
+#include <thread>
 #include <Poseidon/Game/Mission/MissionPathLoader.hpp>
 #include <Poseidon/Graphics/Core/Engine.hpp>
 #include <Poseidon/Graphics/Rendering/Draw/FontSystem.hpp>
@@ -1479,6 +1481,9 @@ void GameApplication::RegisterGraphicsBackends()
 {
     RegisterDummyGraphicsBackend();
     RegisterGL33GraphicsBackend();
+#ifdef __APPLE__
+    RegisterMetalGraphicsBackend();
+#endif
 }
 
 bool GameApplication::InitializeInput()

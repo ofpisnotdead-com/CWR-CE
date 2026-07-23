@@ -122,6 +122,11 @@ class SDLEventWindow
                 if (::Poseidon::GEngine)
                     ::Poseidon::GEngine->OnWindowResized(_width, _height);
             }
+            else if (event.type == SDL_EVENT_WINDOW_SAFE_AREA_CHANGED)
+            {
+                if (::Poseidon::GEngine)
+                    ::Poseidon::GEngine->OnWindowSafeAreaChanged();
+            }
             else if (event.type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN)
             {
                 _fullscreenTransitioning = false;

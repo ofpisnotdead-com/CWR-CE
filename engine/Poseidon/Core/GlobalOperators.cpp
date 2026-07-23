@@ -27,16 +27,46 @@
 
 // Guard: during early dynamic library init (e.g. OpenAL), GMemFunctionsPtr may
 // exist but not be fully constructed (vtable still null). Fall back to malloc/free.
+//
+// On Apple platforms this guard is forced permanently "not ready": Apple ships
+// libc++ as a shared dylib (libc++.dylib), and several basic_string members
+// (e.g. __grow_by_and_replace) are kept out-of-line in that dylib for ABI
+// stability rather than inlined into our binary. Code executing inside that
+// dylib resolves operator delete/free to the *system* allocator, not this
+// override -- so a string buffer allocated here via the custom heap
+// (mimalloc-backed JimboAllocator) can end up freed by system malloc when
+// libc++.dylib grows it, which system malloc correctly rejects as a pointer
+// it never allocated (abort: BUG_IN_CLIENT_OF_LIBMALLOC_POINTER_BEING_FREED_
+// WAS_NOT_ALLOCATED). Confirmed as the cause of a 100%-reproducible launch
+// crash in GamePaths::Resolve -> getXdgDir on iOS. Windows/Linux statically
+// link their C++ runtime, so no separate-image boundary exists there and the
+// custom heap remains safe to use globally on those platforms.
+//
+// TODO(apple-alloc): this permanently gives up JimboAllocator's budget
+// tracking/FreeOnDemand cache eviction on iOS/macOS, not just its speed.
+// Properly restoring mimalloc here would mean registering it as a real
+// malloc_zone_t (malloc_zone_register), which is a materially bigger and
+// riskier piece of platform-specific work than this bypass -- not worth it
+// right after finding this bug. If eviction-under-pressure is ever actually
+// needed on iOS, wire FreeOnDemand to UIApplicationDidReceiveMemoryWarning-
+// Notification directly instead of trying to bring mimalloc along.
+#if defined(__APPLE__)
+#define POSEIDON_APPLE_GLOBAL_NEW_BYPASS 1
+#endif
 
 namespace Poseidon
 {
 static inline bool GMemReady()
 {
+#if defined(POSEIDON_APPLE_GLOBAL_NEW_BYPASS)
+    return false;
+#else
     if (!Foundation::GMemFunctionsPtr)
         return false;
     // Check vtable pointer (first member of the object)
     const void* vtable = *reinterpret_cast<void* const*>(Foundation::GMemFunctionsPtr);
     return vtable != nullptr;
+#endif
 }
 } // namespace Poseidon
 

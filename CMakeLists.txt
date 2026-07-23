@@ -166,7 +166,7 @@ find_package(enkiTS CONFIG REQUIRED)
 # dist/<preset>/{game,viewer,tools} - auto-create on build
 get_filename_component(PRESET_NAME "${CMAKE_BINARY_DIR}" NAME)
 set(DIST_PRESET_NAME "${PRESET_NAME}")
-if(DIST_PRESET_NAME MATCHES "^(win|linux)-([^-]+)(-(.*))?$")
+if(DIST_PRESET_NAME MATCHES "^(win|linux|macos)-([^-]+)(-(.*))?$")
     set(_dist_platform "${CMAKE_MATCH_1}")
     set(_dist_arch "${CMAKE_MATCH_2}")
     set(_dist_suffix "${CMAKE_MATCH_4}")
@@ -195,6 +195,16 @@ add_subdirectory(engine/Poseidon)
 add_subdirectory(engine/PoseidonGL33)
 add_subdirectory(engine/PoseidonOpenAL)
 add_subdirectory(engine/PoseidonFormats)
+
+if(APPLE)
+    # Native Metal renderer backend for macOS (Apple Silicon). GL33 remains
+    # available and is still the default; Metal is an additional backend
+    # registered through GraphicsEngineFactory (see GraphicsBackendMTL.cpp).
+    add_subdirectory(engine/PoseidonMTL)
+    add_subdirectory(apps/tools/MetalSmokeTest)
+    add_subdirectory(apps/tools/GL33SmokeTest)
+endif()
+
 add_subdirectory(tests/unit/engine/Poseidon/Foundation)
 add_subdirectory(apps/tools/Evaluator)
 add_subdirectory(tests/unit/apps/Evaluator)

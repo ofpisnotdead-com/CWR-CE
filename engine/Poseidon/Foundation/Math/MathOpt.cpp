@@ -179,7 +179,7 @@ bool VerifyFloat(float x)
 
 bool VerifyFloat(float x)
 {
-    if (finite(x))
+    if (_finite(x))
         return true;
     if (isinf(x))
     {

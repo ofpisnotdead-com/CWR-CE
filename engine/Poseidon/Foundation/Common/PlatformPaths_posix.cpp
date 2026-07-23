@@ -38,6 +38,25 @@ std::string getXdgDir(const char* envVar, const char* defaultSuffix, const char*
 
 namespace Poseidon::Foundation {
 
+#if defined(__APPLE__)
+// Desktop macOS has its own directory conventions, distinct from Linux's XDG
+// dirs. No XDG_* env var override here — those aren't a macOS convention.
+std::string getUserConfigDir(const char* appName) {
+    return getXdgDir("", "Library/Preferences", appName);
+}
+
+std::string getUserDataDir(const char* appName) {
+    return getXdgDir("", "Library/Application Support", appName);
+}
+
+std::string getUserCacheDir(const char* appName) {
+    return getXdgDir("", "Library/Caches", appName);
+}
+
+std::string getUserDocumentsDir(const char* appName) {
+    return getXdgDir("", "Documents", appName);
+}
+#else
 std::string getUserConfigDir(const char* appName) {
     return getXdgDir("XDG_CONFIG_HOME", ".config", appName);
 }
@@ -57,6 +76,7 @@ std::string getUserDocumentsDir(const char* appName) {
     // correct, non-roaming home for user content (mods, editor missions).
     return getXdgDir("XDG_DATA_HOME", ".local/share", appName);
 }
+#endif
 
 } // namespace Poseidon::Foundation
 

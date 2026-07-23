@@ -400,6 +400,124 @@ bool ReadPAAInfo(const std::string& path, PAAInfo& info)
     return info.width > 0 && info.height > 0;
 }
 
+namespace
+{
+// Decode one already-Init()'d mip level's pixel data into RGBA8888.
+// Factored out of DecodePAABuffer so DecodePAABufferAllMips (which calls
+// this once per level) and the single-level case decode identically instead
+// of risking the two paths drifting apart. `mip` must already have `_w`/
+// `_h`/`_start` populated (i.e. Init() returned 0 for it already) -- this
+// function re-seeks to `_start` itself (SeekLevel) for the formats that read
+// their own raw header, exactly mirroring the original inline logic's order.
+bool DecodeLevelPixels(QIStream& in, PacFormat format, PacLevelMem& mip, PacPalette& pal, bool isPaa, int width,
+                       int height, std::vector<uint8_t>& outRgba)
+{
+    outRgba.assign(static_cast<size_t>(width) * static_cast<size_t>(height) * 4, 0);
+    bool isDXT = (format >= PacDXT1 && format <= PacDXT5);
+
+    if (format == PacARGB8888)
+    {
+        // ARGB8888: raw data, no LZSS. Convert ARGB → RGBA.
+        mip.SeekLevel(in);
+        int mw = fgetiw(in), mh = fgetiw(in);
+        if (mw == 0 && mh == 0)
+        {
+            outRgba.clear();
+            return false;
+        }
+        int dSize = fgeti24(in);
+        std::vector<uint8_t> rawData(dSize);
+        in.read(reinterpret_cast<char*>(rawData.data()), dSize);
+        // The conversion loop below reads width*height*4 raw bytes; reject a payload
+        // too small to cover them rather than read past rawData (heap over-read).
+        if (static_cast<int>(rawData.size()) < width * height * 4)
+        {
+            outRgba.clear();
+            return false;
+        }
+        for (int y = 0; y < height; y++)
+        {
+            const uint8_t* src = rawData.data() + y * width * 4;
+            uint8_t* dst = outRgba.data() + y * width * 4;
+            for (int x = 0; x < width; x++)
+            {
+                // LE memory: B(0) G(1) R(2) A(3) from uint32 (A<<24|R<<16|G<<8|B)
+                dst[x * 4 + 0] = src[x * 4 + 2]; // R
+                dst[x * 4 + 1] = src[x * 4 + 1]; // G
+                dst[x * 4 + 2] = src[x * 4 + 0]; // B
+                dst[x * 4 + 3] = src[x * 4 + 3]; // A
+            }
+        }
+    }
+    else if (isDXT)
+    {
+        mip.SeekLevel(in);
+        int mw = fgetiw(in), mh = fgetiw(in);
+        if (mw == 0 && mh == 0)
+        {
+            outRgba.clear();
+            return false;
+        }
+        int dSize = fgeti24(in);
+        std::vector<uint8_t> dxtData(dSize);
+        in.read(reinterpret_cast<char*>(dxtData.data()), dSize);
+        // The DXT decoders read blockBytes per 4x4 block across width*height; reject a
+        // compressed payload too small to cover them rather than read past dxtData.
+        int blockBytes = (format == PacDXT1) ? 8 : 16;
+        int blocks = ((width + 3) / 4) * ((height + 3) / 4);
+        if (static_cast<int>(dxtData.size()) < blocks * blockBytes)
+        {
+            outRgba.clear();
+            return false;
+        }
+        switch (format)
+        {
+            case PacDXT1:
+                decompressDXT1(outRgba.data(), dxtData.data(), width, height);
+                break;
+            case PacDXT2:
+            case PacDXT3:
+                decompressDXT3(outRgba.data(), dxtData.data(), width, height);
+                break;
+            case PacDXT4:
+            case PacDXT5:
+                decompressDXT5(outRgba.data(), dxtData.data(), width, height);
+                break;
+            default:
+                outRgba.clear();
+                return false;
+        }
+    }
+    else if (format == PacARGB4444 || format == PacAI88)
+    {
+        mip.SetDestFormat(PacARGB4444, 4);
+        std::vector<uint8_t> mipData(mip.Size(), 0);
+        mip.SeekLevel(in);
+        int ret = isPaa ? mip.LoadPaa(in, mipData.data(), &pal) : mip.LoadPac(in, mipData.data(), &pal);
+        if (ret != 0)
+        {
+            outRgba.clear();
+            return false;
+        }
+        argb4444ToRGBA(reinterpret_cast<const uint16_t*>(mipData.data()), outRgba.data(), width, height, mip.Pitch());
+    }
+    else
+    {
+        mip.SetDestFormat(PacARGB1555, 4);
+        std::vector<uint8_t> mipData(mip.Size(), 0);
+        mip.SeekLevel(in);
+        int ret = isPaa ? mip.LoadPaa(in, mipData.data(), &pal) : mip.LoadPac(in, mipData.data(), &pal);
+        if (ret != 0)
+        {
+            outRgba.clear();
+            return false;
+        }
+        argb1555ToRGBA(reinterpret_cast<const uint16_t*>(mipData.data()), outRgba.data(), width, height, mip.Pitch());
+    }
+    return true;
+}
+} // namespace
+
 DecodedImage DecodePAABuffer(const void* data, size_t size, bool isPaa)
 {
     DecodedImage img;
@@ -429,6 +547,9 @@ DecodedImage DecodePAABuffer(const void* data, size_t size, bool isPaa)
 
     img.width = mip._w;
     img.height = mip._h;
+    img.hasAlphaChannel = alpha;
+    img.oneBitAlpha = (format == PacDXT1);
+    img.isChromaKey = pal._isTransparent;
     // Dimensions come from the mip header; reject absurd sizes before width*height*4
     // overflows int (a tiny rgba alloc the decoders then overrun) or drives a huge
     // allocation. PAA textures are far below this cap.
@@ -436,113 +557,77 @@ DecodedImage DecodePAABuffer(const void* data, size_t size, bool isPaa)
     {
         return img;
     }
-    img.rgba.resize(img.width * img.height * 4);
 
-    bool isDXT = (format >= PacDXT1 && format <= PacDXT5);
-
-    if (format == PacARGB8888)
-    {
-        // ARGB8888: raw data, no LZSS. Convert ARGB → RGBA.
-        mip.SeekLevel(in);
-        int mw = fgetiw(in), mh = fgetiw(in);
-        if (mw == 0 && mh == 0)
-        {
-            img.rgba.clear();
-            return img;
-        }
-        int dSize = fgeti24(in);
-        std::vector<uint8_t> rawData(dSize);
-        in.read(reinterpret_cast<char*>(rawData.data()), dSize);
-        // The conversion loop below reads width*height*4 raw bytes; reject a payload
-        // too small to cover them rather than read past rawData (heap over-read).
-        if (static_cast<int>(rawData.size()) < img.width * img.height * 4)
-        {
-            img.rgba.clear();
-            return img;
-        }
-        for (int y = 0; y < img.height; y++)
-        {
-            const uint8_t* src = rawData.data() + y * img.width * 4;
-            uint8_t* dst = img.rgba.data() + y * img.width * 4;
-            for (int x = 0; x < img.width; x++)
-            {
-                // LE memory: B(0) G(1) R(2) A(3) from uint32 (A<<24|R<<16|G<<8|B)
-                dst[x * 4 + 0] = src[x * 4 + 2]; // R
-                dst[x * 4 + 1] = src[x * 4 + 1]; // G
-                dst[x * 4 + 2] = src[x * 4 + 0]; // B
-                dst[x * 4 + 3] = src[x * 4 + 3]; // A
-            }
-        }
-    }
-    else if (isDXT)
-    {
-        mip.SeekLevel(in);
-        int mw = fgetiw(in), mh = fgetiw(in);
-        if (mw == 0 && mh == 0)
-        {
-            img.rgba.clear();
-            return img;
-        }
-        int dSize = fgeti24(in);
-        std::vector<uint8_t> dxtData(dSize);
-        in.read(reinterpret_cast<char*>(dxtData.data()), dSize);
-        // The DXT decoders read blockBytes per 4x4 block across width*height; reject a
-        // compressed payload too small to cover them rather than read past dxtData.
-        int blockBytes = (format == PacDXT1) ? 8 : 16;
-        int blocks = ((img.width + 3) / 4) * ((img.height + 3) / 4);
-        if (static_cast<int>(dxtData.size()) < blocks * blockBytes)
-        {
-            img.rgba.clear();
-            return img;
-        }
-        switch (format)
-        {
-            case PacDXT1:
-                decompressDXT1(img.rgba.data(), dxtData.data(), img.width, img.height);
-                break;
-            case PacDXT2:
-            case PacDXT3:
-                decompressDXT3(img.rgba.data(), dxtData.data(), img.width, img.height);
-                break;
-            case PacDXT4:
-            case PacDXT5:
-                decompressDXT5(img.rgba.data(), dxtData.data(), img.width, img.height);
-                break;
-            default:
-                img.rgba.clear();
-                return img;
-        }
-    }
-    else if (format == PacARGB4444 || format == PacAI88)
-    {
-        mip.SetDestFormat(PacARGB4444, 4);
-        std::vector<uint8_t> mipData(mip.Size(), 0);
-        mip.SeekLevel(in);
-        int ret = isPaa ? mip.LoadPaa(in, mipData.data(), &pal) : mip.LoadPac(in, mipData.data(), &pal);
-        if (ret != 0)
-        {
-            img.rgba.clear();
-            return img;
-        }
-        argb4444ToRGBA(reinterpret_cast<const uint16_t*>(mipData.data()), img.rgba.data(), img.width, img.height,
-                       mip.Pitch());
-    }
-    else
-    {
-        mip.SetDestFormat(PacARGB1555, 4);
-        std::vector<uint8_t> mipData(mip.Size(), 0);
-        mip.SeekLevel(in);
-        int ret = isPaa ? mip.LoadPaa(in, mipData.data(), &pal) : mip.LoadPac(in, mipData.data(), &pal);
-        if (ret != 0)
-        {
-            img.rgba.clear();
-            return img;
-        }
-        argb1555ToRGBA(reinterpret_cast<const uint16_t*>(mipData.data()), img.rgba.data(), img.width, img.height,
-                       mip.Pitch());
-    }
+    if (!DecodeLevelPixels(in, format, mip, pal, isPaa, img.width, img.height, img.rgba))
+        return img;
 
     return img;
+}
+
+DecodedImageChain DecodePAABufferAllMips(const void* data, size_t size, bool isPaa)
+{
+    DecodedImageChain chain;
+    QIStream in(static_cast<const char*>(data), static_cast<int>(size));
+
+    int desc = fgetiw(in);
+    bool alpha = false;
+    PacFormat format = PacFormatFromDesc(desc, alpha);
+    if (format == PacFormatN)
+    {
+        in.seekg(-2, QIOS::cur);
+        format = isPaa ? PacARGB4444 : PacP8;
+    }
+
+    PacPalette pal;
+    int offsets[16];
+    for (int i = 0; i < 16; i++)
+        offsets[i] = -1;
+    if (pal.Load(in, offsets, 16))
+        return chain;
+
+    chain.hasAlphaChannel = alpha;
+    chain.oneBitAlpha = (format == PacDXT1);
+    chain.isChromaKey = pal._isTransparent;
+
+    // Pass 1: walk every level's header sequentially. Each Init() call reads
+    // one level's w/h/dSize, records _start, then seeks past that level's
+    // data -- landing exactly on the next level's header (PacLevelMem::Init,
+    // Pactext.cpp). A fresh PacLevelMem per level (not reused) since Init()
+    // short-circuits ("already initialized") once _w/_h are set.
+    std::vector<PacLevelMem> mips;
+    for (int m = 0; m < 16; m++)
+    {
+        PacLevelMem mip;
+        if (m < 16 && offsets[m] >= 0)
+            mip.SetStart(offsets[m]);
+        int ret = mip.Init(in, format);
+        if (ret != 0)
+            break; // 0x0 terminator (ret>0) or a real read error (ret<0) -- either way, no more levels
+        mips.push_back(mip);
+    }
+    if (mips.empty())
+        return chain;
+
+    // Pass 2: decode each level's pixels (same per-format logic as the
+    // single-level case, see DecodeLevelPixels' doc comment).
+    chain.levels.reserve(mips.size());
+    for (PacLevelMem& mip : mips)
+    {
+        DecodedImage level;
+        level.width = mip._w;
+        level.height = mip._h;
+        level.hasAlphaChannel = alpha;
+        level.oneBitAlpha = chain.oneBitAlpha;
+        level.isChromaKey = chain.isChromaKey;
+        // Same absurd-size guard as DecodePAABuffer -- a corrupt mip header
+        // shouldn't be able to drive a huge allocation in the loop below.
+        if (level.width <= 0 || level.height <= 0 || level.width > 8192 || level.height > 8192)
+            break;
+        if (!DecodeLevelPixels(in, format, mip, pal, isPaa, level.width, level.height, level.rgba))
+            break; // a level failing to decode invalidates every coarser level after it too
+        chain.levels.push_back(std::move(level));
+    }
+    return chain;
 }
 
 DecodedImage DecodePAAFile(const std::string& path)
@@ -604,6 +689,9 @@ DecodedImage DecodePAAFileMip(const std::string& path, int mipLevel)
 
     img.width = mip._w;
     img.height = mip._h;
+    img.hasAlphaChannel = alpha;
+    img.oneBitAlpha = (format == PacDXT1);
+    img.isChromaKey = pal._isTransparent;
     // Reject absurd dimensions (mip header is attacker-controlled) before
     // width*height*4 overflows int into a tiny rgba alloc the decoders overrun.
     if (img.width <= 0 || img.height <= 0 || img.width > 8192 || img.height > 8192)

@@ -83,7 +83,14 @@ typedef size_t SIZE_T;
 #define __cdecl
 #define WINAPI
 
+#ifdef __APPLE__
+// macOS's libc++ doesn't expose the BSD/glibc `finite()` compat function
+// (only the standard `isfinite()`); __builtin_isfinite works in both C and
+// C++ translation units without requiring <cmath>/<math.h> at the call site.
+#define _finite(x) __builtin_isfinite(x)
+#else
 #define _finite(x) finite(x)
+#endif
 #define _isnan(x) isnan(x)
 extern char* strDup(const char* src);
 

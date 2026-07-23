@@ -7,11 +7,7 @@
 #include <Poseidon/Foundation/Math/V3Quads.hpp>
 #include <Poseidon/Graphics/Core/TLVertex.hpp>
 #include <Poseidon/Foundation/Math/Math3D.hpp>
-#ifdef _MSC_VER
-#include <intrin.h> // For MMX intrinsics
-#else
-#include <x86intrin.h>
-#endif
+#include <Poseidon/Foundation/Common/X86IntrinsicsCompat.hpp>
 
 #if defined __ICL
 #define _COMPILER_CAN_PIII 1

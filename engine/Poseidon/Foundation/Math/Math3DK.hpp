@@ -1,4 +1,4 @@
-#include <immintrin.h>
+#include <Poseidon/Foundation/Common/X86IntrinsicsCompat.hpp>
 #ifdef _MSC_VER
 #pragma once
 #endif
