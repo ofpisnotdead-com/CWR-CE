@@ -437,15 +437,11 @@ GameValue MarkerGetPos(const GameState* state, GameValuePar oper1)
     array[1] = 0.0f;
     array[2] = 0.0f;
 
-    for (int i = 0; i < markersMap.Size(); i++)
+    ArcadeMarkerInfo* pInfo = markersMap.Find(name);
+    if (pInfo)
     {
-        ArcadeMarkerInfo& mInfo = markersMap[i];
-        if (stricmp(mInfo.name, name) == 0)
-        {
-            array[0] = mInfo.position.X();
-            array[1] = mInfo.position.Z();
-            break;
-        }
+        array[0] = pInfo->position.X();
+        array[1] = pInfo->position.Z();
     }
     return value;
 }
@@ -460,14 +456,10 @@ GameValue MarkerSetPos(const GameState* state, GameValuePar oper1, GameValuePar 
         return NOTHING;
     }
 
-    for (int i = 0; i < markersMap.Size(); i++)
+    ArcadeMarkerInfo* pInfo = markersMap.Find(name);
+    if (pInfo)
     {
-        ArcadeMarkerInfo& mInfo = markersMap[i];
-        if (stricmp(mInfo.name, name) == 0)
-        {
-            mInfo.position = pos;
-            break;
-        }
+        pInfo->position = pos;
     }
     return NOTHING;
 }
@@ -476,13 +468,10 @@ GameValue MarkerGetType(const GameState* state, GameValuePar oper1)
 {
     GameStringType name = oper1;
 
-    for (int i = 0; i < markersMap.Size(); i++)
+    ArcadeMarkerInfo* pInfo = markersMap.Find(name);
+    if (pInfo)
     {
-        ArcadeMarkerInfo& mInfo = markersMap[i];
-        if (stricmp(mInfo.name, name) == 0)
-        {
-            return mInfo.type;
-        }
+        return pInfo->type;
     }
     return GameStringType("");
 }
@@ -492,15 +481,11 @@ GameValue MarkerSetType(const GameState* state, GameValuePar oper1, GameValuePar
     GameStringType name = oper1;
     GameStringType type = oper2;
 
-    for (int i = 0; i < markersMap.Size(); i++)
+    ArcadeMarkerInfo* pInfo = markersMap.Find(name);
+    if (pInfo)
     {
-        ArcadeMarkerInfo& mInfo = markersMap[i];
-        if (stricmp(mInfo.name, name) == 0)
-        {
-            mInfo.type = type;
-            mInfo.OnTypeChanged();
-            break;
-        }
+        pInfo->type = type;
+        pInfo->OnTypeChanged();
     }
     return NOTHING;
 }
@@ -515,14 +500,11 @@ GameValue MarkerGetSize(const GameState* state, GameValuePar oper1)
     array[0] = 0.0f;
     array[1] = 0.0f;
 
-    for (int i = 0; i < markersMap.Size(); i++)
+    ArcadeMarkerInfo* pInfo = markersMap.Find(name);
+    if (pInfo)
     {
-        ArcadeMarkerInfo& mInfo = markersMap[i];
-        if (stricmp(mInfo.name, name) == 0)
-        {
-            array[0] = mInfo.a;
-            array[1] = mInfo.b;
-        }
+        array[0] = pInfo->a;
+        array[1] = pInfo->b;
     }
     return value;
 }
@@ -538,15 +520,11 @@ GameValue MarkerSetSize(const GameState* state, GameValuePar oper1, GameValuePar
         return NOTHING;
     }
 
-    for (int i = 0; i < markersMap.Size(); i++)
+    ArcadeMarkerInfo* pInfo = markersMap.Find(name);
+    if (pInfo)
     {
-        ArcadeMarkerInfo& mInfo = markersMap[i];
-        if (stricmp(mInfo.name, name) == 0)
-        {
-            mInfo.a = size[0];
-            mInfo.b = size[1];
-            break;
-        }
+        pInfo->a = size[0];
+        pInfo->b = size[1];
     }
     return NOTHING;
 }
@@ -555,13 +533,10 @@ GameValue MarkerGetColor(const GameState* state, GameValuePar oper1)
 {
     GameStringType name = oper1;
 
-    for (int i = 0; i < markersMap.Size(); i++)
+    ArcadeMarkerInfo* pInfo = markersMap.Find(name);
+    if (pInfo)
     {
-        ArcadeMarkerInfo& mInfo = markersMap[i];
-        if (stricmp(mInfo.name, name) == 0)
-        {
-            return mInfo.colorName;
-        }
+        return pInfo->colorName;
     }
     return GameStringType("");
 }
@@ -571,15 +546,11 @@ GameValue MarkerSetColor(const GameState* state, GameValuePar oper1, GameValuePa
     GameStringType name = oper1;
     GameStringType color = oper2;
 
-    for (int i = 0; i < markersMap.Size(); i++)
+    ArcadeMarkerInfo* pInfo = markersMap.Find(name);
+    if (pInfo)
     {
-        ArcadeMarkerInfo& mInfo = markersMap[i];
-        if (stricmp(mInfo.name, name) == 0)
-        {
-            mInfo.colorName = color;
-            mInfo.OnColorChanged();
-            break;
-        }
+        pInfo->colorName = color;
+        pInfo->OnColorChanged();
     }
     return NOTHING;
 }

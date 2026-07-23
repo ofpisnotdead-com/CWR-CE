@@ -1,0 +1,106 @@
+version=11;
+class Mission
+{
+	randomSeed=5997571;
+	class Intel
+	{
+	};
+	class Groups
+	{
+		items=1;
+		class Item0
+		{
+			side="WEST";
+			class Vehicles
+			{
+				items=1;
+				class Item0
+				{
+					position[]={6119.489746,347.468842,6425.809570};
+					id=0;
+					side="WEST";
+					vehicle="SoldierWB";
+					player="PLAYER COMMANDER";
+					leader=1;
+					skill=0.600000;
+				};
+			};
+		};
+	};
+	class Markers
+	{
+		items=9;
+		class Item0
+		{
+			position[]={5978.265137,354.269257,6467.002930};
+			name="conflictName";
+			type="Destroy";
+			colorName="ColorRed";
+		};
+		class Item1
+		{
+			position[]={5972.918945,361.594604,6371.414551};
+			name="conflictName";
+			type="Join";
+			colorName="ColorBlue";
+		};
+		class Item2
+		{
+			position[]={5974.918945,361.594604,6311.414551};
+			name="conflictName";
+			type="End";
+			colorName="ColorGreen";
+		};
+		class Item3
+		{
+			position[]={0,0,0};
+			name="a";
+		};
+		class Item4
+		{
+			position[]={1,1,1};
+			name="b";
+		};
+		class Item5
+		{
+			position[]={100,100,100};
+			name="a";
+		};
+		class Item6
+		{
+			position[]={2,2,2};
+			name="c";
+		};
+		class Item7
+		{
+			position[]={200,200,200};
+			name="a";
+		};
+		class Item8
+		{
+			position[]={3,3,3};
+			name="d";
+		};
+	};
+};
+class Intro
+{
+	randomSeed=11956739;
+	class Intel
+	{
+	};
+};
+class OutroWin
+{
+	randomSeed=2546179;
+	class Intel
+	{
+	};
+};
+class OutroLoose
+{
+	randomSeed=1239555;
+	class Intel
+	{
+	};
+};

@@ -1566,34 +1566,27 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 break;
             }
             RString name = marker.marker.name;
-            int index = -1;
-            for (int i = 0; i < markersMap.Size(); i++)
+            int index = markersMap.FindIdx(name);
+            if (!markersMap.ValidIdx(index))
             {
-                if (stricmp(markersMap[i].name, name) == 0)
-                {
-                    index = i;
-                    break;
-                }
+                // insert if inexist
+                markersMap.Add(marker.marker);
             }
-            if (index < 0)
+            else
             {
-                index = markersMap.Add();
+                // update. marker's name won't change
+                markersMap[index] = marker.marker;
             }
-            markersMap[index] = marker.marker;
         }
         break;
         case NMTMarkerDelete:
         {
             MarkerDeleteMessage info;
             info.TransferMsg(ctx);
-            for (int i = 0; i < markersMap.Size(); i++)
+            int index = markersMap.FindIdx(info.name);
+            if (markersMap.ValidIdx(index))
             {
-                ArcadeMarkerInfo& marker = markersMap[i];
-                if (marker.name == info.name)
-                {
-                    markersMap.Delete(i);
-                    break;
-                }
+                markersMap.Delete(index);
             }
         }
         break;

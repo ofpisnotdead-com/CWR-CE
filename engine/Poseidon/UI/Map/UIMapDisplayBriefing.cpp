@@ -983,10 +983,10 @@ void DisplayMap::OnHTMLLink(int idc, RString link)
     if (strnicmp(ptr, name, n) == 0)
     {
         ptr += n;
-        for (int i = 0; i < markersMap.Size(); i++)
+        const int i = markersMap.FindIdx(ptr);
+        if (markersMap.ValidIdx(i))
         {
             ArcadeMarkerInfo& mInfo = markersMap[i];
-            if (stricmp(ptr, mInfo.name) == 0)
             {
                 float invSizeLand = 1.0 / (LandGrid * LandRange);
                 Vector3 curPos = _map->GetCenter();
@@ -1800,12 +1800,16 @@ void DisplayMap::OnChildDestroyed(int idd, int exit)
         DisplayInsertMarker* display = dynamic_cast<DisplayInsertMarker*>((ControlsContainer*)_child);
         PoseidonAssert(display);
 
-        int index = markersMap.Add();
+        const int size = markersMap.Size();
+        ArcadeMarkerInfo tempMarker{};
+        char buffer[256];
+        sprintf(buffer, "_USER_DEFINED #%d/%d", GetNetworkManager().GetPlayer(), size);
+        tempMarker.name = buffer;
+        const int index = markersMap.Add(tempMarker);
+        PoseidonAssert(index == size);
+
         ArcadeMarkerInfo& marker = markersMap[index];
         marker.position = _map->ScreenToWorld(DrawCoord(display->_x, display->_y));
-        char buffer[256];
-        snprintf(buffer, sizeof(buffer), "_USER_DEFINED #%d/%d", GetNetworkManager().GetPlayer(), index);
-        marker.name = buffer;
         marker.text = display->_text;
         marker.markerType = MTIcon;
         const ParamEntry& markers = Pars >> "CfgMarkers";
