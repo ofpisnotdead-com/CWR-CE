@@ -2,7 +2,7 @@
 
 _based on https://github.com/bohemiainteractive/CWR_
 
-This community repository continues the official engine and game source code (codename *Poseidon*) behind *Arma: Cold War Assault* — the game first released in 2001 as *Operation Flashpoint: Cold War Crisis*. That release launched Bohemia Interactive and began the technology lineage that later grew into Real Virtuality, Arma, and Enfusion. The code has been modernized to C++20, built with CMake and Clang, with cross-platform support for Windows x64 and Linux x64.
+This community repository continues the official engine and game source code (codename *Poseidon*) behind *Arma: Cold War Assault* — the game first released in 2001 as *Operation Flashpoint: Cold War Crisis*. That release launched Bohemia Interactive and began the technology lineage that later grew into Real Virtuality, Arma, and Enfusion. The code has been modernized to C++20, built with CMake and Clang, with cross-platform support for Windows x64 and Linux arm64/x64.
 Bohemia Interactive released it to the community that has kept this game alive for more than two decades — to study it, build on it, fix it, and create from it. Three things are worth keeping separate:
 
 **Source code (this repository)**
@@ -56,7 +56,7 @@ cmake --preset win-x64-clang-rwdi
 cmake --build build/win-x64-clang-rwdi
 ```
 
-On GNU/Linux, use the matching `linux-x64-clang-rwdi` preset.
+On GNU/Linux, use the matching `linux-x64-clang-rwdi` or `linux-arm64-clang-rwdi` preset.
 
 ### Testing
 
