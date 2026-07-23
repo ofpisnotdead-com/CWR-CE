@@ -13,12 +13,16 @@ triClickText "Controls"
 triWaitFrames 5
 
 triClickText "Reset all to defaults"
+triAssertIncludes [(triVisibleTexts), "Preset"]
+triScreenshot "02_presets_page"
+
+triClickText "Reset all to preset"
 triAssertIncludes [(triVisibleTexts), "Cancel"]
-triScreenshot "02_confirm_modal"
+triScreenshot "03_confirm_modal"
 
 triSendKey 88
 triAssertExcludes [(triVisibleTexts), "Cancel"]
-triAssertIncludes [(triVisibleTexts), "Keyboard & Mouse"]
-triScreenshot "03_modal_closed_with_keypad_enter"
+triAssertIncludes [(triVisibleTexts), "Preset"]
+triScreenshot "04_modal_closed_with_keypad_enter"
 
 triEndTest

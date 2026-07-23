@@ -1142,9 +1142,8 @@ UserAction InputSubsystem::FindBindingConflict(int packedCode, UserAction exclud
     return UAN;
 }
 
-void InputSubsystem::ResetCategoryDefaults(ControlsCategory cat)
+void InputSubsystem::ResetCategory(ControlsCategory cat, UserActionDesc* descs)
 {
-    UserActionDesc* descs = GetUserActionDesc();
     const UserAction* list = GetControlsCategoryActions(cat);
     ContextList contexts = ContextsForCategory(cat);
     for (int i = 0; list[i] != UAN; i++)
@@ -1169,6 +1168,11 @@ void InputSubsystem::ResetCategoryDefaults(ControlsCategory cat)
                 profile.Bind(static_cast<UserAction>(idx), binding);
         }
     }
+}
+
+void InputSubsystem::ResetCategoryDefaults(ControlsCategory cat)
+{
+    ResetCategory(cat, GetUserActionDesc());
 }
 
 UserActionDesc* InputSubsystem::GetUserActionDesc()
@@ -1253,6 +1257,92 @@ UserActionDesc* InputSubsystem::GetUserActionDesc()
     // a matching row here, indexing runs off the end. Keep them one-to-one.
     static_assert(std::size(userActionDesc) == UAN,
                   "UserActionDesc table must have exactly one entry per UserAction (UAN)");
+    return userActionDesc;
+}
+
+void InputSubsystem::ResetCategoryA3Legacy(ControlsCategory cat)
+{
+    ResetCategory(cat, GetUserActionDescA3Legacy());
+}
+
+UserActionDesc* InputSubsystem::GetUserActionDescA3Legacy()
+{
+    static UserActionDesc userActionDesc[] = {
+        UserActionDesc("MoveForward", IDS_USRACT_MOVE_FORWARD, SDL_SCANCODE_W, SDL_SCANCODE_UP, -1),
+        UserActionDesc("MoveBack", IDS_USRACT_MOVE_BACK, SDL_SCANCODE_S, SDL_SCANCODE_DOWN, -1),
+        UserActionDesc("TurnLeft", IDS_USRACT_TURN_LEFT, SDL_SCANCODE_A, SDL_SCANCODE_LEFT, -1),
+        UserActionDesc("TurnRight", IDS_USRACT_TURN_RIGHT, SDL_SCANCODE_D, SDL_SCANCODE_RIGHT, -1),
+        UserActionDesc("MoveUp", IDS_USRACT_MOVE_UP, SDL_SCANCODE_Q, SDL_SCANCODE_PAGEUP,
+                       -1), // Leave as Q because it should be shift when flying but x on foot
+        UserActionDesc("MoveDown", IDS_USRACT_MOVE_DOWN, SDL_SCANCODE_Z, SDL_SCANCODE_PAGEDOWN, -1),
+        UserActionDesc("MoveFastForward", IDS_USRACT_FAST_FORWARD, -1),
+        UserActionDesc("MoveSlowForward", IDS_USRACT_SLOW_FORWARD, SDL_SCANCODE_Q, -1),
+        UserActionDesc("MoveLeft", IDS_USRACT_MOVE_LEFT, SDL_SCANCODE_X, SDL_SCANCODE_DELETE, -1),
+        UserActionDesc("MoveRight", IDS_USRACT_MOVE_RIGHT, SDL_SCANCODE_C, SDL_SCANCODE_END, -1),
+        UserActionDesc("ToggleWeapons", IDS_USRACT_TOGGLE_WEAPONS, SDL_SCANCODE_F, SDL_SCANCODE_RCTRL,
+                       INPUT_DEVICE_STICK + 3, -1),
+        UserActionDesc("Fire", IDS_USRACT_FIRE, INPUT_DEVICE_STICK + 7, -1),
+        UserActionDesc("ReloadMagazine", IDS_USRACT_RELOAD_MAGAZINE, SDL_SCANCODE_R, SDL_SCANCODE_HOME,
+                       INPUT_DEVICE_STICK + 2, -1),
+        UserActionDesc("LockTargets", IDS_USRACT_LOCK_TARGETS, SDL_SCANCODE_R, INPUT_DEVICE_STICK + 1, -1),
+        UserActionDesc("LockTarget", IDS_USRACT_LOCK_OR_ZOOM, INPUT_DEVICE_MOUSE + 1, -1),
+        UserActionDesc("RevealTarget", IDS_USRACT_REVEAL_TARGET, SDL_SCANCODE_T, -1),
+        UserActionDesc("PrevAction", IDS_USRACT_PREV_ACTION, SDL_SCANCODE_LEFTBRACKET, INPUT_DEVICE_STICK + 4,
+                       INPUT_DEVICE_STICK_POV + 0, -1),
+        UserActionDesc("NextAction", IDS_USRACT_NEXT_ACTION, SDL_SCANCODE_RIGHTBRACKET, INPUT_DEVICE_STICK + 5,
+                       INPUT_DEVICE_STICK_POV + 4, -1),
+        UserActionDesc("Action", IDS_USRACT_ACTION, SDL_SCANCODE_SPACE, SDL_SCANCODE_RETURN, INPUT_DEVICE_MOUSE + 2,
+                       INPUT_DEVICE_STICK + 0, -1),
+        UserActionDesc("Headlights", IDS_USRACT_HEADLIGHTS, SDL_SCANCODE_L, -1),
+        UserActionDesc("NightVision", IDS_USRACT_NIGHT_VISION, SDL_SCANCODE_N, -1),
+        UserActionDesc("Binocular", IDS_USRACT_BINOCULAR, SDL_SCANCODE_B, -1),
+        UserActionDesc("Handgun", IDS_USRACT_HANDGUN, SDL_SCANCODE_SEMICOLON, -1),
+        UserActionDesc("Compass", IDS_USRACT_COMPASS, SDL_SCANCODE_K, INPUT_DEVICE_STICK_POV + 6, -1),
+        UserActionDesc("Watch", IDS_USRACT_WATCH, SDL_SCANCODE_O, INPUT_DEVICE_STICK_POV + 2, -1),
+        UserActionDesc("Map", IDS_USRACT_MAP, SDL_SCANCODE_M, INPUT_DEVICE_STICK + 8, -1),
+        UserActionDesc("Help", IDS_USRACT_HELP, SDL_SCANCODE_H, INPUT_DEVICE_STICK + 9, -1),
+        UserActionDesc("TimeInc", IDS_USRACT_TIME_INC, SDL_SCANCODE_EQUALS, -1),
+        UserActionDesc("TimeDec", IDS_USRACT_TIME_DEC, SDL_SCANCODE_MINUS, -1),
+        UserActionDesc("Optics", IDS_USRACT_OPTICS, SDL_SCANCODE_V, SDL_SCANCODE_KP_0,
+                       -1), // This is a big departure from A3, should be tap right click
+        UserActionDesc("PersonView", IDS_USRACT_PERSON_VIEW, SDL_SCANCODE_KP_ENTER, -1),
+        UserActionDesc("TacticalView", IDS_USRACT_TACTICAL_VIEW, SDL_SCANCODE_KP_PERIOD, -1),
+        UserActionDesc("ZoomIn", IDS_USRACT_ZOOM_IN, SDL_SCANCODE_KP_PLUS, -1),
+        UserActionDesc("ZoomOut", IDS_USRACT_ZOOM_OUT, SDL_SCANCODE_KP_MINUS, -1),
+        UserActionDesc("LookAround", IDS_USRACT_LOOK_ARROUND, SDL_SCANCODE_LALT, INPUT_DEVICE_STICK + 6, -1),
+        UserActionDesc("LookAroundToggle", IDS_USRACT_LOOK_ARROUND_TOGGLE, SDL_SCANCODE_KP_MULTIPLY, -1),
+        UserActionDesc("LookLeftDown", IDS_USRACT_LOOK_LEFT_DOWN, SDL_SCANCODE_KP_1, -1),
+        UserActionDesc("LookDown", IDS_USRACT_LOOK_DOWN, SDL_SCANCODE_KP_2, -1),
+        UserActionDesc("LookRightDown", IDS_USRACT_LOOK_RIGHT_DOWN, SDL_SCANCODE_KP_3, -1),
+        UserActionDesc("LookLeft", IDS_USRACT_LOOK_LEFT, SDL_SCANCODE_KP_4, -1),
+        UserActionDesc("LookCenter", IDS_USRACT_LOOK_CENTER, SDL_SCANCODE_KP_5, INPUT_DEVICE_STICK + 11, -1),
+        UserActionDesc("LookRight", IDS_USRACT_LOOK_RIGHT, SDL_SCANCODE_KP_6, -1),
+        UserActionDesc("LookLeftUp", IDS_USRACT_LOOK_LEFT_UP, SDL_SCANCODE_KP_7, -1),
+        UserActionDesc("LookUp", IDS_USRACT_LOOK_UP, SDL_SCANCODE_KP_8, -1),
+        UserActionDesc("LookRightUp", IDS_USRACT_LOOK_RIGHT_UP, SDL_SCANCODE_KP_9, -1),
+        UserActionDesc("PrevChannel", IDS_USRACT_PREV_CHANNEL, SDL_SCANCODE_COMMA, -1),
+        UserActionDesc("NextChannel", IDS_USRACT_NEXT_CHANNEL, SDL_SCANCODE_PERIOD, -1),
+        UserActionDesc("Chat", IDS_USRACT_CHAT, SDL_SCANCODE_SLASH, -1),
+        UserActionDesc("VoiceOverNet", IDS_USRACT_VOICE_OVER_NET, SDL_SCANCODE_CAPSLOCK, -1),
+        UserActionDesc("NetworkStats", IDS_USRACT_NETWORK_STATS, SDL_SCANCODE_P, -1),
+        UserActionDesc("NetworkPlayers", IDS_USRACT_NETWORK_PLAYERS, SDL_SCANCODE_I, -1), // This would be shift+p
+        UserActionDesc("SelectAll", IDS_USRACT_SELECT_ALL, SDL_SCANCODE_GRAVE, -1),
+        UserActionDesc("Turbo", IDS_USRACT_TURBO, SDL_SCANCODE_LSHIFT, SDL_SCANCODE_RSHIFT, -1),
+        UserActionDesc("Walk", IDS_USRACT_WALK, -1), // Walk would be a w+s toggle
+        UserActionDesc(true, "AxisTurn", IDS_USRACT_TURN, INPUT_DEVICE_STICK_AXIS + 0, -1),
+        UserActionDesc(true, "AxisDive", IDS_USRACT_ACCELERATE, INPUT_DEVICE_STICK_AXIS + 1, -1),
+        UserActionDesc(true, "AxisRudder", IDS_USRACT_RUDDER, INPUT_DEVICE_STICK_AXIS + 5, -1),
+        UserActionDesc(true, "AxisThrust", IDS_USRACT_THRUST, INPUT_DEVICE_STICK_AXIS + 2, INPUT_DEVICE_STICK_AXIS + 6,
+                       -1),
+        UserActionDesc("AimUp", IDS_USRACT_AIM_UP, -1),
+        UserActionDesc("AimDown", IDS_USRACT_AIM_DOWN, -1),
+        UserActionDesc("AimLeft", IDS_USRACT_AIM_LEFT, -1),
+        UserActionDesc("AimRight", IDS_USRACT_AIM_RIGHT, -1),
+#if _ENABLE_CHEATS
+        UserActionDesc("Cheat1", IDS_USRACT_CHEAT_1, SDL_SCANCODE_RGUI, -1),
+        UserActionDesc("Cheat2", IDS_USRACT_CHEAT_2, SDL_SCANCODE_RALT, -1),
+#endif
+    };
     return userActionDesc;
 }
 
