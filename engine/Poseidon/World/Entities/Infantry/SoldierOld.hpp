@@ -644,6 +644,7 @@ class Man: public Person
 
 	void HideBody() override {_hideBodyWanted = 1;}
 	void ScanNVG();
+	int getNvgIdx() const; // Search first valid night vission weapon
 
 	void AddDefaultWeapons() override;
 	void MinimalWeapons() override;
