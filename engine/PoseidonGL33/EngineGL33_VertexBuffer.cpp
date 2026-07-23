@@ -314,7 +314,7 @@ void EngineGL33::EmitDraw(const Poseidon::render::frame::Draw& d)
 
     // Only upload the world matrix if this is a non-instanced draw
     // (instanced objects read their matrices from a UBO)
-    if (_instCount <= 1) 
+    if (_instCount <= 1)
     {
         UploadVSWorldMatrix(reinterpret_cast<const float*>(&d.world));
     }
@@ -656,4 +656,3 @@ bool EngineGL33::SamplePixel(int x, int y, uint8_t* outRGB)
     outRGB[2] = pixel[2];
     return true;
 }
-
