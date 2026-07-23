@@ -1,0 +1,37 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 60
+
+tags = ["headful", "network"]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "host", "--log-format", "jsonl"]
+name = "host"
+type = "client"
+use_mission = false
+no_autotest = true
+machine_id = "trident:hosted_lan_first_join:host"
+copy_files = [
+  { source = "hosted-first-join.Demo/description.ext", target = "content/MPMissions/hosted-first-join.Demo/description.ext" },
+  { source = "hosted-first-join.Demo/mission.sqm", target = "content/MPMissions/hosted-first-join.Demo/mission.sqm" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "joiner", "--log-format", "jsonl"]
+name = "joiner"
+type = "client"
+use_mission = false
+no_autotest = true
+after = "host"
+start_delay_ms = 3000
+machine_id = "trident:hosted_lan_first_join:joiner"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "joiner2", "--log-format", "jsonl"]
+name = "joiner2"
+type = "client"
+use_mission = false
+no_autotest = true
+after = "host"
+start_delay_ms = 3000
+machine_id = "trident:hosted_lan_first_join:joiner2"

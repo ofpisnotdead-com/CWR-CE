@@ -1,0 +1,35 @@
+version=11;
+class Mission
+{
+	randomSeed=12345;
+	class Intel
+	{
+		viewDistance=900;
+	};
+	class Groups
+	{
+		items=2;
+		class Item0
+		{
+			side="WEST";
+			class Vehicles
+			{
+				items=2;
+				class Item0 { position[]={6710.5,82.9,5408.9}; id=0; side="WEST"; vehicle="SoldierWB"; player="PLAYER COMMANDER"; leader=1; rank="SERGEANT"; text="U1"; init="removeAllWeapons this; this addWeapon ""M4""; this addMagazine ""M4""; this addMagazine ""M4"""; };
+				class Item1 { position[]={6714.5,82.9,5408.9}; id=1; side="WEST"; vehicle="SoldierWB"; player="PLAY CDG"; rank="CORPORAL"; text="U4"; init="removeAllWeapons this; this addWeapon ""M4""; this addMagazine ""M4""; this addMagazine ""M4"""; };
+			};
+		};
+		class Item1
+		{
+			side="EAST";
+			class Vehicles
+			{
+				items=1;
+				class Item0 { position[]={6740,82.9,5410}; id=5; side="EAST"; vehicle="SoldierEB"; player="PLAY CDG"; leader=1; text="R1"; };
+			};
+		};
+	};
+};
+class Intro{};
+class OutroWin{};
+class OutroLoose{};

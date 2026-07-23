@@ -436,15 +436,23 @@ void Weather::Init()
     _thunderBoltTime = Glob.time - 1;
     _overcastSetSky = -1.0;
     _overcastSetClouds = -1.0;
+    _fogSet = 0.0f;
     _cloudsPos = 0;
+    _cloudsAlpha = 0.0f;
+    _cloudsBrightness = 1.0f;
+    _cloudsSpeed = 0.2f;
+    _skyThrough = 1.0f;
     _rainDensity = 0;
     _rainDensityWanted = 0;
     _rainDensitySpeed = 1;
+    _windSpeed = VZero;
+    _lastWindSpeedChange = Glob.time;
+    _gust = VZero;
+    _gustUntil = Glob.time;
 }
 
 Weather::Weather()
 {
-    _windSpeed = VZero;
     Init();
 }
 

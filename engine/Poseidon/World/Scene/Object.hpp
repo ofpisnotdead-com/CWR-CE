@@ -411,6 +411,7 @@ class Object: public NetworkObject, public FrameBase, public IAnimator
 	// 4:3-authored overlays. By default this is gated to gameplay so menu
 	// intro camera effects stay full-width.
 	static void DrawWidescreenPillarbox(bool requireGameplayActive = true);
+	static void DrawWidescreenPillarbox(bool requireGameplayActive, bool force);
 	
 	// Draw given shape as 3D lines
 	void DrawLines( int level, ClipFlags clipFlags, const FrameBase &pos );

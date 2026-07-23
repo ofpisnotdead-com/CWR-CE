@@ -21,6 +21,8 @@ class ControlsContainer;
 class ControlObject;
 struct ControlInObject;
 
+int ResolveLegacyControlInt(const ParamEntry& entry);
+
 inline bool IsUiConfirmKey(unsigned nChar)
 {
     return nChar == SDLK_RETURN || nChar == SDLK_KP_ENTER;

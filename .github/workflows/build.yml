@@ -14,125 +14,296 @@ env:
   CCACHE_BASEDIR: ${{ github.workspace }}
   CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
   CCACHE_NOHASHDIR: true
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  DEMO_ASSETS_URL: https://files.ofpisnotdead.com/CWR-demo-assets.zip
+  CWR_ARTIFACT_PREFIX: Linux-x64-rwdi
+  TRIDENT_RENDER: gl33
+  TRIDENT_AUDIO: openal
+  TRIDENT_XVFB_ARGS: -screen 0 1920x1080x24
 
 jobs:
-  build:
-    name: ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Linux RelWithDebInfo
-            os: ubuntu-24.04
-            preset: linux-x64-clang-rwdi
-            vcpkg_triplet: x64-linux-clang
-            build_dir: build/linux-x64-clang-rwdi
-            ctest_exclude: 'PoseidonTests - OAL -'
-            binaries_upload: 'Linux-x64-rwdi'
-          - name: Windows RelWithDebInfo
-            os: windows-2022
-            preset: win-x64-clang-rwdi
-            vcpkg_triplet: x64-windows-clang
-            build_dir: build/win-x64-clang-rwdi
-            ctest_exclude: 'PoseidonTests - (OAL -|PAAEncoder -|Image - Save to \.paa|World state file format --|PreviewImage - saveToFile writes|PreviewImageRGB - saveToFile writes)'
-            binaries_upload: 'Windows-x64-rwdi'
+  build-linux:
+    name: Linux RelWithDebInfo
+    runs-on: ubuntu-24.04
+    env:
+      CWR_PRESET: linux-x64-clang-rwdi
+      CWR_VCPKG_TRIPLET: x64-linux-clang
+      CWR_BUILD_DIR: build/linux-x64-clang-rwdi
+      CWR_CTEST_EXCLUDE: 'PoseidonTests - OAL -'
+      CWR_DIST_DIR: dist/x64-linux-rwdi
+      CWR_ARTIFACT_PREFIX: Linux-x64-rwdi
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Linux system packages
-        if: runner.os == 'Linux'
+      - name: Build metadata
+        id: build_metadata
+        shell: bash
+        run: echo "sha_short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test
+        uses: ./.github/actions/build-cwr
+        with:
+          preset: ${{ env.CWR_PRESET }}
+          vcpkg-triplet: ${{ env.CWR_VCPKG_TRIPLET }}
+          build-dir: ${{ env.CWR_BUILD_DIR }}
+          ctest-exclude: ${{ env.CWR_CTEST_EXCLUDE }}
+
+      - name: Upload Game
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Game-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ env.CWR_DIST_DIR }}/PoseidonGame
+          if-no-files-found: error
+
+      - name: Upload GameDemo
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-GameDemo-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ env.CWR_DIST_DIR }}/PoseidonGameDemo
+          if-no-files-found: error
+
+      - name: Upload Server
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Server-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ env.CWR_DIST_DIR }}/PoseidonServer
+          if-no-files-found: error
+
+  build-windows:
+    name: Windows RelWithDebInfo
+    runs-on: windows-2022
+    env:
+      CWR_PRESET: win-x64-clang-rwdi
+      CWR_VCPKG_TRIPLET: x64-windows-clang
+      CWR_BUILD_DIR: build/win-x64-clang-rwdi
+      CWR_CTEST_EXCLUDE: 'PoseidonTests - (OAL -|PAAEncoder -|Image - Save to \.paa|World state file format --|PreviewImage - saveToFile writes|PreviewImageRGB - saveToFile writes)'
+      CWR_DIST_DIR: dist/x64-win-rwdi
+      CWR_ARTIFACT_PREFIX: Windows-x64-rwdi
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build metadata
+        id: build_metadata
+        shell: bash
+        run: echo "sha_short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test
+        uses: ./.github/actions/build-cwr
+        with:
+          preset: ${{ env.CWR_PRESET }}
+          vcpkg-triplet: ${{ env.CWR_VCPKG_TRIPLET }}
+          build-dir: ${{ env.CWR_BUILD_DIR }}
+          ctest-exclude: ${{ env.CWR_CTEST_EXCLUDE }}
+
+      - name: Upload Game
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Game-${{ steps.build_metadata.outputs.sha_short }}
+          path: |
+            ${{ env.CWR_DIST_DIR }}/PoseidonGame.exe
+            ${{ env.CWR_DIST_DIR }}/OpenAL32.dll
+            ${{ env.CWR_DIST_DIR }}/OpenAL-Soft.LICENSE.txt
+          if-no-files-found: error
+
+      - name: Upload GameDemo
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-GameDemo-${{ steps.build_metadata.outputs.sha_short }}
+          path: |
+            ${{ env.CWR_DIST_DIR }}/PoseidonGameDemo.exe
+            ${{ env.CWR_DIST_DIR }}/OpenAL32.dll
+            ${{ env.CWR_DIST_DIR }}/OpenAL-Soft.LICENSE.txt
+          if-no-files-found: error
+
+      - name: Upload Server
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Server-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ env.CWR_DIST_DIR }}/PoseidonServer.exe
+          if-no-files-found: error
+
+      - name: Upload symbols
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Symbols-${{ steps.build_metadata.outputs.sha_short }}
+          path: |
+            ${{ env.CWR_DIST_DIR }}/PoseidonGame.pdb
+            ${{ env.CWR_DIST_DIR }}/PoseidonGameDemo.pdb
+            ${{ env.CWR_DIST_DIR }}/PoseidonServer.pdb
+          if-no-files-found: error
+
+  trident:
+    name: Rust / Trident / ubuntu-24.04
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check clippy
+        run: cargo clippy --locked --workspace --all-targets
+
+      - name: Build
+        run: cargo build --locked
+
+      - name: Build metadata
+        id: build_metadata
+        shell: bash
+        run: echo "sha_short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Trident
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Trident-${{ steps.build_metadata.outputs.sha_short }}
+          path: target/debug/tri
+          if-no-files-found: error
+
+      - name: Upload MasterService
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-MasterService-${{ steps.build_metadata.outputs.sha_short }}
+          path: target/debug/papa-bear-master-service
+          if-no-files-found: error
+
+      - name: Test
+        run: cargo test --locked
+
+  trident-test:
+    name: Linux Trident (shard ${{ matrix.shard }})
+    runs-on: ubuntu-24.04
+    needs:
+      - build-linux
+      - trident
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download demo game data
+        uses: ./.github/actions/download-extract
+        with:
+          url: ${{ env.DEMO_ASSETS_URL }}
+          path: packages/Demo
+          archive-name: CWR-demo-assets.zip
+
+      - name: Install Linux runtime packages
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            autoconf \
-            autoconf-archive \
-            automake \
-            clang \
-            libtool \
-            libltdl-dev \
-            pkg-config \
-            libgl1-mesa-dev \
-            libx11-dev \
-            libxext-dev \
-            libxrandr-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libxtst-dev \
-            libxinerama-dev \
-            libxkbcommon-dev \
-            libwayland-dev \
-            wayland-protocols
+            libgl1 \
+            libopengl0 \
+            libx11-6 \
+            libxext6 \
+            libxrandr2 \
+            libxcursor1 \
+            libxi6 \
+            libxtst6 \
+            libxinerama1 \
+            libxkbcommon0 \
+            libwayland-client0 \
+            libopenal1 \
+            alsa-utils \
+            mesa-utils \
+            openbox \
+            pulseaudio-utils \
+            x11-utils \
+            x11-xserver-utils \
+            xvfb \
+            xauth
 
-      - name: Setup LLVM and Clang
-        if: runner.os == 'Windows'
-        uses: KyleMayes/install-llvm-action@v2
+      - name: Build metadata
+        id: build_metadata
+        shell: bash
+        run: echo "sha_short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Download Game
+        uses: actions/download-artifact@v4
         with:
-          version: '19'
-          arch: 'x64'
-          directory: 'C:\Program Files\LLVM'
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Game-${{ steps.build_metadata.outputs.sha_short }}
+          path: exe
 
-      - name: Setup compiler cache
-        uses: hendrikmuhs/ccache-action@v1.2.23
+      - name: Download GameDemo
+        uses: actions/download-artifact@v4
         with:
-          variant: ccache
-          key: ${{ runner.os }}-${{ matrix.preset }}-pch
-          max-size: 1G
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-GameDemo-${{ steps.build_metadata.outputs.sha_short }}
+          path: exe
 
-      - name: Setup CMake and Ninja
-        uses: lukka/get-cmake@latest
-
-      - name: Restore vcpkg binary cache
-        uses: actions/cache@v4
+      - name: Download Server
+        uses: actions/download-artifact@v4
         with:
-          path: .vcpkg-bincache/${{ matrix.vcpkg_triplet }}
-          key: vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/vcpkg-triplets/**', 'cmake/vcpkg-overlay-ports/**') }}
-          restore-keys: |
-            vcpkg-${{ runner.os }}-${{ matrix.vcpkg_triplet }}-
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Server-${{ steps.build_metadata.outputs.sha_short }}
+          path: exe
 
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
+      - name: Download Trident
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Trident-${{ steps.build_metadata.outputs.sha_short }}
+          path: exe
+
+      - name: Download MasterService
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-MasterService-${{ steps.build_metadata.outputs.sha_short }}
+          path: exe
+
+      - name: Write Trident env
+        run: |
+          chmod +x exe/*
+          cp .trident.env.example .trident.env
+          sed -i 's|^OFPR_GAME_DIR=.*|OFPR_GAME_DIR=exe|' .trident.env
+          sed -i 's|^OFPR_DATA_DIR=.*|OFPR_DATA_DIR=packages/Demo|' .trident.env
+
+      - name: Run Trident tests
         env:
-          VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-bincache/${{ matrix.vcpkg_triplet }},readwrite
-          VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-bincache/${{ matrix.vcpkg_triplet }}
-          VCPKG_DEFAULT_TRIPLET: ${{ matrix.vcpkg_triplet }}
-          VCPKG_INSTALLED_DIR: ${{ github.workspace }}/${{ matrix.build_dir }}/vcpkg_installed
-          VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/cmake/vcpkg-overlay-ports
-          VCPKG_OVERLAY_TRIPLETS: ${{ github.workspace }}/cmake/vcpkg-triplets
+          ALSOFT_DRIVERS: 'null'
+          HARNESS_CMD_TIMEOUT_SEC: '180'
+          PAPA_BEAR_MASTER_SERVICE: ${{ github.workspace }}/exe/papa-bear-master-service
+          TRI_OUTPUT_DIR: ${{ github.workspace }}/trident-output
+        run: |
+          xvfb-run -a --server-args="$TRIDENT_XVFB_ARGS" \
+            bash -c 'openbox & trap "kill $!" EXIT; sleep 1; exec "$@"' bash \
+            exe/tri test \
+            --output-dir "$TRI_OUTPUT_DIR" \
+            --render "$TRIDENT_RENDER" \
+            --jobs 2 \
+            --shard ${{ matrix.shard }}/4 \
+            --retries 2 \
+            --skip-tag ci-host-blocked \
+            --game-arg --audio \
+            --game-arg "$TRIDENT_AUDIO" \
+            --game-arg --no-strict \
+            tests/integration
+
+      - name: Upload Trident output
+        if: failure()
+        uses: actions/upload-artifact@v4
         with:
-          runVcpkgInstall: true
-          vcpkgJsonGlob: 'vcpkg.json'
-
-      - name: Configure
-        run: >
-          cmake
-          --preset ${{ matrix.preset }}
-          -DCMAKE_C_COMPILER_LAUNCHER=ccache
-          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-
-      - name: Build
-        run: cmake --build ${{ matrix.build_dir }} --parallel 2
-
-      - name: Upload binaries
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.binaries_upload }}
-          path: |
-            ${{ matrix.build_dir }}/apps/cwr/Game/PoseidonGame
-            ${{ matrix.build_dir }}/apps/cwr/Game/PoseidonGame.exe
-            ${{ matrix.build_dir }}/apps/cwr/GameDemo/PoseidonGameDemo
-            ${{ matrix.build_dir }}/apps/cwr/GameDemo/PoseidonGameDemo.exe
-            ${{ matrix.build_dir }}/apps/cwr/Server/PoseidonServer
-            ${{ matrix.build_dir }}/apps/cwr/Server/PoseidonServer.exe
-
-      - name: Test
-        shell: pwsh
-        env:
-          CTEST_EXCLUDE: ${{ matrix.ctest_exclude }}
-        run: ctest --test-dir '${{ matrix.build_dir }}' --output-on-failure -E "$env:CTEST_EXCLUDE"
+          name: trident-output-${{ steps.build_metadata.outputs.sha_short }}-shard${{ matrix.shard }}
+          path: trident-output
+          if-no-files-found: ignore
 
   steamrt4:
     name: SteamRT4 Release

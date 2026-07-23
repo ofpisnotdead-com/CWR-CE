@@ -68,6 +68,13 @@ if(NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     add_compile_options(-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/=)
 endif()
 
+if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    add_compile_options($<$<CONFIG:Release>:/Zi>)
+    add_link_options($<$<CONFIG:Release>:/DEBUG>)
+else()
+    add_compile_options($<$<CONFIG:Release>:-g>)
+endif()
+
 # Global warning suppressions for legacy codebase and intentional patterns
 # These are all actually needed - verified 11,624 warnings without them (Dec 2025)
 add_compile_options(
@@ -172,6 +179,14 @@ if(DIST_PRESET_NAME MATCHES "^(win|linux)-([^-]+)(-(.*))?$")
         set(DIST_PRESET_NAME "${_dist_arch}-${_dist_platform}-${_dist_suffix}")
     else()
         set(DIST_PRESET_NAME "${_dist_arch}-${_dist_platform}")
+    endif()
+elseif(DIST_PRESET_NAME MATCHES "^steamrt4-([^-]+)-clang(-(.*))?$")
+    set(_dist_arch "${CMAKE_MATCH_1}")
+    set(_dist_suffix "${CMAKE_MATCH_3}")
+    if(_dist_suffix)
+        set(DIST_PRESET_NAME "${_dist_arch}-steamrt4-${_dist_suffix}")
+    else()
+        set(DIST_PRESET_NAME "${_dist_arch}-steamrt4")
     endif()
 endif()
 set(DIST_DIR "${CMAKE_SOURCE_DIR}/dist/${DIST_PRESET_NAME}")
@@ -352,18 +367,22 @@ endif()
 # Python lint targets (ruff via uv, optional)
 find_program(UV_EXE NAMES uv)
 set(BLENDER_ADDON_DIR ${CMAKE_SOURCE_DIR}/apps/tools/BlenderAddon)
+set(BLENDER_PYTHON_LINT_PATHS ${BLENDER_ADDON_DIR}/io_import_p3d)
+if(EXISTS ${CMAKE_SOURCE_DIR}/tests/BlenderAddon)
+    list(APPEND BLENDER_PYTHON_LINT_PATHS ${CMAKE_SOURCE_DIR}/tests/BlenderAddon)
+endif()
 
 if(UV_EXE AND EXISTS ${BLENDER_ADDON_DIR}/pyproject.toml)
     add_custom_target(PythonLint
-        COMMAND ${UV_EXE} run ruff check ${BLENDER_ADDON_DIR}/io_import_p3d ${CMAKE_SOURCE_DIR}/tests/BlenderAddon
-        COMMAND ${UV_EXE} run ruff format --check ${BLENDER_ADDON_DIR}/io_import_p3d ${CMAKE_SOURCE_DIR}/tests/BlenderAddon
+        COMMAND ${UV_EXE} run ruff check ${BLENDER_PYTHON_LINT_PATHS}
+        COMMAND ${UV_EXE} run ruff format --check ${BLENDER_PYTHON_LINT_PATHS}
         WORKING_DIRECTORY ${BLENDER_ADDON_DIR}
         COMMENT "Checking Python formatting and lint (ruff)"
         VERBATIM
     )
     add_custom_target(PythonLintFix
-        COMMAND ${UV_EXE} run ruff format ${BLENDER_ADDON_DIR}/io_import_p3d ${CMAKE_SOURCE_DIR}/tests/BlenderAddon
-        COMMAND ${UV_EXE} run ruff check --fix ${BLENDER_ADDON_DIR}/io_import_p3d ${CMAKE_SOURCE_DIR}/tests/BlenderAddon
+        COMMAND ${UV_EXE} run ruff format ${BLENDER_PYTHON_LINT_PATHS}
+        COMMAND ${UV_EXE} run ruff check --fix ${BLENDER_PYTHON_LINT_PATHS}
         WORKING_DIRECTORY ${BLENDER_ADDON_DIR}
         COMMENT "Formatting Python sources with ruff"
         VERBATIM

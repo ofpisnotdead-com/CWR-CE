@@ -1,0 +1,3 @@
+extra_args = ["--mods-dir", "../../tests/fixtures/mods-mp-missions", "--mod", "@mpmissionbrowser", "--no-menu-scene"]
+timeout = 120
+tags = ["headful"]

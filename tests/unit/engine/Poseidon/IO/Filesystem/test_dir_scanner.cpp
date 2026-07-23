@@ -47,6 +47,22 @@ std::set<std::string> scanNames(const std::string& dir, const char* ext = ".pbo"
     return names;
 }
 
+std::set<std::string> scanDirectories(const std::string& dir)
+{
+    std::set<std::string> names;
+    DirScanner scanner;
+    if (!scanner.First(dir.c_str(), nullptr))
+        return names;
+
+    do
+    {
+        if (scanner.IsDirectory())
+            names.insert(scanner.GetName());
+    } while (scanner.Next());
+
+    return names;
+}
+
 } // namespace
 
 TEST_CASE("DirScanner filters extensions case-insensitively", "[poseidon-base][io][dirscanner]")
@@ -83,6 +99,18 @@ TEST_CASE("DirScanner reports failure for a missing directory", "[poseidon-base]
 {
     DirScanner scanner;
     REQUIRE_FALSE(scanner.First("/tmp/poseidon_base_dirscanner_missing_xyz", ".pbo"));
+}
+
+TEST_CASE("DirScanner exposes directory entries", "[poseidon-base][io][dirscanner]")
+{
+    TempScanDir dir("directory_entries");
+    fs::create_directories(dir.root / "Mission.Eden");
+    std::ofstream(dir.root / "Mission.Eden.pbo").put('x');
+
+    const auto directories = scanDirectories(dir.root.string());
+
+    REQUIRE(directories.count("Mission.Eden") == 1);
+    REQUIRE(directories.count("Mission.Eden.pbo") == 0);
 }
 
 #ifndef _WIN32

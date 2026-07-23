@@ -93,7 +93,7 @@ int DSMaxMsgSend = 128;
 int MaxSizeGuaranteed = 512;
 int MaxSizeNonguaranteed = 256;
 int MinBandwidth = 28800;
-int DSMinBandwidth = 131072;
+int DSMinBandwidth = 8 * 1024 * 1024;
 int MaxBandwidth = INT_MAX;
 float MinErrorToSend = 0.01f;
 

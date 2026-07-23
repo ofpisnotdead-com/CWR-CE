@@ -325,6 +325,7 @@ TEST_CASE("Value getter verbs are all registered", "[tri][value-getter][registra
 
     // Options
     REQUIRE(contains("triGetLanguage"));
+    REQUIRE(contains("voiceLanguage"));
 
     // MP / network / server
     REQUIRE(contains("triGetNgsState"));

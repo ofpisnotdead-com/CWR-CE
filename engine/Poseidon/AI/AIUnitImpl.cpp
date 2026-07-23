@@ -708,8 +708,6 @@ bool AIUnit::ProcessGetIn2(Transport* veh, UIActionType pos)
 
 void AIUnit::DoGetOut(Transport* veh, bool parachute)
 {
-    AI_ERROR(veh->IsLocal()); // warning: BUG
-
     bool isFocused = (GLOB_WORLD->FocusOn() == this);
 
     Person* person = GetPerson();

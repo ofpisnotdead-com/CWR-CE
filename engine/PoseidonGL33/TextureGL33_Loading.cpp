@@ -13,11 +13,37 @@
 extern int MipmapSizeGL33(PacFormat format, int w, int h);
 extern void InitGLPixelFormat(TextureDescGL33& desc, PacFormat format, bool enableDXT);
 
+namespace
+{
+bool IsCompressedInterpolationFormat(PacFormat format)
+{
+    switch (format)
+    {
+        case PacDXT1:
+        case PacDXT2:
+        case PacDXT3:
+        case PacDXT4:
+        case PacDXT5:
+            return true;
+        default:
+            return false;
+    }
+}
+
+} // namespace
+
+PacFormat UploadFormatForTextureGL33(PacFormat format, bool interpolate)
+{
+    if (interpolate && IsCompressedInterpolationFormat(format))
+        return PacARGB1555;
+    return format;
+}
+
 void TextureGL33::InitDesc(TextureDescGL33& desc, int levelMin, bool enableDXT)
 {
     memset(&desc, 0, sizeof(desc));
 
-    PacFormat format = _mipmaps[levelMin].DstFormat();
+    PacFormat format = UploadFormatForTextureGL33(_mipmaps[levelMin].DstFormat(), _interpolate);
     InitGLPixelFormat(desc, format, enableDXT);
 
     desc.w = _mipmaps[levelMin]._w;
@@ -31,7 +57,8 @@ int TextureGL33::TotalSize(int levelMin) const
     for (int i = levelMin; i < _nMipmaps; i++)
     {
         const PacLevelMem& mip = _mipmaps[i];
-        totalSize += MipmapSizeGL33(mip.DstFormat(), mip._w, mip._h);
+        totalSize += MipmapSizeGL33(UploadFormatForTextureGL33(_mipmaps[levelMin].DstFormat(), _interpolate), mip._w,
+                                    mip._h);
     }
     return totalSize;
 }
@@ -66,11 +93,14 @@ int TextureGL33::UploadToGPU(SurfaceInfoGL33& surface, int levelMin)
     // compressed internalFormat trips GL_INVALID_OPERATION (0x0502).
     // Treat level-min as authoritative; the data buffer for each mip
     // is the right size for that format (size math below uses it).
-    const PacFormat sharedFmt = _mipmaps[levelMin].DstFormat();
+    const PacFormat sharedFmt = UploadFormatForTextureGL33(_mipmaps[levelMin].DstFormat(), _interpolate);
 
     for (int i = levelMin; i < _nMipmaps; i++)
     {
-        PacLevelMem& mip = _mipmaps[i];
+        PacLevelMem& srcMip = _mipmaps[i];
+        PacLevelMem mip = srcMip;
+        if (mip.DstFormat() != sharedFmt)
+            mip.SetDestFormat(sharedFmt, 8);
         int aLevel = i - levelMin;
 
         PacFormat dstFmt = sharedFmt;
@@ -81,7 +111,7 @@ int TextureGL33::UploadToGPU(SurfaceInfoGL33& surface, int levelMin)
         // Per-mip pitch / size — must use this mip's dimensions, not
         // base mip's (B-016 / B-021).  See I-15 / I-16 in
         // render-invariants.md.
-        const auto layout = Poseidon::render::mipmap::ComputeLayout(dstFmt, mip._w, mip._h);
+        const auto layout = Poseidon::render::mipmap::ComputeLayout(dstFmt, srcMip._w, srcMip._h);
         tightPitch = layout.tightPitch;
         rowCount = layout.rowCount;
         dataSize = layout.dataSize;
@@ -95,11 +125,13 @@ int TextureGL33::UploadToGPU(SurfaceInfoGL33& surface, int levelMin)
         if (_interpolate)
         {
             PoseidonAssert(_interpolate->_nMipmaps == _nMipmaps);
-            PacLevelMem& imip = _interpolate->_mipmaps[i];
+            PacLevelMem imip = _interpolate->_mipmaps[i];
+            if (imip.DstFormat() != sharedFmt)
+                imip.SetDestFormat(sharedFmt, 8);
 
-            AUTO_STATIC_ARRAY(short, imem, 256 * 256);
-            imem.Realloc(imip._w * imip._h);
-            imem.Resize(imip._w * imip._h);
+            AUTO_STATIC_ARRAY(char, imem, 256 * 256 * 4);
+            imem.Realloc(dataSize);
+            imem.Resize(dataSize);
 
             _interpolate->_src->GetMipmapData(imem.Data(), imip, i);
             mip.Interpolate(pixelData.Data(), imem.Data(), imip, _iFactor);
@@ -117,7 +149,7 @@ int TextureGL33::UploadToGPU(SurfaceInfoGL33& surface, int levelMin)
 
         if (fmtDesc.compressed)
         {
-            glCompressedTexSubImage2D(GL_TEXTURE_2D, aLevel, 0, 0, mip._w, mip._h, fmtDesc.internalFormat, dataSize,
+            glCompressedTexSubImage2D(GL_TEXTURE_2D, aLevel, 0, 0, srcMip._w, srcMip._h, fmtDesc.internalFormat, dataSize,
                                       pixelData.Data());
             GLenum err = glGetError();
             if (err != GL_NO_ERROR)
@@ -125,18 +157,18 @@ int TextureGL33::UploadToGPU(SurfaceInfoGL33& surface, int levelMin)
                 LOG_ERROR(
                     Graphics,
                     "GL33: glCompressedTexSubImage2D FAILED err=0x{:04X} tex={} level={} {}x{} fmt=0x{:04X} size={}",
-                    err, tex, aLevel, mip._w, mip._h, fmtDesc.internalFormat, dataSize);
+                    err, tex, aLevel, srcMip._w, srcMip._h, fmtDesc.internalFormat, dataSize);
             }
         }
         else
         {
-            glTexSubImage2D(GL_TEXTURE_2D, aLevel, 0, 0, mip._w, mip._h, fmtDesc.pixelFormat, fmtDesc.pixelType,
+            glTexSubImage2D(GL_TEXTURE_2D, aLevel, 0, 0, srcMip._w, srcMip._h, fmtDesc.pixelFormat, fmtDesc.pixelType,
                             pixelData.Data());
             GLenum err = glGetError();
             if (err != GL_NO_ERROR)
             {
                 LOG_ERROR(Graphics, "GL33: glTexSubImage2D FAILED err=0x{:04X} tex={} level={} {}x{} fmt=0x{:04X}", err,
-                          tex, aLevel, mip._w, mip._h, fmtDesc.pixelFormat);
+                          tex, aLevel, srcMip._w, srcMip._h, fmtDesc.pixelFormat);
             }
         }
     }
@@ -169,7 +201,7 @@ int TextureGL33::LoadLevels(int levelMin)
         TextureDescGL33 desc;
         InitDesc(desc, levelMin, true);
 
-        PacFormat format = _mipmaps[levelMin].DstFormat();
+        PacFormat format = UploadFormatForTextureGL33(_mipmaps[levelMin].DstFormat(), _interpolate);
         bank->UseReleased(_surface, desc, format);
 
         if (!_surface.GetTexture())
@@ -253,7 +285,7 @@ int TextureGL33::LoadSmall()
     if (levelMin >= _nMipmaps)
         levelMin = _nMipmaps - 1;
 
-    PacFormat format = _mipmaps[levelMin].DstFormat();
+    PacFormat format = UploadFormatForTextureGL33(_mipmaps[levelMin].DstFormat(), _interpolate);
     TextureDescGL33 desc;
     InitDesc(desc, levelMin, false);
 

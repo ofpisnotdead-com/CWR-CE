@@ -7,6 +7,9 @@
 #include <AL/alext.h>
 #include <Poseidon/Audio/Streaming/WaveStream.hpp>
 #include <Poseidon/Audio/Streaming/WaveLoaders.hpp>
+#include <Poseidon/Audio/IAudioSystem.hpp>
+#include <PoseidonOpenAL/SoundSystemOAL.hpp>
+#include <PoseidonOpenAL/WaveOAL.hpp>
 #include "test_fixtures.hpp"
 #include <cmath>
 #include <vector>
@@ -156,6 +159,42 @@ TEST_CASE("OpenAL loopback: device init", "[Audio][integration]")
     std::vector<int16_t> buf;
     dev.Render(buf, 1024);
     CHECK(IsSilence(buf));
+}
+
+TEST_CASE("OpenAL streamed speech primes audio on first commit", "[Audio][integration][streaming][speech]")
+{
+    auto* sys = dynamic_cast<SoundSystemOAL*>(CreateSoundSystemOAL());
+    if (!sys)
+    {
+        SUCCEED("default OpenAL output device unavailable");
+        return;
+    }
+
+    const std::string ogg = GET_FIXTURE("mission_smoke/alpha_scenario.cain/sound/line01.ogg");
+    auto* wave = static_cast<WaveOAL*>(sys->CreateWave(ogg.c_str(), false, true));
+    if (!wave)
+    {
+        delete sys;
+        SKIP("cannot create wave from fixture OGG");
+    }
+    if (!wave->IsStreamed())
+    {
+        wave->Release();
+        delete sys;
+        SKIP("fixture OGG not routed through the streaming path");
+    }
+
+    wave->SetKind(WaveSpeech);
+    wave->Repeat(1);
+    wave->Play();
+    sys->Commit();
+
+    INFO("state=" << static_cast<int>(wave->State()) << " buffersInFlight=" << wave->StreamingState().buffersInFlight);
+    CHECK(wave->StreamingState().buffersInFlight > 0);
+    CHECK(wave->State() == WaveState::Playing);
+
+    wave->Release();
+    delete sys;
 }
 
 TEST_CASE("OpenAL loopback: play WAV fixture produces signal", "[Audio][integration]")

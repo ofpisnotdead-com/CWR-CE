@@ -1,6 +1,7 @@
 #include <Poseidon/Network/NetworkMissionTransfer.hpp>
 
 #include <Poseidon/Foundation/Platform/GamePaths.hpp>
+#include <Poseidon/Foundation/Common/Filenames.hpp>
 #include <Poseidon/Network/Network.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
 #include <Poseidon/Foundation/Algorithms/Crc.hpp>
@@ -37,15 +38,44 @@ bool ValidateNetworkMissionFileOnDisk(const RString& missionPath, int expectedFi
                                              expectedFileCrc);
 }
 
+bool IsSafeNetworkMissionFileName(const char* missionFileName)
+{
+    return missionFileName != nullptr && missionFileName[0] != 0 && IsRelativePath(missionFileName) &&
+           strchr(missionFileName, '/') == nullptr && strchr(missionFileName, '\\') == nullptr;
+}
+
 RString BuildNetworkMissionTransferCacheBasePath(const char* missionFileName)
 {
+    if (!IsSafeNetworkMissionFileName(missionFileName))
+    {
+        return RString();
+    }
+
     return RString(GamePaths::Instance().CacheDir().c_str()) + RString(GameDirs::MPMissionsCachePath().c_str()) +
-           RString(missionFileName != nullptr ? missionFileName : "");
+           RString(missionFileName);
 }
 
 RString BuildNetworkMissionTransferCachePboPath(const char* missionFileName)
 {
-    return BuildNetworkMissionTransferCacheBasePath(missionFileName) + RString(".pbo");
+    const RString basePath = BuildNetworkMissionTransferCacheBasePath(missionFileName);
+    return basePath.GetLength() > 0 ? basePath + RString(".pbo") : RString();
+}
+
+RString BuildNetworkMissionTransferCachePboPathFromTransferPath(const char* transferPath)
+{
+    if (transferPath == nullptr)
+    {
+        return RString();
+    }
+
+    const char* fileName = GetFilenameExt(transferPath);
+    const char* ext = strrchr(fileName, '.');
+    if (ext == nullptr || stricmp(ext, ".pbo") != 0)
+    {
+        return RString();
+    }
+
+    return BuildNetworkMissionTransferCachePboPath(RString(fileName).Substring(0, ext - fileName));
 }
 
 RString BuildNetworkMissionTransferBankPath(const char* transferPath)

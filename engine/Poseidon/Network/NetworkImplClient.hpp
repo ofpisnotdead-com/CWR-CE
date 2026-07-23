@@ -35,6 +35,7 @@ class NetworkClient : public NetworkComponent
 
     // current state on server
     NetworkGameState _serverState;
+    int _voiceChannel = -1;
 
     // true if server state ever reached NGSPlay (for disconnect exit-code logic)
     bool _serverReachedPlay = false;
@@ -72,6 +73,26 @@ class NetworkClient : public NetworkComponent
 
     // sound introducing chat message
     SoundPars _chatSound;
+
+    bool _pendingSelectPlayer;
+    SelectPlayerMessage _pendingSelectPlayerMessage;
+    AutoArray<ChangeOwnerMessage> _pendingChangeOwners;
+    DWORD _missionRawLastRequestTime = 0;
+    int _missionRawLastRequestFirstSegment = -1;
+    int _missionRawLastRequestSegmentCount = 0;
+    DWORD _missionRawFirstSegmentTime = 0;
+    DWORD _missionRawLastSegmentTime = 0;
+    int _missionRawExpectedSize = 0;
+    int _missionRawHighestReceivedSegment = -1;
+    int _missionRawReceivedSegments = 0;
+    int _missionRawDuplicateSegments = 0;
+    int _missionRawRequestedDuplicateSegments = 0;
+    int _missionRawRequestedDuplicateUniqueSegments = 0;
+    int _missionRawRequestedSegments = 0;
+    int _missionRawRequestCount = 0;
+    AutoArray<bool> _missionRawRequestedSegmentMap;
+    AutoArray<bool> _missionRawRequestedDuplicateSegmentMap;
+    bool _missionTransferHeaderStatsLogged = false;
 
     // used for transfer of client info (for example camera position) to server
     Ref<ClientInfoObject> _clientInfo;
@@ -124,6 +145,8 @@ class NetworkClient : public NetworkComponent
 
     void OnSimulate() override;
     void OnSendComplete(DWORD msgID, bool ok);
+    void OnRawMagicMessage(int magic, const char* buffer, int bufferSize);
+    void RequestMissingMissionRawSegments();
     void OnMessage(int from, NetworkMessage* msg, NetworkMessageType type) override;
 
     // perform regular memory clean-up
@@ -258,8 +281,12 @@ class NetworkClient : public NetworkComponent
     void SetVoiceChannel(int channel);
     // Set channel for Voice Over Net
     void SetVoiceChannel(int channel, RefArray<NetworkObject>& units);
+    int GetVoiceChannelForTests() const { return _voiceChannel; }
     // Send synthetic VoN frames through the normal client transport for tests.
     int SendVoiceTestTone(int frames, int amplitude);
+    void GetVoiceSpeakers(AutoArray<NetVoiceSpeakerInfo, Poseidon::Foundation::MemAllocSA>& speakers) const;
+    // Poseidon::VoNTransmitHealth as int (0 = Off / voice not initialized).
+    int GetVoiceTransmitHealth() const;
 
     // Transfer file to server
     void TransferFileToServer(RString dest, RString source);
@@ -377,6 +404,12 @@ class NetworkClient : public NetworkComponent
     // Respawn unit by info given by item of respawn queue
     void DoRespawn(RespawnQueueItem& item);
 
+    bool TryApplySelectPlayer(const SelectPlayerMessage& message, bool allowPending);
+    void TryApplyPendingSelectPlayer(NetworkId id);
+    bool TryApplyChangeOwner(const ChangeOwnerMessage& message, bool allowPending);
+    void TryApplyPendingChangeOwner(NetworkId id);
+    void TryApplyPendingChangeOwners();
+
     // Create network object and register as remote object
     template <class Type>
     bool CreateRemoteObject(NetworkMessageContext& ctx, Type* dummy)
@@ -414,6 +447,7 @@ class NetworkClient : public NetworkComponent
         NetworkRemoteObjectInfo& info = _remoteObjects[index];
         info.id = id;
         info.object = obj;
+        TryApplyPendingSelectPlayer(id);
         if (DiagLevel >= 1)
             DiagLogF("Client: remote object created %d:%d", id.creator, id.id);
         return true;

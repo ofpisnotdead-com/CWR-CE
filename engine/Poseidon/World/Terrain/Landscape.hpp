@@ -183,7 +183,7 @@ class ObjectList
 #define N_CLOUDS 4
 #define MAX_SHAPES 256
 
-#ifdef _ENABLE_CHEATS
+#if _ENABLE_CHEATS
 const int NClutters = 4;
 #endif
 
@@ -455,7 +455,7 @@ class Landscape: public SerializeClass
 	int GetTex( int x, int z ) const {return _tex(x,z);}
 	void SetTex( int x, int z, int data ) {_tex(x,z)=data;}
 
-	#ifdef _ENABLE_CHEATS
+	#if _ENABLE_CHEATS
 	Ref<LODShapeWithShadow> _clutter[NClutters];
   #endif
 

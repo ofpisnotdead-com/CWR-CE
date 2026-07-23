@@ -8,6 +8,7 @@ triAssertIncludes [(triVisibleTexts), "MODS"]
 triClick 119
 triAssertEq [(triDisplay), 72]
 triAssertEq [(triControlText 101), "MODS"]
+triAssertIncludes [(triVisibleTexts), "Operated by master.example"]
 triScreenshot "00_mods_screen"
 
 // Reset sort to Name before seeding: sort column persists across test runs in

@@ -1,5 +1,6 @@
 #include <Poseidon/UI/Options/MicTestPage.hpp>
 #include <Poseidon/UI/Options/MeterWidget.hpp>
+#include <Poseidon/UI/Options/NotebookTheme.hpp>
 #include <Poseidon/UI/Options/OptionsShell.hpp>
 
 #include <Poseidon/Core/Global.hpp>
@@ -24,8 +25,18 @@ constexpr MeterBarLayout kMeter = {
 };
 constexpr int kSampleRate = 16000;
 constexpr int kCaptureSamples = 4096;
+constexpr int kIdcMeterTrack = 9510;
 constexpr int kIdcMeterFill = 9511;
 constexpr int kIdcMeterPeak = 9512;
+
+void ThemeMeterStatic(ControlObjectContainer& notebook, int idc)
+{
+    if (auto* s3d = dynamic_cast<C3DStatic*>(notebook.GetCtrl(idc)))
+    {
+        s3d->SetColor(NotebookTheme::ResourceColorOr(s3d->GetColor()));
+        s3d->SetBgColor(NotebookTheme::ResourceColorOr(s3d->GetBgColor()));
+    }
+}
 } // namespace
 
 void MicTestPage::Mount(OptionsShell& shell)
@@ -36,6 +47,12 @@ void MicTestPage::Mount(OptionsShell& shell)
         m_loopback.open(kSampleRate);
     }
     ButtonModalPage::Mount(shell);
+    if (auto* nb = dynamic_cast<ControlObjectContainer*>(shell.GetCtrl(105)))
+    {
+        ThemeMeterStatic(*nb, kIdcMeterTrack);
+        ThemeMeterStatic(*nb, kIdcMeterFill);
+        ThemeMeterStatic(*nb, kIdcMeterPeak);
+    }
 }
 
 void MicTestPage::Unmount(OptionsShell& shell)

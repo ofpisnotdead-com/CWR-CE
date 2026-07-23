@@ -39,7 +39,7 @@ triOpenModDownload 3
 triAssertEq [(triDisplay), 74]
 triScreenshot "02_download_prompt"
 triClick 125                 // IDC_MODS_DOWNLOAD_GO — start the (fake) download
-triAssertIncludes [(triVisibleTexts), "Complete"]     // auto-retries until the worker finishes + is polled
+triAssertIncludes [(triVisibleTexts), "Completato"]   // localized status line; auto-retries until the worker finishes + is polled
 triAssertIncludes [(triVisibleTexts), "3 / 3 addons   100%"]
 triAssertIncludes [(triVisibleTexts), "Continua"]     // the action button relabels on success
 triScreenshot "03_download_complete"

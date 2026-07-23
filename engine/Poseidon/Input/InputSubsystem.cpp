@@ -548,7 +548,11 @@ void InputSubsystem::ComputeMovementState()
             lookAroundEnabled_ = lookAroundToggled_;
 
         if (oldLookAround != lookAroundEnabled_)
+        {
             freelookChanged_ = true;
+            if (oldLookAround && !lookAroundEnabled_)
+                GInput.cursor.aimDeltaX = GInput.cursor.aimDeltaY = GInput.cursor.aimDeltaZ = 0;
+        }
 
         moveUp_ += GetAction(UAMoveUp, true);
         moveDown_ += GetAction(UAMoveDown, true);
@@ -1071,6 +1075,7 @@ void InputSubsystem::LoadKeys()
     GInput.mouse.tuning.extendedRange = mouse.extendedRange;
 
     GInput.gamepad.enabled = gamepad.enabled;
+    GInput.gamepad.reverseYStick = gamepad.reverseYStick;
     GInput.gamepad.deadzoneStick = gamepad.deadzoneStick;
     GInput.gamepad.deadzoneTrigger = gamepad.deadzoneTrigger;
     GInput.gamepad.lookSensitivity = gamepad.lookSensitivity;
@@ -1083,6 +1088,7 @@ void InputSubsystem::SaveKeys()
 
     GamepadConfig gamepad;
     gamepad.enabled = GInput.gamepad.enabled;
+    gamepad.reverseYStick = GInput.gamepad.reverseYStick;
     gamepad.deadzoneStick = GInput.gamepad.deadzoneStick;
     gamepad.deadzoneTrigger = GInput.gamepad.deadzoneTrigger;
     gamepad.lookSensitivity = GInput.gamepad.lookSensitivity;
@@ -1221,7 +1227,8 @@ UserActionDesc* InputSubsystem::GetUserActionDesc()
         UserActionDesc("PrevChannel", IDS_USRACT_PREV_CHANNEL, SDL_SCANCODE_COMMA, -1),
         UserActionDesc("NextChannel", IDS_USRACT_NEXT_CHANNEL, SDL_SCANCODE_PERIOD, -1),
         UserActionDesc("Chat", IDS_USRACT_CHAT, SDL_SCANCODE_SLASH, -1),
-        UserActionDesc("VoiceOverNet", IDS_USRACT_VOICE_OVER_NET, SDL_SCANCODE_CAPSLOCK, -1),
+        UserActionDesc("VoiceOverNet", IDS_USRACT_VOICE_OVER_NET, -1),
+        UserActionDesc("VoiceOverNetPushToTalk", IDS_USRACT_VOICE_OVER_NET_PUSH_TO_TALK, SDL_SCANCODE_CAPSLOCK, -1),
         UserActionDesc("NetworkStats", IDS_USRACT_NETWORK_STATS, SDL_SCANCODE_I, -1),
         UserActionDesc("NetworkPlayers", IDS_USRACT_NETWORK_PLAYERS, SDL_SCANCODE_P, -1),
         UserActionDesc("SelectAll", IDS_USRACT_SELECT_ALL, SDL_SCANCODE_GRAVE, -1),
@@ -1241,6 +1248,11 @@ UserActionDesc* InputSubsystem::GetUserActionDesc()
         UserActionDesc("Cheat2", IDS_USRACT_CHEAT_2, SDL_SCANCODE_RALT, -1),
 #endif
     };
+    // The table is indexed by UserAction, and per-action arrays (bindings, KeyList
+    // userKeys[UAN]) are sized by UAN. If a new action is added to the enum without
+    // a matching row here, indexing runs off the end. Keep them one-to-one.
+    static_assert(std::size(userActionDesc) == UAN,
+                  "UserActionDesc table must have exactly one entry per UserAction (UAN)");
     return userActionDesc;
 }
 
@@ -1263,6 +1275,18 @@ void InputSubsystem::SetJoystickEnabled(bool v)
 void InputSubsystem::ToggleJoystickEnabled()
 {
     GInput.gamepad.enabled = !GInput.gamepad.enabled;
+}
+bool InputSubsystem::IsReverseJoystick() const
+{
+    return GInput.gamepad.reverseYStick;
+}
+void InputSubsystem::SetReverseJoystick(bool v)
+{
+    GInput.gamepad.reverseYStick = v;
+}
+void InputSubsystem::ToggleReverseJoystick()
+{
+    GInput.gamepad.reverseYStick = !GInput.gamepad.reverseYStick;
 }
 bool InputSubsystem::IsMouseButtonsReversed() const
 {

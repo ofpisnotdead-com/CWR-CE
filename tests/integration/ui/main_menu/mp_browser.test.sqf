@@ -15,14 +15,14 @@ triAssertIncludes [(triVisibleTexts), "Ping"]
 triAssertIncludes [(triVisibleTexts), "Cancel"]
 triAssertIncludes [(triVisibleTexts), "Join"]
 triAssertIncludes [(triVisibleTexts), "New"]
-triAssertEq [(triControlText 109), "Implementation: Sockets"]
+triAssertEq [(triControlText 109), "Operated by master.example"]
 triAssertEq [(triControlText 122), "Address: LAN"]
 triAssertEq [(triControlText 107), "Password: No password"]
 triScreenshot "01_mp_server_browser"
 
 // Language switch updates localized status controls.
 triSetLanguage "Czech"
-triAssertEq [(triControlText 109), "Implementace: Sockety"]
+triAssertEq [(triControlText 109), "Operated by master.example"]
 triAssertEq [(triControlText 122), "Adresa: LAN"]
 triAssertEq [(triControlText 107), "Heslo: Bez hesla"]
 triSetLanguage "English"

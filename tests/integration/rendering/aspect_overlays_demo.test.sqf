@@ -24,7 +24,8 @@ triSetPillarboxBarsEnabled true
 cutRsc ["binocular", "plain", 0]
 triSimFrames 60
 triScreenshot "00_resource_modern"
-triAssertGt [(triGetPixelMaxChannel [0.5, 0.55]), 10]
+triAssertNear [(triSamplePixel [0.5, 0.55]), "0,0,0", 32]
+triAssertGt [(triGetPixelMaxChannel [0.35, 0.55]), 10]
 
 triSetDisplayStyle 1
 triSetPillarboxBarsEnabled false
@@ -34,7 +35,8 @@ triSimFrames 60
 triScreenshot "01_resource_stretch"
 triAssertNear [(triSamplePixel [0.02, 0.5]), "0,0,0", 16]
 triAssertNear [(triSamplePixel [0.97, 0.5]), "0,0,0", 16]
-triAssertGt [(triGetPixelMaxChannel [0.5, 0.55]), 10]
+triAssertNear [(triSamplePixel [0.5, 0.55]), "0,0,0", 32]
+triAssertGt [(triGetPixelMaxChannel [0.35, 0.55]), 10]
 
 cutRsc ["default", "plain", 0]
 triSetDisplayStyle 0

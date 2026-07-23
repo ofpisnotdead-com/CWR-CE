@@ -171,6 +171,7 @@ class TitleEffectBasic : public TitleEffectTimed
 
     Ref<Display> _rsc;
     RefArray<LODShapeWithShadow> _rscOverlayShapes;
+    bool _rscObjectDisplayPillarbox = false;
     bool _rscOverlayPillarbox = false;
     float _yOffset;
 
@@ -280,6 +281,7 @@ void TitleEffectBasic::Init(const ParamEntry& rsc)
     const ParamEntry* objects = rsc.FindEntry("objects");
     if (!controls && objects)
     {
+        bool useDisplayObjectPath = false;
         for (int i = 0; i < objects->GetSize(); ++i)
         {
             RString objectName = (*objects)[i];
@@ -293,6 +295,16 @@ void TitleEffectBasic::Init(const ParamEntry& rsc)
             if (z > 0.25f)
                 continue;
 
+            const ParamEntry* direction = object->FindEntry("direction");
+            const ParamEntry* upEntry = object->FindEntry("up");
+            if (direction && direction->GetSize() >= 3 && upEntry && upEntry->GetSize() >= 2)
+            {
+                useDisplayObjectPath =
+                    static_cast<float>((*direction)[2]) < 0.0f && static_cast<float>((*upEntry)[1]) < 0.0f;
+                if (useDisplayObjectPath)
+                    break;
+            }
+
             Ref<LODShapeWithShadow> shape = Shapes.New(Poseidon::FindShape(*model), true, false);
             if (shape)
             {
@@ -300,11 +312,13 @@ void TitleEffectBasic::Init(const ParamEntry& rsc)
                 _rscOverlayShapes.Add(shape);
             }
         }
-        if (_rscOverlayShapes.Size() > 0)
+        if (!useDisplayObjectPath && _rscOverlayShapes.Size() > 0)
         {
             _rscOverlayPillarbox = true;
             return;
         }
+        _rscOverlayShapes.Clear();
+        _rscObjectDisplayPillarbox = useDisplayObjectPath;
     }
 
     _rsc = new DisplayTitle;
@@ -354,6 +368,7 @@ void TitleEffectBasic::DrawObject()
     PackedColor color(Color(1, 1, 1, _alpha));
     _object->SetConstantColor(color);
     _object->Draw(0, ClipAll, *_object);
+    Object::DrawWidescreenPillarbox(/*requireGameplayActive*/ false, /*force*/ true);
     // restore camera
     GScene->SetCamera(oldCam);
 }
@@ -371,6 +386,8 @@ void TitleEffectBasic::DrawRsc()
         return;
     }
     _rsc->DrawHUD(nullptr, _alpha);
+    if (_rscObjectDisplayPillarbox)
+        Object::DrawWidescreenPillarbox(/*requireGameplayActive*/ false, /*force*/ true);
 }
 
 void TitleEffectBasic::Draw()

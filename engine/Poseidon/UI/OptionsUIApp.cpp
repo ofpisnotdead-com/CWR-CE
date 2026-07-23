@@ -41,6 +41,7 @@ using namespace Poseidon;
 #include <Poseidon/Core/DownloadDialogView.hpp>
 #include <Poseidon/UI/Controls/ProgressBarWidget.hpp>
 #include <Poseidon/UI/GameModule.hpp>
+#include <Poseidon/UI/MainMenuLayout.hpp>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -222,22 +223,25 @@ DisplayMain::DisplayMain(ControlsContainer* parent) : Display(parent)
             // the inherited geometry/styling.
             modsCls->Add("idc", IDC_MAIN_MODS);
             modsCls->Add("text", RString("$STR_DISP_MAIN_MODS"));
-            // Right-align the label so it hugs the box's right edge (next to Quit)
-            // instead of floating at the left of a Quit-width box, which is what made
-            // the gap look large no matter how the box was positioned.
-            modsCls->Add("style", ST_RIGHT);
+            if (quit->X() > 0.10f)
+                modsCls->Add("style", ST_RIGHT);
             modsCls->SetBase(quitCls->GetClassInterface());
             LoadControl(*modsCls);
             if (Control* mods = dynamic_cast<Control*>(GetCtrl(IDC_MAIN_MODS)))
             {
-                // Sit Mods just to the left of Quit, same row, with a small gap. With
-                // the label right-aligned, this gap is the actual space the player
-                // sees between "MODS" and "QUIT GAME".
-                const float gap = quit->W() * 0.05f;
-                float x = quit->X() - quit->W() - gap;
-                if (x < 0.0f)
-                    x = 0.0f;
-                mods->SetPos(x, quit->Y(), quit->W(), quit->H());
+                std::vector<MainMenuControlRect> foreground;
+                foreground.reserve(_controlsForeground.Size());
+                for (int i = 0; i < _controlsForeground.Size(); ++i)
+                {
+                    Control* ctrl = _controlsForeground[i];
+                    if (ctrl == nullptr || ctrl == quit || ctrl == mods)
+                        continue;
+                    foreground.push_back({ctrl->X(), ctrl->Y(), ctrl->W(), ctrl->H(), ctrl->IsVisible()});
+                }
+
+                const MainMenuModsPlacement placement = CalculateMainMenuModsPlacement(
+                    {quit->X(), quit->Y(), quit->W(), quit->H(), quit->IsVisible()}, foreground);
+                mods->SetPos(placement.x, placement.y, placement.w, placement.h);
             }
         }
     }
@@ -1306,6 +1310,45 @@ Control* DisplayMods::OnCreateCtrl(int type, int idc, const ParamEntry& cls)
     return Display::OnCreateCtrl(type, idc, cls);
 }
 
+DisplayMods::DisplayMods(ControlsContainer* parent) : Display(parent)
+{
+    _enableSimulation = false;
+    _exitWhenClose = -1;
+    Load("RscDisplayMods");
+
+    if (ControlObjectContainer* notebook = dynamic_cast<ControlObjectContainer*>(GetCtrl(IDC_MODS_NOTEBOOK)))
+    {
+        ParamEntry* sourceCls = Res.FindEntry("RscDisplayMods")
+                                    ? (Res >> "RscDisplayMods" >> "Notebook").FindEntry("ButtonSource")
+                                    : nullptr;
+        if (sourceCls != nullptr && sourceCls->IsClass())
+        {
+            static ParamFile s_masterServerLabelCfg;
+            s_masterServerLabelCfg.Clear();
+            ParamClass* cls = s_masterServerLabelCfg.AddClass("ModsMasterServerAttribution");
+            cls->Add("type", CT_3DSTATIC);
+            cls->Add("idc", IDC_MODS_MASTER_SERVER);
+            cls->Add("style", ST_LEFT);
+            cls->Add("text", RString(""));
+            cls->Add("x", 0.025f);
+            cls->Add("y", 0.925f);
+            cls->Add("w", 0.95f);
+            cls->Add("h", 0.045f);
+            cls->Add("selection", RString("display"));
+            cls->Add("angle", 0.0f);
+            cls->SetBase(sourceCls->GetClassInterface());
+
+            Control* ctrl = notebook->LoadControl(*cls);
+            if (C3DStatic* text = dynamic_cast<C3DStatic*>(ctrl))
+            {
+                text->SetText(FormatNetworkMasterServerAttribution(GetNetworkMasterServer()));
+            }
+        }
+    }
+
+    ApplyInitialSort();
+}
+
 void DisplayMods::SeedTestMods(int count)
 {
     CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST));
@@ -1791,7 +1834,18 @@ void DisplayModDownload::ApplyView()
     else if (s.done)
         _phase = PhaseDone;
 
-    DownloadDialogView v = BuildDownloadDialogView(s, (const char*)_unitNoun);
+    // Hold the localized labels in locals so the view's const char* fields stay valid
+    // for the BuildDownloadDialogView call.
+    RString lblComplete = LocalizeString("STR_DISP_MODS_DL_COMPLETE");
+    RString lblCancelled = LocalizeString("STR_DISP_MODS_DL_CANCELLED");
+    RString lblStarting = LocalizeString("STR_DISP_MODS_DL_STARTING");
+    RString lblFailed = LocalizeString("STR_DISP_MODS_DL_FAILED");
+    DownloadDialogLabels labels;
+    labels.complete = lblComplete;
+    labels.cancelled = lblCancelled;
+    labels.starting = lblStarting;
+    labels.failed = lblFailed;
+    DownloadDialogView v = BuildDownloadDialogView(s, (const char*)_unitNoun, labels);
     SetNotebookText(IDC_MODS_DL_CURRENT_LABEL, v.currentLine.c_str());
     SetNotebookText(IDC_MODS_DL_OVERALL_LABEL, v.overallLine.c_str());
     SetNotebookText(IDC_MODS_DL_STATUS, v.statusLine.c_str());

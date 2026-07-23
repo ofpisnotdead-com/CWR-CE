@@ -2,6 +2,7 @@
 #include <Poseidon/Core/Application.hpp>
 
 #include <Poseidon/World/Entities/Vehicles/Ground/Tank.hpp>
+#include <Poseidon/World/Entities/Vehicles/Ground/TankNetworkStabilization.hpp>
 #include <Poseidon/AI/AI.hpp>
 
 #include <Poseidon/World/Entities/Weapons/Shots.hpp>
@@ -670,15 +671,11 @@ void Tank::StabilizeTurrets(Matrix3Val oldTrans, Matrix3Val newTrans, Matrix3Val
 {
     _mainTurret.Stabilize(this, Type()->_mainTurret, oldTrans, newTrans);
     // stabilize with relation to mainTurret
-    if (Type()->_comTurretOnMainTurret)
-    {
-        Matrix3 newTurretTrans = newTrans * TurretTransform().Orientation();
-        _comTurret.Stabilize(this, Type()->_comTurret, oldTurretTrans, newTurretTrans);
-    }
-    else
-    {
-        _comTurret.Stabilize(this, Type()->_comTurret, oldTrans, newTrans);
-    }
+    Matrix3 newTurretTrans = Poseidon::BuildCommanderTankTurretStabilizationFrame(Type()->_comTurretOnMainTurret,
+                                                                                  newTrans, TurretTransform());
+    const Matrix3& oldComTurretFrame = Poseidon::SelectCommanderTankTurretOldStabilizationFrame(
+        Type()->_comTurretOnMainTurret, oldTrans, oldTurretTrans);
+    _comTurret.Stabilize(this, Type()->_comTurret, oldComTurretFrame, newTurretTrans);
 }
 
 bool Tank::UseSimpleSimulation(SimulationImportance prec) const

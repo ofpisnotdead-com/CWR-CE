@@ -148,7 +148,8 @@ static RStringB* GetNetStrings(int& count)
 static IdStringTable& GetNetIdStrings()
 {
     int count = 0;
-    static IdStringTable NetIdStrings(GetNetStrings(count), count);
+    RStringB* strings = GetNetStrings(count);
+    static IdStringTable NetIdStrings(strings, count);
     return NetIdStrings;
 }
 
@@ -223,7 +224,8 @@ static RStringB* GetNetMoves(int& count)
 static IdStringTable& GetNetIdMoves()
 {
     int count = 0;
-    static IdStringTable NetIdMoves(GetNetMoves(count), count);
+    RStringB* strings = GetNetMoves(count);
+    static IdStringTable NetIdMoves(strings, count);
     return NetIdMoves;
 }
 

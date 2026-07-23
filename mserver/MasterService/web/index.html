@@ -9,14 +9,7 @@
   <body data-page="landing">
     <nav class="top-menu"></nav>
 
-    <section class="landing-hero">
-      <h1 class="title">PAPA BEAR</h1>
-      <div id="landing-service" class="status-line">Loading service summary...</div>
-      <div class="landing-links">
-        <a href="/browser" class="back-link">OPEN VERIFIED SERVERS</a>
-        <a href="/mods" class="back-link">BROWSE MODS</a>
-      </div>
-    </section>
+    <h1 class="title">PAPA BEAR</h1>
 
     <section id="landing-summary" class="landing-summary">
       <article class="detail-panel landing-card">
@@ -58,7 +51,22 @@
     <section class="detail-panel detail-page">
       <div class="detail-header">
         <div class="detail-label">TOP VERIFIED SERVERS</div>
-        <a href="/browser">See full browser</a>
+        <a id="landing-browser-link" href="/browser">See full browser</a>
+      </div>
+      <div class="toolbar">
+        <label class="filter">
+          <span>game</span>
+          <select id="landing-game">
+            <option value="">all games</option>
+          </select>
+        </label>
+        <label class="filter">
+          <span>game + version</span>
+          <select id="landing-version">
+            <option value="">all game versions</option>
+          </select>
+        </label>
+        <span id="landing-browser-status" class="status-line">Loading...</span>
       </div>
       <div class="browser-table-wrap">
         <table id="landing-table">

@@ -2,6 +2,7 @@
 #include <Poseidon/Core/Application.hpp>
 
 #include <Poseidon/World/Entities/Vehicles/Ground/Tank.hpp>
+#include <Poseidon/World/Entities/Vehicles/Ground/TankNetworkStabilization.hpp>
 #include <Poseidon/AI/AI.hpp>
 
 #include <Poseidon/World/Entities/Weapons/Shots.hpp>
@@ -710,9 +711,11 @@ TMError TankWithAI::TransferMsg(NetworkMessageContext& ctx)
             Matrix3 oldTrans = Orientation();
             Matrix3 oldTurretTrans = Orientation() * TurretTransform().Orientation();
             TMCHECK(base::TransferMsg(ctx))
-            if (ctx.IsSending() || !(GunnerUnit() && GunnerUnit()->GetPerson()->IsLocal()))
+            if (Poseidon::ShouldTransferNetworkTankTurretState(ctx.IsSending(),
+                                                               GunnerUnit() && GunnerUnit()->GetPerson()->IsLocal()))
                 TMCHECK(ctx.IdxTransferObject(indices->mainTurret, _mainTurret))
-            if (ctx.IsSending() || !(ObserverUnit() && ObserverUnit()->GetPerson()->IsLocal()))
+            if (Poseidon::ShouldTransferNetworkTankTurretState(
+                    ctx.IsSending(), ObserverUnit() && ObserverUnit()->GetPerson()->IsLocal()))
                 TMCHECK(ctx.IdxTransferObject(indices->comTurret, _comTurret))
             StabilizeTurrets(oldTrans, Orientation(), oldTurretTrans);
 

@@ -1,6 +1,7 @@
 #include <Poseidon/World/Entities/Infantry/SoldierOldCommon.hpp>
 #include <Poseidon/Core/Application.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <limits.h>
 #include <stdio.h>
 #include <cmath>
@@ -477,8 +478,7 @@ void Man::Simulate(float deltaT, SimulationImportance prec)
                 {
                     // calculate landcontact point position
 
-                    int level = GetShape()->FindLandContactLevel();
-                    DoAssert(level >= 0);
+                    PoseidonAssert(GetShape()->FindLandContactLevel() >= 0);
 
                     _waterDepth = 0;
                     GroundCollisionBuffer retVal;
@@ -916,7 +916,12 @@ void Man::SetFace(RString name, RString player)
         Fail("Face");
         name = "Default";
     }
-    _head.SetFace(Type()->_head, IsWoman(), _shape, name, player);
+    RString playerKey = player;
+    if (stricmp(name, "custom") == 0 && IsNetworkPlayer())
+    {
+        playerKey = Poseidon::BuildNetworkPlayerStorageKey(GetRemotePlayer());
+    }
+    _head.SetFace(Type()->_head, IsWoman(), _shape, name, playerKey);
 }
 
 void Man::SetGlasses(RString name)

@@ -331,6 +331,28 @@ inline PackedColor ModAlpha(PackedColor color, float alpha)
     return PackedColorRGB(color, a);
 }
 
+RString ControlLineTextWithoutTrailingBreaks(const RString& text, int from, int to)
+{
+    if (from < 0)
+    {
+        from = 0;
+    }
+    if (to < from)
+    {
+        to = from;
+    }
+    int length = text.GetLength();
+    if (to > length)
+    {
+        to = length;
+    }
+    while (to > from && (text[to - 1] == '\r' || text[to - 1] == '\n'))
+    {
+        to--;
+    }
+    return text.Substring(from, to);
+}
+
 RString CStatic::GetLine(int i) const
 {
     if ((_style & ST_TYPE) != ST_MULTI)
@@ -348,7 +370,7 @@ RString CStatic::GetLine(int i) const
 
     int from = _lines[i];
     int to = i + 1 < NLines() ? _lines[i + 1] : strlen(_text);
-    return _text.Substring(from, to);
+    return ControlLineTextWithoutTrailingBreaks(_text, from, to);
 }
 
 void CStatic::OnDraw(float alpha)
@@ -1650,7 +1672,7 @@ RString CEditContainer::GetLine(int i) const
 
     int from = _lines[i];
     int to = i + 1 < _lines.Size() ? _lines[i + 1] : _text.GetLength();
-    return _text.Substring(from, to);
+    return ControlLineTextWithoutTrailingBreaks(_text, from, to);
 }
 
 void CEditContainer::BlockDelete()

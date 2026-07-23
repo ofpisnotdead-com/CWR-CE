@@ -11,6 +11,8 @@ pub enum VerificationState {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, ToSchema)]
 pub struct RegisterServerRequest {
+    #[serde(rename = "app", default)]
+    pub app_name: String,
     #[serde(rename = "serverId")]
     pub server_id: String,
     pub address: String,
@@ -68,6 +70,8 @@ pub struct RegisterServerRequest {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, ToSchema)]
 pub struct DirectoryServerRecord {
+    #[serde(rename = "app", default)]
+    pub app_name: String,
     #[serde(rename = "serverId")]
     pub server_id: String,
     pub address: String,
@@ -127,6 +131,7 @@ pub struct DirectoryServerRecord {
 impl RegisterServerRequest {
     pub fn into_record(self, now_unix_ms: i64) -> DirectoryServerRecord {
         DirectoryServerRecord {
+            app_name: self.app_name,
             server_id: self.server_id,
             address: self.address,
             hostport: self.hostport,
@@ -170,6 +175,11 @@ impl RegisterServerRequest {
 #[derive(Clone, Debug, Default, Deserialize, IntoParams, PartialEq, Eq, Serialize)]
 #[into_params(parameter_in = Query)]
 pub struct ListServersQuery {
+    #[serde(rename = "app")]
+    pub app_name: Option<String>,
+    pub actver: Option<i32>,
+    #[serde(rename = "vertag")]
+    pub version_tag: Option<String>,
     pub hostname: Option<String>,
     pub gametype: Option<String>,
     pub minplayers: Option<i32>,
@@ -187,9 +197,24 @@ pub struct ListServersQuery {
     pub limit: Option<usize>,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, ToSchema)]
+pub struct ServerVersionGroup {
+    #[serde(rename = "app")]
+    pub app_name: String,
+    pub actver: i32,
+    #[serde(rename = "vertag")]
+    pub version_tag: String,
+    pub servers: usize,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, IntoParams, PartialEq, Eq, Serialize)]
 #[into_params(parameter_in = Query)]
 pub struct ListModsQuery {
+    #[serde(rename = "app")]
+    pub app_name: Option<String>,
+    pub actver: Option<i32>,
+    #[serde(rename = "vertag")]
+    pub version_tag: Option<String>,
     pub q: Option<String>,
     pub limit: Option<usize>,
 }
@@ -244,6 +269,14 @@ pub struct ServiceSummary {
 pub struct ModCatalogEntry {
     #[serde(rename = "modId")]
     pub mod_id: String,
+    #[serde(rename = "app", default, skip_serializing_if = "Option::is_none")]
+    pub app_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actver: Option<i32>,
+    #[serde(rename = "vertag", default, skip_serializing_if = "Option::is_none")]
+    pub version_tag: Option<String>,
+    #[serde(default)]
+    pub compatible: bool,
     pub name: String,
     pub version: String,
     /// Canonical on-disk mod folder name (verbatim, incl. any `@` and case) the client

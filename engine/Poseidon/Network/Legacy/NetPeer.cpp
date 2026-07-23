@@ -1,6 +1,7 @@
 #include <Poseidon/Network/Legacy/netpch.hpp>
 #include <Poseidon/Network/Legacy/NetPeer.hpp>
 #include <Poseidon/Network/Legacy/NetChannel.hpp>
+#include <Poseidon/Network/NetworkConfig.hpp>
 #ifndef _WIN32
 #include <arpa/inet.h>
 #endif
@@ -780,6 +781,11 @@ void NetPeerUDP::reconnect()
     struct sockaddr_in local;
     local.sin_family = AF_INET;
     local.sin_addr.s_addr = INADDR_ANY;
+    RString bindAddress = GetNetworkBindAddress();
+    if (bindAddress.GetLength() > 0 && strcmp((const char*)bindAddress, "0.0.0.0") != 0)
+    {
+        local.sin_addr.s_addr = inet_addr(bindAddress);
+    }
     local.sin_port = htons(port);
     if (bind(sock, (struct sockaddr*)&local, sizeof(local)) == SOCKET_ERROR)
     {

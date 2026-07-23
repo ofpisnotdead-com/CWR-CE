@@ -6,8 +6,8 @@ use sha2::Digest;
 
 use crate::model::{
     DirectoryServerRecord, ListModsQuery, ListServersQuery, ModCatalogEntry, ModUsageServer,
-    RegisterServerRequest, ServerDetail, ServerModReference, ServerPlayer, ServiceMetadata,
-    ServiceSummary,
+    RegisterServerRequest, ServerDetail, ServerModReference, ServerPlayer, ServerVersionGroup,
+    ServiceMetadata, ServiceSummary,
 };
 use crate::mods::{ArtifactStream, ArtifactUpload, ModStore, ModUploadMeta};
 use crate::repository::SqliteServerDirectory;
@@ -72,6 +72,15 @@ impl PapaBearService {
 
     pub async fn list(&self, query: &ListServersQuery) -> Result<Vec<DirectoryServerRecord>> {
         self.directory.list(query, now_unix_millis()).await
+    }
+
+    pub async fn version_groups(
+        &self,
+        query: &ListServersQuery,
+    ) -> Result<Vec<ServerVersionGroup>> {
+        self.directory
+            .version_groups(query, now_unix_millis())
+            .await
     }
 
     pub async fn get(&self, server_id: &str) -> Result<Option<DirectoryServerRecord>> {

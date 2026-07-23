@@ -2,12 +2,15 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <Poseidon/Audio/Voice/MicLoopback.hpp>
+#include <Poseidon/Audio/Voice/PCMCodec.hpp>
 #include <Poseidon/Audio/Voice/VoiceBackend.hpp>
+#include <Poseidon/Audio/Voice/VonApp.hpp>
 #include <Poseidon/Audio/Voice/VonCapture.hpp>
 #include <Poseidon/Audio/Voice/VonSpeaker.hpp>
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -46,6 +49,7 @@ struct TestVoiceBackendState
     int speakerDestroyCalls = 0;
     int speakerFeedCalls = 0;
     int speakerStopCalls = 0;
+    VoNChatChannel speakerChannel = VoNChatChannel::Global;
     std::array<float, 3> speakerPosition{0.0f, 0.0f, 0.0f};
 
     bool loopbackOpen = false;
@@ -151,6 +155,7 @@ class TestVoiceSpeakerBackend : public IVoiceSpeakerBackend
         state.speakerInitialized = false;
     }
 
+    void setChannel(VoNChatChannel channel) override { VoiceState().speakerChannel = channel; }
     void setPosition(float x, float y, float z) override { VoiceState().speakerPosition = {x, y, z}; }
 
     void stopStream() override
@@ -298,6 +303,114 @@ TEST_CASE("VoNCapture returns zero reads when backend open fails", "[VoN][captur
     REQUIRE(cap.lastFramePeak() == 0.0f);
 }
 
+TEST_CASE("VoNClient drains stale capture on every push-to-talk press", "[VoN][capture][unit]")
+{
+    EnsureTestVoiceBackend();
+    ResetVoiceState();
+
+    VoNClient client;
+    client.setCodecFactory([]() { return std::make_unique<PCMCodec>(16000); });
+    client.setSenderId(77);
+
+    std::vector<uint64_t> origins;
+    client.setPacketSink(
+        [&](const std::vector<uint8_t>& packet)
+        {
+            auto* pkt = reinterpret_cast<const VoNDataPacket*>(packet.data());
+            origins.push_back(pkt->origin);
+        });
+
+    REQUIRE(client.openCapture(nullptr, 16000, 16000));
+
+    VoiceState().captureAvailableSamples = 640;
+    client.setTransmit(true);
+    REQUIRE(VoiceState().captureStartCalls == 1);
+    REQUIRE(VoiceState().captureStopCalls == 0);
+    REQUIRE(VoiceState().captureAvailableSamples == 0);
+
+    VoiceState().captureAvailableSamples = 320;
+    client.update();
+    REQUIRE(origins == std::vector<uint64_t>{0});
+
+    // The device keeps capturing while PTT is released; the ring fills with
+    // audio from outside the press.
+    client.setTransmit(false);
+    REQUIRE(VoiceState().captureStopCalls == 0);
+    REQUIRE(VoiceState().captureCapturing);
+    VoiceState().captureAvailableSamples = 640;
+
+    // Next press must discard that backlog — only audio captured after the
+    // press is transmitted, and the origin stays monotonic across bursts.
+    client.setTransmit(true);
+    REQUIRE(VoiceState().captureStartCalls == 1);
+    REQUIRE(VoiceState().captureStopCalls == 0);
+    REQUIRE(VoiceState().captureAvailableSamples == 0);
+
+    VoiceState().captureAvailableSamples = 320;
+    client.update();
+    REQUIRE(origins == std::vector<uint64_t>{0, 320});
+}
+
+TEST_CASE("VoNClient transmit health reflects the sending pipeline", "[VoN][capture][unit]")
+{
+    EnsureTestVoiceBackend();
+    ResetVoiceState();
+
+    VoNClient client;
+    client.setCodecFactory([]() { return std::make_unique<PCMCodec>(16000); });
+
+    REQUIRE(client.transmitHealth() == VoNTransmitHealth::Off);
+
+    SECTION("capture open failure reports NoCapture")
+    {
+        VoiceState().captureOpenReturn = false;
+        REQUIRE_FALSE(client.openCapture(nullptr, 16000, 16000));
+        client.setSenderId(77);
+        client.setPacketSink([](const std::vector<uint8_t>&) {});
+        client.setTransmit(true);
+        REQUIRE(client.transmitHealth() == VoNTransmitHealth::NoCapture);
+    }
+
+    SECTION("missing sender identity reports NotConnected and sends nothing")
+    {
+        REQUIRE(client.openCapture(nullptr, 16000, 16000));
+        int packets = 0;
+        client.setPacketSink([&](const std::vector<uint8_t>&) { ++packets; });
+        client.setTransmit(true);
+        VoiceState().captureAvailableSamples = 640;
+        client.update();
+        REQUIRE(packets == 0);
+        REQUIRE(client.transmitHealth() == VoNTransmitHealth::NotConnected);
+    }
+
+    SECTION("packets flowing is Transmitting; silence past the window is Stalled")
+    {
+        REQUIRE(client.openCapture(nullptr, 16000, 16000));
+        client.setSenderId(77);
+        int packets = 0;
+        client.setPacketSink([&](const std::vector<uint8_t>&) { ++packets; });
+        client.setTransmit(true);
+
+        // Grace right after the press, before the first packet.
+        const auto start = std::chrono::steady_clock::now();
+        REQUIRE(client.transmitHealthAt(start + std::chrono::milliseconds(100)) == VoNTransmitHealth::Transmitting);
+        REQUIRE(client.transmitHealthAt(start + std::chrono::milliseconds(900)) == VoNTransmitHealth::Stalled);
+
+        VoiceState().captureAvailableSamples = 320;
+        client.update();
+        REQUIRE(packets == 1);
+
+        // A packet just left; the capture then goes silent — healthy inside
+        // the stall window, Stalled once it elapses.
+        const auto sent = std::chrono::steady_clock::now();
+        REQUIRE(client.transmitHealthAt(sent + std::chrono::milliseconds(100)) == VoNTransmitHealth::Transmitting);
+        REQUIRE(client.transmitHealthAt(sent + std::chrono::milliseconds(900)) == VoNTransmitHealth::Stalled);
+
+        client.setTransmit(false);
+        REQUIRE(client.transmitHealth() == VoNTransmitHealth::Off);
+    }
+}
+
 TEST_CASE("VoNSpeaker syncs state from backend", "[VoN][speaker][unit]")
 {
     EnsureTestVoiceBackend();
@@ -314,6 +427,9 @@ TEST_CASE("VoNSpeaker syncs state from backend", "[VoN][speaker][unit]")
     REQUIRE(VoiceState().speakerInitCalls == 1);
     REQUIRE(speaker.active);
     REQUIRE(speaker.level == Catch::Approx(0.75f));
+
+    speaker.setChannel(VoNChatChannel::Direct);
+    REQUIRE(VoiceState().speakerChannel == VoNChatChannel::Direct);
 
     speaker.setPosition(1.0f, 2.0f, 3.0f);
     REQUIRE(VoiceState().speakerPosition == std::array<float, 3>{1.0f, 2.0f, 3.0f});

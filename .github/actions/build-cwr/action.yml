@@ -1,0 +1,107 @@
+name: Build CWR
+description: Configure, build and test a CWR/Poseidon CMake preset.
+
+inputs:
+  preset:
+    description: CMake configure preset to build.
+    required: true
+  vcpkg-triplet:
+    description: vcpkg triplet for the binary cache and install dir.
+    required: true
+  build-dir:
+    description: Build directory the preset writes to.
+    required: true
+  ctest-exclude:
+    description: Regex of tests to exclude (ctest -E). Empty runs all.
+    required: false
+    default: ''
+  run-tests:
+    description: Run ctest after the build.
+    required: false
+    default: 'true'
+  use-ccache:
+    description: Enable the ccache compiler launcher and cache.
+    required: false
+    default: 'true'
+  use-vcpkg-binary-cache:
+    description: Restore and save the per-triplet vcpkg binary cache.
+    required: false
+    default: 'true'
+  extra-cmake-args:
+    description: Extra arguments for the configure command.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Install Linux system packages
+      if: runner.os == 'Linux'
+      uses: ./.github/actions/setup-linux-deps
+
+    - name: Setup LLVM and Clang
+      if: runner.os == 'Windows'
+      uses: KyleMayes/install-llvm-action@v2
+      with:
+        version: '19'
+        arch: 'x64'
+        directory: 'C:\Program Files\LLVM'
+
+    - name: Setup compiler cache
+      if: inputs.use-ccache == 'true'
+      uses: hendrikmuhs/ccache-action@v1.2.23
+      with:
+        variant: ccache
+        key: ${{ runner.os }}-${{ inputs.preset }}-pch
+        max-size: 1G
+
+    - name: Setup CMake and Ninja
+      uses: lukka/get-cmake@latest
+
+    - name: Restore vcpkg binary cache
+      if: inputs.use-vcpkg-binary-cache == 'true'
+      uses: actions/cache@v4
+      with:
+        path: .vcpkg-bincache/${{ inputs.vcpkg-triplet }}
+        key: vcpkg-${{ runner.os }}-${{ inputs.vcpkg-triplet }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/vcpkg-triplets/**', 'cmake/vcpkg-overlay-ports/**') }}
+        restore-keys: |
+          vcpkg-${{ runner.os }}-${{ inputs.vcpkg-triplet }}-
+
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11
+      env:
+        VCPKG_BINARY_SOURCES: ${{ inputs.use-vcpkg-binary-cache == 'true' && format('clear;files,{0}/.vcpkg-bincache/{1},readwrite', github.workspace, inputs.vcpkg-triplet) || 'clear;default,readwrite' }}
+        VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-bincache/${{ inputs.vcpkg-triplet }}
+        VCPKG_DEFAULT_TRIPLET: ${{ inputs.vcpkg-triplet }}
+        VCPKG_INSTALLED_DIR: ${{ github.workspace }}/${{ inputs.build-dir }}/vcpkg_installed
+        VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/cmake/vcpkg-overlay-ports
+        VCPKG_OVERLAY_TRIPLETS: ${{ github.workspace }}/cmake/vcpkg-triplets
+      with:
+        runVcpkgInstall: true
+        vcpkgJsonGlob: 'vcpkg.json'
+
+    - name: Configure
+      shell: bash
+      run: >
+        cmake
+        --preset ${{ inputs.preset }}
+        -DCMAKE_C_COMPILER_LAUNCHER=${{ inputs.use-ccache == 'true' && 'ccache' || '' }}
+        -DCMAKE_CXX_COMPILER_LAUNCHER=${{ inputs.use-ccache == 'true' && 'ccache' || '' }}
+        ${{ inputs.extra-cmake-args }}
+
+    - name: Build
+      shell: bash
+      run: cmake --build ${{ inputs.build-dir }} --parallel 2
+
+    - name: Test
+      if: inputs.run-tests == 'true'
+      shell: pwsh
+      env:
+        CTEST_EXCLUDE: ${{ inputs.ctest-exclude }}
+        ALSOFT_DRIVERS: "null"
+      run: |
+        if ("$env:CTEST_EXCLUDE") {
+          ctest --test-dir '${{ inputs.build-dir }}' --output-on-failure -E "$env:CTEST_EXCLUDE"
+        } else {
+          ctest --test-dir '${{ inputs.build-dir }}' --output-on-failure
+        }

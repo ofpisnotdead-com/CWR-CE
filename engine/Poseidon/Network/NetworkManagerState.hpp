@@ -22,4 +22,25 @@ inline NetworkGameState ResolveNetworkManagerServerState(bool simulateMode, bool
     return NGSNone;
 }
 
+inline NetworkGameState ResolveMultiplayerSetupDisplayState(bool isServer, NetworkGameState serverState,
+                                                            NetworkGameState clientState)
+{
+    if (isServer)
+    {
+        return serverState;
+    }
+
+    if (clientState == NGSTransferMission && serverState >= NGSTransferMission && serverState < NGSBriefing)
+    {
+        return clientState;
+    }
+
+    if (serverState < NGSBriefing && clientState >= NGSBriefing)
+    {
+        return clientState;
+    }
+
+    return serverState;
+}
+
 } // namespace Poseidon

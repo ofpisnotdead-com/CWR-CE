@@ -47,6 +47,9 @@ const MOD_ARTIFACT_EXT: &str = "pbo.zst";
 /// Inputs for publishing a packed mod to the workshop.
 pub struct PublishModInput {
     pub name: String,
+    pub app_name: Option<String>,
+    pub actver: Option<i32>,
+    pub version_tag: Option<String>,
     pub version: Option<String>,
     pub description: Option<String>,
     pub authors: Vec<String>,
@@ -60,6 +63,9 @@ pub struct PublishModInput {
 #[derive(Default)]
 pub struct ModUploadMeta {
     pub name: String,
+    pub app_name: Option<String>,
+    pub actver: Option<i32>,
+    pub version_tag: Option<String>,
     pub version: Option<String>,
     pub folder_name: Option<String>,
     pub description: Option<String>,
@@ -210,6 +216,10 @@ impl ModStore {
 
         let entry = ModCatalogEntry {
             mod_id: mod_id.clone(),
+            app_name: input.app_name.clone(),
+            actver: input.actver,
+            version_tag: input.version_tag.clone(),
+            compatible: false,
             name: input.name.clone(),
             version,
             folder_name: None,
@@ -322,6 +332,10 @@ impl ModStore {
 
         let entry = ModCatalogEntry {
             mod_id: mod_id.clone(),
+            app_name: meta.app_name,
+            actver: meta.actver,
+            version_tag: meta.version_tag,
+            compatible: false,
             name: meta.name,
             version,
             folder_name: meta
@@ -573,7 +587,14 @@ fn hex(bytes: &[u8]) -> String {
 fn apply_mod_filters(mods: &mut Vec<ModCatalogEntry>, query: &ListModsQuery) {
     let text_filter = query.q.as_ref().map(|value| value.to_lowercase());
 
-    mods.retain(|entry| {
+    mods.retain_mut(|entry| {
+        entry.compatible = is_mod_compatible(entry, query);
+        if (query.app_name.is_some() || query.actver.is_some() || query.version_tag.is_some())
+            && !entry.compatible
+        {
+            return false;
+        }
+
         if let Some(filter) = &text_filter {
             let haystacks = [
                 entry.mod_id.to_lowercase(),
@@ -591,6 +612,35 @@ fn apply_mod_filters(mods: &mut Vec<ModCatalogEntry>, query: &ListModsQuery) {
     if let Some(limit) = query.limit {
         mods.truncate(limit);
     }
+}
+
+fn is_mod_compatible(entry: &ModCatalogEntry, query: &ListModsQuery) -> bool {
+    if let Some(app_name) = query.app_name.as_deref() {
+        if entry.app_name.as_deref() != Some(app_name) {
+            return false;
+        }
+    }
+    if let Some(actver) = query.actver {
+        if entry.actver != Some(actver) {
+            return false;
+        }
+    }
+    if let Some(version_tag) = query
+        .version_tag
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        if let Some(entry_tag) = entry
+            .version_tag
+            .as_deref()
+            .filter(|value| !value.is_empty())
+        {
+            if entry_tag != version_tag {
+                return false;
+            }
+        }
+    }
+    query.app_name.is_some() || query.actver.is_some() || query.version_tag.is_some()
 }
 
 #[cfg(test)]
@@ -638,6 +688,9 @@ mod tests {
         let entry = store
             .publish_mod(&super::PublishModInput {
                 name: "Synthetic Core Pack".to_string(),
+                app_name: Some("CWR".to_string()),
+                actver: Some(302),
+                version_tag: Some("rc1".to_string()),
                 version: Some("1.0".to_string()),
                 description: Some("demo".to_string()),
                 authors: vec!["bis".to_string()],
@@ -647,6 +700,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(entry.mod_id, "synthetic-core-pack-1.0");
+        assert_eq!(entry.app_name.as_deref(), Some("CWR"));
+        assert_eq!(entry.actver, Some(302));
+        assert_eq!(entry.version_tag.as_deref(), Some("rc1"));
 
         let fetched = store
             .get_mod("synthetic-core-pack-1.0")
@@ -726,6 +782,9 @@ mod tests {
         store
             .publish_mod(&super::PublishModInput {
                 name: "Temp Mod".to_string(),
+                app_name: None,
+                actver: None,
+                version_tag: None,
                 version: Some("1.0".to_string()),
                 description: None,
                 authors: Vec::new(),

@@ -1,0 +1,43 @@
+name: Download and extract
+description: Download an archive and extract it to a destination path.
+
+inputs:
+  url:
+    description: URL to download.
+    required: true
+  path:
+    description: Destination directory for extracted files.
+    required: true
+  archive-name:
+    description: Temporary archive file name.
+    required: false
+    default: download.zip
+
+runs:
+  using: composite
+  steps:
+    - name: Download and extract archive
+      shell: bash
+      env:
+        DOWNLOAD_URL: ${{ inputs.url }}
+        DESTINATION_PATH: ${{ inputs.path }}
+        ARCHIVE_NAME: ${{ inputs.archive-name }}
+      run: |
+        set -euo pipefail
+
+        archive_path="$RUNNER_TEMP/$ARCHIVE_NAME"
+        extract_path="$RUNNER_TEMP/extract-$ARCHIVE_NAME"
+
+        rm -rf "$DESTINATION_PATH" "$extract_path"
+        mkdir -p "$DESTINATION_PATH" "$extract_path"
+
+        curl -fsSL "$DOWNLOAD_URL" -o "$archive_path"
+        unzip -q "$archive_path" -d "$extract_path"
+
+        shopt -s dotglob nullglob
+        entries=("$extract_path"/*)
+        if [ "${#entries[@]}" -eq 1 ] && [ -d "${entries[0]}" ]; then
+          mv "${entries[0]}"/* "$DESTINATION_PATH"/
+        else
+          mv "$extract_path"/* "$DESTINATION_PATH"/
+        fi

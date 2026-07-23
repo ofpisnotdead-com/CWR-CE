@@ -13,8 +13,7 @@ const UserAction kOnFoot[] = {
     // Movement
     UAMoveForward, UAMoveBack, UATurnLeft, UATurnRight, UAMoveLeft, UAMoveRight, UAMoveUp, UAMoveDown,
     UAMoveFastForward, UAMoveSlowForward, UATurbo,
-    // Walk lives in UserActionDesc as a hard-coded entry — UAN-1 is
-    // out of range for a generic enum, so we look it up by name later.
+    UASlow, // "Walk" — the slow-movement toggle (label/default key live in UserActionDesc)
     // Weapons & combat
     UAFire, UAReloadMagazine, UAToggleWeapons, UAHandgun, UALockTarget, UALockTargets, UARevealTarget, UAOptics,
     UAZoomIn, UAZoomOut,
@@ -46,24 +45,10 @@ const UserAction kGunner[] = {
     UALookAround, UALookAroundToggle, UALookCenter,    UALookLeft,     UALookRight,     UALookUp,
     UALookDown,   UALookLeftUp,       UALookRightUp,   UALookLeftDown, UALookRightDown, UAN};
 
-const UserAction kCommon[] = {UAPrevAction,
-                              UANextAction,
-                              UAPersonView,
-                              UATacticalView,
-                              UAMap,
-                              UACompass,
-                              UAWatch,
-                              UAHelp,
-                              UATimeInc,
-                              UATimeDec,
-                              UASelectAll,
-                              UAChat,
-                              UAVoiceOverNet,
-                              UAPrevChannel,
-                              UANextChannel,
-                              UANetworkStats,
-                              UANetworkPlayers,
-                              UAN};
+const UserAction kCommon[] = {
+    UAPrevAction,  UANextAction,  UAPersonView,   UATacticalView,   UAMap,  UACompass,      UAWatch,
+    UAHelp,        UATimeInc,     UATimeDec,      UASelectAll,      UAChat, UAVoiceOverNet, UAVoiceOverNetPushToTalk,
+    UAPrevChannel, UANextChannel, UANetworkStats, UANetworkPlayers, UAN};
 
 const UserAction* const kCategoryTable[ControlsCategoryCount] = {
     kOnFoot, kVehicles, kPilot, kGunner, kCommon,

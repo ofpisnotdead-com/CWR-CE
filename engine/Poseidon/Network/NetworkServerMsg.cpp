@@ -6,11 +6,13 @@
 #include <Poseidon/Foundation/Logging/Logging.hpp>
 #include <Poseidon/Core/Config/Config.hpp>
 #include <Poseidon/Network/NetworkImpl.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <Poseidon/Core/Global.hpp>
 // #include "strIncl.hpp"
 #include <Poseidon/UI/Locale/StringtableExt.hpp>
 
 #include <Poseidon/Network/NetworkConfig.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <limits.h>
 #include <stdio.h>
 #include <Poseidon/Foundation/Common/FltOpts.hpp>
@@ -234,8 +236,11 @@ void NetworkServer::OnCreatePlayer(int player, bool botClient, const char* name)
         return;
     }
 
-    // Check if player is joining mid-game (JIP)
-    bool isJip = _state >= NGSPlay && _missionHeader.joinInProgress;
+    // Check if player is joining mid-game (JIP). Transfer/load/briefing count as
+    // mid-game: the lobby role broadcast is over, so a player created here only
+    // receives the mission and role data through the JIP bootstrap — without it the
+    // client waits forever in the setup screen with an empty role list.
+    bool isJip = _state >= NGSTransferMission && _missionHeader.joinInProgress;
 
     if (botClient)
     {
@@ -422,10 +427,7 @@ void NetworkServer::GetPlayersOnChannel(AutoArray<int, MemAllocSA>& players, int
                     }
                     if (voice)
                     {
-                        if (info->dvid != 0)
-                        {
-                            players.Add(info->dvid);
-                        }
+                        players.Add(Poseidon::SelectNetworkVoiceTargetPlayerId(info->dpid, info->dvid));
                     }
                     else
                     {
@@ -475,10 +477,7 @@ void NetworkServer::GetPlayersOnChannel(AutoArray<int, MemAllocSA>& players, int
                     }
                     if (voice)
                     {
-                        if (info->dvid != 0)
-                        {
-                            players.Add(info->dvid);
-                        }
+                        players.Add(Poseidon::SelectNetworkVoiceTargetPlayerId(info->dpid, info->dvid));
                     }
                     else
                     {
@@ -530,10 +529,7 @@ void NetworkServer::GetPlayersOnChannel(AutoArray<int, MemAllocSA>& players, int
                     }
                     if (voice)
                     {
-                        if (info->dvid != 0)
-                        {
-                            players.Add(info->dvid);
-                        }
+                        players.Add(Poseidon::SelectNetworkVoiceTargetPlayerId(info->dpid, info->dvid));
                     }
                     else
                     {
@@ -575,13 +571,14 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
         RString src, dst;
         if (squad->picture.GetLength() > 0)
         {
-            src = GetServerTmpDir() + RString("/squads/") + squad->nick + RString("/") + squad->picture;
+            src = Poseidon::BuildNetworkServerSquadPictureUploadPath(GetServerTmpDir(), squad->nick, squad->picture);
             if (QIFStream::FileExists(src))
             {
-                dst = RString("tmp/squads/") + squad->nick + RString("/") + squad->picture;
+                dst = Poseidon::BuildNetworkSquadPictureTmpPath(squad->nick, squad->picture);
             }
             else
             {
+                LOG_WARN(Network, "[squad] logo missing for transfer '{}'", (const char*)src);
                 src = "";
             }
         }
@@ -619,17 +616,16 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
         SquadIdentity* squad = _squads[i];
         if (squad->picture.GetLength() > 0)
         {
-            RString src = GetServerTmpDir() + RString("/squads/") + squad->nick + RString("/") + squad->picture;
+            RString src =
+                Poseidon::BuildNetworkServerSquadPictureUploadPath(GetServerTmpDir(), squad->nick, squad->picture);
             if (QIFStream::FileExists(src))
             {
-                RString dst = RString("tmp/squads/") + squad->nick + RString("/") + squad->picture;
+                RString dst = Poseidon::BuildNetworkSquadPictureTmpPath(squad->nick, squad->picture);
                 TransferFile(identity.dpnid, dst, src);
             }
         }
         SendMsg(identity.dpnid, squad, NMFGuaranteed);
     }
-
-    bool hasCustomFace = stricmp(identity.face, "custom") == 0;
 
     for (int i = 0; i < _identities.Size(); i++)
     {
@@ -639,20 +635,14 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
             // send all faces and sounds to new player
             //						if (notBotClient)
             {
-                if (stricmp(player.face, "custom") == 0)
-                {
-                    TransferFace(identity.dpnid, player.name);
-                }
-                TransferCustomRadio(identity.dpnid, player.name);
+                TransferFace(identity.dpnid, player.dpnid);
+                TransferCustomRadio(identity.dpnid, player.dpnid);
             }
             // send new face and sound to all players
             //						if (!client || client->GetPlayer() != player.dpnid)
             {
-                if (hasCustomFace)
-                {
-                    TransferFace(player.dpnid, identity.name);
-                }
-                TransferCustomRadio(player.dpnid, identity.name);
+                TransferFace(player.dpnid, identity.dpnid);
+                TransferCustomRadio(player.dpnid, identity.dpnid);
             }
             // send all identities to new player
             NetworkPlayerInfo* pInfo = GetPlayerInfo(player.dpnid);
@@ -758,18 +748,8 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
         // temporary: enable 1.47 server checking config of 146 client
         if (ver != MP_VERSION_ACTUAL && (ver != 146 || MP_VERSION_ACTUAL < 147 || MP_VERSION_ACTUAL > 149))
         {
-            // never check
+            _server->KickOff(info->dpid, NTRVersion);
             info->integrityCheckNext = UINT_MAX;
-            char buf[256];
-            if (ver)
-            {
-                snprintf(buf, sizeof(buf), "%d.%02d", ver / 100, ver % 100);
-            }
-            else
-            {
-                snprintf(buf, sizeof(buf), "%s", (const char*)"1.40..1.42");
-            }
-            OnIntegrityCheckFailed(info->dpid, IQTConfig, buf, true);
         }
         else
         {
@@ -798,16 +778,15 @@ void NetworkServer::SetPlayerState(int dpid, NetworkGameState state)
     }
 }
 
-static bool CheckValidUpload(RString path, RString name)
+static bool CheckValidUpload(RString path, int player)
 {
-    RString prefixShouldBe = GetServerTmpDir() + RString("/players/") + name + RString("/");
-    return !strnicmp(path, prefixShouldBe, prefixShouldBe.GetLength());
+    return Poseidon::IsSafeNetworkServerPlayerUploadPath(path, GetServerTmpDir(), player);
 }
 
-static RString GetRelUploadPath(RString path, RString name)
+static RString GetRelUploadPath(RString path, int player)
 {
-    RString prefixShouldBe = GetServerTmpDir() + RString("/players/") + name + RString("/");
-    if (strnicmp(path, prefixShouldBe, prefixShouldBe.GetLength()))
+    RString prefixShouldBe = Poseidon::BuildNetworkServerPlayerUploadDir(GetServerTmpDir(), player);
+    if (prefixShouldBe.GetLength() == 0 || strnicmp(path, prefixShouldBe, prefixShouldBe.GetLength()))
     {
         return path;
     }

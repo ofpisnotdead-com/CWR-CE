@@ -423,6 +423,50 @@ TEST_CASE("InputSubsystem lookAround defaults to off", "[input][integration]")
     REQUIRE_FALSE(sub.IsLookAroundToggled());
 }
 
+TEST_CASE("InputSubsystem clears pending look delta when held freelook is released", "[input][integration]")
+{
+    auto& sub = InputSubsystem::Instance();
+    ProfileSnapshot infantrySnap(sub, InputContext::Infantry);
+    InputContext savedContext = sub.GetContext();
+    float savedAlt = GInput.keyboard.keys[SDL_SCANCODE_LALT];
+    float savedAimX = GInput.cursor.aimDeltaX;
+    float savedAimY = GInput.cursor.aimDeltaY;
+    float savedAimZ = GInput.cursor.aimDeltaZ;
+
+    auto& infantry = sub.GetProfile(InputContext::Infantry);
+    infantry.ClearBindings(UALookAround);
+    infantry.Bind(UALookAround, InputCode::Key(SDL_SCANCODE_LALT));
+    sub.SetContext(InputContext::Infantry);
+    sub.ResetLookAroundToggle();
+
+    GInput.keyboard.keys[SDL_SCANCODE_LALT] = 0.0f;
+    sub.Update();
+    REQUIRE_FALSE(sub.IsLookAroundEnabled());
+
+    GInput.keyboard.keys[SDL_SCANCODE_LALT] = 1.0f;
+    sub.Update();
+    REQUIRE(sub.IsLookAroundEnabled());
+
+    GInput.cursor.aimDeltaX = 0.25f;
+    GInput.cursor.aimDeltaY = -0.125f;
+    GInput.cursor.aimDeltaZ = 0.5f;
+
+    GInput.keyboard.keys[SDL_SCANCODE_LALT] = 0.0f;
+    sub.Update();
+
+    REQUIRE_FALSE(sub.IsLookAroundEnabled());
+    REQUIRE(sub.FreelookChanged());
+    CHECK(sub.ConsumeCursorDeltaX() == 0.0f);
+    CHECK(sub.ConsumeCursorDeltaY() == 0.0f);
+    CHECK(sub.ConsumeCursorScroll() == 0.0f);
+
+    GInput.keyboard.keys[SDL_SCANCODE_LALT] = savedAlt;
+    GInput.cursor.aimDeltaX = savedAimX;
+    GInput.cursor.aimDeltaY = savedAimY;
+    GInput.cursor.aimDeltaZ = savedAimZ;
+    sub.SetContext(savedContext);
+}
+
 // --- Joystick/activity/focus/fire/cursor tests (Phase 2H API) ---
 
 TEST_CASE("InputSubsystem joystick axes return zero on zeroed GInput", "[input][integration]")
@@ -481,6 +525,12 @@ TEST_CASE("InputSubsystem config settings round-trip", "[input][integration]")
     REQUIRE(sub.IsJoystickEnabled() == !origJoy);
     sub.ToggleJoystickEnabled();
     REQUIRE(sub.IsJoystickEnabled() == origJoy);
+
+    bool origRevJoy = sub.IsReverseJoystick();
+    sub.SetReverseJoystick(!origRevJoy);
+    REQUIRE(sub.IsReverseJoystick() == !origRevJoy);
+    sub.ToggleReverseJoystick();
+    REQUIRE(sub.IsReverseJoystick() == origRevJoy);
 
     bool origButtons = sub.IsMouseButtonsReversed();
     sub.SetMouseButtonsReversed(!origButtons);

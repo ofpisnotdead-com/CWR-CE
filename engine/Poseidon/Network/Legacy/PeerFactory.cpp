@@ -14,6 +14,8 @@
 #include <Poseidon/Foundation/Common/NetGlobal.hpp>
 #include <Poseidon/Foundation/Framework/DebugLog.hpp>
 #include <Poseidon/Foundation/Threads/PoCritical.hpp>
+#include <Poseidon/Network/NetworkConfig.hpp>
+#include <string.h>
 
 int PeerChannelFactoryUDP::instances = 0;
 
@@ -198,6 +200,19 @@ NetPeer* PeerChannelFactoryUDP::createPeer(NetPool* pool, BitMask* tryPorts)
     struct sockaddr_in local;
     local.sin_family = AF_INET;
     local.sin_addr.s_addr = INADDR_ANY;
+    RString bindAddress = GetNetworkBindAddress();
+    if (bindAddress.GetLength() > 0 && strcmp((const char*)bindAddress, "0.0.0.0") != 0)
+    {
+        local.sin_addr.s_addr = inet_addr(bindAddress);
+        if (local.sin_addr.s_addr == INADDR_NONE)
+        {
+            closesocket(s);
+#ifdef NET_LOG_CREATE_PEER
+            NetLog("PeerChannelFactoryUDP::createPeer: invalid bind address '%s'", (const char*)bindAddress);
+#endif
+            return nullptr;
+        }
+    }
     do
     { // try one port number
         local.sin_port = htons(port);

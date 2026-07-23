@@ -129,6 +129,16 @@ TEST_CASE("JPG: GetMipmapData decodes to ARGB1555", "[Graphics][JPG]")
         REQUIRE((pix & 0x8000) != 0);
 }
 
+TEST_CASE("JPG: source metadata is opaque for custom faces", "[Graphics][JPG][CustomFace]")
+{
+    TextureSourceJPEG src;
+    PacLevelMem mips[kMaxMips];
+    REQUIRE(src.Init(GET_FIXTURE("jpg/checker_32x32.jpg"), mips, kMaxMips));
+
+    REQUIRE_FALSE(src.IsAlpha());
+    REQUIRE_FALSE(src.IsTransparent());
+}
+
 TEST_CASE("JPG: GetMipmapData decodes to ARGB8888", "[Graphics][JPG]")
 {
     TextureSourceJPEG src;

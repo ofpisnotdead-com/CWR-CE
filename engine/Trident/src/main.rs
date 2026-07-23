@@ -83,6 +83,15 @@ enum Commands {
         #[arg(long, default_value = "3")]
         retries: usize,
 
+        /// Run only shard I of N (1-based), e.g. --shard 1/4. Scenarios are
+        /// balanced across shards by declared timeout so slow tests spread evenly.
+        #[arg(long, value_name = "I/N")]
+        shard: Option<String>,
+
+        /// Print the selected test names (after tag/shard filtering) and exit.
+        #[arg(long)]
+        list: bool,
+
         /// Output directory for screenshots and artifacts (default: tmp/tri/<timestamp>)
         #[arg(long, env = "TRI_OUTPUT_DIR")]
         output_dir: Option<String>,
@@ -174,6 +183,34 @@ enum Commands {
     },
 }
 
+// Resolves when the process is asked to terminate (Ctrl-C anywhere; SIGTERM on
+// Unix). Wrapping a game-spawning run in `select!` against this lets the command
+// return early: the tokio runtime then shuts down, drops every in-flight
+// GameInstance, and `kill_on_drop` reaps the game processes instead of orphaning
+// them. Cross-platform — no process-group / signal machinery.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            }
+            Err(_) => std::future::pending::<()>().await,
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        () = ctrl_c => {}
+        () = terminate => {}
+    }
+}
+
 #[tokio::main]
 #[allow(clippy::too_many_lines)]
 async fn main() -> anyhow::Result<()> {
@@ -212,6 +249,8 @@ async fn main() -> anyhow::Result<()> {
             data_dir,
             jobs,
             retries,
+            shard,
+            list,
             output_dir,
             render,
             game_args,
@@ -221,11 +260,22 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("Output: {}", out_dir.display());
 
             let path_refs: Vec<&str> = paths.iter().map(String::as_str).collect();
-            let tests = scenarios::integration::filter_tests_by_tags(
+            let mut tests = scenarios::integration::filter_tests_by_tags(
                 scenarios::integration::resolve_tests(&path_refs)?,
                 &tags,
                 &skip_tags,
             );
+            if let Some(spec) = shard.as_deref() {
+                let (index, total) = scenarios::integration::parse_shard(spec)?;
+                tests = scenarios::integration::select_shard(tests, index, total);
+                println!("  \x1b[36mshard {index}/{total}\x1b[0m");
+            }
+            if list {
+                for test in &tests {
+                    println!("{}", test.name);
+                }
+                return Ok(());
+            }
             if tests.is_empty() {
                 if tags.is_empty() {
                     println!("No tests found");
@@ -240,17 +290,21 @@ async fn main() -> anyhow::Result<()> {
                 tests.len()
             );
 
-            let results = scenarios::integration::run_all(
-                &tests,
-                &game_dir,
-                data_dir.as_deref(),
-                jobs,
-                retries,
-                &out_dir,
-                render.as_deref(),
-                &game_args,
-            )
-            .await?;
+            let results = tokio::select! {
+                result = scenarios::integration::run_all(
+                    &tests,
+                    &game_dir,
+                    data_dir.as_deref(),
+                    jobs,
+                    retries,
+                    &out_dir,
+                    render.as_deref(),
+                    &game_args,
+                ) => result?,
+                () = shutdown_signal() => {
+                    anyhow::bail!("interrupted (SIGINT/SIGTERM) — shutting down and killing games");
+                }
+            };
 
             if let Some(n) = profile {
                 scenarios::integration::print_profile(&results, n);
@@ -281,15 +335,19 @@ async fn main() -> anyhow::Result<()> {
                 );
             }
 
-            let result = scenarios::stress::run_stress_scenario(
-                &scenario_dir,
-                &game_dir,
-                data_dir.as_deref(),
-                &out_dir,
-                render.as_deref(),
-                &game_args,
-            )
-            .await?;
+            let result = tokio::select! {
+                result = scenarios::stress::run_stress_scenario(
+                    &scenario_dir,
+                    &game_dir,
+                    data_dir.as_deref(),
+                    &out_dir,
+                    render.as_deref(),
+                    &game_args,
+                ) => result?,
+                () = shutdown_signal() => {
+                    anyhow::bail!("interrupted (SIGINT/SIGTERM) — shutting down and killing games");
+                }
+            };
 
             println!("{}", result.message);
             if !result.passed {

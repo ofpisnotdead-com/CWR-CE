@@ -24,6 +24,7 @@ imgui.ini
 # Local game data and fixtures
 /assets/
 /packages/
+/packages
 /tests/integration/missions/*/sound/
 !/tests/integration/missions/sound_preload.Demo/sound/
 !/tests/integration/missions/sound_preload.Demo/sound/say.wav

@@ -1,8 +1,9 @@
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use axum::body::Body;
-use axum::extract::{DefaultBodyLimit, Multipart, Path, Query, State};
+use axum::extract::{ConnectInfo, DefaultBodyLimit, Multipart, Path, Query, State};
 use axum::http::header::{CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_TYPE, LOCATION};
 use axum::http::HeaderMap;
 use axum::http::StatusCode;
@@ -15,7 +16,7 @@ use crate::model::{
     DirectoryServerRecord, ListModsQuery, ListServersQuery, ModCatalogEntry, ModUsageServer,
     ObserveServerRequest, PruneServersRequest, PruneServersResponse, RegisterServerRequest,
     ServerDetail, ServerModReference, ServerPlayer, ServerPopulationSample, ServerRecentSession,
-    ServiceMetadata, ServiceSummary,
+    ServerVersionGroup, ServiceMetadata, ServiceSummary,
 };
 use crate::mods::ModUploadMeta;
 use crate::repository::SqliteServerDirectory;
@@ -48,6 +49,7 @@ fn max_mod_upload_bytes() -> usize {
     ),
     paths(
         list_servers,
+        list_server_versions,
         get_server,
         list_mods,
         get_mod,
@@ -65,6 +67,7 @@ fn max_mod_upload_bytes() -> usize {
     components(schemas(
         RegisterServerRequest,
         DirectoryServerRecord,
+        ServerVersionGroup,
         ObserveServerRequest,
         ServerDetail,
         ServerModReference,
@@ -86,7 +89,7 @@ struct AppState {
     service: Arc<PapaBearService>,
     admin_api_key: Option<Arc<str>>,
     /// Trusted header carrying the real client IP (e.g. `X-Forwarded-For` behind an ingress).
-    /// When set, register/heartbeat bind the server's address+id to it instead of the body.
+    /// When set, public entries bind the server's address+id to it instead of the body.
     client_ip_header: Option<Arc<str>>,
     /// When true, heartbeat/unregister of an active row require the matching server token.
     /// A token is always issued on register regardless, so this can be flipped on once
@@ -165,6 +168,7 @@ fn build_router_for_service(
         .route("/assets/site.css", get(site_css))
         .route("/assets/papa-bear.js", get(site_javascript))
         .route("/v1/servers", get(list_servers))
+        .route("/v1/servers/versions", get(list_server_versions))
         .route(
             "/v1/mods",
             get(list_mods)
@@ -205,12 +209,11 @@ fn build_router_for_service(
 async fn register_server(
     State(state): State<AppState>,
     headers: HeaderMap,
+    connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(mut request): Json<RegisterServerRequest>,
 ) -> Result<Json<DirectoryServerRecord>, (StatusCode, String)> {
-    // Bind the server's identity to the connection's real IP (anti-spoof): a publisher can
-    // only register/heartbeat for its own address. No trusted header -> trust the body
-    // (local/direct use). hostport stays claimed but is verified by the prober.
-    if let Some(ip) = client_ip(&state, &headers) {
+    if let Some(ip) = publish_client_ip(&state, &headers, connect_info.as_ref().map(|info| info.0))
+    {
         request.server_id = format!("{ip}:{}", request.hostport);
         request.address = ip;
     }
@@ -282,6 +285,29 @@ async fn list_servers(
     let records = state
         .service
         .list(&query)
+        .await
+        .map_err(|error| internal_error(&error))?;
+    Ok(Json(records))
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/servers/versions",
+    params(ListServersQuery),
+    responses(
+        (status = 200, description = "Live server app/version groups", body = [ServerVersionGroup])
+    )
+)]
+async fn list_server_versions(
+    State(state): State<AppState>,
+    Query(mut query): Query<ListServersQuery>,
+) -> Result<Json<Vec<ServerVersionGroup>>, (StatusCode, String)> {
+    query.app_name = None;
+    query.actver = None;
+    query.version_tag = None;
+    let records = state
+        .service
+        .version_groups(&query)
         .await
         .map_err(|error| internal_error(&error))?;
     Ok(Json(records))
@@ -428,8 +454,9 @@ async fn list_mod_servers(
 }
 
 /// Publish a packed mod to the workshop. Admin-gated (`x-api-key`); accepts a
-/// `multipart/form-data` body with a `name` field, an optional `version`/`description`/
-/// `homepageUrl`, repeated `author` fields, and the PBO as the `file` field.
+/// `multipart/form-data` body with a `name` field, optional `app`/`actver`/`vertag`,
+/// optional `version`/`description`/`homepageUrl`, repeated `author` fields, and the PBO
+/// as the `file` field.
 async fn publish_mod(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -456,6 +483,9 @@ async fn publish_mod(
     };
 
     let mut name: Option<String> = None;
+    let mut app_name: Option<String> = None;
+    let mut actver: Option<String> = None;
+    let mut version_tag: Option<String> = None;
     let mut version: Option<String> = None;
     let mut folder_name: Option<String> = None;
     let mut description: Option<String> = None;
@@ -471,6 +501,9 @@ async fn publish_mod(
         let field_name = field.name().map(str::to_string);
         match field_name.as_deref() {
             Some("name") => name = Some(read_text_field(field).await?),
+            Some("app") => app_name = Some(read_text_field(field).await?),
+            Some("actver") => actver = Some(read_text_field(field).await?),
+            Some("vertag") => version_tag = Some(read_text_field(field).await?),
             Some("version") => version = Some(read_text_field(field).await?),
             Some("folderName") => folder_name = Some(read_text_field(field).await?),
             Some("description") => description = Some(read_text_field(field).await?),
@@ -514,6 +547,9 @@ async fn publish_mod(
             upload,
             ModUploadMeta {
                 name: name.unwrap(),
+                app_name: app_name.filter(|value| !value.trim().is_empty()),
+                actver: actver.and_then(|value| value.trim().parse().ok()),
+                version_tag: version_tag.filter(|value| !value.trim().is_empty()),
                 version: version.filter(|value| !value.trim().is_empty()),
                 folder_name: folder_name.filter(|value| !value.trim().is_empty()),
                 description: description.filter(|value| !value.is_empty()),
@@ -605,7 +641,7 @@ async fn unregister_server(
     Path(server_id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     // Only the owning IP may unregister its server (server_id is "<ip>:<port>").
-    if let Some(ip) = client_ip(&state, &headers) {
+    if let Some(ip) = caller_client_ip(&state, &headers) {
         let owner_ip = server_id
             .rsplit_once(':')
             .map_or(server_id.as_str(), |(host, _)| host);
@@ -848,16 +884,72 @@ fn absolutize_download_url(url: &mut Option<String>, base: Option<&str>) {
     *url = Some(format!("{base}{path}"));
 }
 
-/// The caller's real IP from the configured trusted header (leftmost `X-Forwarded-For`
-/// value behind an ingress). `None` when no header is configured or present.
-fn client_ip(state: &AppState, headers: &HeaderMap) -> Option<String> {
+fn forwarded_ips(state: &AppState, headers: &HeaderMap) -> Option<Vec<String>> {
     let header = state.client_ip_header.as_ref()?;
     headers
         .get(header.as_ref())
         .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.split(',').next())
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
+        .map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .filter(|values| !values.is_empty())
+}
+
+fn publish_client_ip(
+    state: &AppState,
+    headers: &HeaderMap,
+    peer_addr: Option<SocketAddr>,
+) -> Option<String> {
+    forwarded_ips(state, headers)
+        .into_iter()
+        .flatten()
+        .find(|value| is_public_forwarded_ip(value))
+        .or_else(|| {
+            peer_addr
+                .map(|addr| addr.ip().to_string())
+                .filter(|value| is_public_forwarded_ip(value))
+        })
+}
+
+fn caller_client_ip(state: &AppState, headers: &HeaderMap) -> Option<String> {
+    let ips = forwarded_ips(state, headers)?;
+    ips.iter()
+        .find(|value| is_public_forwarded_ip(value))
+        .cloned()
+        .or_else(|| ips.into_iter().next())
+}
+
+fn is_public_forwarded_ip(value: &str) -> bool {
+    match value.parse::<IpAddr>() {
+        Ok(IpAddr::V4(ip)) => {
+            !(ip.is_private()
+                || ip.is_loopback()
+                || ip.is_link_local()
+                || ip.is_unspecified()
+                || ip.is_multicast())
+        }
+        Ok(IpAddr::V6(ip)) => {
+            !(ip.is_loopback()
+                || ip.is_unspecified()
+                || ip.is_multicast()
+                || is_ipv6_unique_local(ip)
+                || is_ipv6_link_local(ip))
+        }
+        Err(_) => false,
+    }
+}
+
+fn is_ipv6_unique_local(ip: std::net::Ipv6Addr) -> bool {
+    (ip.segments()[0] & 0xfe00) == 0xfc00
+}
+
+fn is_ipv6_link_local(ip: std::net::Ipv6Addr) -> bool {
+    (ip.segments()[0] & 0xffc0) == 0xfe80
 }
 
 /// The server token from `Authorization: Bearer <token>` (or the `x-server-token` header).

@@ -195,6 +195,10 @@ void ProcessKeyboard_SDL(DWORD /*sysTime*/, DWORD timeDelta)
     // (Event timestamps are in GlobalTickCount() space, not ::GetTickCount())
     DWORD sysTime = GlobalTickCount();
     GInput.keyboard.Update(sysTime, timeDelta, GWorld->IsUserInputEnabled());
+    if (GWorld)
+    {
+        GWorld->HandleVoiceChatShortcuts();
+    }
 }
 
 void SDLInput_BufferMouseButton(int btn, bool down)
@@ -240,8 +244,26 @@ void ProcessMouse_SDL(DWORD timeDelta)
         clampPtr = &clamp;
     }
 
-    bool markKeyboardTurn =
-        GInput.mouse.Update(GInput.cursor, GInput.gameFocusLost, GInput.lookAroundEnabled, Glob.uiTime, clampPtr);
+    // Aiming spans the full window, so it uses the window aspect ratio
+    // (Width/Height).  The cursor's coordinates are relative to the HUD region,
+    // so it uses that region's aspect ratio (Width2D/Height2D) — this keeps its
+    // speed consistent and unaffected by the HUD width limit.  Both fall back to
+    // the 4:3 reference when the engine size is unavailable.
+    float aimAspectRatio = MouseState::kBaseAspectRatio;
+    float cursorAspectRatio = MouseState::kBaseAspectRatio;
+    if (::Poseidon::GEngine)
+    {
+        const int winH = ::Poseidon::GEngine->Height();
+        if (winH > 0)
+            aimAspectRatio = static_cast<float>(::Poseidon::GEngine->Width()) / static_cast<float>(winH);
+
+        const int uiH = ::Poseidon::GEngine->Height2D();
+        if (uiH > 0)
+            cursorAspectRatio = static_cast<float>(::Poseidon::GEngine->Width2D()) / static_cast<float>(uiH);
+    }
+
+    bool markKeyboardTurn = GInput.mouse.Update(GInput.cursor, GInput.gameFocusLost, GInput.lookAroundEnabled,
+                                                Glob.uiTime, clampPtr, cursorAspectRatio, aimAspectRatio);
 
     if (markKeyboardTurn)
         GInput.keyboard.turnLastActive = Glob.uiTime;
@@ -504,7 +526,7 @@ void ProcessJoystick_SDL()
         if (GInput.gameFocusLost <= 0)
         {
             GInput.cursor.aimDeltaX += moveX;
-            GInput.cursor.aimDeltaY += GInput.mouse.reverseY ? -moveY : moveY;
+            GInput.cursor.aimDeltaY += GInput.gamepad.reverseYStick ? -moveY : moveY;
         }
         GInput.cursor.cursorX += moveX;
         GInput.cursor.cursorY += moveY;

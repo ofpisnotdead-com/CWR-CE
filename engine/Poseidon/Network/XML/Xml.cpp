@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #endif
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #ifndef _WIN32
 #include <sys/select.h>
@@ -22,6 +23,9 @@
 #include <Poseidon/Foundation/Framework/Log.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 #include <Poseidon/Foundation/platform.hpp>
+#include <curl/curl.h>
+#include <mutex>
+#include <vector>
 #if defined _WIN32
 #include <winInet.h>
 #else
@@ -30,13 +34,117 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#include <stdio.h>
 #include <fcntl.h>
 #include <signal.h>
 #endif
 
 #define BUFFER_SIZE 256
 #define AGENT_NAME "BI Agent"
+
+namespace
+{
+struct CurlDownloadBuffer
+{
+    std::vector<char>* out;
+    size_t maxSize;
+    bool exceeded;
+};
+
+enum class CurlDownloadStatus
+{
+    Failed,
+    Succeeded,
+    Rejected
+};
+
+size_t WriteCurlDownloadChunk(char* ptr, size_t size, size_t nmemb, void* userdata)
+{
+    auto* buffer = static_cast<CurlDownloadBuffer*>(userdata);
+    const size_t bytes = size * nmemb;
+    if (size != 0 && bytes / size != nmemb)
+    {
+        buffer->exceeded = true;
+        return 0;
+    }
+    if (buffer->maxSize > 0 && (buffer->out->size() > buffer->maxSize || bytes > buffer->maxSize - buffer->out->size()))
+    {
+        buffer->exceeded = true;
+        return 0;
+    }
+    buffer->out->insert(buffer->out->end(), ptr, ptr + bytes);
+    return bytes;
+}
+
+CurlDownloadStatus DownloadFileWithCurl(const char* url, const char* proxyServer, size_t maxSize,
+                                        std::vector<char>& out)
+{
+    out.clear();
+    if (url == nullptr || url[0] == 0)
+    {
+        return CurlDownloadStatus::Failed;
+    }
+
+    static std::once_flag curlInitFlag;
+    std::call_once(curlInitFlag, [] { curl_global_init(CURL_GLOBAL_DEFAULT); });
+
+    CURL* curl = curl_easy_init();
+    if (curl == nullptr)
+    {
+        return CurlDownloadStatus::Failed;
+    }
+
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, AGENT_NAME);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+    CurlDownloadBuffer buffer{&out, maxSize, false};
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCurlDownloadChunk);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
+    if (proxyServer != nullptr && proxyServer[0] != 0)
+    {
+        curl_easy_setopt(curl, CURLOPT_PROXY, proxyServer);
+    }
+    if (const char* caFile = std::getenv("SSL_CERT_FILE"); caFile != nullptr && caFile[0] != 0)
+    {
+        curl_easy_setopt(curl, CURLOPT_CAINFO, caFile);
+    }
+
+    const CURLcode result = curl_easy_perform(curl);
+    long statusCode = 0;
+    if (result == CURLE_OK)
+    {
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &statusCode);
+    }
+    else if (buffer.exceeded)
+    {
+        LOG_WARN(Network, "XML download '{}' exceeded max size {}", url, maxSize);
+    }
+    else
+    {
+        LOG_WARN(Network, "XML download '{}' failed: {}", url, curl_easy_strerror(result));
+    }
+
+    curl_easy_cleanup(curl);
+    if (result != CURLE_OK || statusCode < 200 || statusCode >= 300)
+    {
+        if (result == CURLE_OK)
+        {
+            LOG_WARN(Network, "XML download '{}' returned HTTP {}", url, statusCode);
+        }
+        out.clear();
+        return buffer.exceeded ? CurlDownloadStatus::Rejected : CurlDownloadStatus::Failed;
+    }
+    if (maxSize > 0 && out.size() > maxSize)
+    {
+        LOG_WARN(Network, "XML download '{}' exceeded max size {} > {}", url, out.size(), maxSize);
+        out.clear();
+        return CurlDownloadStatus::Rejected;
+    }
+    return CurlDownloadStatus::Succeeded;
+}
+} // namespace
 
 #if defined _WIN32
 
@@ -108,6 +216,10 @@ void QIHTTPStream::open(const char* url, const char* proxyServer)
     }
 
     char proxyOverride[256] = "<local>";
+    if (proxyServer && !proxyServer[0])
+    {
+        proxyServer = nullptr;
+    }
     if (!proxyServer)
     {
         // retrieve proxy from registry
@@ -138,7 +250,8 @@ void QIHTTPStream::open(const char* url, const char* proxyServer)
         _fail = true;
         return;
     }
-    _hSession = internetOpen(AGENT_NAME, INTERNET_OPEN_TYPE_PROXY, proxyServer, proxyOverride, 0);
+    const DWORD accessType = proxyServer ? INTERNET_OPEN_TYPE_PROXY : INTERNET_OPEN_TYPE_PRECONFIG;
+    _hSession = internetOpen(AGENT_NAME, accessType, proxyServer, proxyServer ? proxyOverride : nullptr, 0);
     if (!_hSession)
     {
         _fail = true;
@@ -718,8 +831,32 @@ class BufferedWrite
     }
 };
 
-bool DownloadFile(const char* url, const char* filename, const char* proxyServer)
+bool DownloadFile(const char* url, const char* filename, const char* proxyServer, size_t maxSize)
 {
+    std::vector<char> payload;
+    const CurlDownloadStatus curlStatus = DownloadFileWithCurl(url, proxyServer, maxSize, payload);
+    if (curlStatus == CurlDownloadStatus::Succeeded)
+    {
+        LocalPath(fn, filename);
+        FILE* file = fopen(fn, "wb");
+        if (file == nullptr)
+        {
+            return false;
+        }
+        const size_t written = fwrite(payload.data(), 1, payload.size(), file);
+        fclose(file);
+        if (written != payload.size())
+        {
+            DeleteFile(filename);
+            return false;
+        }
+        return true;
+    }
+    if (curlStatus == CurlDownloadStatus::Rejected)
+    {
+        return false;
+    }
+
     QIHTTPStream in;
     in.open(url, proxyServer);
     // On failure, don't create the file.
@@ -734,14 +871,21 @@ bool DownloadFile(const char* url, const char* filename, const char* proxyServer
     }
     BufferedWrite buf(out);
     bool ok = true;
+    size_t downloaded = 0;
     int c = in.get();
     while (!in.eof() && !in.fail())
     {
+        if (maxSize > 0 && downloaded >= maxSize)
+        {
+            ok = false;
+            break;
+        }
         if (buf.Put(c) < 0)
         {
             ok = false;
             break;
         }
+        ++downloaded;
         c = in.get();
     }
     buf.Flush();
@@ -760,8 +904,32 @@ bool DownloadFile(const char* url, const char* filename, const char* proxyServer
 
 #else
 
-bool DownloadFile(const char* url, const char* filename, const char* proxyServer)
+bool DownloadFile(const char* url, const char* filename, const char* proxyServer, size_t maxSize)
 {
+    std::vector<char> payload;
+    const CurlDownloadStatus curlStatus = DownloadFileWithCurl(url, proxyServer, maxSize, payload);
+    if (curlStatus == CurlDownloadStatus::Succeeded)
+    {
+        LocalPath(fn, filename);
+        FILE* file = fopen(fn, "wb");
+        if (file == nullptr)
+        {
+            return false;
+        }
+        const size_t written = fwrite(payload.data(), 1, payload.size(), file);
+        fclose(file);
+        if (written != payload.size())
+        {
+            ::unlink(filename);
+            return false;
+        }
+        return true;
+    }
+    if (curlStatus == CurlDownloadStatus::Rejected)
+    {
+        return false;
+    }
+
     QIHTTPStream in;
     in.open(url, proxyServer);
     if (in.fail())
@@ -777,6 +945,12 @@ bool DownloadFile(const char* url, const char* filename, const char* proxyServer
         ::close(file);
         return false;
     }
+    if (maxSize > 0 && size > maxSize)
+    {
+        ::close(file);
+        ::unlink(filename);
+        return false;
+    }
     int sizeWritten = ::write(file, data, size);
     ::close(file);
     return (sizeWritten == size);
@@ -788,7 +962,7 @@ bool DownloadFile(const char* url, const char* filename, const char* proxyServer
 
 #ifdef _WIN32
 
-char* DownloadFile(const char* url, size_t& size, const char* proxyServer)
+char* DownloadFile(const char* url, size_t& size, const char* proxyServer, size_t maxSize)
 {
     size = 0;
     QIHTTPStream in;
@@ -808,6 +982,11 @@ char* DownloadFile(const char* url, size_t& size, const char* proxyServer)
     int c = in.get();
     while (!in.eof() && !in.fail())
     {
+        if (maxSize > 0 && static_cast<size_t>(usedSize) >= maxSize)
+        {
+            GlobalFree(mem);
+            return nullptr;
+        }
         if (usedSize >= allocated)
         {
             char* newMem = (char*)GlobalAlloc(GMEM_FIXED, allocated * 2);
@@ -835,8 +1014,24 @@ char* DownloadFile(const char* url, size_t& size, const char* proxyServer)
 
 #else
 
-char* DownloadFile(const char* url, size_t& size, const char* proxyServer)
+char* DownloadFile(const char* url, size_t& size, const char* proxyServer, size_t maxSize)
 {
+    std::vector<char> payload;
+    const CurlDownloadStatus curlStatus = DownloadFileWithCurl(url, proxyServer, maxSize, payload);
+    if (curlStatus == CurlDownloadStatus::Succeeded)
+    {
+        size = payload.size();
+        char* copy = static_cast<char*>(malloc(size));
+        if (copy)
+            memcpy(copy, payload.data(), size);
+        return copy;
+    }
+    if (curlStatus == CurlDownloadStatus::Rejected)
+    {
+        size = 0;
+        return nullptr;
+    }
+
     QIHTTPStream in;
     in.open(url, proxyServer);
     size = 0;
@@ -845,6 +1040,8 @@ char* DownloadFile(const char* url, size_t& size, const char* proxyServer)
     unsigned s;
     const unsigned char* data = in.getData(s);
     if (!data)
+        return nullptr;
+    if (maxSize > 0 && s > maxSize)
         return nullptr;
     size = s;
     char* copy = (char*)malloc(size);

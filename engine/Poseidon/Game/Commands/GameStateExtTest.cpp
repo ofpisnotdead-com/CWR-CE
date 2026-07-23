@@ -3,6 +3,7 @@ using namespace Poseidon;
 #include <Poseidon/World/World.hpp>
 #include <Poseidon/Foundation/Logging/Logging.hpp>
 #include <Poseidon/Core/Application.hpp>
+#include <Poseidon/Core/Game/GameLoop.hpp>
 #include <Poseidon/UI/UITestEngine.hpp>
 #include <Poseidon/UI/UIActiveDisplay.hpp>
 #include <Poseidon/UI/Controls/UIControls.hpp>
@@ -420,6 +421,19 @@ GameValue TriSeedSessions(const GameState* state, GameValuePar arg)
     return GameValue(true);
 }
 
+/// triSessionPing <row> - return the currently visible MP browser row ping.
+GameValue TriSessionPing(const GameState* state, GameValuePar arg)
+{
+    int row = static_cast<int>(static_cast<GameScalarType>(arg));
+    DisplayMultiplayer* mp = dynamic_cast<DisplayMultiplayer*>(GetActiveDisplayForSQF());
+    if (mp == nullptr)
+    {
+        LOG_ERROR(Core, "[tri] triSessionPing: MP server browser is not the active display");
+        return GameValue(static_cast<GameScalarType>(-1));
+    }
+    return GameValue(static_cast<GameScalarType>(mp->GetVisibleSessionPingForTest(row)));
+}
+
 /// triSeedMods <n> — inject n fake catalog rows into the active MODS table.
 GameValue TriSeedMods(const GameState* state, GameValuePar arg)
 {
@@ -617,25 +631,31 @@ GameValue TriOpenModDownload(const GameState* /*state*/, GameValuePar arg)
     return GameValue(true);
 }
 
-/// triOpenJoinRequirements — open the join-requirements dialog
+/// triOpenJoinRequirements <0|1> — open the join-requirements dialog
 /// (RscDisplayJoinRequirements, idd 75) with a synthetic mod diff + password field as
-/// a child of the current display. Exercises the live dialog offline; idc 1 = Download
-/// & Join, idc 2 = Cancel. Returns true.
-GameValue TriOpenJoinRequirements(const GameState* /*state*/, GameValuePar /*arg*/)
+/// a child of the current display. Exercises the live dialog offline; mode 0 shows
+/// Download & Join, mode 1 shows Set up & Join. idc 1 = OK, idc 2 = Cancel.
+/// Returns true.
+GameValue TriOpenJoinRequirements(const GameState* /*state*/, GameValuePar arg)
 {
     ControlsContainer* display = GetActiveDisplayForSQF();
     if (display == nullptr)
         return GameValue(false);
+    const bool setupOnly = static_cast<int>(static_cast<GameScalarType>(arg)) != 0;
     const RString title = Format(LocalizeString("STR_DISP_MODS_JOIN_TITLE"), "Pristar's CSLA Server");
     std::string diff = (const char*)LocalizeString("STR_DISP_MODS_JOIN_REQUIRES");
     diff += "\n  [ok] @csla   ";
     diff += (const char*)LocalizeString("STR_DISP_MODS_JOIN_INSTALLED");
-    diff += "\n  [dl] CSLA Sounds   ";
-    diff += (const char*)LocalizeString("STR_DISP_MODS_JOIN_DOWNLOAD");
-    diff += " 12 MB\n";
+    if (!setupOnly)
+    {
+        diff += "\n  [dl] CSLA Sounds   ";
+        diff += (const char*)LocalizeString("STR_DISP_MODS_JOIN_DOWNLOAD");
+        diff += " 12 MB\n";
+    }
     diff += (const char*)LocalizeString("STR_DISP_MODS_JOIN_DISABLED");
     diff += "\n  [x] @ffur1985\n";
-    display->CreateChild(new DisplayJoinRequirements(display, title, RString(diff.c_str()), ""));
+    const RString okText = LocalizeString(setupOnly ? "STR_DISP_MODS_SETUP_JOIN" : "STR_DISP_MODS_DOWNLOAD_JOIN");
+    display->CreateChild(new DisplayJoinRequirements(display, title, RString(diff.c_str()), "", okText));
     return GameValue(true);
 }
 
@@ -665,6 +685,35 @@ GameValue TriAssertControlLineStarts(const GameState* /*state*/, GameValuePar ar
             return GameValue(RString("OK"));
     }
     return GameValue(Format("FAIL:no line starts with '%s' (%d lines)", prefix.c_str(), s->GetLineCount()));
+}
+
+/// triAssertControlLinesExclude [idc, "needle"] - assert no rendered line of the
+/// active display's C3DStatic (idc) contains needle. Useful for catching explicit
+/// line-break delimiters that split lines but still leak into the drawn substring.
+GameValue TriAssertControlLinesExclude(const GameState* /*state*/, GameValuePar arg)
+{
+    const GameArrayType& a = arg;
+    if (a.Size() < 2)
+        return GameValue(RString("FAIL:triAssertControlLinesExclude needs [idc, needle]"));
+    const int idc = static_cast<int>(static_cast<GameScalarType>(a[0]));
+    std::string needle = (const char*)static_cast<RString>(a[1]);
+    if (needle == "\\n")
+        needle = "\n";
+    else if (needle == "\\r")
+        needle = "\r";
+    ControlsContainer* display = GetActiveDisplayForSQF();
+    if (display == nullptr)
+        return GameValue(RString("FAIL:no active display"));
+    C3DStatic* s = dynamic_cast<C3DStatic*>(display->GetCtrl(idc));
+    if (s == nullptr)
+        return GameValue(Format("FAIL:no C3DStatic with idc %d", idc));
+    for (int i = 0; i < s->GetLineCount(); i++)
+    {
+        std::string line = (const char*)s->GetLine(i);
+        if (line.find(needle) != std::string::npos)
+            return GameValue(Format("FAIL:line %d contains excluded text", i));
+    }
+    return GameValue(RString("OK"));
 }
 
 /// triClickText "text" — find control by text content and click it. Returns true on success.
@@ -1412,6 +1461,62 @@ GameValue TriMissionPlayerReady(const GameState* /*state*/)
     return GameValue("OK");
 }
 
+/// triAssertMissionPlayable — assert a client is past MP briefing/map states and
+/// actually controls a live unit in an advancing mission.
+GameValue TriAssertMissionPlayable(const GameState* /*state*/)
+{
+    if (!GWorld)
+        return GameValue("FAIL:no_world");
+
+    auto* display = GetActiveDisplayForSQF();
+    const int idd = display ? display->IDD() : -1;
+    if (idd != 46)
+    {
+        char buf[96];
+        snprintf(buf, sizeof(buf), "FAIL:display=%d,expected=46", idd);
+        return GameValue(buf);
+    }
+
+    if (!GApp || !GApp->IsInGameplay())
+    {
+        char buf[96];
+        snprintf(buf, sizeof(buf), "FAIL:not_in_gameplay,display=%d", idd);
+        return GameValue(buf);
+    }
+
+    Person* player = GWorld->GetRealPlayer();
+    if (!player || !player->Brain())
+        return GameValue("FAIL:no_player");
+    if (player->IsDammageDestroyed())
+        return GameValue("FAIL:player_destroyed");
+    if (GWorld->PlayerOn() != player)
+        return GameValue("FAIL:player_not_active");
+    if (!player->Brain()->GetVehicle())
+        return GameValue("FAIL:no_vehicle");
+
+    const int beforeTime = Glob.time.toInt();
+    const uint32_t beforeFrame = GEngine ? GEngine->GetFrameCounter() : 0;
+    for (int i = 0; i < 5; ++i)
+        Poseidon::AppIdle();
+    const int afterTime = Glob.time.toInt();
+    const uint32_t afterFrame = GEngine ? GEngine->GetFrameCounter() : 0;
+
+    if (afterFrame <= beforeFrame)
+    {
+        char buf[96];
+        snprintf(buf, sizeof(buf), "FAIL:frames_not_advancing,before=%u,after=%u", beforeFrame, afterFrame);
+        return GameValue(buf);
+    }
+    if (afterTime <= beforeTime)
+    {
+        char buf[96];
+        snprintf(buf, sizeof(buf), "FAIL:sim_time_not_advancing,before=%d,after=%d", beforeTime, afterTime);
+        return GameValue(buf);
+    }
+
+    return GameValue("OK");
+}
+
 /// triControlText <idc> — return the current text carried by a control, or ""
 /// if the control does not exist / has no text-bearing type.
 GameValue TriControlText(const GameState* state, GameValuePar arg)
@@ -1424,6 +1529,8 @@ GameValue TriControlText(const GameState* state, GameValuePar arg)
     if (!ctrl)
         return GameValue("");
     std::string text = UITestEngine::GetControlText(ctrl);
+    if (text.empty())
+        text = UITestEngine::GetHtmlText(ctrl); // mission/overview HTML preview
     return GameValue(text.c_str());
 }
 
@@ -1499,6 +1606,53 @@ GameValue TriVisibleTexts(const GameState* state)
     return GameValue(out.c_str());
 }
 
+/// triMpSetupMessage - return DisplayMultiplayerSetup's immediate-mode wait text.
+GameValue TriMpSetupMessage(const GameState* state)
+{
+    auto* display = GetActiveDisplayForSQF();
+    auto* setup = dynamic_cast<DisplayMultiplayerSetup*>(display);
+    if (!setup)
+    {
+        return GameValue("");
+    }
+    return GameValue((const char*)setup->GetMessageForTest());
+}
+
+/// triMpTransferOverlayShows - return how many times the current multiplayer
+/// setup entered the mission-transfer overlay.
+GameValue TriMpTransferOverlayShows(const GameState* /*state*/)
+{
+    for (ControlsContainer* display = GetActiveDisplayForSQF(); display; display = display->Parent())
+    {
+        auto* setup = dynamic_cast<DisplayMultiplayerSetup*>(display);
+        if (setup)
+        {
+            return GameValue(static_cast<float>(setup->GetTransferOverlayShowsForTest()));
+        }
+    }
+    return GameValue(-1.0f);
+}
+
+/// triMpTransferStats - return [receivedBytes,totalBytes] from the MP transfer model.
+GameValue TriMpTransferStats(const GameState* state)
+{
+    int curBytes = 0;
+    int totBytes = 0;
+    GetNetworkManager().GetTransferStats(curBytes, totBytes);
+
+    GameValue value = state->CreateGameValue(GameArray);
+    GameArrayType& array = value;
+    array.Add(GameValue(static_cast<float>(curBytes)));
+    array.Add(GameValue(static_cast<float>(totBytes)));
+    return value;
+}
+
+/// triActiveMods - return the active mod mount path list.
+GameValue TriActiveMods(const GameState* /*state*/)
+{
+    return GameValue((const char*)Poseidon::ModSystem::GetModList());
+}
+
 /// triAssertTreeText [idc, "text"] — assert a tree control contains an item
 /// with the given text anywhere in its hierarchy.
 GameValue TriAssertTreeText(const GameState* state, GameValuePar arg)
@@ -1529,6 +1683,85 @@ GameValue TriAssertTreeText(const GameState* state, GameValuePar arg)
         return GameValue(buf);
     }
     return GameValue(TreeContainsText(tree->GetRoot(), (const char*)expected) ? "OK" : "FAIL:text not found");
+}
+
+/// triAssertListText [idc, "text"] - assert a listbox contains an item with the
+/// given text.
+GameValue TriAssertListText(const GameState* /*state*/, GameValuePar arg)
+{
+    if (arg.GetType() != GameArray)
+    {
+        return GameValue("FAIL:expected [idc,text] array");
+    }
+    const GameArrayType& arr = arg;
+    if (arr.Size() < 2)
+    {
+        return GameValue("FAIL:expected [idc,text] array");
+    }
+
+    int idc = static_cast<int>(static_cast<GameScalarType>(arr[0]));
+    GameStringType expected = static_cast<GameStringType>(arr[1]);
+    auto* display = GetActiveDisplayForSQF();
+    if (!display)
+    {
+        return GameValue("FAIL:no active display");
+    }
+    IControl* ctrl = display->GetCtrl(idc);
+    if (!ctrl)
+    {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "FAIL:IDC %d not found", idc);
+        return GameValue(buf);
+    }
+
+    auto failWithRows = [](const std::vector<std::string>& rows) -> GameValue
+    {
+        std::string out = "FAIL:text not found";
+        if (!rows.empty())
+        {
+            out += ": ";
+            for (size_t i = 0; i < rows.size(); ++i)
+            {
+                if (i > 0)
+                {
+                    out += "|";
+                }
+                out += rows[i];
+            }
+        }
+        return GameValue(out.c_str());
+    };
+
+    if (auto* lb = dynamic_cast<CListBox*>(ctrl))
+    {
+        std::vector<std::string> rows;
+        for (int i = 0; i < lb->GetSize(); ++i)
+        {
+            rows.emplace_back(lb->GetText(i));
+            if (rows.back() == (const char*)expected)
+            {
+                return GameValue("OK");
+            }
+        }
+        return failWithRows(rows);
+    }
+    if (auto* lb3d = dynamic_cast<C3DListBox*>(ctrl))
+    {
+        std::vector<std::string> rows;
+        for (int i = 0; i < lb3d->GetSize(); ++i)
+        {
+            rows.emplace_back(lb3d->GetText(i));
+            if (rows.back() == (const char*)expected)
+            {
+                return GameValue("OK");
+            }
+        }
+        return failWithRows(rows);
+    }
+
+    char buf[64];
+    snprintf(buf, sizeof(buf), "FAIL:IDC %d not listbox", idc);
+    return GameValue(buf);
 }
 
 /// triVoiceLanguage — return the currently selected voice language as a string
@@ -1588,8 +1821,6 @@ GameValue TriResetErrorCount(const GameState* /*state*/)
     LoggingSystem::ResetErrorCount();
     return GameValue("OK");
 }
-
-#include <Poseidon/Core/Game/GameLoop.hpp>
 
 /// triWaitFrames <n> — pump N render frames (clear + present).
 /// Keeps the window alive and advances the GPU pipeline without

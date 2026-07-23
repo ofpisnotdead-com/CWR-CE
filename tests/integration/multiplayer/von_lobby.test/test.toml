@@ -1,0 +1,38 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 75
+
+tags = ["headful", "network"]
+
+# VoN routing should work before the mission enters play. Keep both clients in
+# the multiplayer setup/slot phase, send a synthetic tone, and require the peer
+# to receive and decode it.
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl", "--config", "${output}/server/user/server.cfg"]
+name = "server"
+type = "server"
+use_mission = false
+copy_files = [
+  { source = "server.cfg", target = "server.cfg" },
+  { source = "jip_basic.Demo.pbo", target = "content/MPMissions/jip_basic.Demo.pbo" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "speaker", "--log-format", "jsonl"]
+name = "speaker"
+type = "client"
+use_mission = false
+connect = "server"
+after = "server"
+start_delay_ms = 4000
+machine_id = "trident:von_lobby:speaker"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "listener", "--log-format", "jsonl"]
+name = "listener"
+type = "client"
+use_mission = false
+connect = "server"
+after = "server"
+start_delay_ms = 4000
+machine_id = "trident:von_lobby:listener"

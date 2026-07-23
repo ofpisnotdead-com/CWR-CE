@@ -1,0 +1,34 @@
+mission = "tests/integration/missions/mp_horn.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 75
+
+tags = ["headful", "network"]
+
+# WEST:1 is authored into jeepHorn. The initial cohort launches through the
+# on-foot WEST:2 slot; the late participant must receive both the person and
+# the distinct transport's control before becoming playable.
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl", "--mp-auto-start", "1"]
+name = "server"
+type = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "anchor", "--log-format", "jsonl"]
+name = "anchor"
+type = "client"
+connect = "server"
+after = "server"
+mp_assign = "WEST:2"
+machine_id = "trident:jip_vehicle_authority:anchor"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "driver", "--log-format", "jsonl"]
+name = "driver"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+start_delay_ms = 12000
+mp_assign = "WEST:1"
+machine_id = "trident:jip_vehicle_authority:driver"

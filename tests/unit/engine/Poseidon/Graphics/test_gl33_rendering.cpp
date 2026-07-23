@@ -742,6 +742,16 @@ TEST_CASE("MipmapSizeGL33: non-power-of-two sizes", "[Graphics][GL33][Texture]")
     REQUIRE(MipmapSizeGL33(PacDXT1, 1, 1) == 8);
 }
 
+TEST_CASE("TextureGL33 upload format expands interpolated compressed textures", "[Graphics][GL33][Texture]")
+{
+    REQUIRE(UploadFormatForTextureGL33(PacDXT1, true) == PacARGB1555);
+    REQUIRE(UploadFormatForTextureGL33(PacDXT3, true) == PacARGB1555);
+    REQUIRE(UploadFormatForTextureGL33(PacDXT5, true) == PacARGB1555);
+    REQUIRE(UploadFormatForTextureGL33(PacDXT1, false) == PacDXT1);
+    REQUIRE(UploadFormatForTextureGL33(PacARGB1555, true) == PacARGB1555);
+    REQUIRE(UploadFormatForTextureGL33(PacARGB4444, true) == PacARGB4444);
+}
+
 TEST_CASE("InitGLPixelFormat: ARGB8888 maps to GL_RGBA8", "[Graphics][GL33][Texture]")
 {
     TextureDescGL33 desc{};

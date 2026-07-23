@@ -17,6 +17,7 @@ TEST_CASE("appConfig: singleton defaults", "[platform][appConfig]")
     REQUIRE(config.GetWindowHeight() == 600);
     REQUIRE(config.NoSound() == false);
     REQUIRE(config.IsHostServer() == false);
+    REQUIRE(config.IsPublicServer() == false);
     REQUIRE(config.GetNetworkPort() == 1985);
     REQUIRE(config.BenchmarkMode() == false);
     REQUIRE(config.NoTextures() == false);

@@ -167,6 +167,88 @@ TEST_CASE("UserConfig IsEnabled logic", "[core][config][difficulty]")
     }
 }
 
+TEST_CASE("UserConfig server difficulty override in multiplayer", "[core][config][difficulty][multiplayer]")
+{
+    using namespace Poseidon;
+    UserConfig config;
+
+    // A joining client in veteran mode: friendly/enemy tags, HUD and map are off
+    // locally; the weapon cursor stays on (its veteran default).
+    config.easyMode = false;
+    config.veteranDifficulty[DTFriendlyTag] = false;
+    config.veteranDifficulty[DTEnemyTag] = false;
+    config.veteranDifficulty[DTHUD] = false;
+    config.veteranDifficulty[DTMap] = false;
+    config.veteranDifficulty[DTWeaponCursor] = true;
+
+    SECTION("Without an override the local profile is used")
+    {
+        REQUIRE(config.HasServerDifficulty() == false);
+        REQUIRE(config.IsEnabled(DTFriendlyTag) == false);
+        REQUIRE(config.IsEnabled(DTHUD) == false);
+    }
+
+    SECTION("Server override takes precedence over the local profile")
+    {
+        // The host enables the in-world callouts; this is the difficulty array a
+        // client receives from the server.
+        bool serverDifficulty[DTN] = {};
+        serverDifficulty[DTFriendlyTag] = true;
+        serverDifficulty[DTEnemyTag] = true;
+        serverDifficulty[DTHUD] = true;
+        serverDifficulty[DTMap] = true;
+        serverDifficulty[DTWeaponCursor] = true;
+
+        config.SetServerDifficulty(serverDifficulty);
+
+        REQUIRE(config.HasServerDifficulty() == true);
+        REQUIRE(config.IsEnabled(DTFriendlyTag) == true);
+        REQUIRE(config.IsEnabled(DTEnemyTag) == true);
+        REQUIRE(config.IsEnabled(DTHUD) == true);
+        REQUIRE(config.IsEnabled(DTMap) == true);
+        REQUIRE(config.IsEnabled(DTWeaponCursor) == true);
+
+        // The override wins regardless of cadet/veteran mode.
+        config.easyMode = true;
+        REQUIRE(config.IsEnabled(DTFriendlyTag) == true);
+    }
+
+    SECTION("Server override can also disable callouts the local profile would show")
+    {
+        config.easyMode = true;
+        config.cadetDifficulty[DTFriendlyTag] = true;
+
+        bool serverDifficulty[DTN] = {}; // strict server: everything off
+        config.SetServerDifficulty(serverDifficulty);
+
+        REQUIRE(config.IsEnabled(DTFriendlyTag) == false);
+    }
+
+    SECTION("Clearing the override restores the local profile")
+    {
+        bool serverDifficulty[DTN] = {};
+        serverDifficulty[DTFriendlyTag] = true;
+        config.SetServerDifficulty(serverDifficulty);
+        REQUIRE(config.IsEnabled(DTFriendlyTag) == true);
+
+        config.ClearServerDifficulty();
+        REQUIRE(config.HasServerDifficulty() == false);
+        REQUIRE(config.IsEnabled(DTFriendlyTag) == false);
+    }
+
+    SECTION("A null difficulty array clears the override")
+    {
+        bool serverDifficulty[DTN] = {};
+        serverDifficulty[DTHUD] = true;
+        config.SetServerDifficulty(serverDifficulty);
+        REQUIRE(config.HasServerDifficulty() == true);
+
+        config.SetServerDifficulty(nullptr);
+        REQUIRE(config.HasServerDifficulty() == false);
+        REQUIRE(config.IsEnabled(DTHUD) == false);
+    }
+}
+
 TEST_CASE("UserConfig InitDifficulties", "[core][config][difficulty]")
 {
     Poseidon::UserConfig config;

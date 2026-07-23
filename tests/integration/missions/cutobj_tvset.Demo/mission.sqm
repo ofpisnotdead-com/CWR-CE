@@ -1,0 +1,39 @@
+version=11;
+class Mission
+{
+	randomSeed=12345;
+	class Intel
+	{
+		viewDistance=900;
+		month=7;
+		day=5;
+		hour=12;
+		minute=0;
+	};
+	class Groups
+	{
+		items=1;
+		class Item0
+		{
+			side="WEST";
+			class Vehicles
+			{
+				items=1;
+				class Item0
+				{
+					position[]={6710.527832,82.907585,5408.891602};
+					azimut=0.000000;
+					id=0;
+					side="WEST";
+					vehicle="SoldierWB";
+					player="PLAYER COMMANDER";
+					leader=1;
+					skill=0.600000;
+				};
+			};
+		};
+	};
+};
+class Intro{};
+class OutroWin{};
+class OutroLoose{};

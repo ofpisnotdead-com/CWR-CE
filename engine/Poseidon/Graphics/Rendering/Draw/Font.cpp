@@ -48,14 +48,15 @@ static FreeTypeFontMapping s_fontTable[] = {
     {"cwrbody", "fonts\\cwr_body.ttf", 12, 10, 1.000f, false, 0.0f, 0.0f, 0.0f},
     {"cwrmono", "fonts\\cwr_mono.ttf", 29, 28, 0.800f, false, 0.0f, -0.6f, 0.0f},
     {"cwrserif", "fonts\\cwr_serif.ttf", 29, 24, 0.935f, false, 0.0f, 0.0f, 0.0f},
-    {"cwrhand", "fonts\\cwr_hand.ttf", 27, 21, 1.183f, false, -1.60f, -0.90f, 0.0f},
-    {"ru_audreyshand", "fonts\\cwr_hand.ttf", 27, 21, 1.183f, false, -1.60f, -0.90f, 0.0f},
+    {"cwrhand", "fonts\\cwr_hand.ttf", 27, 21, 1.050f, false, -1.60f, -0.90f, 0.0f},
+    {"ru_audreyshand", "fonts\\cwr_hand.ttf", 27, 21, 1.050f, false, -1.60f, -0.90f, 0.0f},
     {"steelfishb", "fonts\\cwr_title.ttf", 59, 46, 0.628f, false, -6.0f, -1.5f, 0.0f},
+    {"impact", "fonts\\cwr_title.ttf", 59, 46, 0.628f, false, -6.0f, -1.5f, 0.0f},
     {"tahomab", "fonts\\cwr_body.ttf", 12, 10, 1.000f, false, 0.0f, 0.0f, 0.0f},
     {"fontmaincz", "fonts\\cwr_body.ttf", 12, 10, 1.000f, false, 0.0f, 0.0f, 0.0f},
     {"couriernewb", "fonts\\cwr_mono.ttf", 29, 28, 0.800f, false, 0.0f, -0.6f, 0.0f},
     {"garamond", "fonts\\cwr_serif.ttf", 29, 24, 0.935f, false, 0.0f, 0.0f, 0.0f},
-    {"audreyshand", "fonts\\cwr_hand.ttf", 27, 21, 1.183f, false, -1.60f, -0.90f, 0.0f},
+    {"audreyshand", "fonts\\cwr_hand.ttf", 27, 21, 1.050f, false, -1.60f, -0.90f, 0.0f},
 };
 static const size_t s_fontTableCount = sizeof(s_fontTable) / sizeof(s_fontTable[0]);
 
@@ -226,7 +227,11 @@ void ResetFontRenderers()
 void ClearFreeTypeCaches()
 {
     ClearFreeTypeAtlasTextures();
-    GetFTRenderers().clear();
+    // Cached Font objects hold raw pointers into this renderer map, and some UI
+    // objects keep Font refs across world remounts.  Dropping the renderers here
+    // leaves those refs with dangling FreeType faces on the next draw.  Keep the
+    // renderers process-lifetime; ResetFontRenderers refreshes mappings without
+    // invalidating existing Font objects.
 }
 
 static ui::FontRenderer* GetOrCreateRenderer(const char* ttfPath, bool syntheticOblique, float syntheticBold)

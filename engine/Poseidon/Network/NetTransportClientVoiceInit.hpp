@@ -52,6 +52,34 @@ bool SetNetTransportClientVoiceTransmit(GetClientFn&& getClient, bool on)
     return true;
 }
 
+template <class GetClientFn>
+bool SetNetTransportClientVoiceSenderId(GetClientFn&& getClient, uint32_t playerId)
+{
+    auto* client = getClient();
+    if (!client)
+    {
+        return false;
+    }
+
+    client->setSenderId(playerId);
+    return true;
+}
+
+template <class GetClientFn>
+bool SetNetTransportClientVoiceSenderIdIfAccepted(bool ackAccepted, GetClientFn&& getClient, uint32_t playerId)
+{
+    if (!ackAccepted)
+    {
+        return false;
+    }
+    return SetNetTransportClientVoiceSenderId(std::forward<GetClientFn>(getClient), playerId);
+}
+
+inline bool IsNetTransportClientVoiceAckAccepted(ConnectResult result)
+{
+    return result == CROK;
+}
+
 template <class InitClientFn, class GetClientFn, class SendVoiceFn, class WarnCaptureFn, class LogInitializedFn>
 bool ProcessNetTransportClientVoiceInit(InitClientFn&& initClient, GetClientFn&& getClient, uint32_t playerId,
                                         SendVoiceFn&& sendVoice, WarnCaptureFn&& warnCaptureUnavailable,

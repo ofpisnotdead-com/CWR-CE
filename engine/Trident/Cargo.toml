@@ -21,21 +21,14 @@ toml = "1.0.7"
 glob = "0.3"
 indicatif = "0.17"
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
+papa-bear-archive = { path = "../../mserver/Archive" }
+papa-bear-client = { path = "../../mserver/Client" }
+zstd = "0.13"
 
 [dev-dependencies]
 tempfile = "3"
 assert_cmd = "2"
 predicates = "3"
-
-[profile.dbg]
-inherits = "dev"
-
-[profile.rwdi]
-inherits = "release"
-debug = true
-
-[profile.rel]
-inherits = "release"
 
 [lints.rust]
 unsafe_code = "deny"

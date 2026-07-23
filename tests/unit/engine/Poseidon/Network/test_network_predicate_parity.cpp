@@ -1,6 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_message.hpp>
 
+#include <Poseidon/Foundation/platform.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
+#include <Poseidon/Network/NetworkMissionTransfer.hpp>
+#include <Poseidon/Network/NetworkPlayerRoleAssignment.hpp>
 #include <Poseidon/Network/NetworkServerAuth.hpp>
 
 // Behaviour-preservation tests for the server-side network predicates that were
@@ -21,6 +25,8 @@ bool VoteSelectionComplete_original(int first, int second, int rest)
     return first >= second + rest;
 }
 } // namespace
+
+#include <Poseidon/Network/NetworkServerConfig.hpp>
 
 TEST_CASE("Refactor: VoteThresholdMet equals the original Voting::Check tally", "[refactor][network][vote]")
 {
@@ -208,6 +214,484 @@ TEST_CASE("Refactor: player-role predicates equal the original OnMessagePlayerRo
     }
 }
 
+TEST_CASE("Player-role self refresh accepts an already-owned slot", "[network][role]")
+{
+    const int player = 42;
+    REQUIRE(Poseidon::RoleSelfRefreshAllowed(player, player, player));
+    REQUIRE_FALSE(Poseidon::RoleSelfRefreshAllowed(player, 43, player));
+    REQUIRE_FALSE(Poseidon::RoleSelfRefreshAllowed(43, player, player));
+
+    REQUIRE_FALSE(Poseidon::RoleDuplicateClearRequired(-1, 0));
+    REQUIRE_FALSE(Poseidon::RoleDuplicateClearRequired(1, 1));
+    REQUIRE(Poseidon::RoleDuplicateClearRequired(1, 2));
+}
+
+TEST_CASE("Delayed role assignment starts per-player mission catch-up", "[network][mission]")
+{
+    const int prepareRole = 8;
+    const int transferMission = 11;
+    const int briefing = 13;
+    const int play = 14;
+
+    REQUIRE(Poseidon::DelayedRoleShouldStartMissionCatchUp(true, transferMission, prepareRole, true, transferMission,
+                                                           briefing));
+    REQUIRE(Poseidon::DelayedRoleShouldStartMissionCatchUp(true, briefing, transferMission, true, transferMission,
+                                                           briefing));
+
+    REQUIRE_FALSE(Poseidon::DelayedRoleShouldStartMissionCatchUp(false, briefing, transferMission, true,
+                                                                 transferMission, briefing));
+    REQUIRE_FALSE(Poseidon::DelayedRoleShouldStartMissionCatchUp(true, prepareRole, prepareRole, true, transferMission,
+                                                                 briefing));
+    REQUIRE_FALSE(
+        Poseidon::DelayedRoleShouldStartMissionCatchUp(true, briefing, briefing, true, transferMission, briefing));
+    REQUIRE_FALSE(Poseidon::DelayedRoleShouldStartMissionCatchUp(true, briefing, transferMission, false,
+                                                                 transferMission, briefing));
+    REQUIRE_FALSE(
+        Poseidon::DelayedRoleShouldStartMissionCatchUp(true, play, transferMission, true, transferMission, briefing));
+}
+
+TEST_CASE("Delayed mission participants ignore stale ready states", "[network][mission]")
+{
+    const int prepareSide = 6;
+    const int prepareRole = 7;
+    const int prepareOk = 8;
+    const int transferMission = 11;
+    const int loadIsland = 12;
+    const int briefing = 13;
+    const int play = 14;
+
+    REQUIRE(Poseidon::ShouldIgnoreStaleMissionReadyState(prepareOk, transferMission, transferMission, prepareOk,
+                                                         transferMission, briefing));
+    REQUIRE(Poseidon::ShouldIgnoreStaleMissionReadyState(prepareRole, transferMission, loadIsland, prepareOk,
+                                                         transferMission, briefing));
+    REQUIRE(Poseidon::ShouldIgnoreStaleMissionReadyState(prepareOk, briefing, briefing, prepareOk, transferMission,
+                                                         briefing));
+
+    REQUIRE_FALSE(Poseidon::ShouldIgnoreStaleMissionReadyState(prepareOk, prepareOk, transferMission, prepareOk,
+                                                               transferMission, briefing));
+    REQUIRE_FALSE(Poseidon::ShouldIgnoreStaleMissionReadyState(play, transferMission, transferMission, prepareOk,
+                                                               transferMission, briefing));
+    REQUIRE_FALSE(Poseidon::ShouldIgnoreStaleMissionReadyState(prepareOk, transferMission, prepareSide, prepareOk,
+                                                               transferMission, briefing));
+    REQUIRE_FALSE(Poseidon::ShouldIgnoreStaleMissionReadyState(prepareOk, transferMission, play, prepareOk,
+                                                               transferMission, briefing));
+}
+
+TEST_CASE("Joining players receive global phases only after the prior boundary", "[network][mission]")
+{
+    const int create = 2;
+    const int transferMission = 11;
+    const int loadIsland = 12;
+    const int briefing = 13;
+    const int play = 14;
+
+    REQUIRE_FALSE(Poseidon::ShouldBroadcastNetworkMissionState(briefing, true, transferMission, true, transferMission,
+                                                               loadIsland, briefing, play));
+    REQUIRE_FALSE(Poseidon::ShouldBroadcastNetworkMissionState(play, true, create, true, transferMission, loadIsland,
+                                                               briefing, play));
+
+    REQUIRE(Poseidon::ShouldBroadcastNetworkMissionState(loadIsland, true, create, true, transferMission, loadIsland,
+                                                         briefing, play));
+    REQUIRE(Poseidon::ShouldBroadcastNetworkMissionState(briefing, true, loadIsland, true, transferMission, loadIsland,
+                                                         briefing, play));
+    REQUIRE(Poseidon::ShouldBroadcastNetworkMissionState(play, true, briefing, true, transferMission, loadIsland,
+                                                         briefing, play));
+    REQUIRE(Poseidon::ShouldBroadcastNetworkMissionState(play, false, create, true, transferMission, loadIsland,
+                                                         briefing, play));
+    REQUIRE(Poseidon::ShouldBroadcastNetworkMissionState(transferMission, true, create, true, transferMission,
+                                                         loadIsland, briefing, play));
+
+    const int prepareRole = 7;
+    REQUIRE(Poseidon::ShouldBroadcastNetworkMissionState(prepareRole, false, create, false, transferMission, loadIsland,
+                                                         briefing, play));
+    REQUIRE_FALSE(Poseidon::ShouldBroadcastNetworkMissionState(transferMission, false, create, false, transferMission,
+                                                               loadIsland, briefing, play));
+    REQUIRE_FALSE(Poseidon::ShouldBroadcastNetworkMissionState(play, false, create, false, transferMission, loadIsland,
+                                                               briefing, play));
+}
+
+TEST_CASE("Client mission state replay does not regress an already loaded client", "[network][mission]")
+{
+    const int transferMission = 11;
+    const int loadIsland = 12;
+    const int briefing = 13;
+
+    REQUIRE(Poseidon::ClientShouldAcceptTransferState(transferMission, loadIsland));
+    REQUIRE_FALSE(Poseidon::ClientShouldAcceptTransferState(loadIsland, loadIsland));
+    REQUIRE_FALSE(Poseidon::ClientShouldAcceptTransferState(briefing, loadIsland));
+
+    REQUIRE(Poseidon::ClientShouldPrepareLoadIsland(transferMission, loadIsland));
+    REQUIRE_FALSE(Poseidon::ClientShouldPrepareLoadIsland(loadIsland, loadIsland));
+    REQUIRE_FALSE(Poseidon::ClientShouldPrepareLoadIsland(briefing, loadIsland));
+}
+
+TEST_CASE("Upload path parent escapes are rejected", "[network][upload]")
+{
+    REQUIRE_FALSE(Poseidon::PathHasParentEscape("tmp/players/Alice/face.jpg"));
+    REQUIRE(Poseidon::PathHasParentEscape("tmp/players/Alice/../Bob/face.jpg"));
+    REQUIRE_FALSE(Poseidon::PathHasParentEscape(nullptr));
+}
+
+TEST_CASE("Player custom asset paths reject unsafe path components", "[network][assets]")
+{
+    REQUIRE(Poseidon::BuildNetworkPlayerStorageKey(42) == RString("42"));
+    REQUIRE(Poseidon::BuildNetworkPlayerStorageKey(-1).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpDir(42) == RString("tmp/players/42/"));
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpPath(42, RString("face.jpg")) == RString("tmp/players/42/face.jpg"));
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpPath(42, RString("face.paa")) == RString("tmp/players/42/face.paa"));
+
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpPath(42, RString("face.gif")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpPath(RString("Alice"), RString("face.jpg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpPath(RString("Al/ice"), RString("face.jpg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpPath(42, RString("../face.jpg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpPath(42, RString("nested/face.jpg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerAssetTmpPath(42, RString("C:face.jpg")).GetLength() == 0);
+}
+
+TEST_CASE("Transferred custom asset paths are confined to expected temp namespaces", "[network][assets]")
+{
+    REQUIRE(Poseidon::IsNetworkTransferredAssetSizeAllowed(128 * 1024, 128 * 1024));
+    REQUIRE_FALSE(Poseidon::IsNetworkTransferredAssetSizeAllowed(128 * 1024 + 1, 128 * 1024));
+    REQUIRE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/players/42/face.jpg"), 128 * 1024, 128 * 1024));
+    REQUIRE_FALSE(
+        Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/players/42/face.jpg"), 128 * 1024 + 1, 128 * 1024));
+    REQUIRE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/squads/SQTAG/logo.paa"), 128 * 1024 + 1,
+                                                          128 * 1024));
+    REQUIRE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/squads/SQTAG/logo.paa"),
+                                                          Poseidon::NetworkSquadFileMaxSize, 128 * 1024));
+    REQUIRE_FALSE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/squads/SQTAG/logo.paa"),
+                                                                Poseidon::NetworkSquadFileMaxSize + 1, 128 * 1024));
+    REQUIRE_FALSE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString(), 1, 128 * 1024));
+    REQUIRE_FALSE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("../outside.bin"), 1, 128 * 1024));
+
+    REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/face.jpg")));
+    REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/face.paa")));
+    REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/sound/radio.ogg")));
+    REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/squads/SQTAG/logo.paa")));
+    REQUIRE(Poseidon::ClassifyNetworkPlayerUploadRelativePath(RString("face.jpg")) ==
+            Poseidon::NetworkPlayerUploadKind::Face);
+    REQUIRE(Poseidon::ClassifyNetworkPlayerUploadRelativePath(RString("face.paa")) ==
+            Poseidon::NetworkPlayerUploadKind::Face);
+    REQUIRE(Poseidon::ClassifyNetworkPlayerUploadRelativePath(RString("sound/radio.ogg")) ==
+            Poseidon::NetworkPlayerUploadKind::Sound);
+    REQUIRE(Poseidon::ClassifyNetworkPlayerUploadRelativePath(RString("sound\\radio.ogg")) ==
+            Poseidon::NetworkPlayerUploadKind::Sound);
+    REQUIRE(Poseidon::ClassifyNetworkPlayerUploadRelativePath(RString()) == Poseidon::NetworkPlayerUploadKind::Other);
+    REQUIRE(Poseidon::ClassifyNetworkPlayerUploadRelativePath(RString("radio.ogg")) ==
+            Poseidon::NetworkPlayerUploadKind::Other);
+
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/face.jpg")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/sound/radio.ogg")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/face.gif")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/../face.jpg")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Al/ice/face.jpg")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/mpmissions/__CUR_MP.pbo")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("../outside.bin")));
+}
+
+TEST_CASE("Mission transfer cache paths reject traversal in server-provided mission names",
+          "[network][mission][transfer][security]")
+{
+    REQUIRE(Poseidon::BuildNetworkMissionTransferCachePboPath("co06_clean_sweep.Intro").GetLength() > 0);
+
+    REQUIRE(Poseidon::BuildNetworkMissionTransferCachePboPath("../escape").GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkMissionTransferCachePboPath("nested/escape").GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkMissionTransferCachePboPath("/tmp/escape").GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkMissionTransferCachePboPath("C:/Windows/System32/escape").GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkMissionTransferCachePboPath("C:\\Windows\\System32\\escape").GetLength() == 0);
+}
+
+TEST_CASE("Transferred custom asset probe maps semantic asset names to temp paths", "[network][assets]")
+{
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("player"), RString("42"), RString("face.jpg")) ==
+            RString("tmp/players/42/face.jpg"));
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(
+                RString("playerFace"), RString("42"), RString("face.paa")) == RString("tmp/players/42/face.paa"));
+
+    REQUIRE(
+        Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("unknown"), RString("Alice"), RString("face.jpg"))
+            .GetLength() == 0);
+    REQUIRE(
+        Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("player"), RString("../Alice"), RString("face.jpg"))
+            .GetLength() == 0);
+}
+
+TEST_CASE("Server player upload paths require safe player names and exact temp prefix", "[network][upload]")
+{
+    const RString tmp = RString("server-tmp");
+    const RString playerDir = RString("server-tmp/players/42/");
+
+    REQUIRE(Poseidon::BuildNetworkServerPlayerUploadDir(tmp, 42) == playerDir);
+    REQUIRE(Poseidon::BuildNetworkServerPlayerUploadDir(RString("server-tmp\\session"), 42) ==
+            RString("server-tmp/session/players/42/"));
+    REQUIRE(Poseidon::BuildNetworkServerPlayerAssetUploadPath(tmp, 42, RString("face.jpg")) ==
+            playerDir + RString("face.jpg"));
+    REQUIRE(Poseidon::IsSafeNetworkServerPlayerUploadPath(playerDir + RString("face.jpg"), tmp, 42));
+    REQUIRE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("/tmp/cwr/server-tmp/players/42/face.jpg"), tmp, 42));
+    REQUIRE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("/tmp/cwr/server-tmp/players/42/sound/ack.ogg"), tmp,
+                                                          42));
+    REQUIRE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("/tmp/cwr/Tmp1985/players/42/face.jpg"), tmp, 42));
+    REQUIRE(
+        Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("/tmp/cwr/Tmp1985/players/42/sound/ack.ogg"), tmp, 42));
+    REQUIRE(Poseidon::NormalizeNetworkServerPlayerUploadPath(RString("/tmp/cwr/Tmp1985/players/42/face.jpg"), tmp,
+                                                             42) == playerDir + RString("face.jpg"));
+    REQUIRE(Poseidon::NormalizeNetworkServerPlayerUploadPath(RString("/tmp/cwr/Tmp1985/players/42/sound/ack.ogg"), tmp,
+                                                             42) == playerDir + RString("sound/ack.ogg"));
+    REQUIRE(
+        Poseidon::ClassifyNetworkServerPlayerUploadPath(
+            Poseidon::NormalizeNetworkServerPlayerUploadPath(RString("/tmp/cwr/Tmp1985/players/42/face.jpg"), tmp, 42),
+            tmp, 42) == Poseidon::NetworkPlayerUploadKind::Face);
+    REQUIRE(Poseidon::ClassifyNetworkServerPlayerUploadPath(
+                Poseidon::NormalizeNetworkServerPlayerUploadPath(RString("/tmp/cwr/Tmp1985/players/42/sound/ack.ogg"),
+                                                                 tmp, 42),
+                tmp, 42) == Poseidon::NetworkPlayerUploadKind::Sound);
+    REQUIRE(Poseidon::NormalizeNetworkServerPlayerUploadPath(playerDir + RString("face.jpg"), tmp, 42) ==
+            playerDir + RString("face.jpg"));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("server-tmp/players/Alice/face.jpg"), tmp, 42));
+
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("server-tmp/players/43/face.jpg"), tmp, 42));
+    REQUIRE_FALSE(
+        Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("/tmp/cwr/server-tmp/players/43/face.jpg"), tmp, 42));
+    REQUIRE_FALSE(
+        Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("/tmp/cwr/Tmp1985/players/43/sound/ack.ogg"), tmp, 42));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(playerDir + RString("../face.jpg"), tmp, 42));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("server-tmp/players/4/2/face.jpg"), tmp, 42));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("/players/42/face.jpg"), tmp, 42));
+    REQUIRE_FALSE(
+        Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("/tmp/cwr/Tmp1985/players/42/nested/face.jpg"), tmp, 42));
+    REQUIRE(Poseidon::NormalizeNetworkServerPlayerUploadPath(RString("/tmp/cwr/Tmp1985/players/43/face.jpg"), tmp, 42)
+                .GetLength() == 0);
+}
+
+TEST_CASE("Player custom sound paths reject unsafe path components", "[network][assets][sound]")
+{
+    const RString localSoundDir = RString("users") + RString(PATH_SEP_STR) + RString("Alice") + RString(PATH_SEP_STR) +
+                                  RString("sound") + RString(PATH_SEP_STR);
+
+    REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpDir(42) == RString("tmp/players/42/sound/"));
+    REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpPath(42, RString("radio.ogg")) ==
+            RString("tmp/players/42/sound/radio.ogg"));
+    REQUIRE(Poseidon::BuildNetworkCustomRadioSoundPath(RString("42"), RString("radio.ogg"), localSoundDir) ==
+            RString("tmp/players/42/sound/radio.ogg"));
+    REQUIRE(
+        Poseidon::BuildNetworkCustomRadioSoundPath(RString("Alice"), RString("radio.ogg"), localSoundDir).GetLength() ==
+        0);
+    REQUIRE(Poseidon::BuildNetworkCustomRadioSoundPath(RString(), RString("radio.ogg"), localSoundDir) ==
+            localSoundDir + RString("radio.ogg"));
+
+    REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpPath(RString("Al/ice"), RString("radio.ogg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpPath(42, RString("../radio.ogg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpPath(42, RString("nested/radio.ogg")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkPlayerSoundTmpPath(42, RString("C:radio.ogg")).GetLength() == 0);
+    REQUIRE(
+        Poseidon::BuildNetworkCustomRadioSoundPath(RString("42"), RString("../radio.ogg"), localSoundDir).GetLength() ==
+        0);
+    REQUIRE(Poseidon::BuildNetworkCustomRadioSoundPath(RString(), RString("../radio.ogg"), localSoundDir).GetLength() ==
+            0);
+}
+
+TEST_CASE("Custom radio menu text decodes legacy filenames for supported languages",
+          "[network][assets][sound][encoding]")
+{
+    struct Case
+    {
+        RString filename;
+        Poseidon::Codepage preferredCodepage;
+        RString expected;
+    };
+
+    const Case cases[] = {
+        {RString("BO\x8E"
+                 "E, TO JE ALE SPOU\x8A\x8D.ogg"),
+         Poseidon::Codepage::CP1252,
+         RString("BO\xC5\xBD"
+                 "E, TO JE ALE SPOU\xC5\xA0\xC5\xA4")},
+        {RString("Gr\xFC\xDF"
+                 "e caf\xE9 se\xF1"
+                 "or.ogg"),
+         Poseidon::Codepage::CP1252,
+         RString("Gr\xC3\xBC\xC3\x9F"
+                 "e caf\xC3\xA9 se\xC3\xB1"
+                 "or")},
+        {RString("\xCF\xF0\xE8\xE2\xE5\xF2.ogg"), Poseidon::Codepage::CP1252,
+         RString("\xD0\x9F\xD1\x80\xD0\xB8\xD0\xB2\xD0\xB5\xD1\x82")},
+        {RString("\xC4\x8C"
+                 "au Gr\xC3\xBC\xC3\x9F"
+                 "e.ogg"),
+         Poseidon::Codepage::CP1250,
+         RString("\xC4\x8C"
+                 "au Gr\xC3\xBC\xC3\x9F"
+                 "e")},
+        {RString("BO\xC5\xBD"
+                 "E, TO JE ALE SPOU\xC5\xA0\xC5\xA4.ogg"),
+         Poseidon::Codepage::CP1252,
+         RString("BO\xC5\xBD"
+                 "E, TO JE ALE SPOU\xC5\xA0\xC5\xA4")},
+    };
+
+    for (const Case& c : cases)
+    {
+        REQUIRE(Poseidon::BuildNetworkCustomRadioMenuText(c.filename, c.preferredCodepage) == c.expected);
+    }
+
+    const char* languages[] = {"English",    "French",  "German",    "Italian",   "Spanish",   "Dutch",
+                               "Portuguese", "Danish",  "Swedish",   "Norwegian", "Finnish",   "Icelandic",
+                               "Czech",      "Polish",  "Slovak",    "Hungarian", "Slovenian", "Croatian",
+                               "Romanian",   "Russian", "Ukrainian", "Bulgarian"};
+    const RString reported = RString("BO\x8E"
+                                     "E, TO JE ALE SPOU\x8A\x8D.ogg");
+    const RString expected = RString("BO\xC5\xBD"
+                                     "E, TO JE ALE SPOU\xC5\xA0\xC5\xA4");
+    for (const char* language : languages)
+    {
+        INFO(language);
+        REQUIRE(Poseidon::BuildNetworkCustomRadioMenuText(reported, Poseidon::CodepageForLanguage(language)) ==
+                expected);
+    }
+
+    const RString reportedUtf8 = RString("BO\xC5\xBD"
+                                         "E, TO JE ALE SPOU\xC5\xA0\xC5\xA4.ogg");
+    for (const char* language : languages)
+    {
+        INFO(language);
+        REQUIRE(Poseidon::BuildNetworkCustomRadioMenuText(reportedUtf8, Poseidon::CodepageForLanguage(language)) ==
+                expected);
+    }
+}
+
+TEST_CASE("Transferred custom sound paths are confined to player temp sound directories", "[network][assets][sound]")
+{
+    REQUIRE(Poseidon::IsNetworkTransferredAssetSizeAllowed(128 * 1024, 128 * 1024));
+    REQUIRE_FALSE(Poseidon::IsNetworkTransferredAssetSizeAllowed(128 * 1024 + 1, 128 * 1024));
+    REQUIRE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/players/42/sound/radio.ogg"), 128 * 1024,
+                                                          128 * 1024));
+    REQUIRE_FALSE(Poseidon::ShouldAcceptNetworkTransferredAsset(RString("tmp/players/42/sound/radio.ogg"),
+                                                                128 * 1024 + 1, 128 * 1024));
+
+    REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/sound/radio.ogg")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/sound/nested/radio.ogg")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/sound/../radio.ogg")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Al/ice/sound/radio.ogg")));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("../outside.bin")));
+}
+
+TEST_CASE("Transferred custom sound probe maps semantic asset names to temp paths", "[network][assets][sound]")
+{
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("playerSound"), RString("42"),
+                                                               RString("radio.ogg")) ==
+            RString("tmp/players/42/sound/radio.ogg"));
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("sound"), RString("42"), RString("radio.ogg")) ==
+            RString("tmp/players/42/sound/radio.ogg"));
+
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("playerSound"), RString("42"),
+                                                               RString("nested/radio.ogg"))
+                .GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("playerSound"), RString("../Alice"),
+                                                               RString("radio.ogg"))
+                .GetLength() == 0);
+}
+
+TEST_CASE("Server player upload paths accept custom sounds only under the player's safe prefix",
+          "[network][upload][sound]")
+{
+    const RString tmp = RString("server-tmp");
+    const RString playerDir = RString("server-tmp/players/42/");
+    const RString soundDir = playerDir + RString("sound/");
+
+    REQUIRE(Poseidon::BuildNetworkServerPlayerUploadDir(tmp, 42) == playerDir);
+    REQUIRE(Poseidon::BuildNetworkServerPlayerSoundUploadDir(tmp, 42) == soundDir);
+    REQUIRE(Poseidon::BuildNetworkServerPlayerSoundUploadPath(tmp, 42, RString("radio.ogg")) ==
+            soundDir + RString("radio.ogg"));
+    REQUIRE(Poseidon::IsSafeNetworkServerPlayerUploadPath(soundDir + RString("radio.ogg"), tmp, 42));
+
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(soundDir + RString("nested/radio.ogg"), tmp, 42));
+    REQUIRE_FALSE(
+        Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("server-tmp/players/43/sound/radio.ogg"), tmp, 42));
+    REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(soundDir + RString("../radio.ogg"), tmp, 42));
+}
+
+TEST_CASE("Squad logo paths reject unsafe XML path components", "[network][squad][assets]")
+{
+    REQUIRE(Poseidon::NetworkSquadFileMaxSize == 1024 * 1024);
+    REQUIRE(Poseidon::IsNetworkSquadFileSizeAllowed(Poseidon::NetworkSquadFileMaxSize));
+    REQUIRE_FALSE(Poseidon::IsNetworkSquadFileSizeAllowed(Poseidon::NetworkSquadFileMaxSize + 1));
+
+    REQUIRE(Poseidon::BuildNetworkSquadPictureRelativePath(RString("CWR"), RString("synthetic_grid.paa")) ==
+            RString("squads/CWR/synthetic_grid.paa"));
+    REQUIRE(Poseidon::BuildNetworkSquadPictureTmpPath(RString("CWR"), RString("synthetic_grid.paa")) ==
+            RString("tmp/squads/CWR/synthetic_grid.paa"));
+    REQUIRE(Poseidon::BuildNetworkServerSquadPictureUploadPath(RString("server-tmp"), RString("CWR"),
+                                                               RString("synthetic_grid.paa")) ==
+            RString("server-tmp/squads/CWR/synthetic_grid.paa"));
+    REQUIRE(Poseidon::NetworkSquadPictureStorageName(
+                RString("https://gist.githubusercontent.com/simi/b4dbb7fea11cb4c7e7b1c090e5e065bc/raw/"
+                        "synthetic_grid.paa")) == RString("synthetic_grid.paa"));
+    REQUIRE(Poseidon::BuildNetworkSquadPictureTmpPath(
+                RString("CWR"), RString("https://gist.githubusercontent.com/simi/b4dbb7fea11cb4c7e7b1c090e5e065bc/raw/"
+                                        "synthetic_grid.paa")) == RString("tmp/squads/CWR/synthetic_grid.paa"));
+
+    REQUIRE(Poseidon::BuildNetworkSquadPictureTmpPath(RString("CW/R"), RString("synthetic_grid.paa")).GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkSquadPictureTmpPath(RString("CWR"), RString("../synthetic_grid.paa")).GetLength() ==
+            0);
+    REQUIRE(Poseidon::BuildNetworkSquadPictureDownloadUrl(
+                RString("https://gist.githubusercontent.com/simi/b4dbb7fea11cb4c7e7b1c090e5e065bc/raw/squad.xml"),
+                RString("synthetic_grid.paa")) ==
+            RString("https://gist.githubusercontent.com/simi/b4dbb7fea11cb4c7e7b1c090e5e065bc/raw/"
+                    "synthetic_grid.paa"));
+    REQUIRE(Poseidon::BuildNetworkSquadPictureDownloadUrl(
+                RString("https://gist.githubusercontent.com/simi/b4dbb7fea11cb4c7e7b1c090e5e065bc/raw/squad.xml"),
+                RString("../synthetic_grid.paa"))
+                .GetLength() == 0);
+    REQUIRE(Poseidon::BuildNetworkSquadPictureDownloadUrl(
+                RString("https://example.invalid/squad.xml"),
+                RString("https://cdn.example.invalid/assets/synthetic_grid.paa")) ==
+            RString("https://cdn.example.invalid/assets/synthetic_grid.paa"));
+    REQUIRE(Poseidon::BuildNetworkSquadPictureDownloadUrl(
+                RString("https://example.invalid/squad.xml"),
+                RString("https://cdn.example.invalid/assets/../synthetic_grid.paa"))
+                .GetLength() == 0);
+}
+
+TEST_CASE("Transferred squad asset probe maps semantic names to temp paths", "[network][squad][assets]")
+{
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("squad"), RString("CWR"),
+                                                               RString("synthetic_grid.paa")) ==
+            RString("tmp/squads/CWR/synthetic_grid.paa"));
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("squadPicture"), RString("CWR"),
+                                                               RString("synthetic_grid.paa")) ==
+            RString("tmp/squads/CWR/synthetic_grid.paa"));
+    REQUIRE(Poseidon::BuildNetworkTransferredAssetProbeTmpPath(RString("squad"), RString("CW/R"),
+                                                               RString("synthetic_grid.paa"))
+                .GetLength() == 0);
+}
+
+TEST_CASE("Player-role assignment request does not mutate the local role table", "[network][role]")
+{
+    struct Role
+    {
+        int player;
+        bool roleLocked;
+    };
+
+    AutoArray<Role> roles;
+    roles.Resize(3);
+    roles[0] = {101, true};
+    roles[1] = {-1, false};
+    roles[2] = {202, true};
+
+    const Role request = Poseidon::BuildNetworkPlayerRoleAssignmentRequest(roles[1], 101);
+
+    REQUIRE(request.player == 101);
+    REQUIRE_FALSE(request.roleLocked);
+
+    REQUIRE(roles[0].player == 101);
+    REQUIRE(roles[0].roleLocked);
+    REQUIRE(roles[1].player == -1);
+    REQUIRE_FALSE(roles[1].roleLocked);
+    REQUIRE(roles[2].player == 202);
+    REQUIRE(roles[2].roleLocked);
+}
+
 // Transcription of the original relay guard pair:
 //   if (info.dpid == from) continue;
 //   if (info.state < minState) continue;
@@ -240,4 +724,21 @@ TEST_CASE("Refactor: RelayEligible equals the original relay guard pair", "[refa
             }
         }
     }
+}
+
+TEST_CASE("Server MaxCustomFileSize is read from config with a fallback", "[network][config][sound]")
+{
+    // Absent key -> keep the built-in default (no server-side change).
+    ParamFile absent;
+    REQUIRE(Poseidon::NetworkMaxCustomFileSizeFromCfg(absent, 131072) == 131072);
+
+    // Present key -> server-configured cap (e.g. shrink the allowance).
+    ParamFile capped;
+    capped.Add("MaxCustomFileSize", 4096);
+    REQUIRE(Poseidon::NetworkMaxCustomFileSizeFromCfg(capped, 131072) == 4096);
+
+    // 0 -> block all custom files (any non-empty transfer is rejected/kicked).
+    ParamFile blocked;
+    blocked.Add("MaxCustomFileSize", 0);
+    REQUIRE(Poseidon::NetworkMaxCustomFileSizeFromCfg(blocked, 131072) == 0);
 }

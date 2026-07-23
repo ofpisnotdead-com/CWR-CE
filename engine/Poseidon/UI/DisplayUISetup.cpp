@@ -1,10 +1,12 @@
 #include <Poseidon/Foundation/Platform/AppConfig.hpp>
 #include <Poseidon/UI/Map/UIMap.hpp>
+#include <Poseidon/Core/Application.hpp>
 #include <Poseidon/Core/Config/EngineConfig.hpp>
 #include <Poseidon/Core/Config/UserConfig.hpp>
 #include <Poseidon/Core/resincl.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Network/Network.hpp>
+#include <Poseidon/Network/NetworkManagerState.hpp>
 #include <Poseidon/Game/Chat.hpp>
 #include <Poseidon/UI/DisplayUI.hpp>
 #include <Poseidon/UI/DisplayUICommon.hpp>
@@ -209,15 +211,22 @@ void DisplayClient::OnSimulate(EntityAI* vehicle)
         // ran (possibly ending very quickly before DisplayMission was created).
         LOG_DEBUG(Network, "[mp-assign] Disconnect: gameState=NGSNone wasConnected={} exitCode={} serverPlaying={}",
                   _wasConnected, GApp->m_exitCode, GetNetworkManager().WasServerPlaying());
-        if (GApp->m_exitCode == 0 || GetNetworkManager().WasServerPlaying())
+        const bool missionCompleted = GApp->m_exitCode == 0 || GetNetworkManager().WasServerPlaying();
+        const bool shutdownAlreadyRequested = GApp->m_closeRequest;
+        GApp->m_exitCode =
+            ResolveMultiplayerAutomationExitCode(GApp->m_exitCode, shutdownAlreadyRequested, missionCompleted);
+        if (shutdownAlreadyRequested)
         {
-            GApp->m_exitCode = 0;
+            LOG_DEBUG(Network, "[mp-assign] Disconnect after shutdown request, preserving exitCode={}",
+                      GApp->m_exitCode);
+        }
+        else if (missionCompleted)
+        {
             LOG_DEBUG(Network, "[mp-assign] Server disconnected after play (mission complete)");
         }
         else
         {
             LOG_DEBUG(Network, "[mp-assign] Server offline before play started");
-            GApp->m_exitCode = 2;
         }
         GApp->m_closeRequest = true;
         return;
@@ -973,6 +982,8 @@ DisplayMultiplayerSetup::DisplayMultiplayerSetup(ControlsContainer* parent) : Di
     _player = NO_PLAYER;
 
     _transferMission = true;
+    _transferOverlayVisible = false;
+    _transferOverlayShows = 0;
     _loadIsland = true;
     _play = false;
 
@@ -1410,7 +1421,8 @@ void DisplayMultiplayerSetup::OnChildDestroyed(int idd, int exit)
                 Display::OnChildDestroyed(idd, exit);
                 // In auto-assign mode, reaching this point means a mission was played
                 if (!AppConfig::Instance().GetMPAssign().empty())
-                    GApp->m_exitCode = 0;
+                    GApp->m_exitCode =
+                        ResolveMultiplayerAutomationExitCode(GApp->m_exitCode, GApp->m_closeRequest, true);
                 GetNetworkManager().DestroyAllObjects();
                 GetNetworkManager().ClientReady(NGSDebriefing);
                 CreateChild(new DisplayClientDebriefing(this, false));
@@ -1445,8 +1457,19 @@ void DisplayMultiplayerSetup::OnChildDestroyed(int idd, int exit)
 
 void DisplayMultiplayerSetup::OnSimulate(EntityAI* vehicle)
 {
-    NetworkGameState state = GetNetworkManager().GetServerState();
+    NetworkGameState state = Poseidon::ResolveMultiplayerSetupDisplayState(
+        GetNetworkManager().IsServer(), GetNetworkManager().GetServerState(), GetNetworkManager().GetGameState());
     LOG_DEBUG(Network, "[mp-setup] OnSimulate: state={} isServer={}", (int)state, GetNetworkManager().IsServer());
+
+    if (!GetNetworkManager().IsServer())
+    {
+        const bool transferOverlayVisible = state == NGSTransferMission;
+        if (transferOverlayVisible && !_transferOverlayVisible)
+        {
+            ++_transferOverlayShows;
+        }
+        _transferOverlayVisible = transferOverlayVisible;
+    }
 
     if (GetNetworkManager().IsServer())
     {
@@ -1486,7 +1509,8 @@ void DisplayMultiplayerSetup::OnSimulate(EntityAI* vehicle)
                     _message = LocalizeString(IDS_NETWORK_SEND);
 
                     GetNetworkManager().CreateAllObjects();
-                    // wait until NGSBriefing on client
+                    // CreateAllObjects ends with a guaranteed Briefing report. The server
+                    // advances only after consuming it, behind every world update above.
                 }
                 break;
             case NGSBriefing:
@@ -1616,7 +1640,10 @@ void DisplayMultiplayerSetup::OnSimulate(EntityAI* vehicle)
                 // else continue
             case NGSPlay:
             {
-                CreateChild(new DisplayClientWait(this));
+                if (GetNetworkManager().GetGameState() >= NGSPlay && GetNetworkManager().GetMyPlayerRole())
+                    CreateChild(new DisplayMission(this));
+                else
+                    CreateChild(new DisplayClientWait(this));
                 break;
             }
             case NGSDebriefing:

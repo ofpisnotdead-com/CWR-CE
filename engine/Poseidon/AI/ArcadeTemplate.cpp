@@ -1832,7 +1832,7 @@ bool ArcadeTemplate::IsConsistent(Display* disp, bool multiplayer)
         }
     }
 
-    AI_ERROR(nPlayers1 <= 1);
+    AI_ERROR(multiplayer || nPlayers1 <= 1);
 #if !_ENABLE_CHEATS
     if (!multiplayer && nPlayers1 == 0)
     {

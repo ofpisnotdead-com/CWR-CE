@@ -159,7 +159,11 @@ async fn run_server(args: ServerArgs) -> Result<()> {
     let listener = tokio::net::TcpListener::bind(&args.listen).await?;
     let local_addr = listener.local_addr()?;
     log_listen_urls(local_addr);
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
 

@@ -16,6 +16,7 @@
 #include <Poseidon/Core/Progress.hpp>
 
 #include <Poseidon/IO/Serialization/ParamArchive.hpp>
+#include <Poseidon/IO/FileServer.hpp>
 #include <Poseidon/Core/SaveVersion.hpp>
 
 #include <Poseidon/IO/Streams/QBStream.hpp>
@@ -316,6 +317,8 @@ void FindEnvSound(RString name, SoundPars& day, SoundPars& night)
     Poseidon::Foundation::WarningMessage("Environmental sound %s not found", (const char*)name);
 }
 
+static void PreferExistingVoiceLanguageOverride(SoundPars& pars);
+
 void FindSFX(RString name, SoundEntry& emptySound, AutoArray<SoundEntry>& sounds)
 {
     // ignore @ - not used now
@@ -347,6 +350,7 @@ void FindSFX(RString name, SoundEntry& emptySound, AutoArray<SoundEntry>& sounds
             if (sound.name.GetLength() > 0)
             {
                 sound.name = GetMissionDirectory() + sound.name;
+                PreferExistingVoiceLanguageOverride(sound);
             }
         }
         // return sound location
@@ -376,6 +380,7 @@ void FindSFX(RString name, SoundEntry& emptySound, AutoArray<SoundEntry>& sounds
             if (sound.name.GetLength() > 0)
             {
                 sound.name = BaseDirectory + RString("dtaExt\\") + sound.name;
+                PreferExistingVoiceLanguageOverride(sound);
             }
         }
         // return sound location
@@ -894,14 +899,31 @@ RString CreateSingleMissionBank(RString filename)
 {
     // suppose filename is without extension (.pbo)
 
-    // remove bank
+    // Remove the previously created __cur_sp bank(s). Match with CmpStartStr —
+    // the same separator- and case-insensitive prefix test AutoBank uses to
+    // resolve reads. A plain strnicmp here is separator-sensitive, and
+    // SetPrefix() stores the prefix with platform-native separators
+    // (backslash -> slash on POSIX): on Linux the literal backslash prefix never
+    // matched, so old banks leaked and every template resolved to the first
+    // stale __cur_sp bank.
     const char* prefix = "missions\\__cur_sp.";
-    int prefixLen = strlen(prefix);
     for (int i = 0; i < GFileBanks.Size();)
     {
         QFBank& bank = GFileBanks[i];
-        if (strnicmp(bank.GetPrefix(), prefix, prefixLen) == 0)
+        if (CmpStartStr(bank.GetPrefix(), prefix) == 0)
         {
+            if (GFileServer)
+            {
+                GFileServer->FlushBank(&bank);
+            }
+            if (GEngine && GEngine->TextBank())
+            {
+                GEngine->TextBank()->FlushBank(&bank);
+            }
+            if (GSoundsys)
+            {
+                GSoundsys->FlushBank(&bank);
+            }
             GFileBanks.Delete(i);
         }
         else

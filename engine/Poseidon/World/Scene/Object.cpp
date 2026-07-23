@@ -1288,7 +1288,12 @@ void Object::Draw2D(LODShape* lShape, int lod, PackedColor cColor, bool preserve
 
 void Object::DrawWidescreenPillarbox(bool requireGameplayActive)
 {
-    if (!AspectRatio::ArePillarboxBarsEnabled())
+    DrawWidescreenPillarbox(requireGameplayActive, /*force*/ false);
+}
+
+void Object::DrawWidescreenPillarbox(bool requireGameplayActive, bool force)
+{
+    if (!force && !AspectRatio::ArePillarboxBarsEnabled())
         return;
     // The pillarbox treatment exists for 4:3-designed dark-around
     // overlay models (cutscene CinemaBorder, binocs, NV goggles,

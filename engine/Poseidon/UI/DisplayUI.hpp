@@ -143,15 +143,7 @@ class DisplayMods : public Display
     bool _sortAscending = true;
 
   public:
-    DisplayMods(ControlsContainer* parent) : Display(parent)
-    {
-        _enableSimulation = false;
-        _exitWhenClose = -1;
-        Load("RscDisplayMods");
-        // Match the MP browser: open with a default Name-ascending sort and its
-        // caret shown (out-of-line; CModsList + ModsSortColumn aren't visible here).
-        ApplyInitialSort();
-    }
+    DisplayMods(ControlsContainer* parent);
 
     // Builds the catalog list as a CModsList (5-column DrawItem) and seeds it.
     // Out-of-line in OptionsUIApp.cpp where CModsList is fully visible.
@@ -497,6 +489,8 @@ class DisplayMultiplayer : public Display
     bool _refresh;
 
     bool _refreshing;
+    bool _internetPingProbe = false;
+    int _internetPingProbeFrames = 0;
 
     // Test-only (triSeedSessions): once set, UpdateServerList is a no-op so a
     // LAN/master refresh can't wipe the seeded rows.
@@ -528,6 +522,7 @@ class DisplayMultiplayer : public Display
     // Test-only (triSeedSessions): replace the browser list with count fake
     // sessions so the table's rows/sort can be characterized in the harness.
     void SeedTestSessions(int count);
+    int GetVisibleSessionPingForTest(int row) const;
 
   protected:
     // Join a server that requires mods: resolve the required set against the catalog,
@@ -541,6 +536,7 @@ class DisplayMultiplayer : public Display
     void UpdatePassword(RString password);
     void UpdateSessions();
     void UpdateServerList();
+    void UpdateInternetSessionPings();
     int GetPort();
     void SetPort(int port);
     void SetSource(BrowsingSource source);
@@ -569,17 +565,19 @@ class DisplayPassword : public Display
 
 // One-screen "join a modded server" approval: shows the server name, the mod diff
 // (already formatted by the caller from a ServerModResolution), and a password field.
-// Download & Join exits IDC_OK; the parent reads the password back and proceeds.
+// IDC_OK exits; the parent reads the password back and proceeds.
 class DisplayJoinRequirements : public Display
 {
   protected:
     RString _title;
     RString _diff;
     RString _password;
+    RString _okText;
 
   public:
-    DisplayJoinRequirements(ControlsContainer* parent, RString title, RString diff, RString password)
-        : Display(parent), _title(title), _diff(diff), _password(password)
+    DisplayJoinRequirements(ControlsContainer* parent, RString title, RString diff, RString password,
+                            RString okText = RString())
+        : Display(parent), _title(title), _diff(diff), _password(password), _okText(okText)
     {
         _enableSimulation = false;
         Load("RscDisplayJoinRequirements");
@@ -727,6 +725,8 @@ class DisplayMultiplayerSetup : public Display
 
     bool _init;
     bool _transferMission;
+    bool _transferOverlayVisible;
+    unsigned _transferOverlayShows;
     bool _loadIsland;
     bool _play;
 
@@ -755,6 +755,8 @@ class DisplayMultiplayerSetup : public Display
 
   public:
     DisplayMultiplayerSetup(ControlsContainer* parent);
+    RString GetMessageForTest() const { return _message; }
+    unsigned GetTransferOverlayShowsForTest() const { return _transferOverlayShows; }
     Control* OnCreateCtrl(int type, int idc, const ParamEntry& cls) override;
 
     void OnButtonClicked(int idc) override;
@@ -799,6 +801,7 @@ class DisplayClientGetReady : public DisplayGetReady
     DisplayClientGetReady(ControlsContainer* parent);
     void Destroy() override;
     void OnButtonClicked(int idc) override;
+    void OnDraw(EntityAI* vehicle, float alpha) override;
     void OnSimulate(EntityAI* vehicle) override;
 };
 

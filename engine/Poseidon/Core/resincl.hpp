@@ -384,6 +384,7 @@ CMD_RADIO_CUSTOM_0
 #define IDC_MODS_FILTER				123
 #define IDC_MODS_FILTER_NAME			124
 #define IDC_MODS_NOTEBOOK			106
+#define IDC_MODS_MASTER_SERVER			7000
 
 // Mods download dialog (RscDisplayModDownload) — opened from Apply when the
 // ticked set includes not-yet-downloaded (Available) mods.

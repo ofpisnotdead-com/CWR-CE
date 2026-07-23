@@ -59,6 +59,36 @@
       }
     },
     {
+      "name": "steamrt4-x64-clang-dbg",
+      "displayName": "Steam Runtime 4 x64 Clang Debug",
+      "inherits": "linux-clang-debug",
+      "binaryDir": "${sourceDir}/build/steamrt4-x64-clang-dbg",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-linux-clang",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-x64-clang.cmake"
+      }
+    },
+    {
+      "name": "steamrt4-x64-clang-rwdi",
+      "displayName": "Steam Runtime 4 x64 Clang RelWithDebInfo",
+      "inherits": "linux-clang-relwithdebinfo",
+      "binaryDir": "${sourceDir}/build/steamrt4-x64-clang-rwdi",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-linux-clang",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-x64-clang.cmake"
+      }
+    },
+    {
+      "name": "steamrt4-x64-clang-rel",
+      "displayName": "Steam Runtime 4 x64 Clang Release",
+      "inherits": "linux-clang-release",
+      "binaryDir": "${sourceDir}/build/steamrt4-x64-clang-rel",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-linux-clang",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-x64-clang.cmake"
+      }
+    },
+    {
       "name": "linux-x64-clang-rel",
       "displayName": "Linux x64 Clang Release",
       "inherits": "linux-clang-release",

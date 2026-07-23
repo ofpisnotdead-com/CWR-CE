@@ -43,3 +43,9 @@ TEST_CASE("MachineIdToPlayerId - distinct machines get distinct ids", "[network]
             MachineIdToPlayerId("fedcba9876543210fedcba9876543210"));
     REQUIRE(MachineIdToPlayerId("deadbeef") != MachineIdToPlayerId("deadbeee"));
 }
+
+TEST_CASE("MachineIdToPlayerId - squad insignia fixture ids stay aligned", "[network][mp-id]")
+{
+    REQUIRE(MachineIdToPlayerId("trident:squad_insignia_https:client1") == 2227712454512799032ULL);
+    REQUIRE(MachineIdToPlayerId("trident:squad_insignia_https:client2") == 2227715753047683665ULL);
+}

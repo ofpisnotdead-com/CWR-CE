@@ -24,8 +24,15 @@ class UserConfig
     void InitDefaults();
     void InitDifficulties();
 
-    /// Whether the toggle is enabled in the current difficulty mode (cadet/veteran).
+    /// Whether the toggle is enabled in the current difficulty mode. A server
+    /// override (set in multiplayer) takes precedence over the local profile.
     bool IsEnabled(DifficultyType type) const;
+
+    /// Adopt the server's per-flag difficulty so queries are server-authoritative.
+    void SetServerDifficulty(const bool* flags);
+    /// Drop the server override; queries fall back to the local profile.
+    void ClearServerDifficulty();
+    bool HasServerDifficulty() const { return _serverDifficultyActive; }
 
     // --- Difficulty Settings ---
     bool cadetDifficulty[DTN];   // Flags for cadet mode
@@ -42,5 +49,9 @@ class UserConfig
   private:
     void LoadFromParamFile(const ParamFile& cfg);
     void SaveToParamFile(ParamFile& cfg) const;
+
+    // Server difficulty pushed by the host in multiplayer (session-local, not persisted).
+    bool _serverDifficultyActive = false;
+    bool _serverDifficulty[DTN] = {};
 };
 } // namespace Poseidon

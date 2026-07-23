@@ -1,7 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <climits>
+#include <vector>
 #include <Poseidon/Foundation/Containers/Array.hpp>
+#include <Poseidon/Network/NetworkFileTransfer.hpp>
 #include <Poseidon/Network/WireBounds.hpp>
 
 using namespace Poseidon;
@@ -90,4 +93,64 @@ TEST_CASE("AutoArray::AtOrNull bounds-checks in release builds", "[foundation][c
     REQUIRE(ca.AtOrNull(1) != nullptr);
     REQUIRE(*ca.AtOrNull(1) == 99);
     REQUIRE(ca.AtOrNull(5) == nullptr);
+}
+
+TEST_CASE("file transfer segments advance offsets for multi-segment payloads", "[network][file-transfer]")
+{
+    struct TestTransferFileMessage
+    {
+        RString path;
+        AutoArray<char> data;
+        int totSize = 0;
+        int offset = 0;
+        int totSegments = 0;
+        int curSegment = 0;
+    };
+
+    constexpr int payload = NetworkFileTransferSegmentSize;
+    const int totalSize = payload * 2 + 17;
+    std::vector<char> data(totalSize);
+    std::vector<int> offsets;
+    std::vector<int> sizes;
+    std::vector<int> indices;
+    std::vector<char> reconstructed(totalSize);
+
+    const int segmentCount = SendNetworkFileTransferSegments<TestTransferFileMessage>(
+        RString("tmp/players/player/face.jpg"), data.data(), static_cast<int>(data.size()),
+        [&](const TestTransferFileMessage& msg)
+        {
+            REQUIRE(msg.totSize == totalSize);
+            REQUIRE(msg.totSegments == 3);
+            offsets.push_back(msg.offset);
+            sizes.push_back(msg.data.Size());
+            indices.push_back(msg.curSegment);
+            std::copy(msg.data.Data(), msg.data.Data() + msg.data.Size(), reconstructed.begin() + msg.offset);
+        });
+
+    REQUIRE(segmentCount == 3);
+    REQUIRE(indices == std::vector<int>{0, 1, 2});
+    REQUIRE(offsets == std::vector<int>{0, payload, payload * 2});
+    REQUIRE(sizes == std::vector<int>{payload, payload, 17});
+    REQUIRE(reconstructed == data);
+}
+
+TEST_CASE("file transfer duplicate receives do not inflate progress", "[network][file-transfer]")
+{
+    bool received = false;
+    int receivedBytes = 0;
+    int remainingSegments = 2;
+
+    REQUIRE_FALSE(ApplyReceivedNetworkFileTransferSegment(received, 1024, receivedBytes, remainingSegments));
+    REQUIRE(received);
+    REQUIRE(receivedBytes == 1024);
+    REQUIRE(remainingSegments == 1);
+
+    REQUIRE_FALSE(ApplyReceivedNetworkFileTransferSegment(received, 1024, receivedBytes, remainingSegments));
+    REQUIRE(receivedBytes == 1024);
+    REQUIRE(remainingSegments == 1);
+
+    bool finalSegmentReceived = false;
+    REQUIRE(ApplyReceivedNetworkFileTransferSegment(finalSegmentReceived, 17, receivedBytes, remainingSegments));
+    REQUIRE(receivedBytes == 1041);
+    REQUIRE(remainingSegments == 0);
 }

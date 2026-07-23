@@ -601,12 +601,21 @@ fn print_query_status(target: &str, status: &ServerStatus) {
     println!("  state:    {}", s.game_state);
     println!("  password: {}", yes_no(s.password));
     println!(
-        "  version:  actual {} / required {}",
-        s.actual_version, s.required_version
+        "  version:  actual {}{} / required {}",
+        s.actual_version,
+        format_version_tag(s.version_tag.as_deref()),
+        s.required_version
     );
     if let Some(mods) = &s.mod_list {
         println!("  mod:      {mods}");
         println!("  equalMod: {}", yes_no(s.equal_mod_required));
+    }
+}
+
+fn format_version_tag(tag: Option<&str>) -> String {
+    match tag.map(str::trim).filter(|tag| !tag.is_empty()) {
+        Some(tag) => format!(" {tag}"),
+        None => String::new(),
     }
 }
 
@@ -749,8 +758,9 @@ fn print_server_detail(detail: &serde_json::Value) {
         }
     }
     println!(
-        "  versions:  actual {} / required {}",
+        "  versions:  actual {}{} / required {}",
         int("actver"),
+        format_version_tag(Some(text("vertag"))).as_str(),
         int("reqver")
     );
     println!("  transport: {} / {}", text("platform"), text("impl"));

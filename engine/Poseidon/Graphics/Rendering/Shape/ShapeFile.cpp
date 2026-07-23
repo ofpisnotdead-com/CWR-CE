@@ -30,6 +30,41 @@ Poseidon::Object* NewProxyObject(Poseidon::Foundation::RString shapeName);
 namespace Poseidon
 {
 
+namespace
+{
+bool IsFaceBoundary(const Shape& shape, Offset target)
+{
+    if (target == shape.EndFaces())
+    {
+        return true;
+    }
+    for (Offset o = shape.BeginFaces(); o < shape.EndFaces(); shape.NextFace(o))
+    {
+        if (o == target)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ShapeSectionsAreUsable(const Shape& shape)
+{
+    Offset expectedBeg = shape.BeginFaces();
+    for (int i = 0; i < shape.NSections(); i++)
+    {
+        const ShapeSection& section = shape.GetSection(i);
+        if (section.beg != expectedBeg || section.end < section.beg || !IsFaceBoundary(shape, section.beg) ||
+            !IsFaceBoundary(shape, section.end))
+        {
+            return false;
+        }
+        expectedBeg = section.end;
+    }
+    return expectedBeg == shape.EndFaces();
+}
+} // namespace
+
 void NamedProperty::SerializeBin(SerializeBinStream& f)
 {
     f.Transfer(_name);
@@ -55,6 +90,10 @@ void NamedSelection::SerializeBin(SerializeBinStream& f)
 #endif
     _faceSel.SerializeBin(f);
     Selection::SerializeBin(f);
+    if (f.IsLoading())
+    {
+        _faceSelReady = false;
+    }
 }
 
 void ProxyObject::SerializeBin(SerializeBinStream& f)
@@ -313,7 +352,6 @@ void Shape::SerializeBin(SerializeBinStream& f)
         {
             _face._sections[i].SerializeBin(f, this);
         }
-        DoAssert(_face._sections.Size() == 0 || _face._sections[_face._sections.Size() - 1].end == EndFaces());
     }
     else
     {
@@ -325,6 +363,11 @@ void Shape::SerializeBin(SerializeBinStream& f)
     }
 
     f.TransferArray(_sel);
+    if (f.IsLoading() && !ShapeSectionsAreUsable(*this))
+    {
+        LOG_WARN(Graphics, "Rebuilding malformed shape sections");
+        FindSections();
+    }
 #if _DEBUG
     if (f.IsLoading())
     {

@@ -7,6 +7,7 @@
 #include <SDL3/SDL_scancode.h>
 #include <SDL3/SDL_keycode.h>
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
+#include <Poseidon/World/WorldChatInput.hpp>
 #include <Poseidon/Network/Network.hpp>
 #include <Poseidon/Game/Chat.hpp>
 #include <Poseidon/Audio/DynSound.hpp>
@@ -339,9 +340,6 @@ DisplayNewUser::DisplayNewUser(ControlsContainer* parent, RString name, bool edi
     _head->SetFace(_face);
     _head->SetGlasses(_glasses);
 
-    // Squad field hidden — CD key verification removed
-    GetCtrl(IDC_NEW_USER_SQUAD)->ShowCtrl(false);
-    GetCtrl(IDC_NEW_USER_SQUAD_TEXT)->ShowCtrl(false);
     _langCbToken = RegisterLanguageChangedCallback([this]() { RefreshLanguage(); });
 }
 
@@ -945,7 +943,8 @@ void DisplayMission::OnSimulate(EntityAI* vehicle)
             return;
         }
 
-        if (InputSubsystem::Instance().GetActionToDo(UANetworkPlayers))
+        if (Poseidon::ShouldHandleMultiplayerChatShortcut(GWorld->GetChat() != nullptr) &&
+            InputSubsystem::Instance().GetActionToDo(UANetworkPlayers))
         {
             CreateChild(new DisplayMPPlayers(this));
         }

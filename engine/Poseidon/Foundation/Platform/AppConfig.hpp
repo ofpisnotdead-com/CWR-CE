@@ -108,6 +108,9 @@ public:
 
     /// True when master-server publishing/listing is disabled for a LAN/private server.
     bool IsPrivateServer() const { return _privateServer; }
+
+    /// True when this dedicated server should publish itself to the master server.
+    bool IsPublicServer() const { return _publicServer; }
     
     /// Server password
     const RString& GetPassword() const { return _password; }
@@ -126,6 +129,9 @@ public:
     
     /// Auto-assign client to side:slot (--mp-assign WEST:1), empty=disabled
     const std::string& GetMPAssign() const { return _mpAssign; }
+
+    /// Print the exact MP compatibility tuple and exit before opening a window.
+    bool PrintMPVersion() const { return _printMPVersion; }
     
     // Audio
 
@@ -363,10 +369,12 @@ private:
     RString _connectIP;
     int _networkPort = 1985;
     int _connectPort = 0;
+    RString _bindAddress = "0.0.0.0";
     RString _advertiseAddress;
     int _maxMemMB = 0;
     int _maxThreads = -1;
     bool _privateServer = false;
+    bool _publicServer = false;
     RString _masterServer;
     RString _password;
     RString _playerName;
@@ -374,6 +382,7 @@ private:
     int _mpAutoStart = 0;
     bool _forceJIP = false;
     std::string _mpAssign;
+    bool _printMPVersion = false;
     
     // Audio
     bool _noSound = false;

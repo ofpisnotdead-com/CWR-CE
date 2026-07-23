@@ -75,10 +75,12 @@ bool TrySendNetTransportGuaranteedBuffer(MessageRef& outMessage, int bufferSize,
                                          unsigned8*& payload, CreateMessage&& createMessage,
                                          DispatchMessage&& dispatchMessage)
 {
-    if (bufferSize > maxMessage)
+    const int maxGuaranteedPayload =
+        maxMessage > NetTransportReliableFragmentPayload ? NetTransportReliableFragmentPayload : maxMessage;
+    if (bufferSize > maxGuaranteedPayload)
     {
         return SendNetTransportMessageFragments(
-            bufferSize, maxMessage, flags,
+            bufferSize, maxGuaranteedPayload, flags,
             [&outMessage, &payload, &createMessage, &dispatchMessage](int packetSize, unsigned16 packetFlags)
             {
                 if (!TrySendNetTransportMessage(
@@ -452,11 +454,14 @@ TrySendNetTransportToSingleUser(UserMapT& users, int player, ChannelRef& channel
         return result;
     }
 
-    if (bufferSize > maxMessage)
+    const int maxGuaranteedPayload =
+        maxMessage > NetTransportReliableFragmentPayload ? NetTransportReliableFragmentPayload : maxMessage;
+    if ((flags & MSG_VIM_FLAG) && bufferSize > maxGuaranteedPayload)
     {
-        result.success = TrySendNetTransportGuaranteedBuffer(outMessage, bufferSize, maxMessage, flags, payload,
-                                                             std::forward<CreateMessage>(createMessage),
-                                                             std::forward<DispatchGuaranteed>(dispatchGuaranteed));
+        result.success =
+            TrySendNetTransportGuaranteedBuffer(outMessage, bufferSize, maxMessage, flags, payload,
+                                                std::forward<CreateMessage>(createMessage),
+                                                std::forward<DispatchGuaranteed>(dispatchGuaranteed));
         return result;
     }
 

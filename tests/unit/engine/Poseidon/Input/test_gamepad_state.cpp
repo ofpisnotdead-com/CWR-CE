@@ -26,6 +26,7 @@ TEST_CASE("GamepadState: default construction zeroes everything", "[input][gamep
     }
 
     REQUIRE(gs.enabled == true);
+    REQUIRE_FALSE(gs.reverseYStick);
     REQUIRE(gs.deadzoneStick == Catch::Approx(0.21f));
     REQUIRE(gs.deadzoneTrigger == Catch::Approx(0.10f));
     REQUIRE(gs.lookSensitivity == Catch::Approx(1.0f));

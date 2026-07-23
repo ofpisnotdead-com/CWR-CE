@@ -183,6 +183,7 @@ class WaveOAL : public IWave
     // alSourcePause so DoPlay can restore the offset via AL_BYTE_OFFSET on the
     // next Commit — same pattern as Wave8::Play -> SetCurrentPosition(_curPosition).
     void StoreCurrentOffset();
+    bool PumpDrainUpload(bool kickDecode);
 
   public:
     // Diagnostic: live playback offset in seconds.  Reads AL_SEC_OFFSET when
