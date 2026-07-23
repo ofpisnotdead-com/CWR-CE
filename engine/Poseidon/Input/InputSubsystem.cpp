@@ -1257,6 +1257,8 @@ UserActionDesc* InputSubsystem::GetUserActionDesc()
         UserActionDesc("AimDown", IDS_USRACT_AIM_DOWN, -1),
         UserActionDesc("AimLeft", IDS_USRACT_AIM_LEFT, -1),
         UserActionDesc("AimRight", IDS_USRACT_AIM_RIGHT, -1),
+        UserActionDesc("MapZoomIn", IDS_USRACT_MAP_ZOOM_IN, SDL_SCANCODE_KP_PLUS, -1),
+        UserActionDesc("MapZoomOut", IDS_USRACT_MAP_ZOOM_OUT, SDL_SCANCODE_KP_MINUS, -1),
 #if _ENABLE_CHEATS
         UserActionDesc("Cheat1", IDS_USRACT_CHEAT_1, SDL_SCANCODE_RGUI, -1),
         UserActionDesc("Cheat2", IDS_USRACT_CHEAT_2, SDL_SCANCODE_RALT, -1),

@@ -49,10 +49,27 @@ const UserAction kGunner[] = {
     UALookAround, UALookAroundToggle, UALookCenter,    UALookLeft,     UALookRight,     UALookUp,
     UALookDown,   UALookLeftUp,       UALookRightUp,   UALookLeftDown, UALookRightDown, UAN};
 
-const UserAction kCommon[] = {
-    UAPrevAction,  UANextAction,  UAPersonView,   UATacticalView,   UAMap,  UACompass,      UAWatch,
-    UAHelp,        UATimeInc,     UATimeDec,      UASelectAll,      UAChat, UAVoiceOverNet, UAVoiceOverNetPushToTalk,
-    UAPrevChannel, UANextChannel, UANetworkStats, UANetworkPlayers, UAN};
+const UserAction kCommon[] = {UAPrevAction,
+                              UANextAction,
+                              UAPersonView,
+                              UATacticalView,
+                              UAMap,
+                              UACompass,
+                              UAWatch,
+                              UAHelp,
+                              UATimeInc,
+                              UATimeDec,
+                              UASelectAll,
+                              UAChat,
+                              UAVoiceOverNet,
+                              UAVoiceOverNetPushToTalk,
+                              UAPrevChannel,
+                              UANextChannel,
+                              UANetworkStats,
+                              UANetworkPlayers,
+                              UAMapZoomIn,
+                              UAMapZoomOut,
+                              UAN};
 
 const UserAction* const kCategoryTable[ControlsCategoryCount] = {
     kOnFoot, kVehicles, kPilot, kGunner, kCommon,

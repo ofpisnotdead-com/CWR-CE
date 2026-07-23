@@ -8,6 +8,8 @@
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Input/UserActionDesc.hpp>
 
+#include <SDL3/SDL_scancode.h>
+
 #include <set>
 #include <catch2/catch_message.hpp>
 #include <initializer_list>
@@ -51,6 +53,24 @@ TEST_CASE("ControlsCategory: Fire shows in OnFoot/Vehicles/Pilot/Gunner, not Com
     CHECK(IsActionInControlsCategory(UAFire, ControlsCategoryPilot));
     CHECK(IsActionInControlsCategory(UAFire, ControlsCategoryGunner));
     CHECK_FALSE(IsActionInControlsCategory(UAFire, ControlsCategoryCommon));
+}
+
+TEST_CASE("ControlsCategory: MapZoom lives in Common with numpad defaults", "[Input][ControlsCategory]")
+{
+    CHECK(IsActionInControlsCategory(UAMapZoomIn, ControlsCategoryCommon));
+    CHECK(IsActionInControlsCategory(UAMapZoomOut, ControlsCategoryCommon));
+    CHECK_FALSE(IsActionInControlsCategory(UAMapZoomIn, ControlsCategoryOnFoot));
+
+    UserActionDesc* descs = InputSubsystem::GetUserActionDesc();
+    auto hasKey = [&](UserAction a, int sc)
+    {
+        for (int i = 0; i < descs[a].keys.Size(); i++)
+            if (descs[a].keys[i] == sc)
+                return true;
+        return false;
+    };
+    CHECK(hasKey(UAMapZoomIn, SDL_SCANCODE_KP_PLUS));
+    CHECK(hasKey(UAMapZoomOut, SDL_SCANCODE_KP_MINUS));
 }
 
 TEST_CASE("ControlsCategory: Aim* lives under OnFoot and Gunner", "[Input][ControlsCategory]")

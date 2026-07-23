@@ -2045,6 +2045,31 @@ void CStaticMap::DrawGrid()
 void CStaticMap::OnDraw(float alpha)
 {
     Precalculate();
+
+    // Zoom is polled from the bound actions (follows rebinds + gamepad); wheel is separate.
+    auto& input = InputSubsystem::Instance();
+    const float zoomIn = input.GetAction(UAMapZoomIn, false);
+    const float zoomOut = input.GetAction(UAMapZoomOut, false);
+    if (zoomIn > 0 || zoomOut > 0)
+    {
+        float dt = Glob.uiTime - _zoomLast;
+        _zoomLast = Glob.uiTime;
+        if (Glob.uiTime - _zoomStart < 0.5)
+        {
+            dt *= 0.5;
+        }
+        if (_interpolator)
+        {
+            ClearAnimation();
+        }
+        SetScale(exp(zoomIn >= zoomOut ? -dt : dt) * GetScale());
+    }
+    else
+    {
+        _zoomStart = Glob.uiTime;
+        _zoomLast = Glob.uiTime;
+    }
+
     unsigned key = _mouseKey;
     if (key == 0)
     {
@@ -2061,12 +2086,6 @@ void CStaticMap::OnDraw(float alpha)
 
         switch (key)
         {
-            case SDLK_KP_PLUS:
-                SetScale(exp(-dt) * GetScale());
-                break;
-            case SDLK_KP_MINUS:
-                SetScale(exp(dt) * GetScale());
-                break;
             case SDLK_KP_1:
                 _mapX += dt;
                 SaturateX(_mapX);
@@ -2184,8 +2203,6 @@ bool CStaticMap::OnKeyUp(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
 {
     switch (nChar)
     {
-        case SDLK_KP_PLUS:
-        case SDLK_KP_MINUS:
         case SDLK_KP_1:
         case SDLK_KP_2:
         case SDLK_KP_3:
@@ -2206,8 +2223,6 @@ bool CStaticMap::OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
 {
     switch (nChar)
     {
-        case SDLK_KP_PLUS:
-        case SDLK_KP_MINUS:
         case SDLK_KP_1:
         case SDLK_KP_2:
         case SDLK_KP_3:

@@ -21,6 +21,7 @@ UAMoveForward, UAMoveBack, UATurnLeft, UATurnRight, UAMoveUp, UAMoveDown, UAMove
 
     UAAxisTurn, UAAxisDive, UAAxisRudder, UAAxisThrust,
     UAAimUp, UAAimDown, UAAimLeft, UAAimRight,
+    UAMapZoomIn, UAMapZoomOut,
 #if _ENABLE_CHEATS
     UACheat1, UACheat2,
 #endif

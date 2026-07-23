@@ -198,6 +198,11 @@ void ApplyContextDefaults(InputContext ctx, InputProfile& profile)
             ApplyDriverGamepadDefaults(profile);
             ApplyDirectFreelookDefaults(profile);
             break;
+        case InputContext::Map:
+        case InputContext::Menu:
+            BindButton(profile, UAMapZoomIn, kGamepadButtonRB);
+            BindButton(profile, UAMapZoomOut, kGamepadButtonLB);
+            break;
         default:
             break;
     }
