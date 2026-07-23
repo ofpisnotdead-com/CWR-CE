@@ -138,61 +138,101 @@ static void SortListByCachedKey(ListT& list, Extract extract, Compare comp)
     }
 }
 
-// Pass1 shape-sort key (follows CmpShapeObj's ordering).
-struct DrawKey
+namespace
 {
-    SortObject* obj;
-    const void* shape;
-    int passNum;
-    int complexity;
-    int drawLOD;
-    float distance2;
+struct MergeSubBucket
+{
+    int pass;
+    int lod;
+    int bucket;
 };
-
-// Sort _drawMergers in CmpShapeObj order.
-static void SortDrawMergersByShape(SortObjectList& mergers)
+struct MergeShapeSlot
 {
-    SortListByCachedKey<DrawKey>(
-        mergers,
-        [](SortObject* o) -> DrawKey
+    unsigned int epoch = 0;
+    std::vector<MergeSubBucket> subs;
+};
+}
+
+// Groups _drawMergers so objects of equal (passNum, shape, drawLOD) are contiguous, for instancing.
+static void BucketDrawMergersByShape(SortObjectList& mergers)
+{
+    const int n = mergers.Size();
+    if (n < 2)
+    {
+        return;
+    }
+
+    static unsigned int epoch = 0;
+    ++epoch;
+
+    static std::vector<MergeShapeSlot> shapeSlots;
+    static MergeShapeSlot nullSlot;
+    static std::vector<std::vector<SortObject*>> buckets;
+
+    int usedShapes = 0;
+    int usedBuckets = 0;
+
+    for (int i = 0; i < n; i++)
+    {
+        SortObject* o = mergers[i];
+        LODShape* shape = o->object ? o->object->GetShape() : nullptr;
+
+        MergeShapeSlot* ss;
+        if (shape)
         {
-            return {o,          o->object ? static_cast<const void*>(o->object->GetShape()) : nullptr,
-                    o->passNum, o->sortComplexity,
-                    o->drawLOD, o->distance2};
-        },
-        [](const DrawKey* p1, const DrawKey* p2, int) -> int
-        {
-            int sDif = p1->passNum - p2->passNum;
-            if (sDif)
+            bool firstSeen;
+            int slot = shape->ResolveDrawBucket(epoch, usedShapes, firstSeen);
+            if (firstSeen)
             {
-                return sDif;
-            }
-            sDif = (intptr_t)p2->shape - (intptr_t)p1->shape;
-            if (sDif)
-            {
-                int cDiff = p1->complexity - p2->complexity;
-                if (cDiff)
+                usedShapes++;
+                if (slot >= static_cast<int>(shapeSlots.size()))
                 {
-                    return cDiff;
+                    shapeSlots.resize(slot + 1);
                 }
-                return sDif;
+                shapeSlots[slot].subs.clear();
             }
-            sDif = p2->drawLOD - p1->drawLOD;
-            if (sDif)
+            ss = &shapeSlots[slot];
+        }
+        else
+        {
+            if (nullSlot.epoch != epoch)
             {
-                return sDif;
+                nullSlot.epoch = epoch;
+                nullSlot.subs.clear();
             }
-            float fDif = p2->distance2 - p1->distance2;
-            if (fDif < 0)
+            ss = &nullSlot;
+        }
+
+        int bucket = -1;
+        for (const MergeSubBucket& sub : ss->subs)
+        {
+            if (sub.pass == o->passNum && sub.lod == o->drawLOD)
             {
-                return -1;
+                bucket = sub.bucket;
+                break;
             }
-            if (fDif > 0)
+        }
+        if (bucket < 0)
+        {
+            bucket = usedBuckets++;
+            if (bucket >= static_cast<int>(buckets.size()))
             {
-                return +1;
+                buckets.emplace_back();
             }
-            return 0;
-        });
+            buckets[bucket].clear();
+            ss->subs.push_back({o->passNum, o->drawLOD, bucket});
+        }
+        buckets[bucket].push_back(o);
+    }
+
+    int w = 0;
+    for (int bucket = 0; bucket < usedBuckets; bucket++)
+    {
+        for (SortObject* o : buckets[bucket])
+        {
+            mergers[w++].SetRef(o);
+        }
+    }
 }
 
 // Radix-sort a Ref list in place by descending float key.
@@ -1630,12 +1670,12 @@ void Scene::DrawObjectsAndShadowsPass1()
         }
     }
 
-    SortDrawMergersByShape(_drawMergers);
+    BucketDrawMergersByShape(_drawMergers);
     // first of all draw non-alpha objects
 
 #if DRAW_OBJS
     {
-        // _drawMergers is shape-sorted, so identical static shapes arrive contiguously. A
+        // _drawMergers is shape-grouped, so identical static shapes arrive contiguously. A
         // batchable run draws the head once inside Begin/EndInstancedRun; every TL section
         // then renders all K instances from the WorldInstances matrix array.
         LightList lightProbe(true);
@@ -1777,31 +1817,25 @@ void Scene::DrawObjectsAndShadowsPass2()
         // PassOrder, not distance: a fresh decal carries distance2~=0
         // (SetAutoCenter(false)) and would tie the road tile under the vehicle,
         // letting the road repaint over it.  Re-sorted by distance below.
-        SortListByCachedKey<SurfKey>(
-            _drawMergers,
-            [](SortObject* o) -> SurfKey
-            {
-                return {o, o->object ? o->sortPassOrder : 0,
-                        o->object ? static_cast<const void*>(o->object->GetShape()) : nullptr, o->distance2};
-            },
-            [](const SurfKey* p1, const SurfKey* p2, int) -> int
-            {
-                const Poseidon::SurfaceDraw::SurfaceDrawKey k1{p1->passOrder, p1->shape, p1->distance2};
-                const Poseidon::SurfaceDraw::SurfaceDrawKey k2{p2->passOrder, p2->shape, p2->distance2};
-                return Poseidon::SurfaceDraw::CompareSurfaceDraw(k1, k2);
-            });
+        auto surfExtract = [](SortObject* o) -> SurfKey
+        {
+            return {o, o->object ? o->sortPassOrder : 0,
+                    o->object ? static_cast<const void*>(o->object->GetShape()) : nullptr, o->distance2};
+        };
+        auto surfCmp = [](const SurfKey* p1, const SurfKey* p2, int) -> int
+        {
+            const Poseidon::SurfaceDraw::SurfaceDrawKey k1{p1->passOrder, p1->shape, p1->distance2};
+            const Poseidon::SurfaceDraw::SurfaceDrawKey k2{p2->passOrder, p2->shape, p2->distance2};
+            return Poseidon::SurfaceDraw::CompareSurfaceDraw(k1, k2);
+        };
+        // Sort and draw the surface-blend overlays (roads/decals)
+        // passNum > 1 is skipped, as they're drawn separately (below)
+        AUTO_STATIC_ARRAY(Ref<SortObject>, surfSort, 256);
         for (int i = 0; i < nDraw; i++)
         {
             SortObject* oi = _drawMergers[i];
             if (oi->drawLOD == LOD_INVISIBLE)
                 continue;
-            // Mirror exactly the post-shadow blend branch that skips these
-            // objects (passNum<=1 && HasBlendSections && surface).  With grass
-            // enabled a surface object is passNum==2 (whole-alpha) and is drawn
-            // by the passNum==2 branch below; drawing it here too would
-            // double-draw it and re-overwrite the shadow.  The cheap passNum
-            // gate also avoids the per-object Special() probe for non-surface
-            // objects.
             if (oi->passNum > 1)
                 continue;
             if (!IsSurfaceSortObject(oi))
@@ -1810,8 +1844,13 @@ void Scene::DrawObjectsAndShadowsPass2()
             Shape* lvl = shp ? shp->LevelOpaque(oi->drawLOD) : nullptr;
             if (!lvl || !lvl->HasBlendSections())
                 continue;
+            surfSort.Add(oi);
+        }
+        SortListByCachedKey<SurfKey>(surfSort, surfExtract, surfCmp);
+        for (int i = 0; i < surfSort.Size(); i++)
+        {
             GSectionFilter = SectionClassFilter::BlendOnly;
-            DrawSortObject(oi);
+            DrawSortObject(surfSort[i]);
             GSectionFilter = SectionClassFilter::All;
         }
         GEngine->FlushQueues();
