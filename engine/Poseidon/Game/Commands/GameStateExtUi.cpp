@@ -1843,9 +1843,10 @@ GameValue SetObjectiveStatus(const GameState* state, GameValuePar oper1, GameVal
         return NOTHING;
     }
     RString message = status == OSDone ? LocalizeString(IDS_OBJECTIVE_DONE) : LocalizeString(IDS_OBJECTIVE_UPDATED);
-    if (USER_CONFIG.easyMode && status != OSHidden)
+    AbstractUI* ui = GWorld->UI();
+    if (USER_CONFIG.easyMode && status != OSHidden && ui)
     {
-        GWorld->UI()->ShowHint(message);
+        ui->ShowHint(message);
     }
     const_cast<GameState*>(state)->VarSet(name, GameValue((float)value), true);
     DisplayMap* map = dynamic_cast<DisplayMap*>(GWorld->Map());
