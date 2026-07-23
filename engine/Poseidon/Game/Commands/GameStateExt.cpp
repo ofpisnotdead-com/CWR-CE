@@ -723,6 +723,7 @@ GameValue ObjFire(const GameState* state, GameValuePar oper1, GameValuePar oper2
 GameValue ObjFireEx(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjGetBuildingPos(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjGetSelectionDammage(const GameState* state, GameValuePar oper1, GameValuePar oper2);
+GameValue ObjGetVariable(const GameState* state, GameValuePar lhs, GameValuePar rhs);
 GameValue ObjGlobalChat(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjGlobalRadio(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjGroupChat(const GameState* state, GameValuePar oper1, GameValuePar oper2);
@@ -768,6 +769,7 @@ GameValue ObjSetSelectionDammage(const GameState* state, GameValuePar oper1, Gam
 GameValue ObjSetSkill(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjSetTexture(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjSetUnitPos(const GameState* state, GameValuePar oper1, GameValuePar oper2);
+GameValue ObjSetVariable(const GameState* state, GameValuePar lhs, GameValuePar rhs);
 GameValue ObjSetVectorDir(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjSetVectorDirectionAndUp(const GameState* state, GameValuePar oper1, GameValuePar oper2);
 GameValue ObjSetVectorUp(const GameState* state, GameValuePar oper1, GameValuePar oper2);
@@ -1460,6 +1462,9 @@ static const GameOperator* GetExtBinary(int& count)
         GameOperator(GameNothing, "SetSelectionDammage", function, ObjSetSelectionDammage, GameObject, GameArray),
         GameOperator(GameNothing, "setSelectionDamage", function, ObjSetSelectionDammage, GameObject,
                      GameArray), // one-M alias
+
+        GameOperator(GameVoid, "getVariable", function, ObjGetVariable, GameObject, GameString),
+        GameOperator(GameNothing, "setVariable", function, ObjSetVariable, GameObject, GameArray),
     };
     count = sizeof(ExtBinary) / sizeof(*ExtBinary);
     return ExtBinary;

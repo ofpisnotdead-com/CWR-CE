@@ -30,6 +30,8 @@ enum TargetSide
 	NTargetSide,
 };
 
+class GameValue;
+
 namespace Poseidon
 {
 #ifndef SERIAL_BRANCH
@@ -252,6 +254,9 @@ class Object: public NetworkObject, public FrameBase, public IAnimator
 	// quick link to object shadow
 	SRef<ShadowIndex> _shadow;
 
+	// for set/getVariable commands
+	std::unordered_map<std::string, std::unique_ptr<GameValue>> _vars;
+
 	public:
 
 	Object(LODShapeWithShadow *shape, int id);
@@ -267,6 +272,9 @@ class Object: public NetworkObject, public FrameBase, public IAnimator
 	// Access to shadow index
 	void SetShadowIndex( ShadowIndex *shadow ){_shadow=shadow;}
 	ShadowIndex *GetShadowIndex() const {return _shadow;}
+
+	// Access to custom variabales
+	std::unordered_map<std::string, std::unique_ptr<GameValue>>& GetVariables() {return _vars;}
 
 	void RemoveAllShadows();
 	void RemoveShadow(int level);

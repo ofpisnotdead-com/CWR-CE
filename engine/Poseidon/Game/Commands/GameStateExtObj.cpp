@@ -1165,6 +1165,33 @@ GameValue ObjSetSelectionDammage(const GameState* state, GameValuePar oper1, Gam
     return NOTHING;
 }
 
+GameValue ObjGetVariable(const GameState* state, GameValuePar oper1, GameValuePar oper2)
+{
+    Object* obj = GetObject(oper1);
+    if (!obj)
+    {
+        return NOTHING;
+    }
+    RString name = oper2;
+    auto it = obj->GetVariables().find((const char*)name);
+    return it != obj->GetVariables().end() ? *(it->second) : NOTHING;
+}
+
+GameValue ObjSetVariable(const GameState* state, GameValuePar oper1, GameValuePar oper2)
+{
+    Object* obj = GetObject(oper1);
+    if (!obj)
+    {
+        return NOTHING;
+    }
+    const GameArrayType& arr = oper2;
+    if (arr.Size() < 2)
+        return NOTHING;
+    RString name = arr[0];
+    obj->GetVariables()[(const char*)name].reset(new GameValue(arr[1]));
+    return NOTHING;
+}
+
 GameValue DebugShow(const GameState* state, GameValuePar oper1)
 {
     const GameArrayType& array = oper1;
