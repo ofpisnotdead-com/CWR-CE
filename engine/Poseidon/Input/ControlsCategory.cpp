@@ -43,11 +43,11 @@ const UserAction kPilot[] = {
     UALookAroundToggle, UALookCenter,   UALookLeft,      UALookRight,   UALookUp,   UALookDown,  UALookLeftUp,
     UALookRightUp,      UALookLeftDown, UALookRightDown, UAHeadlights,  UAN};
 
-const UserAction kGunner[] = {
-    UAFire,       UAReloadMagazine,   UAToggleWeapons, UALockTarget,   UALockTargets,   UAOptics,
-    UAZoomIn,     UAZoomOut,          UAAimUp,         UAAimDown,      UAAimLeft,       UAAimRight,
-    UALookAround, UALookAroundToggle, UALookCenter,    UALookLeft,     UALookRight,     UALookUp,
-    UALookDown,   UALookLeftUp,       UALookRightUp,   UALookLeftDown, UALookRightDown, UAN};
+const UserAction kGunner[] = {UAFire,       UAReloadMagazine, UAToggleWeapons, UALockTarget,    UALockTargets,
+                              UAAction,     UAOptics,         UAZoomIn,        UAZoomOut,       UAAimUp,
+                              UAAimDown,    UAAimLeft,        UAAimRight,      UALookAround,    UALookAroundToggle,
+                              UALookCenter, UALookLeft,       UALookRight,     UALookUp,        UALookDown,
+                              UALookLeftUp, UALookRightUp,    UALookLeftDown,  UALookRightDown, UAN};
 
 const UserAction kCommon[] = {UAPrevAction,
                               UANextAction,

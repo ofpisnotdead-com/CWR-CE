@@ -8,6 +8,8 @@
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Input/UserActionDesc.hpp>
 
+#include <Poseidon/Input/InputDeviceConstants.hpp>
+
 #include <SDL3/SDL_scancode.h>
 
 #include <set>
@@ -71,6 +73,22 @@ TEST_CASE("ControlsCategory: MapZoom lives in Common with numpad defaults", "[In
     };
     CHECK(hasKey(UAMapZoomIn, SDL_SCANCODE_KP_PLUS));
     CHECK(hasKey(UAMapZoomOut, SDL_SCANCODE_KP_MINUS));
+}
+
+TEST_CASE("ControlsCategory: Perform Action is bindable in Gunner (#133)", "[Input][ControlsCategory]")
+{
+    CHECK(IsActionInControlsCategory(UAAction, ControlsCategoryGunner));
+
+    UserActionDesc* descs = InputSubsystem::GetUserActionDesc();
+    auto hasKey = [&](UserAction a, int code)
+    {
+        for (int i = 0; i < descs[a].keys.Size(); i++)
+            if (descs[a].keys[i] == code)
+                return true;
+        return false;
+    };
+    CHECK(hasKey(UAAction, SDL_SCANCODE_RETURN));
+    CHECK(hasKey(UAAction, INPUT_DEVICE_MOUSE + 2));
 }
 
 TEST_CASE("ControlsCategory: Aim* lives under OnFoot and Gunner", "[Input][ControlsCategory]")
