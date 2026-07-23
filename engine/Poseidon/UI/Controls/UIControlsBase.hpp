@@ -391,6 +391,7 @@ protected:
 	AutoArray<int> _lines;
 	float _firstLine;
 	float _lineSpacing;
+	float m_azimut = 0.0;
 	float _shadowOffsetXRatio;
 	float _shadowOffsetYRatio;
 	bool _shadowOffsetXAspectCorrect;
@@ -427,6 +428,8 @@ public:
 	void SetBgColor(PackedColor color) {_bgColor = color;}
 	PackedColor GetFtColor() {return _ftColor;}
 	void SetFtColor(PackedColor color) {_ftColor = color;}
+
+	void SetAzimut(float azimut) { m_azimut = azimut; }
 
 	int NLines() const;
 	float GetTextHeight() const;
