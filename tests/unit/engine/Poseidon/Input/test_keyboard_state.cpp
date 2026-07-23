@@ -43,13 +43,9 @@ void TypeCheat(KeyboardState& kb, const char* text)
 
 void ArmClassicCheatEntry(KeyboardState& kb)
 {
-    kb.BufferKeyEvent(SDL_SCANCODE_LSHIFT, true, 100);
-    kb.BufferKeyEvent(SDL_SCANCODE_KP_MINUS, true, 110);
+    kb.cheatEntryTrigger = true;
     kb.Update(200, 100, true);
-
-    kb.BufferKeyEvent(SDL_SCANCODE_KP_MINUS, false, 210);
-    kb.BufferKeyEvent(SDL_SCANCODE_LSHIFT, false, 220);
-    kb.Update(300, 100, true);
+    kb.cheatEntryTrigger = false;
 }
 } // namespace
 
@@ -406,6 +402,19 @@ TEST_CASE("KeyboardState: Left Shift plus keypad minus arms classic cheat entry"
     REQUIRE(kb.awaitCheat == true);
     REQUIRE(kb.cheatInProgress.GetLength() == 0);
     REQUIRE(kb.cheatActive == CheatNone);
+}
+
+TEST_CASE("KeyboardState: cheat entry arms only when the trigger flag is set", "[input][keyboard][cheat]")
+{
+    KeyboardState kb;
+
+    kb.cheatEntryTrigger = false;
+    kb.Update(200, 100, true);
+    REQUIRE(kb.awaitCheat == false);
+
+    kb.cheatEntryTrigger = true;
+    kb.Update(300, 100, true);
+    REQUIRE(kb.awaitCheat == true);
 }
 
 TEST_CASE("KeyboardState: classic SAVEGAME cheat activates from typed sequence", "[input][keyboard][cheat]")

@@ -213,7 +213,7 @@ void BindingsPage::ResetCurrentCategoryToDefaults()
         for (int i = 0; i < keys.Size(); ++i)
         {
             if (DeviceFilter(keys[i]) && keys[i] < INPUT_DEVICE_STICK)
-                defaults.push_back(MakeBinding(keys[i], -1));
+                defaults.push_back(MakeBinding(keys[i], DefaultModifierForDefaultKey(action, keys[i])));
         }
 
         for (int c = 0; c < contexts.count; ++c)

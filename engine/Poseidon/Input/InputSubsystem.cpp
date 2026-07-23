@@ -492,6 +492,8 @@ void InputSubsystem::ComputeMovementState()
     GInput.keyboard.cheat2 = cheat2;
 #endif
 
+    GInput.keyboard.cheatEntryTrigger = GetAction(UACheatEntry, false) > 0.0f;
+
     moveLeft_ = 0;
     moveRight_ = 0;
     moveUp_ = 0;
@@ -1172,7 +1174,11 @@ void InputSubsystem::ResetCategoryDefaults(ControlsCategory cat)
         for (int j = 0; j < defaultKeys.Size(); j++)
         {
             if (!GamepadConfig::IsGamepadCode(defaultKeys[j]))
-                defaultBindings.push_back(InputBinding(InputCode::FromLegacy(defaultKeys[j])));
+            {
+                int mod = DefaultModifierForDefaultKey(static_cast<UserAction>(idx), defaultKeys[j]);
+                InputCode modCode = mod >= 0 ? InputCode::FromLegacy(mod) : InputCode{};
+                defaultBindings.push_back(InputBinding(InputCode::FromLegacy(defaultKeys[j]), modCode));
+            }
         }
 
         for (int c = 0; c < contexts.count; ++c)
@@ -1259,6 +1265,7 @@ UserActionDesc* InputSubsystem::GetUserActionDesc()
         UserActionDesc("AimRight", IDS_USRACT_AIM_RIGHT, -1),
         UserActionDesc("MapZoomIn", IDS_USRACT_MAP_ZOOM_IN, SDL_SCANCODE_KP_PLUS, -1),
         UserActionDesc("MapZoomOut", IDS_USRACT_MAP_ZOOM_OUT, SDL_SCANCODE_KP_MINUS, -1),
+        UserActionDesc("CheatEntry", IDS_USRACT_CHEAT_ENTRY, SDL_SCANCODE_KP_MINUS, -1),
 #if _ENABLE_CHEATS
         UserActionDesc("Cheat1", IDS_USRACT_CHEAT_1, SDL_SCANCODE_RGUI, -1),
         UserActionDesc("Cheat2", IDS_USRACT_CHEAT_2, SDL_SCANCODE_RALT, -1),

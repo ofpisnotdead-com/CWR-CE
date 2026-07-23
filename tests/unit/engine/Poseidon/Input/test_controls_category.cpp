@@ -91,6 +91,20 @@ TEST_CASE("ControlsCategory: Perform Action is bindable in Gunner (#133)", "[Inp
     CHECK(hasKey(UAAction, INPUT_DEVICE_MOUSE + 2));
 }
 
+TEST_CASE("ControlsCategory: cheat entry lives in Common with a Shift+Numpad-Minus default",
+          "[Input][ControlsCategory]")
+{
+    CHECK(IsActionInControlsCategory(UACheatEntry, ControlsCategoryCommon));
+
+    InputProfile profile;
+    profile.LoadDefaults();
+    const std::vector<InputBinding>& entries = profile.GetBindingEntries(UACheatEntry);
+    REQUIRE(entries.size() == 1);
+    CHECK(entries[0].code.toLegacy() == SDL_SCANCODE_KP_MINUS);
+    CHECK(entries[0].modifier.valid());
+    CHECK(entries[0].modifier.toLegacy() == SDL_SCANCODE_LSHIFT);
+}
+
 // Keyboard and gamepad controls pages share the same category lists; KbmPage /
 // GamepadPage IsActionVisible delegate to IsActionVisibleOn{Keyboard,Gamepad}. These
 // guard the "one shared source" invariant so a new action cannot silently go missing
