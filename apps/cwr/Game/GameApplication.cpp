@@ -1194,9 +1194,11 @@ void GameApplication::RunMainLoop()
 
     // Benchmark tracking (mirrors Windows loop)
     const bool benchmarkMode = AppConfig::Instance().BenchmarkMode();
-    const int benchmarkMaxFrames = 300;
+    const int benchmarkMaxFrames = 1000;       // steadier sample than the old 300
+    const DWORD benchmarkWarmupMs = 4000;      // let the scene stream in before measuring
     int benchmarkFrameCount = 0;
     DWORD benchmarkStartTick = 0;
+    DWORD benchmarkFirstArcadeTick = 0;
     DWORD benchmarkLastLogTick = 0;
     int benchmarkLastLogFrame = 0;
 
@@ -1255,6 +1257,13 @@ void GameApplication::RunMainLoop()
         // Benchmark FPS tracking (only in arcade/gameplay mode)
         if (benchmarkMode && GWorld && GWorld->GetMode() == GModeArcade)
         {
+            // Warm-up: the scene streams in over the first seconds of gameplay, so
+            // measuring from frame 0 spends the whole frame budget on empty
+            // load-phase frames (draw=0). Wait benchmarkWarmupMs before counting.
+            if (benchmarkFirstArcadeTick == 0)
+                benchmarkFirstArcadeTick = Poseidon::Foundation::GlobalTickCount();
+            if (Poseidon::Foundation::GlobalTickCount() - benchmarkFirstArcadeTick >= benchmarkWarmupMs)
+            {
             if (benchmarkFrameCount == 0)
             {
                 benchmarkStartTick = Poseidon::Foundation::GlobalTickCount();
@@ -1294,6 +1303,7 @@ void GameApplication::RunMainLoop()
                          elapsed / 1000.0f, avgFps);
                 m_closeRequest = true;
             }
+            } // end warm-up gate
         }
 
         // Auto-screenshot capture
@@ -1705,8 +1715,16 @@ void GameApplication::StartGameMode()
         }
         else if (Benchmark)
         {
-            snprintf(LoadFile, sizeof(LoadFile), "%s",
-                     (const char*)"Users\\Test\\Missions\\Benchmark.Abel\\mission.sqm");
+            // Forward slashes: on POSIX the backslash form is not normalized
+            // before StartIntro's FileExist() (WorldImpl.cpp:2219), so a
+            // "Users\\..." literal is never found and the mission silently does
+            // not load. Forward slashes resolve on POSIX and Windows both.
+            snprintf(LoadFile, sizeof(LoadFile), "%s", (const char*)"Users/Test/Missions/Benchmark.Abel/mission.sqm");
+            // Boot the benchmark mission into gameplay; without this the mission
+            // never loads (StartAutoTest is gated on AutoTest, WorldImpl.cpp) and
+            // the GModeArcade-gated benchmark FPS tracking never runs. Mirrors the
+            // test-mission branch above.
+            AutoTest = true;
         }
         if (AppConfig::Instance().IsViewerMode())
         {
