@@ -123,4 +123,33 @@ const char* GetControlsCategoryName(ControlsCategory cat)
             return "";
     }
 }
+
+bool IsActionVisibleOnKeyboard(UserAction action, ControlsCategory cat)
+{
+    // On-foot aim is the mouse on keyboard, so the four aim rows are hidden there.
+    if (cat == ControlsCategoryOnFoot &&
+        (action == UAAimUp || action == UAAimDown || action == UAAimLeft || action == UAAimRight))
+        return false;
+    return true;
+}
+
+bool IsActionVisibleOnGamepad(UserAction action, ControlsCategory cat)
+{
+    // Analog-stick group heads (movement / aim / freelook) are always shown.
+    const bool movementHead = cat == ControlsCategoryOnFoot && action == UAMoveForward;
+    const bool aimHead = (cat == ControlsCategoryOnFoot || cat == ControlsCategoryGunner) && action == UAAimRight;
+    const bool freelookHead = action == UALookAround;
+    if (movementHead || aimHead || freelookHead)
+        return true;
+    // Direction rows folded into a stick head are hidden on gamepad.
+    if (cat == ControlsCategoryOnFoot && (action == UAMoveBack || action == UAMoveLeft || action == UAMoveRight ||
+                                          action == UAAimUp || action == UAAimDown || action == UAAimLeft))
+        return false;
+    if (cat == ControlsCategoryGunner && (action == UAAimUp || action == UAAimDown || action == UAAimLeft))
+        return false;
+    if (action == UALookLeft || action == UALookRight || action == UALookUp || action == UALookDown ||
+        action == UALookLeftUp || action == UALookRightUp || action == UALookLeftDown || action == UALookRightDown)
+        return false;
+    return true;
+}
 } // namespace Poseidon

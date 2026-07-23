@@ -91,6 +91,81 @@ TEST_CASE("ControlsCategory: Perform Action is bindable in Gunner (#133)", "[Inp
     CHECK(hasKey(UAAction, INPUT_DEVICE_MOUSE + 2));
 }
 
+// Keyboard and gamepad controls pages share the same category lists; KbmPage /
+// GamepadPage IsActionVisible delegate to IsActionVisibleOn{Keyboard,Gamepad}. These
+// guard the "one shared source" invariant so a new action cannot silently go missing
+// on a device page.
+
+namespace
+{
+const UserAction kFreelookDirs[] = {UALookLeft,   UALookRight,   UALookUp,       UALookDown,
+                                    UALookLeftUp, UALookRightUp, UALookLeftDown, UALookRightDown};
+bool IsFreelookDir(UserAction a)
+{
+    for (UserAction d : kFreelookDirs)
+        if (a == d)
+            return true;
+    return false;
+}
+} // namespace
+
+TEST_CASE("ControlsVisibility: no category action is hidden on both device pages", "[Input][ControlsCategory]")
+{
+    for (int c = 0; c < ControlsCategoryCount; c++)
+    {
+        ControlsCategory cat = (ControlsCategory)c;
+        for (const UserAction* p = GetControlsCategoryActions(cat); *p != UAN; p++)
+        {
+            UserAction a = *p;
+            // Direction rows folded into a gamepad stick head are the only rows hidden on
+            // both pages; they stay reachable through their (gamepad-visible) head.
+            bool movementFold =
+                cat == ControlsCategoryOnFoot && (a == UAMoveBack || a == UAMoveLeft || a == UAMoveRight);
+            bool aimFold = (cat == ControlsCategoryOnFoot || cat == ControlsCategoryGunner) &&
+                           (a == UAAimUp || a == UAAimDown || a == UAAimLeft);
+            CAPTURE(c, (int)a);
+            CHECK((IsActionVisibleOnKeyboard(a, cat) || IsActionVisibleOnGamepad(a, cat) || movementFold || aimFold ||
+                   IsFreelookDir(a)));
+        }
+    }
+    // The stick heads that cover the folded rows must stay gamepad-visible.
+    CHECK(IsActionVisibleOnGamepad(UAMoveForward, ControlsCategoryOnFoot));
+    CHECK(IsActionVisibleOnGamepad(UAAimRight, ControlsCategoryOnFoot));
+    CHECK(IsActionVisibleOnGamepad(UAAimRight, ControlsCategoryGunner));
+    CHECK(IsActionVisibleOnGamepad(UALookAround, ControlsCategoryOnFoot));
+    // Common (where map zoom lives) must be identical on both pages.
+    for (const UserAction* p = GetControlsCategoryActions(ControlsCategoryCommon); *p != UAN; p++)
+        CHECK(IsActionVisibleOnKeyboard(*p, ControlsCategoryCommon) ==
+              IsActionVisibleOnGamepad(*p, ControlsCategoryCommon));
+}
+
+TEST_CASE("ControlsVisibility: the intended keyboard/gamepad differences", "[Input][ControlsCategory]")
+{
+    // On-foot movement directions: keyboard-only (folded into the left stick on gamepad).
+    for (UserAction a : {UAMoveBack, UAMoveLeft, UAMoveRight})
+    {
+        CHECK(IsActionVisibleOnKeyboard(a, ControlsCategoryOnFoot));
+        CHECK_FALSE(IsActionVisibleOnGamepad(a, ControlsCategoryOnFoot));
+    }
+    // Freelook directions: keyboard-only wherever the category has them.
+    for (int c = 0; c < ControlsCategoryCount; c++)
+        for (UserAction a : kFreelookDirs)
+            if (IsActionInControlsCategory(a, (ControlsCategory)c))
+            {
+                CHECK(IsActionVisibleOnKeyboard(a, (ControlsCategory)c));
+                CHECK_FALSE(IsActionVisibleOnGamepad(a, (ControlsCategory)c));
+            }
+    // Gunner aim directions: keyboard-only (folded into the right stick).
+    for (UserAction a : {UAAimUp, UAAimDown, UAAimLeft})
+    {
+        CHECK(IsActionVisibleOnKeyboard(a, ControlsCategoryGunner));
+        CHECK_FALSE(IsActionVisibleOnGamepad(a, ControlsCategoryGunner));
+    }
+    // On-foot aim is the mouse on KB&M (all four hidden) but the stick head shows on gamepad.
+    CHECK_FALSE(IsActionVisibleOnKeyboard(UAAimRight, ControlsCategoryOnFoot));
+    CHECK(IsActionVisibleOnGamepad(UAAimRight, ControlsCategoryOnFoot));
+}
+
 TEST_CASE("ControlsCategory: Aim* lives under OnFoot and Gunner", "[Input][ControlsCategory]")
 {
     for (UserAction a : {UAAimUp, UAAimDown, UAAimLeft, UAAimRight})
