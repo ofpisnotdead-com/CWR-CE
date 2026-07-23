@@ -1,8 +1,9 @@
 mission = "tests/integration/missions/mp_browser_basic.Demo"
+data_dir = "packages/Demo"
 game_port = 0
-timeout = 120
+timeout = 75
 
-tags = ["headful", "ci-host-blocked", "exclusive"]
+tags = ["headful", "ci-host-blocked"]
 
 [[services]]
 name = "master"

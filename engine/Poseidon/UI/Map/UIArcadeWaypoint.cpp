@@ -943,10 +943,13 @@ bool ParseCutscene(RString cutscene, bool multiplayer)
             }
             message = message + CurrentTemplate.missingAddOns[i];
         }
+        LOG_WARN(Mission, "Cannot load {} from {}: {}", (const char*)cutscene, (const char*)name, (const char*)message);
         Poseidon::Foundation::WarningMessage(message);
     }
     else if (result != LSOK)
     {
+        LOG_WARN(Mission, "Cannot load {} from {}: {}", (const char*)cutscene, (const char*)name,
+                 ar.GetErrorName(result));
         Poseidon::Foundation::WarningMessage("Cannot load mission");
     }
     if (ar.GetArVersion() < 7)

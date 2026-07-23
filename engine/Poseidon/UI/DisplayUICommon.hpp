@@ -9,7 +9,6 @@ extern bool AutoTest;
 
 namespace Poseidon
 {
-void DeleteDirectoryStructure(const char* name, bool deleteDir = true);
 void CopyDirectoryStructure(const char* dst, const char* src);
 void RunInitScript();
 void CreatePath(RString path);

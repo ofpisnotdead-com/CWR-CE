@@ -429,11 +429,7 @@ void QOFStream::close(const void* header, int headerSize)
     }
 #else
     DWORD eCode = 0;
-    HANDLE file = ::CreateFile(_file, GENERIC_WRITE, 0,
-                               nullptr, // security
-                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL,
-                               nullptr // template
-    );
+    HANDLE file = OpenFileForWrite(_file, true);
     if (file != INVALID_HANDLE_VALUE)
     {
         DWORD sizeWritten;

@@ -1,0 +1,4 @@
+triAssertNgsClient 14
+triAssertMissionPlayable
+triScreenshot "client2_passworded_playable"
+triEndTest

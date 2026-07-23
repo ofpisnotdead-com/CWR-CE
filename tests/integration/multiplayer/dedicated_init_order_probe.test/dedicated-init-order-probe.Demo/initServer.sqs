@@ -1,0 +1,5 @@
+probeServerInitDuplicate = format ["%1", probeServerInitSeen] == "1"
+probeServerInitSeen = 1
+probeServerToken = 7303
+publicVariable "probeServerToken"
+exit

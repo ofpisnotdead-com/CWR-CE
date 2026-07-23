@@ -55,7 +55,7 @@ GameValue TriShowVoiceOverlay(const GameState* /*state*/, GameValuePar arg)
     if (!GWorld)
         return GameValue("FAIL:no_world");
     if ((float)arg != 0.0f)
-        GWorld->CreateVoiceChat();
+        GWorld->CreateVoiceChat(false);
     else
         GWorld->DestroyVoiceChat(0);
     LOG_INFO(Core, "[tri] triShowVoiceOverlay {}", (float)arg != 0.0f);

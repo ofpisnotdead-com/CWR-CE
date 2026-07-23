@@ -1,0 +1,42 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 120
+
+tags = ["headful", "network"]
+
+# Listen-server regression for repeated push-to-talk over the REAL voice
+# path (no triSendVonTestTone): both instances run the env-gated test-tone
+# voice backend, so triHoldKey drives capture -> recorder -> routing ->
+# jitter -> speaker exactly like a live microphone, and the host's speaker
+# pulls at real-time playback rate like a sound device. Barriers keep the
+# joiner's PTT held until the host's asserts pass; bursts are separated by
+# gaps longer than the capture ring (1 s). The regression was a stale ring
+# backlog flooding the receiver on the second press and permanently wedging
+# its jitter buffer: decodes (von_received) kept counting, but nothing was
+# pulled for playback, so listeners got no audio and no speaking label from
+# burst 2 on. triAssertVonSpeaking is the assert with teeth here — it reads
+# the same pull-driven state as the on-screen speaking label.
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "hosted-ptt-host", "--log-format", "jsonl"]
+name = "host"
+type = "client"
+use_mission = false
+no_autotest = true
+machine_id = "trident:von_hosted_ptt_repeat:host"
+env = [{ name = "POSEIDON_VOICE_TEST_TONE", value = "1" }]
+copy_files = [
+  { source = "hosted-von.Demo/description.ext", target = "content/MPMissions/hosted-von.Demo/description.ext" },
+  { source = "hosted-von.Demo/mission.sqm", target = "content/MPMissions/hosted-von.Demo/mission.sqm" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "hosted-ptt-joiner", "--log-format", "jsonl"]
+name = "joiner"
+type = "client"
+use_mission = false
+no_autotest = true
+after = "host"
+start_delay_ms = 3000
+machine_id = "trident:von_hosted_ptt_repeat:joiner"
+env = [{ name = "POSEIDON_VOICE_TEST_TONE", value = "1" }]

@@ -1,0 +1,32 @@
+mission = "tests/integration/missions/jip_basic.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 120
+render = "dummy"
+
+tags = ["headful", "network"]
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl", "--password", "tri-secret"]
+name = "server"
+type = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "client1", "--log-format", "jsonl", "--password", "tri-secret"]
+name = "client1"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:1"
+machine_id = "trident:passworded_join:client1"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "client2", "--log-format", "jsonl", "--password", "tri-secret"]
+name = "client2"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:2"
+machine_id = "trident:passworded_join:client2"

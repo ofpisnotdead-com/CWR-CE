@@ -74,6 +74,11 @@ RString ResolveMissionTemplateDisplayName(RString missionDirectory, RString fall
     return displayName.GetLength() > 0 ? displayName : fallback;
 }
 
+RString GetMissionTemplateSelectorText(const MissionTemplateEntry& templ)
+{
+    return templ.name;
+}
+
 void ListMissionTemplates(AutoArray<MissionTemplateEntry>& templates, bool multiplayer, RString world)
 {
     templates.Clear();

@@ -524,6 +524,9 @@ std::string BuildMasterServerServiceListUrl(const char* masterServerHost, const 
 
     bool hasQuery = false;
     AppendMasterServerServiceQueryParameter(url, hasQuery, "app", UrlEncodeMasterServerServiceValue(APP_NAME_SHORT));
+    // The directory hides passworded servers by default; the in-game browser must
+    // list them (with the lock marker) or private servers are unjoinable from the UI.
+    AppendMasterServerServiceQueryParameter(url, hasQuery, "includePasswordedServers", "true");
     VisitMasterServerBrowserFilterTerms(
         filter,
         [&](const MasterServerBrowserFilterTerm& term)

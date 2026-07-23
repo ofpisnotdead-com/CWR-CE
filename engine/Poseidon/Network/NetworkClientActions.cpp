@@ -6,9 +6,11 @@
 #include <Poseidon/Core/Config/Config.hpp>
 #include <Poseidon/Network/NetworkClientCommon.hpp>
 #include <Poseidon/Network/NetworkFileTransfer.hpp>
+#include <Poseidon/Network/NetworkMissionTransfer.hpp>
 #include <Poseidon/Network/NetworkPlayerRoleAssignment.hpp>
 #include <Poseidon/Network/NetworkScriptValueCodec.hpp>
 #include <Poseidon/Core/Global.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 // #include "strIncl.hpp"
 #include <Poseidon/UI/Locale/StringtableExt.hpp>
 
@@ -2090,8 +2092,10 @@ void NetworkClient::RadioChatWave(int channel, RefArray<NetworkObject>& units, R
 
 void NetworkClient::SetVoiceChannel(int channel)
 {
+    _voiceChannel = channel;
     SetVoiceChannelMessage msg(channel);
     SendMsg(&msg, NMFGuaranteed);
+    LOG_DEBUG(Network, "VoN# cli voicechan-msg ch={} units=0 transport={}", channel, _client != nullptr);
     if (_client)
     {
         _client->SetVoiceChannel(channel);
@@ -2101,8 +2105,10 @@ void NetworkClient::SetVoiceChannel(int channel)
 
 void NetworkClient::SetVoiceChannel(int channel, RefArray<NetworkObject>& units)
 {
+    _voiceChannel = channel;
     SetVoiceChannelMessage msg(channel, units);
     SendMsg(&msg, NMFGuaranteed);
+    LOG_DEBUG(Network, "VoN# cli voicechan-msg ch={} units={} transport={}", channel, units.Size(), _client != nullptr);
     if (_client)
     {
         _client->SetVoiceChannel(channel);
@@ -2112,11 +2118,23 @@ void NetworkClient::SetVoiceChannel(int channel, RefArray<NetworkObject>& units)
 
 int NetworkClient::SendVoiceTestTone(int frames, int amplitude)
 {
+    _voiceChannel = CCDirect;
     SetVoiceChannelMessage msg(CCDirect);
     SendMsg(&msg, NMFGuaranteed);
     if (_client)
         _client->SetVoiceChannel(CCDirect);
     return _client ? _client->SendVoiceTestTone(frames, amplitude) : 0;
+}
+
+void NetworkClient::GetVoiceSpeakers(AutoArray<NetVoiceSpeakerInfo, Poseidon::Foundation::MemAllocSA>& speakers) const
+{
+    if (_client)
+        _client->GetVoiceSpeakers(speakers);
+}
+
+int NetworkClient::GetVoiceTransmitHealth() const
+{
+    return _client ? _client->GetVoiceTransmitHealth() : 0;
 }
 
 // Files can be transferred only to a player's temporary folder on the server -
@@ -2127,12 +2145,24 @@ int NetworkClient::SendVoiceTestTone(int frames, int amplitude)
 
 void NetworkClient::TransferFileToServer(RString dest, RString source)
 {
-    QIFStreamB f;
-    f.AutoOpen(source);
+    const std::vector<char> data = Poseidon::ReadFileUtf8(source);
+    if (data.empty() && Poseidon::FileExistsUtf8(source))
+    {
+        LOG_WARN(Network, "[TransferFileToServer] refusing empty file '{}'", (const char*)source);
+        return;
+    }
+    if (data.empty())
+    {
+        LOG_WARN(Network, "[TransferFileToServer] failed to read '{}'", (const char*)source);
+        return;
+    }
 
-    Poseidon::SendNetworkFileTransferSegments<TransferFileToServerMessage>(
-        dest, f.GetBuffer()->GetData(), f.GetBuffer()->GetSize(),
-        [this](TransferFileToServerMessage& msg) { SendMsg(&msg, NMFGuaranteed); });
+    const DWORD start = GlobalTickCount();
+    const int segments = Poseidon::SendNetworkFileTransferSegments<TransferFileToServerMessage>(
+        dest, data.data(), static_cast<int>(data.size()),
+        [this](TransferFileToServerMessage& msg) { SendMsg(&msg, NMFGuaranteed | NMFHighPriority); });
+    LOG_INFO(Network, "[NMTTransferFileToServer] upload queued src='{}' dst='{}' bytes={} segments={} enqueueMs={}",
+             (const char*)source, (const char*)dest, data.size(), segments, GlobalTickCount() - start);
 }
 
 void NetworkClient::GetTransferStats(int& curBytes, int& totBytes)
@@ -2143,6 +2173,16 @@ void NetworkClient::GetTransferStats(int& curBytes, int& totBytes)
     {
         curBytes = _files[i].received;
         totBytes = _files[i].fileData.Size();
+    }
+    if (totBytes <= 0 && _state == NGSTransferMission && !_missionFileValid)
+    {
+        totBytes = Poseidon::NetworkMissionHeaderTransferSize(_missionHeader.fileSizeL, _missionHeader.fileSizeH);
+        if (totBytes > 0 && !_missionTransferHeaderStatsLogged)
+        {
+            LOG_DEBUG(Network, "[NMTTransferMission] transfer UI waiting for first segment file='{}' total={}",
+                      (const char*)_missionHeader.fileName, totBytes);
+            _missionTransferHeaderStatsLogged = true;
+        }
     }
 }
 
@@ -2303,13 +2343,8 @@ void NetworkClient::EstimateBandwidth(int& nMsgMax, int& nBytesMax)
     }
     else
     {
-        int nMsg = 0, nBytes = 0, nMsgG = 0, nBytesG = 0;
-        _client->GetSendQueueInfo(nMsg, nBytes, nMsgG, nBytesG);
-        if (nMsgG > 0) // new style?
-        {
-            nMsg += nMsgG;
-            nBytes += nBytesG;
-        }
+        int nMsg = 0;
+        int nBytes = 0;
         /*
           #if _ENABLE_CHEATS
             if (outputDiags == 1 && nMsg > 0) snprintf(output, sizeof(output), "Waiting (%d, %d); ", nBytes, nMsg);

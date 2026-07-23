@@ -304,7 +304,7 @@ void Selection::Add(int vi, byte weigth)
 
 NamedSelection::NamedSelection(const char* name, const SelInfo* points, int nPoints, const VertexIndex* faces,
                                int nFaces)
-    : Selection(points, nPoints), _faces(faces, nFaces)
+    : Selection(points, nPoints), _faces(faces, nFaces), _faceSelReady(false)
 {
     RString nameLow = name;
     nameLow.Lower();
@@ -317,11 +317,13 @@ void NamedSelection::DoConstruct(const NamedSelection& src)
     _faces = src.Faces();
     _name = src._name;
     _faceSel = src._faceSel;
+    _faceSelReady = src._faceSelReady;
 }
 
 void NamedSelection::DoConstruct()
 {
     _faceSel = FaceSelection();
+    _faceSelReady = false;
 }
 
 void NamedSelection::DoDestruct()
@@ -332,23 +334,32 @@ void NamedSelection::DoDestruct()
 
 const FaceSelection& NamedSelection::FaceOffsets(Shape* shape) const
 {
-    if (_faceSel.Size() != _faces.Size())
+    if (!_faceSelReady)
     {
         _faceSel.Init(_faces.Size());
+        int validFaces = 0;
+        shape->BuildFaceIndexToOffset();
         // convert indices to offsets
-        for (int i = 0; i < _faceSel.Size(); i++)
+        for (int i = 0; i < _faces.Size(); i++)
         {
-            const Poly& poly = shape->FaceIndexed(_faces[i]);
-            Offset f((const char*)&poly - (const char*)&shape->FaceIndexed(0));
-            _faceSel[i] = f;
+            int faceIndex = _faces[i];
+            if (faceIndex < 0 || faceIndex >= shape->NFaces())
+            {
+                LOG_WARN(Physics, "Skipping invalid face index {} in selection {} ({} faces)", faceIndex, Name(),
+                         shape->NFaces());
+                continue;
+            }
+            _faceSel[validFaces++] = shape->FaceIndexToOffset(faceIndex);
         }
+        _faceSel.Resize(validFaces);
+        _faceSelReady = true;
     }
     return _faceSel;
 }
 
 bool NamedSelection::FaceOffsetsReady() const
 {
-    return _faces.Size() == _faceSel.Size();
+    return _faceSelReady;
 }
 
 int Shape::FindNamedSel(const char* name) const

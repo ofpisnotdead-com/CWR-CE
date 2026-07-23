@@ -20,6 +20,9 @@ DEFINE_ENUM_BEG(MoveId)
 DEFINE_ENUM_END(MoveId)
 
 class MotionType;
+class AIGroup;
+
+float SoldierStealthStanceExposure(AIGroup* group, bool holdingFire, int x, int z);
 
 
 struct MotionPathItem

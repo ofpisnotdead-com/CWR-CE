@@ -1619,7 +1619,10 @@ Vector3 AIUnit::GetFormationAbsolute() const
 {
     if (!_subgroup)
     {
-        Fail("No subgroup");
+        if (!IsAnyPlayer())
+        {
+            Fail("No subgroup");
+        }
         return GetVehicle()->Position();
     }
     AIUnit* leader = _subgroup->Leader();

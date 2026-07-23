@@ -385,9 +385,9 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 // banned by either key is rejected, independent of banMode.
                 if (!ban && _server)
                 {
-                    const RString ipStr = _server->GetPlayerHostIP(from);
+                    char ipStr[24] = {};
                     uint32_t ip = 0;
-                    if (ipStr.GetLength() > 0 && Poseidon::ParseIPv4(static_cast<const char*>(ipStr), ip))
+                    if (_server->GetPlayerHostIP(from, ipStr, sizeof(ipStr)) && Poseidon::ParseIPv4(ipStr, ip))
                     {
                         Poseidon::LoadIpBanList("ipban.txt", _banListIPGlobal);
                         for (int i = 0; i < _banListIPGlobal.Size() && !ban; i++)
@@ -853,7 +853,30 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 break;
             }
 
-            ReceiveFileSegment(transfer);
+            transfer.path = Poseidon::NormalizeNetworkServerPlayerUploadPath(transfer.path, GetServerTmpDir(), from);
+            const Poseidon::NetworkPlayerUploadKind uploadKind =
+                Poseidon::ClassifyNetworkServerPlayerUploadPath(transfer.path, GetServerTmpDir(), from);
+            if (ReceiveFileSegment(transfer) > 0)
+            {
+                LOG_INFO(Network, "[NMTTransferFileToServer] completed receive from={} path='{}' bytes={} segments={}",
+                         from, (const char*)transfer.path, transfer.totSize, transfer.totSegments);
+                for (int i = 0; i < _players.Size(); i++)
+                {
+                    const NetworkPlayerInfo& peer = _players[i];
+                    if (peer.dpid == from || peer.dpid == _botClient)
+                    {
+                        continue;
+                    }
+                    if (uploadKind == Poseidon::NetworkPlayerUploadKind::Face)
+                    {
+                        TransferFace(peer.dpid, from);
+                    }
+                    else if (uploadKind == Poseidon::NetworkPlayerUploadKind::Sound)
+                    {
+                        TransferCustomRadio(peer.dpid, from);
+                    }
+                }
+            }
         }
         break;
         case NMTSetFlagOwner:
@@ -1140,6 +1163,8 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 GetPlayersOnChannel(players, channel, from, true);
             }
+            LOG_DEBUG(Network, "VoN# srvmsg voicechan from={} ch={} units={} -> targets={}", from, channel,
+                      units.Size(), players.Size());
             NetworkPlayerInfo* info = GetPlayerInfo(from);
             if (info)
             {
@@ -1573,6 +1598,93 @@ void NetworkServer::OnNetworkCommand(int from, NetworkCommandMessage& cmd)
     }
 }
 
+bool NetworkServer::ReplayPlayerWorldState(NetworkPlayerInfo& info)
+{
+    if (info.dpid <= 0 || info.dpid == _botClient)
+    {
+        return false;
+    }
+
+    if (info.person.IsNull())
+    {
+        bool found = false;
+        for (int r = 0; r < _playerRoles.Size(); r++)
+        {
+            if (_playerRoles[r].player != info.dpid)
+            {
+                continue;
+            }
+
+            found = true;
+            AICenter* center = GWorld ? GWorld->GetCenter(_playerRoles[r].side) : nullptr;
+            if (!center)
+            {
+                LOG_WARN(Network, "ReplayPlayerWorldState: no center for side {}", (int)_playerRoles[r].side);
+                break;
+            }
+            AIGroup* grp = center->GetGroup(_playerRoles[r].group);
+            if (!grp)
+            {
+                LOG_WARN(Network, "ReplayPlayerWorldState: no group {} in center", _playerRoles[r].group);
+                break;
+            }
+            AIUnit* unit = grp->UnitWithID(_playerRoles[r].unit + 1);
+            if (!unit || !unit->GetPerson())
+            {
+                LOG_WARN(Network, "ReplayPlayerWorldState: no unit/person at index {}", _playerRoles[r].unit + 1);
+                break;
+            }
+
+            Person* person = unit->GetPerson();
+            info.person = person->GetNetworkId();
+            info.cameraPosition = person->Position();
+            info.unit = PersonToUnit(info.person);
+            break;
+        }
+
+        if (!found)
+        {
+            LOG_WARN(Network, "ReplayPlayerWorldState: no role found for player {} (dpid={})", (const char*)info.name,
+                     info.dpid);
+        }
+    }
+
+    if (info.person.IsNull())
+    {
+        LOG_WARN(Network, "ReplayPlayerWorldState: no person for player {} (dpid={})", (const char*)info.name,
+                 info.dpid);
+        return false;
+    }
+
+    SendWorldState(info.dpid);
+
+    NetworkObjectInfo* personInfo = GetObjectInfo(info.person);
+    if (!personInfo)
+    {
+        LOG_WARN(Network, "ReplayPlayerWorldState: missing person object {}:{} for player {}", info.person.creator,
+                 info.person.id, (const char*)info.name);
+        return false;
+    }
+
+    SelectPlayerMessage pl(info.dpid, info.person, info.cameraPosition, false);
+    LOG_INFO(Network, "ReplayPlayerWorldState: sending SelectPlayer {}:{} to {}", info.person.creator, info.person.id,
+             (const char*)info.name);
+    NetworkComponent::SendMsg(info.dpid, &pl, NMFGuaranteed);
+    ChangeOwner(info.person, personInfo->owner, info.dpid);
+
+    NetworkId brain = PersonToUnit(info.person);
+    if (!brain.IsNull())
+    {
+        NetworkObjectInfo* brainInfo = GetObjectInfo(brain);
+        if (brainInfo)
+        {
+            ChangeOwner(brain, brainInfo->owner, info.dpid);
+        }
+    }
+
+    return true;
+}
+
 void NetworkServer::OnGameStateMessage(int from, NetworkMessage* msg, NetworkMessageType type,
                                        NetworkMessageContext& ctx)
 {
@@ -1593,13 +1705,24 @@ void NetworkServer::OnGameStateMessage(int from, NetworkMessage* msg, NetworkMes
             NET_ERROR(info);
             if (info && info->state >= NGSCreate)
             {
-                // JIP: player was in NGSBriefing, now clicking "I'm Ready"
-                // — send ChangeGameState(NGSPlay) so client transitions
-                if (gs.gameState == NGSPlay && info->jip && info->state == NGSBriefing && _state >= NGSPlay)
+                LOG_DEBUG(Network,
+                          "ClientReady received: player={} name='{}' requestedState={} previousState={} "
+                          "serverState={} jip={}",
+                          from, (const char*)info->name, (int)gs.gameState, (int)info->state, (int)_state, info->jip);
+                if (gs.gameState == NGSPlay && info->state == NGSBriefing && _state >= NGSPlay)
                 {
-                    LOG_INFO(Network, "JIP: Player {} confirmed ready, advancing to NGSPlay", (const char*)info->name);
+                    LOG_INFO(Network, "Player {} confirmed ready after server play, advancing to NGSPlay",
+                             (const char*)info->name);
                     ChangeGameState gsPlay(NGSPlay);
                     SendMsg(from, &gsPlay, NMFGuaranteed);
+                }
+                if (Poseidon::ShouldIgnoreStaleMissionReadyState(gs.gameState, info->state, _state, NGSPrepareOK,
+                                                                 NGSTransferMission, NGSBriefing))
+                {
+                    LOG_DEBUG(Network,
+                              "Ignoring stale ClientReady state {} from {} while playerState={} serverState={}",
+                              (int)gs.gameState, (const char*)info->name, (int)info->state, (int)_state);
+                    break;
                 }
                 info->state = gs.gameState;
                 SetPlayerState(from, gs.gameState);
@@ -1609,21 +1732,18 @@ void NetworkServer::OnGameStateMessage(int from, NetworkMessage* msg, NetworkMes
             // them through mission transfer → island load → briefing automatically.
             // The MissionHeader was already sent in OnCreatePlayer, so the client
             // has already checked mission file validity and sent AskMissionFile.
-            if (gs.gameState == NGSPrepareOK && info && info->jip && _state >= NGSPlay)
+            if (gs.gameState == NGSPrepareOK && info && info->jip && _state >= NGSBriefing)
             {
                 LOG_INFO(Network, "JIP: Player {} assigned role (missionFileValid={}), advancing",
                          (const char*)info->name, info->missionFileValid);
 
-                // Send mission file if client doesn't have it
-                if (!info->missionFileValid)
-                {
-                    SendMissionFile();
-                }
-
-                // Advance client through the remaining states.
-                // Mirrors normal flow: TransferMission → LoadIsland → Briefing
                 ChangeGameState gsTransfer(NGSTransferMission);
                 SendMsg(from, &gsTransfer, NMFGuaranteed);
+                if (!info->missionFileValid)
+                {
+                    SendMissionFileTo(from);
+                }
+
                 ChangeGameState gsLoad(NGSLoadIsland);
                 SendMsg(from, &gsLoad, NMFGuaranteed);
                 ChangeGameState gsBriefing(NGSBriefing);
@@ -1646,18 +1766,67 @@ void NetworkServer::OnGameStateMessage(int from, NetworkMessage* msg, NetworkMes
                 for (int i = 0; i < _players.Size(); i++)
                 {
                     NetworkPlayerInfo& info = _players[i];
+                    if (info.person.IsNull())
+                    {
+                        for (int r = 0; r < _playerRoles.Size(); r++)
+                        {
+                            if (_playerRoles[r].player != info.dpid)
+                            {
+                                continue;
+                            }
+
+                            AICenter* center = GWorld->GetCenter(_playerRoles[r].side);
+                            if (!center)
+                            {
+                                break;
+                            }
+                            AIGroup* grp = center->GetGroup(_playerRoles[r].group);
+                            if (!grp)
+                            {
+                                break;
+                            }
+                            AIUnit* unit = grp->UnitWithID(_playerRoles[r].unit + 1);
+                            if (!unit || !unit->GetPerson())
+                            {
+                                break;
+                            }
+
+                            Person* person = unit->GetPerson();
+                            info.person = person->GetNetworkId();
+                            info.cameraPosition = person->Position();
+                            info.unit = PersonToUnit(info.person);
+                            LOG_DEBUG(Network, "SelectPlayer: resolved briefing player {} to person {}:{} via role {}",
+                                      info.dpid, info.person.creator, info.person.id, r);
+                            break;
+                        }
+                    }
                     NetworkId& id = info.person;
                     if (id.IsNull())
                     {
+                        LOG_DEBUG(Network, "SelectPlayer: no briefing person for player {}", info.dpid);
                         continue;
                     }
+                    if (info.dpid != _botClient)
+                    {
+                        SendWorldState(info.dpid);
+                    }
+                    SelectPlayerMessage pl(info.dpid, id, info.cameraPosition, false);
+                    LOG_DEBUG(Network, "SelectPlayer: sending briefing player {} person {}:{}", pl.player,
+                              pl.person.creator, pl.person.id);
+                    NetworkComponent::SendMsg(pl.player, &pl, NMFGuaranteed);
                     NetworkObjectInfo* oInfo = GetObjectInfo(id);
                     if (!oInfo)
                     {
+                        LOG_DEBUG(Network, "SelectPlayer: no object info for briefing person {}:{}", id.creator, id.id);
                         continue;
                     }
-                    SelectPlayerMessage pl(info.dpid, id, info.cameraPosition, false);
-                    NetworkComponent::SendMsg(pl.player, &pl, NMFGuaranteed);
+                    NetworkId brain = PersonToUnit(id);
+                    NetworkObjectInfo* brainInfo = brain.IsNull() ? nullptr : GetObjectInfo(brain);
+                    LOG_DEBUG(Network,
+                              "SelectPlayer: briefing ownership player={} person={}:{} owner={} brain={}:{} "
+                              "brainOwner={} botClient={}",
+                              pl.player, id.creator, id.id, oInfo->owner, brain.creator, brain.id,
+                              brainInfo ? brainInfo->owner : -1, _botClient);
                     ChangeOwner(id, oInfo->owner, pl.player);
                 }
                 // change state
@@ -1673,11 +1842,8 @@ void NetworkServer::OnGameStateMessage(int from, NetworkMessage* msg, NetworkMes
                 RString worldFile = GetWorldName(Glob.header.worldname);
                 PerformFileIntegrityCheck(worldFile, info->dpid);
 
-                // JIP: fast-track to NGSPlay if server is already playing
-                if (info->jip && _state >= NGSPlay)
+                if (info->jip && _state >= NGSBriefing)
                 {
-                    LOG_INFO(Network, "JIP: Fast-tracking player {} to NGSPlay", (const char*)info->name);
-
                     // Resolve person from world if not yet set (normal case for JIP)
                     if (info->person.IsNull())
                     {
@@ -1736,18 +1902,6 @@ void NetworkServer::OnGameStateMessage(int from, NetworkMessage* msg, NetworkMes
                     // SelectPlayer can resolve GetObject(person)
                     SendWorldState(info->dpid);
 
-                    // Send time sync so client sets _jip flag
-                    NetworkCommandMessage timeMsg;
-                    timeMsg.type = NCMTMissionTimeElapsed;
-                    int timeElapsed = GlobalTickCount() - _missionHeader.start;
-                    timeMsg.content.Write(&timeElapsed, sizeof(timeElapsed));
-                    SendMsg(info->dpid, &timeMsg, NMFGuaranteed);
-
-                    // DON'T send NGSPlay yet — player stays in NGSBriefing
-                    // (yellow in player list) until they click "I'm Ready".
-                    // The client sends ClientReady(NGSPlay) when ready, and
-                    // the server echoes ChangeGameState(NGSPlay) back then.
-
                     // Assign player AFTER world state so client
                     // has the Person object when it processes SelectPlayer
                     if (!info->person.IsNull())
@@ -1778,9 +1932,23 @@ void NetworkServer::OnGameStateMessage(int from, NetworkMessage* msg, NetworkMes
                                  (const char*)info->name);
                     }
 
-                    // Run initPlayerServer.sqs on server for JIP player
-                    using Poseidon::RunMissionScript;
-                    RunMissionScript("initPlayerServer.sqs", GameValue());
+                    if (_state >= NGSPlay)
+                    {
+                        NetworkCommandMessage timeMsg;
+                        timeMsg.type = NCMTMissionTimeElapsed;
+                        int timeElapsed = GlobalTickCount() - _missionHeader.start;
+                        timeMsg.content.Write(&timeElapsed, sizeof(timeElapsed));
+                        SendMsg(info->dpid, &timeMsg, NMFGuaranteed);
+
+                        using Poseidon::RunMissionScript;
+                        RunMissionScript("initPlayerServer.sqs", GameValue());
+
+                        LOG_INFO(Network, "JIP: Sending NGSPlay to player {}", (const char*)info->name);
+                        ChangeGameState gsPlay(NGSPlay);
+                        SendMsg(from, &gsPlay, NMFGuaranteed);
+                        info->state = NGSPlay;
+                        SetPlayerState(from, NGSPlay);
+                    }
                 }
             }
         }
@@ -2320,18 +2488,22 @@ static bool IsAllDisabled(const AutoArray<PlayerRole>& roles)
 
 void NetworkServer::OnMessagePlayerRole(int from, NetworkMessageType type, NetworkMessageContext& ctx)
 {
-    // PATCHED
+    bool acceptedDelayedRole = false;
     if (_state != NGSPrepareSide)
     {
-        // Allow JIP players to assign roles when game is already in progress
-        NetworkPlayerInfo* jipInfo = GetPlayerInfo(from);
-        if (!jipInfo || !jipInfo->jip || _state < NGSPlay)
+        NetworkPlayerInfo* playerInfo = GetPlayerInfo(from);
+        bool jipRole = playerInfo && playerInfo->jip && _state >= NGSBriefing;
+        bool delayedRole = playerInfo && !playerInfo->jip && _state >= NGSTransferMission && _state <= NGSBriefing &&
+                           playerInfo->state >= NGSCreate && playerInfo->state < NGSPlay;
+        if (!jipRole && !delayedRole)
         {
-            LOG_WARN(Network, "JIP: OnMessagePlayerRole rejected from={} (jipInfo={}, jip={}, state={})", from,
-                     (void*)jipInfo, jipInfo ? jipInfo->jip : false, (int)_state);
+            LOG_WARN(Network, "OnMessagePlayerRole rejected from={} (playerInfo={}, jip={}, state={})", from,
+                     (void*)playerInfo, playerInfo ? playerInfo->jip : false, (int)_state);
             return;
         }
-        LOG_INFO(Network, "JIP: OnMessagePlayerRole ACCEPTED from={} (JIP player)", from);
+        LOG_INFO(Network, "OnMessagePlayerRole accepted from={} (jip={}, state={})", from, playerInfo->jip,
+                 (int)_state);
+        acceptedDelayedRole = delayedRole;
     }
 
     NET_ERROR(dynamic_cast<const IndicesPlayerRole*>(ctx.GetIndices()))
@@ -2387,7 +2559,7 @@ void NetworkServer::OnMessagePlayerRole(int from, NetworkMessageType type, Netwo
 
     if (lock)
     {
-        if (iFound >= 0)
+        if (Poseidon::RoleDuplicateClearRequired(iFound, index))
         {
             _playerRoles[iFound].player = noPlayer;
             _playerRoles[iFound].roleLocked = false;
@@ -2411,7 +2583,8 @@ void NetworkServer::OnMessagePlayerRole(int from, NetworkMessageType type, Netwo
                 return;
             }
         }
-        if (Poseidon::RoleSwapAllowed(_playerRoles[index].player, info.player, from, AI_PLAYER, NO_PLAYER))
+        if (Poseidon::RoleSwapAllowed(_playerRoles[index].player, info.player, from, AI_PLAYER, NO_PLAYER) ||
+            Poseidon::RoleSelfRefreshAllowed(_playerRoles[index].player, info.player, from))
         {
             _playerRoles[index] = info;
             LOG_DEBUG(Network, "JIP-ROLE: unlocked assign OK, roles[{}].player={}", index, info.player);
@@ -2422,7 +2595,7 @@ void NetworkServer::OnMessagePlayerRole(int from, NetworkMessageType type, Netwo
                      _playerRoles[index].player, info.player, from);
             return;
         }
-        if (iFound >= 0)
+        if (Poseidon::RoleDuplicateClearRequired(iFound, index))
         {
             _playerRoles[iFound].player = noPlayer;
             _playerRoles[iFound].roleLocked = false;
@@ -2461,7 +2634,7 @@ void NetworkServer::OnMessagePlayerRole(int from, NetworkMessageType type, Netwo
             NetworkComponent::SendMsg(player.dpid, msgSend, type, NMFGuaranteed);
         }
     }
-    if (iFound >= 0)
+    if (Poseidon::RoleDuplicateClearRequired(iFound, index))
     {
         // create message
         Ref<NetworkMessage> msgSend = new NetworkMessage();
@@ -2492,6 +2665,44 @@ void NetworkServer::OnMessagePlayerRole(int from, NetworkMessageType type, Netwo
             }
             //					SendMsg(player.dpid, &info, 0, index, NMFGuaranteed);
             NetworkComponent::SendMsg(player.dpid, msgSend, type, NMFGuaranteed);
+        }
+    }
+
+    NetworkPlayerInfo* assignedInfo = GetPlayerInfo(from);
+    const bool hasRole = FindPlayerRole(from) != nullptr;
+    if (assignedInfo && Poseidon::DelayedRoleShouldStartMissionCatchUp(acceptedDelayedRole, _state, assignedInfo->state,
+                                                                       hasRole, NGSTransferMission, NGSBriefing))
+    {
+        LOG_INFO(Network,
+                 "Delayed role assignment for player {} at server state {}; sending mission catch-up "
+                 "(playerState={}, missionFileValid={})",
+                 (const char*)assignedInfo->name, (int)_state, (int)assignedInfo->state,
+                 assignedInfo->missionFileValid);
+        if (assignedInfo->state < NGSTransferMission)
+        {
+            ChangeGameState gsTransfer(NGSTransferMission);
+            SendMsg(from, &gsTransfer, NMFGuaranteed);
+            assignedInfo->state = NGSTransferMission;
+            SetPlayerState(from, NGSTransferMission);
+        }
+        if (!assignedInfo->missionFileValid)
+        {
+            SendMissionFileTo(from);
+        }
+        if (_state >= NGSLoadIsland)
+        {
+            ChangeGameState gsLoad(NGSLoadIsland);
+            SendMsg(from, &gsLoad, NMFGuaranteed);
+            assignedInfo->state = NGSLoadIsland;
+            SetPlayerState(from, NGSLoadIsland);
+            if (_state >= NGSBriefing)
+            {
+                ReplayPlayerWorldState(*assignedInfo);
+                ChangeGameState gsBriefing(NGSBriefing);
+                SendMsg(from, &gsBriefing, NMFGuaranteed);
+                assignedInfo->state = NGSBriefing;
+                SetPlayerState(from, NGSBriefing);
+            }
         }
     }
 }

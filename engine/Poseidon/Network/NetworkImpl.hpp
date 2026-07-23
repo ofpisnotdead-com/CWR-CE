@@ -51,6 +51,7 @@ class NetworkManager : public INetworkManager
     void Done() override;
 
     void GetSessions(AutoArray<SessionInfo>& sessions) override;
+    bool ProbeRemoteHosts(AutoArray<RemoteHostAddress>& hosts, int port) override;
     RString IPToGUID(RString ip, int port) override;
     bool CreateSession(int port, RString password) override;
     ConnectResult JoinSession(RString guid, RString password) override;
@@ -91,6 +92,8 @@ class NetworkManager : public INetworkManager
     void SoundState(IWave* wave, SoundStateType state) override;
     NetworkGameState GetPlayerState(int dpid) override;
     RString GetPlayerName(int dpid) override;
+    void GetVoiceSpeakers(AutoArray<NetVoiceSpeakerInfo, Poseidon::Foundation::MemAllocSA>& speakers) override;
+    int GetVoiceTransmitHealth() override;
     Vector3 GetCameraPosition(int dpid) override;
     NetworkObject* GetObject(NetworkId& id) override;
     bool CreateVehicle(Vehicle* veh, VehicleListType type, RString name, int idVeh) override;
@@ -277,10 +280,6 @@ void RemoveBank(const char* prefix);
 
 int GetNetworkPort();
 
-namespace Poseidon
-{
-void DeleteDirectoryStructure(const char* name, bool deleteDir);
-}
 namespace Poseidon
 {
 void CreatePath(RString path);

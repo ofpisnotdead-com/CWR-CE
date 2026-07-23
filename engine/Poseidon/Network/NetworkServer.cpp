@@ -7,6 +7,7 @@ using namespace Poseidon;
 #include <Poseidon/Foundation/Logging/Logging.hpp>
 #include <Poseidon/Core/Config/Config.hpp>
 #include <Poseidon/Network/NetworkImpl.hpp>
+#include <Poseidon/IO/Filesystem/DirTree.hpp>
 #include <Poseidon/Core/Global.hpp>
 #include <Poseidon/Core/Application.hpp>
 // #include "strIncl.hpp"
@@ -14,6 +15,8 @@ using namespace Poseidon;
 #include <Poseidon/Foundation/Platform/GamePaths.hpp>
 
 #include <Poseidon/Network/NetworkConfig.hpp>
+#include <Poseidon/Network/NetworkServerConfig.hpp>
+#include <Poseidon/Network/NetworkMissionTransfer.hpp>
 #include <Poseidon/Network/NetworkServerCommon.hpp>
 #include <Poseidon/Network/MasterServerPublisher.hpp>
 #include <Poseidon/Network/MasterServerServiceClient.hpp>
@@ -228,6 +231,12 @@ int GetServerBanCount()
     return srv ? srv->GetBanCount() : -1;
 }
 
+RString GetServerFirstBanId()
+{
+    NetworkServer* srv = GNetworkManager.GetServer();
+    return srv ? srv->GetFirstBanId() : RString();
+}
+
 bool GetServerLocked()
 {
     NetworkServer* srv = GNetworkManager.GetServer();
@@ -395,6 +404,10 @@ NetTranspServer* __cdecl InitServer(int port, RString password, const ParamEntry
             equalModRequired = *entry;
         }
 
+        // The dedicated server config (-config) takes precedence over the main cfg
+        // read in Init() for the custom-file cap, so admins can set it in server.cfg.
+        MaxCustomFileSize = Poseidon::NetworkMaxCustomFileSizeFromCfg(cfg, MaxCustomFileSize);
+
         // on dedicated server, use only server name as session name
     }
     else
@@ -436,6 +449,11 @@ bool NetworkServer::Init(int port, RString password)
     {
         _proxy = *entry;
     }
+
+    // Server-configurable cap on client custom files (radio sounds, faces); a larger
+    // transfer kicks the client. Applies to dedicated and self-hosted servers alike,
+    // mirroring the original OFP Flashpoint.cfg "MaxCustomFileSize" key. 0 blocks all.
+    MaxCustomFileSize = Poseidon::NetworkMaxCustomFileSizeFromCfg(cfg, MaxCustomFileSize);
 
     _server = InitServer(port, password, cfg);
     return _server != nullptr;
@@ -877,6 +895,12 @@ void OnServerUserMessage(int from, char* buffer, int bufferSize, void* context)
     }
 }
 
+void OnServerRawMagicMessage(int from, int magic, const char* buffer, int bufferSize, void* context)
+{
+    NetworkServer* server = (NetworkServer*)context;
+    server->OnRawMagicMessage(from, magic, buffer, bufferSize);
+}
+
 void OnServerSendComplete(DWORD msgID, bool ok, void* context)
 {
     NetworkServer* server = (NetworkServer*)context;
@@ -942,7 +966,46 @@ void NetworkServer::ReceiveUserMessages()
     if (_server)
     {
         _server->ProcessUserMessages(OnServerUserMessage, this);
+        _server->ProcessRawMagicMessages(OnServerRawMagicMessage, this);
     }
+}
+
+void NetworkServer::OnRawMagicMessage(int from, int magic, const char* buffer, int bufferSize)
+{
+    if (magic != Poseidon::NetworkMissionBulkRawMagic)
+    {
+        return;
+    }
+
+    Poseidon::NetworkMissionBulkRawPacket packet;
+    if (!Poseidon::DecodeNetworkMissionBulkRawPayload(buffer, bufferSize, packet) ||
+        packet.kind != Poseidon::NetworkMissionBulkRawKind::Request)
+    {
+        LOG_WARN(Network, "[NMTTransferMission] rejected malformed raw mission request from {} size={}", from,
+                 bufferSize);
+        return;
+    }
+
+    QIFStreamB f;
+    RString src = _missionBank;
+    f.AutoOpen(src);
+    const auto source = Poseidon::BuildNetworkMissionFileSendSource(src, _missionHeader.fileName, f.GetBuffer());
+    if (!source.data || source.totalSize != packet.totalSize)
+    {
+        LOG_WARN(Network, "[NMTTransferMission] rejected raw resend request from {} size={} actual={}", from,
+                 packet.totalSize, source.totalSize);
+        return;
+    }
+
+    const int sent = Poseidon::SendNetworkMissionRawFileSegmentRange<TransferMissionFileMessage>(
+        source.destinationPath, source.data, source.totalSize, packet.curSegment, packet.segmentCount,
+        [this, from](AutoArray<char>& payload)
+        {
+            _server->SendRawMagic(from, Poseidon::NetworkMissionBulkRawMagic, reinterpret_cast<BYTE*>(payload.Data()),
+                                  payload.Size());
+        });
+    LOG_DEBUG(Network, "[NMTTransferMission] raw resend from {} firstSegment={} count={} sent={}", from,
+              packet.curSegment, packet.segmentCount, sent);
 }
 
 void NetworkServer::RemoveSystemMessages()

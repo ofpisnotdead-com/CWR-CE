@@ -46,6 +46,12 @@ void VoNSpeaker::destroy()
     SyncState();
 }
 
+void VoNSpeaker::setChannel(VoNChatChannel channel)
+{
+    EnsureImpl()->setChannel(channel);
+    SyncState();
+}
+
 void VoNSpeaker::setPosition(float x, float y, float z)
 {
     EnsureImpl()->setPosition(x, y, z);

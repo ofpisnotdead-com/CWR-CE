@@ -4,4 +4,4 @@
 # uses a fake in-process transport (triOpenModDownload) — no network.
 extra_args = ["--mods-dir", "../../tests/fixtures/mods"]
 timeout = 120
-tags = ["headful"]
+tags = ["headful", "ci-host-blocked"]

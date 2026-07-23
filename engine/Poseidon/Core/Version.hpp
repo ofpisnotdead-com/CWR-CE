@@ -48,6 +48,10 @@ RString GetVersionTag();
 //! (e.g. "3.0", "3.0-rc1", "3.0-d83a-dev").
 RString GetVersionString();
 
+//! Full version string for an explicit runtime state. Used by early CLI paths before
+//! AppConfig has stored parsed flags.
+RString GetVersionStringForState(bool devMode, bool isDemo = false);
+
 //! Pure tag resolution (unit-testable). buildTag = BUILD_VERSION_TAG or nullptr;
 //! gitSha = BUILD_GIT_SHA or nullptr; isDemo inserts "-demo"; devMode then appends
 //! "-dev" (so a full tag is e.g. "d83a-demo-dev"; either suffix alone when empty).

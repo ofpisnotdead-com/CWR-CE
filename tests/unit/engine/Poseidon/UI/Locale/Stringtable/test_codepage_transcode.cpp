@@ -238,7 +238,19 @@ TEST_CASE("DecodeLegacyTextToUtf8 - modern UTF-8 is never double encoded", "[cod
                              "MOD - P\xC5\x99"
                              "iklad";
     REQUIRE(SelectLegacyTextCodepage(utf8, Codepage::CP1252) == Codepage::Utf8);
+    REQUIRE(SelectLegacyTextCodepage(utf8, Codepage::CP1250) == Codepage::Utf8);
     REQUIRE(DecodeLegacyTextToUtf8(utf8, Codepage::CP1252) == utf8);
+    REQUIRE(DecodeLegacyTextToUtf8(utf8, Codepage::CP1250) == utf8);
+}
+
+TEST_CASE("DecodeLegacyTextToUtf8 - CP1250 that is valid UTF-8 still follows Czech column codepage",
+          "[codepage][legacy][cp1250]")
+{
+    const std::string cp1250 = "NEM\xD9\x8E"
+                               "U";
+    REQUIRE(SelectLegacyTextCodepage(cp1250, Codepage::CP1250) == Codepage::CP1250);
+    REQUIRE(DecodeLegacyTextToUtf8(cp1250, Codepage::CP1250) == "NEM\xC5\xAE\xC5\xBD"
+                                                                "U");
 }
 
 TEST_CASE("DecodeLegacyTextToUtf8 - CP1252 Western accents stay Western", "[codepage][legacy][cp1252]")
@@ -362,6 +374,13 @@ TEST_CASE("DecodeLegacyTextToRString - repairs user-facing CP1250 config literal
 {
     const RString decoded = DecodeLegacyTextToRString("Gener\xE1l Novotn\xFD - \xC8SLA", Codepage::CP1252);
     REQUIRE(std::string(decoded.Data()) == "Gener\xC3\xA1l Novotn\xC3\xBD - \xC4\x8CSLA");
+}
+
+TEST_CASE("DecodeLegacyTextToRString - repairs Western European place names in script chat",
+          "[codepage][decode][rstring]")
+{
+    const RString decoded = DecodeLegacyTextToRString("Warnem\xFCnde", Codepage::CP1250);
+    REQUIRE(std::string(decoded.Data()) == "Warnem\xC3\xBCnde");
 }
 
 TEST_CASE("TranscodeToUtf8 - Undefined codepage slot becomes U+FFFD", "[codepage][undefined]")

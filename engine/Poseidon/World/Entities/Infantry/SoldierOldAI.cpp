@@ -1552,6 +1552,14 @@ bool RandomDecision(AIUnit* unit, float period, float ratio)
     return timeMod < ratio * period;
 }
 
+float SoldierStealthStanceExposure(AIGroup* group, bool holdingFire, int x, int z)
+{
+    AICenter* center = group ? group->GetCenter() : nullptr;
+    if (!center)
+        return 0.0f;
+    return holdingFire ? center->GetExposurePessimistic(x, z) : center->GetExposureOptimistic(x, z);
+}
+
 #define DIAG_FIRE 0
 
 void Soldier::DisabledPilot(float deltaT, SimulationImportance prec)
@@ -1589,8 +1597,10 @@ void Soldier::AIPilot(float deltaT, SimulationImportance prec)
 #endif
 
     AIUnit* unit = Brain();
-    PoseidonAssert(unit);
-    PoseidonAssert(unit->GetSubgroup());
+    if (!unit)
+        return;
+    if (!unit->GetSubgroup())
+        return;
     bool isLeader = unit->IsSubgroupLeader();
 
     // Vector3Val speed=ModelSpeed();
@@ -1868,15 +1878,7 @@ void Soldier::AIPilot(float deltaT, SimulationImportance prec)
             int x = toIntFloor(Position().X() * InvLandGrid);
             int z = toIntFloor(Position().Z() * InvLandGrid);
 
-            float exposure;
-            if (unit->IsHoldingFire())
-            {
-                exposure = GetGroup()->GetCenter()->GetExposurePessimistic(x, z);
-            }
-            else
-            {
-                exposure = GetGroup()->GetCenter()->GetExposureOptimistic(x, z);
-            }
+            float exposure = SoldierStealthStanceExposure(GetGroup(), unit->IsHoldingFire(), x, z);
 
             if (exposure < 400 && speedWanted > 2.0f)
             {

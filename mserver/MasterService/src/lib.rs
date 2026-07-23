@@ -32,7 +32,7 @@ mod tests {
 
     fn sample_request(server_id: &str, hostname: &str, now_suffix: &str) -> RegisterServerRequest {
         RegisterServerRequest {
-            app_name: "CWR-CE".to_string(),
+            app_name: "CWR".to_string(),
             server_id: server_id.to_string(),
             address: format!("192.168.1.{now_suffix}"),
             hostport: 2302,
@@ -78,16 +78,7 @@ mod tests {
         version: &str,
         homepage_url: Option<&str>,
     ) {
-        write_mod_metadata_for_game(
-            root,
-            mod_id,
-            name,
-            version,
-            homepage_url,
-            "CWR-CE",
-            301,
-            None,
-        );
+        write_mod_metadata_for_game(root, mod_id, name, version, homepage_url, "CWR", 303, None);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -228,7 +219,7 @@ mod tests {
         // The host's build tag round-trips through the upsert (sample_request sets "rc1");
         // without the version_tag column/bind/select it would be absent or empty.
         assert_eq!(first.version_tag, "rc1");
-        assert_eq!(first.app_name, "CWR-CE");
+        assert_eq!(first.app_name, "CWR");
 
         let listed = directory
             .list(
@@ -244,7 +235,7 @@ mod tests {
         assert_eq!(listed[0].hostname, "Alpha");
         // The served list row carries the tag the publisher registered with.
         assert_eq!(listed[0].version_tag, "rc1");
-        assert_eq!(listed[0].app_name, "CWR-CE");
+        assert_eq!(listed[0].app_name, "CWR");
 
         let updated = directory
             .register(sample_request("srv-1", "Bravo", "11"), 2000)
@@ -473,7 +464,7 @@ mod tests {
         let rows = directory
             .list(
                 &ListServersQuery {
-                    app_name: Some("CWR-CE".to_string()),
+                    app_name: Some("CWR".to_string()),
                     actver: Some(196),
                     version_tag: Some("rc1".to_string()),
                     include_unverified_servers: Some(true),
@@ -518,7 +509,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(groups.len(), 2);
-        assert!(groups.iter().any(|group| group.app_name == "CWR-CE"
+        assert!(groups.iter().any(|group| group.app_name == "CWR"
             && group.actver == 196
             && group.version_tag == "rc1"
             && group.servers == 2));
@@ -860,7 +851,7 @@ mod tests {
             "hostport": 2302,
             "hostname": "Raw Server",
             "gametype": "coop",
-            "app": "CWR-CE",
+            "app": "CWR",
             "actver": 196,
             "reqver": 196,
             "vertag": "rc2",
@@ -901,7 +892,7 @@ mod tests {
         let list_body = to_bytes(list.into_body(), usize::MAX).await.unwrap();
         let rows: Vec<Value> = serde_json::from_slice(&list_body).unwrap();
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0]["app"], "CWR-CE");
+        assert_eq!(rows[0]["app"], "CWR");
         assert_eq!(rows[0]["vertag"], "rc2");
     }
 
@@ -939,7 +930,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri("/v1/servers?includeUnverifiedServers=true&app=CWR-CE&actver=196&vertag=rc1")
+                    .uri("/v1/servers?includeUnverifiedServers=true&app=CWR&actver=196&vertag=rc1")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -983,7 +974,7 @@ mod tests {
                 Request::builder()
                     .method("GET")
                     .uri("/v1/servers?includeUnverifiedServers=true")
-                    .header("user-agent", "CWR-CE/196 (tag=rc1; role=client)")
+                    .header("user-agent", "CWR/196 (tag=rc1; role=client)")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -995,6 +986,55 @@ mod tests {
         assert_eq!(servers.len(), 2);
         assert!(servers.iter().any(|server| server.server_id == "cwr-a"));
         assert!(servers.iter().any(|server| server.server_id == "cwr-b"));
+    }
+
+    #[tokio::test]
+    async fn http_list_returns_303_server_to_302_discovery_client() {
+        let temp_dir = tempdir().unwrap();
+        let directory = Arc::new(
+            SqliteServerDirectory::open_path(temp_dir.path().join("directory.sqlite"))
+                .await
+                .unwrap(),
+        );
+        let app = build_router(directory);
+
+        let mut server = sample_request("cwr-303", "CWR 3.03 Server", "3");
+        server.actver = 303;
+        server.reqver = 303;
+        server.version_tag = "rc303".to_string();
+        let registered = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/servers/register")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&server).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(registered.status(), StatusCode::OK);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/v1/servers?includeUnverifiedServers=true&app=CWR")
+                    .header("user-agent", "CWR/302 (tag=rc302; role=client)")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let servers: Vec<DirectoryServerRecord> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[0].server_id, "cwr-303");
+        assert_eq!(servers[0].actver, 303);
+        assert_eq!(servers[0].reqver, 303);
+        assert_eq!(servers[0].version_tag, "rc303");
     }
 
     #[tokio::test]
@@ -1038,7 +1078,7 @@ mod tests {
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let groups: Vec<crate::model::ServerVersionGroup> = serde_json::from_slice(&body).unwrap();
         assert_eq!(groups.len(), 1);
-        assert_eq!(groups[0].app_name, "CWR-CE");
+        assert_eq!(groups[0].app_name, "CWR");
         assert_eq!(groups[0].actver, 196);
         assert_eq!(groups[0].version_tag, "rc1");
         assert_eq!(groups[0].servers, 2);
@@ -1127,8 +1167,8 @@ mod tests {
                 boundary,
                 &[
                     ("name", "Synthetic Upload"),
-                    ("app", "CWR-CE"),
-                    ("actver", "301"),
+                    ("app", "CWR"),
+                    ("actver", "302"),
                     ("vertag", "rc1"),
                     ("author", "simi"),
                     ("description", "a mod"),
@@ -1193,8 +1233,8 @@ mod tests {
             entry.mod_id
         );
         assert_eq!(entry.version.len(), 8); // default version = sha256[..8] hex
-        assert_eq!(entry.app_name.as_deref(), Some("CWR-CE"));
-        assert_eq!(entry.actver, Some(301));
+        assert_eq!(entry.app_name.as_deref(), Some("CWR"));
+        assert_eq!(entry.actver, Some(302));
         assert_eq!(entry.version_tag.as_deref(), Some("rc1"));
         assert_eq!(entry.authors, vec!["simi".to_string()]);
         assert_eq!(
@@ -1213,7 +1253,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri("/v1/mods?app=CWR-CE&actver=301&vertag=rc1")
+                    .uri("/v1/mods?app=CWR&actver=302&vertag=rc1")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1879,8 +1919,8 @@ mod tests {
             "CWR Effects",
             "1.0.0",
             None,
-            "CWR-CE",
-            301,
+            "CWR",
+            303,
             Some("rc1"),
         );
         write_mod_metadata_for_game(
@@ -1899,8 +1939,8 @@ mod tests {
             "Future Effects",
             "1.0.0",
             None,
-            "CWR-CE",
-            302,
+            "CWR",
+            304,
             None,
         );
 
@@ -1914,8 +1954,8 @@ mod tests {
 
         let mods = service
             .list_mods(&ListModsQuery {
-                app_name: Some("CWR-CE".to_string()),
-                actver: Some(301),
+                app_name: Some("CWR".to_string()),
+                actver: Some(303),
                 version_tag: Some("rc1".to_string()),
                 q: Some("effects".to_string()),
                 ..ListModsQuery::default()
@@ -2530,6 +2570,10 @@ mod tests {
         assert!(landing_text.contains("id=\"landing-unreachable-count\""));
         assert!(landing_text.contains("id=\"landing-table\""));
         assert!(landing_text.contains("data-page=\"landing\""));
+        assert!(landing_text.contains("<h1 class=\"title\">PAPA BEAR</h1>"));
+        assert!(!landing_text.contains("id=\"landing-service\""));
+        assert!(!landing_text.contains("OPEN VERIFIED SERVERS"));
+        assert!(!landing_text.contains("BROWSE MODS"));
 
         let browser_response = app
             .clone()
@@ -2651,6 +2695,7 @@ mod tests {
         let js_body = to_bytes(js_response.into_body(), usize::MAX).await.unwrap();
         let js_text = String::from_utf8(js_body.to_vec()).unwrap();
         assert!(js_text.contains("loadBrowserList"));
+        assert!(js_text.contains("if (serviceElement)"));
         assert!(js_text.contains("loadServerDetailPage"));
         assert!(js_text.contains("loadModsList"));
         assert!(js_text.contains("currentModsTextFilter"));
@@ -2664,6 +2709,10 @@ mod tests {
             .contains("github.com/ofpisnotdead-com/CWR-CE/discussions/new?category=papa-bear-cz"));
         assert!(js_text.contains("Share your ideas, issues, and mod requests"));
         assert!(js_text.contains("GitHub Discussions</a>."));
+        assert!(js_text.contains("renderSiteFooter"));
+        assert!(js_text.contains(
+            "Community project of <a href=\"https://ofpisnotdead.com\">ofpisnotdead.com</a> group &lt;3."
+        ));
         assert!(js_text.contains("renderTopMenu"));
         assert!(js_text.contains("\"HOME\""));
         assert!(js_text.contains("\"SERVERS\""));

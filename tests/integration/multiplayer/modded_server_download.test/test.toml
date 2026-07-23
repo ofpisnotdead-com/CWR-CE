@@ -1,8 +1,9 @@
 mission = "tests/integration/missions/mp_browser_basic.Demo"
+data_dir = "packages/Demo"
 game_port = 0
-timeout = 150
+timeout = 75
 
-tags = ["headful", "ci-host-blocked", "exclusive"]
+tags = ["headful", "ci-host-blocked"]
 
 [[services]]
 name = "master"
@@ -15,8 +16,8 @@ extra_args = ["--mods-dir", "${output}/master-mods"]
 id = "fixturemod"
 name = "Fixture Mod"
 version = "1.2.3"
-app = "CWR-CE"
-actver = 301
+app = "CWR"
+actver = 303
 folder = "@fixturemod"
 source = "tests/fixtures/mods/@fixturemod"
 description = "Tiny downloadable fixture mod for Trident modded-server tests."
@@ -68,4 +69,25 @@ extra_args = [
     "${output}/client-local-mods",
     "--workshop-dir",
     "${output}/client-workshop",
+]
+
+[[instances]]
+name = "client2"
+type = "client"
+after = "dedicated"
+use_mission = false
+start_delay_ms = 3000
+no_autotest = true
+extra_args = [
+    "--no-strict",
+    "--lang",
+    "English",
+    "--master-server",
+    "${master.url}",
+    "--mp-assign",
+    "WEST:2",
+    "--mods-dir",
+    "${output}/client2-local-mods",
+    "--workshop-dir",
+    "${output}/client2-workshop",
 ]

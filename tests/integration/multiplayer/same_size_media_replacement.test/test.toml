@@ -1,0 +1,37 @@
+mission = "tests/integration/missions/jip_basic.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 75
+
+tags = ["headful", "network"]
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl"]
+name = "server"
+type = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "source", "--log-format", "jsonl"]
+name = "source"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:1"
+machine_id = "trident:same_size_media_replacement:source"
+copy_files = [
+  { source = "source/UserInfo.cfg", target = "Users/source/UserInfo.cfg" },
+  { source = "source/Sound/same_size.wav", target = "Users/source/Sound/same_size.wav" },
+  { source = "source/original.wav", target = "Users/source/original.wav" },
+  { source = "source/replacement.wav", target = "Users/source/replacement.wav" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "observer", "--log-format", "jsonl"]
+name = "observer"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:2"
+machine_id = "trident:same_size_media_replacement:observer"

@@ -5,9 +5,20 @@
 #include <cstring>
 #include <vector>
 
-
 namespace Poseidon
 {
+// What VoNJitterBuffer::push did with a frame — callers log the non-Accepted
+// outcomes, which are exactly the events that eat audio.
+enum class VoNJitterPush : uint8_t
+{
+    Accepted = 0,
+    BadSize,   // samples != frameSamples
+    Duplicate, // origin already buffered
+    TooOld,    // behind the play cursor beyond capacity
+    Resync,    // far ahead — buffer jumped to the new stream position
+    Full       // no free slot
+};
+
 class VoNJitterBuffer
 {
   public:
@@ -15,7 +26,7 @@ class VoNJitterBuffer
     explicit VoNJitterBuffer(int capacity = 16, int frameSamples = 320);
 
     // Push a decoded frame with its origin sample offset
-    void push(uint64_t origin, const int16_t* pcm, int samples);
+    VoNJitterPush push(uint64_t origin, const int16_t* pcm, int samples);
 
     // Pull next frame in order. Returns samples written (frameSamples or 0).
     // If gap detected, writes silence. If empty, returns 0.

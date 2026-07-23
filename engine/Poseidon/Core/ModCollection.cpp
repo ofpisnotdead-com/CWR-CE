@@ -1,5 +1,6 @@
 #include <Poseidon/Core/ModCollection.hpp>
 
+#include <Poseidon/Foundation/Strings/LocaleCollate.hpp>
 #include <Poseidon/IO/Filesystem/FileOps.hpp>
 
 #include <cjson/cJSON.h>
@@ -196,7 +197,8 @@ std::vector<Mod> ScanModsRoot(const std::string& root, ModSource source)
         mods.push_back(std::move(m));
     }
 
-    std::sort(mods.begin(), mods.end(), [](const Mod& a, const Mod& b) { return a.name < b.name; });
+    std::sort(mods.begin(), mods.end(),
+              [](const Mod& a, const Mod& b) { return Foundation::CollateUtf8(a.name.c_str(), b.name.c_str()) < 0; });
     return mods;
 }
 

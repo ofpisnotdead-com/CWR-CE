@@ -6,3 +6,4 @@
 // This tests that clients don't get stuck in briefing when server signals play.
 
 triAssertNgsClient 14
+triAssertMissionPlayable

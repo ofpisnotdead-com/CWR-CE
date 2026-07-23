@@ -52,6 +52,33 @@ TEST_CASE("multiplayer chat shortcuts are suppressed while chat input is active"
     REQUIRE_FALSE(Poseidon::ShouldSwitchMultiplayerChannelFromChatInput());
 }
 
+TEST_CASE("chat line submits on both the main and numpad Enter", "[world][chat]")
+{
+    REQUIRE(Poseidon::IsChatSubmitKey(SDLK_RETURN));
+    REQUIRE(Poseidon::IsChatSubmitKey(SDLK_KP_ENTER));
+    REQUIRE_FALSE(Poseidon::IsChatSubmitKey(SDLK_ESCAPE));
+    REQUIRE_FALSE(Poseidon::IsChatSubmitKey(SDLK_SPACE));
+    REQUIRE_FALSE(Poseidon::IsChatSubmitKey(SDLK_A));
+}
+
+TEST_CASE("chat line swallows its own control keys but lets typing through", "[world][chat]")
+{
+    // Consumed so they never leak into game controls (e.g. numpad Enter used to
+    // fall through and toggle PersonView) — must match OnKeyUp's handled set.
+    REQUIRE(Poseidon::IsChatConsumedKey(SDLK_RETURN));
+    REQUIRE(Poseidon::IsChatConsumedKey(SDLK_KP_ENTER));
+    REQUIRE(Poseidon::IsChatConsumedKey(SDLK_ESCAPE));
+    REQUIRE(Poseidon::IsChatConsumedKey(SDLK_UP));
+    REQUIRE(Poseidon::IsChatConsumedKey(SDLK_DOWN));
+    REQUIRE(Poseidon::IsChatConsumedKey(SDLK_PAGEUP));
+    REQUIRE(Poseidon::IsChatConsumedKey(SDLK_PAGEDOWN));
+
+    // Printable keys must pass through so the player can actually type.
+    REQUIRE_FALSE(Poseidon::IsChatConsumedKey(SDLK_A));
+    REQUIRE_FALSE(Poseidon::IsChatConsumedKey(SDLK_SPACE));
+    REQUIRE_FALSE(Poseidon::IsChatConsumedKey(SDLK_1));
+}
+
 TEST_CASE("voice chat route setup only uses explicit unit targets for targeted non-direct channels",
           "[world][chat][network]")
 {

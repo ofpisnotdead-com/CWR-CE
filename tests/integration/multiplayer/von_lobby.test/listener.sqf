@@ -1,0 +1,6 @@
+triAssertNgsClient 6
+triWait 1000
+triAssertVonReceived 2
+triAssertVonSpeaking 1
+triScreenshot "listener_lobby_von_received"
+triEndTest

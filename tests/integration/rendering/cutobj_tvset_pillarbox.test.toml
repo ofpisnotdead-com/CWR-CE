@@ -1,5 +1,6 @@
 tags = ["exclusive", "headful", "aspect-ratio"]
 binary = "PoseidonGame"
-mission = "tests/integration/missions/aspect_overlays.Demo"
+mission = "tests/integration/missions/cutobj_tvset.Demo"
+data_dir = "packages/Demo"
 timeout = 120
 extra_args = ["--dev", "--width", "3840", "--height", "1080"]

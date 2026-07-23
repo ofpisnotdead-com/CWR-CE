@@ -111,6 +111,11 @@ void Man::ProcessMoveFunction(ActionContextBase* context)
 
                 Vector3Val pos = Position();
                 float surfY = GLandscape->RoadSurfaceY(pos + VUp * 0.5f);
+                if (!shape)
+                {
+                    break;
+                }
+
                 Vector3 offset = transform.Rotate(shape->BoundingCenter());
                 transform.SetPosition(Vector3(pos[0], surfY, pos[2]) + offset);
 

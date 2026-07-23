@@ -8,11 +8,43 @@
 #include <Poseidon/UI/InGame/InGameUIImpl.hpp>
 #include <Poseidon/UI/InGame/InGameUIGroupUnitLabel.hpp>
 #include <Poseidon/Core/resincl.hpp>
+#include <Poseidon/IO/ParamFile/ParamFile.hpp>
+#include <Poseidon/IO/ParamFileExt.hpp>
+#include <Poseidon/IO/Streams/QStream.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <cstring>
 #include <string>
 
 using namespace Poseidon;
+
+namespace
+{
+class ZeroEvaluatorFunctions final : public EvaluatorFunctions
+{
+  public:
+    float EvaluateFloat(const char* /*expr*/, GameVarSpace* /*vars*/) override { return 0.0f; }
+    float EvaluateFloatInternal(const char* /*expr*/) override { return 0.0f; }
+};
+
+class ScopedEvaluatorFunctions final
+{
+  public:
+    explicit ScopedEvaluatorFunctions(EvaluatorFunctions* replacement) : _previous(ParamFile::DefaultEvalFunctions())
+    {
+        ParamFile::SetDefaultEvalFunctions(replacement);
+    }
+
+    ~ScopedEvaluatorFunctions() { ParamFile::SetDefaultEvalFunctions(_previous); }
+
+    ScopedEvaluatorFunctions(const ScopedEvaluatorFunctions&) = delete;
+    ScopedEvaluatorFunctions& operator=(const ScopedEvaluatorFunctions&) = delete;
+
+  private:
+    EvaluatorFunctions* _previous;
+};
+} // namespace
+
 TEST_CASE("inGameUI compiles", "[inGameUI][tier3]")
 {
     REQUIRE(sizeof(AbstractUI) > 0);
@@ -44,4 +76,55 @@ TEST_CASE("InGameUI move-menu wiring tolerates a RscMainMenu without move comman
 
     SUCCEED("survived a RscMainMenu missing the movement command menu");
     delete menu;
+}
+
+TEST_CASE("InGameUI menu loader resolves legacy command names from resources", "[inGameUI][menu]")
+{
+    const char* resource =
+        "class RscSubmenu\n"
+        "{\n"
+        "    atomic = 0;\n"
+        "    items[] = {\"Back\"};\n"
+        "    class Back { title = \"\"; key = 14; character = 0; command = -4; };\n"
+        "};\n"
+        "class RscMainMenu\n"
+        "{\n"
+        "    title = \"\";\n"
+        "    atomic = 0;\n"
+        "    items[] = {\"Reply\"};\n"
+        "    class Reply { title = \"Reply\"; key = 10; character = 9; command = -2; menu = \"RscReply\"; };\n"
+        "};\n"
+        "class RscReply: RscSubmenu\n"
+        "{\n"
+        "    title = \"Reply\";\n"
+        "    items[] = {\"UserRadio\", \"Back\"};\n"
+        "    class UserRadio\n"
+        "    {\n"
+        "        title = \"Custom\";\n"
+        "        key = 10;\n"
+        "        character = 9;\n"
+        "        command = \"CMD_RADIO_CUSTOM\";\n"
+        "        menu = \"RscUserRadio\";\n"
+        "    };\n"
+        "};\n"
+        "class RscUserRadio: RscSubmenu\n"
+        "{\n"
+        "    title = \"Custom\";\n"
+        "    atomic = 1;\n"
+        "    items[] = {\"Back\"};\n"
+        "};\n";
+
+    QIStream in(resource, static_cast<int>(strlen(resource)));
+    Res.Parse(in);
+
+    ZeroEvaluatorFunctions zeroEvaluator;
+    ScopedEvaluatorFunctions scopedEvaluator(&zeroEvaluator);
+
+    Menu menu;
+    menu.Load(&(Res >> "RscMainMenu"));
+
+    MenuItem* item = menu.Find(CMD_RADIO_CUSTOM, true);
+    REQUIRE(item != nullptr);
+    REQUIRE(item->_cmd == CMD_RADIO_CUSTOM);
+    REQUIRE(item->_submenu != nullptr);
 }

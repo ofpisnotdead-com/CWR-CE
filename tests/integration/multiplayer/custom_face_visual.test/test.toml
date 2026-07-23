@@ -1,0 +1,39 @@
+mission = "tests/integration/missions/jip_basic.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 45
+
+tags = ["headful", "network"]
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl"]
+name = "server"
+type = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "client1", "--log-format", "jsonl"]
+name = "client1"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:1"
+machine_id = "trident:custom_face_visual:client1"
+copy_files = [
+  { source = "client1/UserInfo.cfg", target = "Users/client1/UserInfo.cfg" },
+  { source = "client1/face.paa", target = "Users/client1/face.paa" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "client2", "--log-format", "jsonl"]
+name = "client2"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:2"
+machine_id = "trident:custom_face_visual:client2"
+copy_files = [
+  { source = "client2/UserInfo.cfg", target = "Users/client2/UserInfo.cfg" },
+  { source = "client2/face.paa", target = "Users/client2/face.paa" },
+]

@@ -1,0 +1,46 @@
+mission = "tests/integration/missions/jip_basic.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 75
+
+tags = ["headful", "network"]
+
+# Late-joiner media sync: the early client uploads its custom face/sound and
+# plays; a client that joins ~12s later must receive the EARLY player's
+# already-present media (the server transfers an existing player's assets to a
+# newcomer), and the early client must in turn receive the late joiner's.
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl"]
+name = "server"
+type = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "early", "--log-format", "jsonl"]
+name = "early"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:1"
+machine_id = "trident:late_joiner_media:early"
+copy_files = [
+  { source = "early/UserInfo.cfg", target = "Users/early/UserInfo.cfg" },
+  { source = "early/face.jpg", target = "Users/early/face.jpg" },
+  { source = "early/Sound/tri_mp_ping.wav", target = "Users/early/Sound/tri_mp_ping.wav" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "late", "--log-format", "jsonl"]
+name = "late"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+start_delay_ms = 12000
+mp_assign = "WEST:2"
+machine_id = "trident:late_joiner_media:late"
+copy_files = [
+  { source = "late/UserInfo.cfg", target = "Users/late/UserInfo.cfg" },
+  { source = "late/face.jpg", target = "Users/late/face.jpg" },
+  { source = "late/Sound/tri_mp_ping.wav", target = "Users/late/Sound/tri_mp_ping.wav" },
+]

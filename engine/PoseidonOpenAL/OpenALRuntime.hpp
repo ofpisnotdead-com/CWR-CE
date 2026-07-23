@@ -28,6 +28,7 @@ namespace OpenALRuntime
     X(alGenSources)                                                                                                     \
     X(alGetError)                                                                                                       \
     X(alGetSourcef)                                                                                                     \
+    X(alGetSource3f)                                                                                                    \
     X(alGetSourcei)                                                                                                     \
     X(alListener3f)                                                                                                     \
     X(alListenerf)                                                                                                      \
@@ -275,6 +276,7 @@ inline const Api& GetApi()
 #define alGenSources OpenALRuntime::GetApi().alGenSources
 #define alGetError OpenALRuntime::GetApi().alGetError
 #define alGetSourcef OpenALRuntime::GetApi().alGetSourcef
+#define alGetSource3f OpenALRuntime::GetApi().alGetSource3f
 #define alGetSourcei OpenALRuntime::GetApi().alGetSourcei
 #define alListener3f OpenALRuntime::GetApi().alListener3f
 #define alListenerf OpenALRuntime::GetApi().alListenerf
