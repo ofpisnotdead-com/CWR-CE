@@ -84,8 +84,6 @@ void EngineGL33::PrepareMeshTLImpl(const FrameState& frame, const Matrix4& model
     _currentDrawItem.specFlags = spec;
     _currentDrawItem.bias = _bias;
 
-    UploadObjectConstants(_currentDrawItem);
-
     // IsColored objects carry their opacity + fade in the scene constant colour;
     // mirror the software path (TransLight.cpp) or they render at texture alpha.
     float constColor[4] = {1.0f, 1.0f, 1.0f, 1.0f};
