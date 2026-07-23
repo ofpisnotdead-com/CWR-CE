@@ -1347,7 +1347,7 @@ bool Man::BinocularSelected() const
     }
     const MagazineSlot& slot = GetMagazineSlot(_currentWeapon);
     const WeaponType* type = slot._weapon;
-    return stricmp(type->GetName(), "binocular") == 0;
+    return type && type->IsBinocular();
 }
 
 bool Man::IsHandGunInMove() const
