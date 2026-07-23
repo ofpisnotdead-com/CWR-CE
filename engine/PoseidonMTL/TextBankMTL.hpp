@@ -41,9 +41,12 @@ class TextBankMTL : public AbstractTextBank
     Texture* CreateDynamic(int w, int h, const void* rgba, uint32_t size, bool mipmap = false) override;
     void UpdateDynamic(Texture* texture, const void* rgba, uint32_t size) override;
 
-    void Compact() override {}
+    // Drop auto-nulled weak links left behind by textures whose last external
+    // reference was released. World remounts call FlushTextures(), so keeping
+    // this as a no-op grows the lookup array with stale entries each time.
+    void Compact() override { _texture.Compact(); }
     void Preload() override {}
-    void FlushTextures() override {}
+    void FlushTextures() override { Compact(); }
     void FlushBank(QFBank* /*bank*/) override {}
     // Wipes every texture at once (level unload etc.) -- the budget total
     // and LRU list would otherwise go stale (individual TextureMTL
