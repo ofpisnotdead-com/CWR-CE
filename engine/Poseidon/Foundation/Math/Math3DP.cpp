@@ -9,6 +9,9 @@
 
 #include <Poseidon/Foundation/Math/Math3DP.hpp>
 #include <Poseidon/Foundation/Framework/DebugLog.hpp>
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+#include <xmmintrin.h> // SSE _mm_* for Vector3P::SetFastTransform
+#endif
 
 namespace Poseidon::Foundation
 {
@@ -309,12 +312,42 @@ bool Vector3P::IsFinite() const
 // Note: Use direct _e[] access to avoid operator[] which has FLT_MAX assertion in debug
 void Vector3P::SetFastTransform(const Matrix4P& a, Vector3PPar o)
 {
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+    // u = M*v + t. The 3x3 is stored column-major as three contiguous 3-float
+    // Vector3P (_aside/_up/_dir = columns 0/1/2), followed by the 3-float
+    // _position. Vector3P is 12 bytes, unaligned, no trailing pad, so:
+    //  - use UNALIGNED loads (aligned _mm_load_ps would fault);
+    //  - a column load's spilled 4th lane lands in the next in-struct member and
+    //    is discarded (in-bounds for _aside/_up/_dir);
+    //  - _position is the last member, so build it with _mm_setr_ps from its 3
+    //    floats rather than loading 4 (which would over-read past the object).
+    // Per-component this evaluates ((m0*o0 + m1*o1) + m2*o2) + t, the same op
+    // order as the scalar path, so the result is bit-identical. o may alias
+    // *this: values are read into registers before *this is written.
+    const __m128 vx = _mm_set1_ps(o._e[0]);
+    const __m128 vy = _mm_set1_ps(o._e[1]);
+    const __m128 vz = _mm_set1_ps(o._e[2]);
+    const __m128 c0 = _mm_loadu_ps(&a.DirectionAside()._e[0]);
+    const __m128 c1 = _mm_loadu_ps(&a.DirectionUp()._e[0]);
+    const __m128 c2 = _mm_loadu_ps(&a.Direction()._e[0]);
+    const Vector3P& t = a.Position();
+    const __m128 pos = _mm_setr_ps(t._e[0], t._e[1], t._e[2], 0.0f);
+    __m128 acc = _mm_add_ps(_mm_mul_ps(vx, c0), _mm_mul_ps(vy, c1));
+    acc = _mm_add_ps(acc, _mm_mul_ps(vz, c2));
+    acc = _mm_add_ps(acc, pos);
+    float r[4];
+    _mm_storeu_ps(r, acc);
+    _e[0] = r[0];
+    _e[1] = r[1];
+    _e[2] = r[2];
+#else
     float r0 = a.Get(0, 0) * o._e[0] + a.Get(0, 1) * o._e[1] + a.Get(0, 2) * o._e[2] + a.GetPos(0);
     float r1 = a.Get(1, 0) * o._e[0] + a.Get(1, 1) * o._e[1] + a.Get(1, 2) * o._e[2] + a.GetPos(1);
     float r2 = a.Get(2, 0) * o._e[0] + a.Get(2, 1) * o._e[1] + a.Get(2, 2) * o._e[2] + a.GetPos(2);
     _e[0] = r0;
     _e[1] = r1;
     _e[2] = r2;
+#endif
 }
 
 #endif
