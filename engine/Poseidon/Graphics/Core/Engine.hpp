@@ -369,6 +369,9 @@ class Engine : public IGraphicsEngine
     // bounding centre (the VS samples the terrain there as the ClipLandKeep reference).
     virtual void SetLandClipParams(float /*enable*/, Vector3Par /*boundingCenter*/) {}
 
+    // Upload the view's active local lights to a renderer-global buffer.
+    virtual void UploadLocalLights(const LightList& /*aLights*/) {}
+
   private:
     Engine(const Engine& src); // no copy
     void operator=(const Engine& src);
@@ -440,7 +443,7 @@ class Engine : public IGraphicsEngine
     // once with K instances. Defaults keep unsupporting backends scalar
     // (InstancedRunAdd refusing = the scene never arms a batch).
     virtual void InstancedRunReset() {}
-    virtual bool InstancedRunAdd(const Matrix4& /*modelToWorld*/) { return false; }
+    virtual bool InstancedRunAdd(const Matrix4& /*modelToWorld*/, const LightList& /*lights*/) { return false; }
     virtual void BeginInstancedRunUpload() {}
     virtual bool EndInstancedRun() { return true; }
     virtual bool InstancedRunActive() const { return false; }

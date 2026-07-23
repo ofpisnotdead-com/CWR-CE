@@ -180,7 +180,7 @@ void EngineGL33::InitDraw(bool clear, PackedColor color)
     invalidMat.specFlags = 0;
 
     LightList lights;
-    DoSetMaterial(invalidMat, lights, Poseidon::render::LegacySpec{});
+    DoSetMaterialAndLights(invalidMat, lights, Poseidon::render::LegacySpec{});
 }
 
 void EngineGL33::FinishDraw()
