@@ -30,10 +30,12 @@ foreach(test_line IN LISTS test_list)
 
     # CTest display name: "Target - category - name"
     string(REPLACE "/" " - " test_name "${test_line}")
+    string(REGEX REPLACE "^[^/]*/" "" test_filter "${test_line}")
 
-    # Run with --filter to select only this test
+    # ImGui Test Engine filters category and name independently, so use the
+    # exact (suite-unique) test name rather than the category/name display path.
     file(APPEND "${CTEST_FILE}"
-        "add_test(\"${TEST_TARGET} - ${test_name}\" \"${TEST_EXECUTABLE}\" ${TEST_EXTRA_ARGS} \"--filter\" \"${test_line}\")\n"
+        "add_test(\"${TEST_TARGET} - ${test_name}\" \"${TEST_EXECUTABLE}\" ${TEST_EXTRA_ARGS} \"--filter\" \"^${test_filter}$\")\n"
         "set_tests_properties(\"${TEST_TARGET} - ${test_name}\" PROPERTIES WORKING_DIRECTORY \"${TEST_WORKING_DIR}\")\n"
     )
 

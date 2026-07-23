@@ -166,6 +166,7 @@ int main(int argc, char* argv[])
 
     Poseidon::NoTextures = true;
 
+    SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "SDL_VIDEODRIVER", "dummy", false);
     if (!SDL_Init(SDL_INIT_VIDEO))
     {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());

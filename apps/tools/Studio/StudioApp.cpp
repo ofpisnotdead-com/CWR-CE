@@ -1893,6 +1893,7 @@ void StudioApp::updateCachedInfo(const FileEntry& entry)
                     }
                     else
                     {
+                        std::replace(cleanTex.begin(), cleanTex.end(), '\\', '/');
                         std::filesystem::path modelDir = std::filesystem::path(resolvedPath).parent_path();
                         ref.exists = std::filesystem::exists(modelDir / cleanTex) ||
                                      std::filesystem::exists(std::filesystem::path(gamePath) / cleanTex);
