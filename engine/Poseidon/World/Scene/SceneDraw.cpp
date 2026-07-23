@@ -1398,6 +1398,8 @@ static void DrawSortObject(SortObject* oi)
 
 void Scene::DrawObjectsAndShadowsPass1()
 {
+    GEngine->UploadLocalLights(_aLights);
+
     // select first objects - those with highest visual priority
 
     int s = 0, t = 0;
@@ -1637,14 +1639,14 @@ void Scene::DrawObjectsAndShadowsPass1()
         // batchable run draws the head once inside Begin/EndInstancedRun; every TL section
         // then renders all K instances from the WorldInstances matrix array.
         LightList lightProbe(true);
-        auto litByLocalLight = [&](SortObject* o) -> bool
+        static const LightList emptyLights;
+        auto instanceLights = [&](SortObject* o) -> const LightList&
         {
             if (!o->object)
             {
-                return false;
+                return emptyLights;
             }
-            const LightList& sel = SelectLights(o->object->Transform(), o->object, o->drawLOD, lightProbe);
-            return sel.Size() > 0;
+            return SelectLights(o->object->Transform(), o->object, o->drawLOD, lightProbe);
         };
         const int kMinInstanceRun = 2;
         for (int i = 0; i < _drawMergers.Size();)
@@ -1679,12 +1681,11 @@ void Scene::DrawObjectsAndShadowsPass1()
                 !oi->object->DeformsSharedShape(oi->drawLOD) && (!cpuDeform || vsDeform) && oi->object->Static() &&
                 sShape->NProxies() == 0 && !render::Has(headSpec.routing, render::Routing::OnSurface) &&
                 !render::Has(headSpec.routing, render::Routing::IsColored) && oi->object != GWorld->CameraOn();
-            const bool lit = cheapPass && litByLocalLight(oi);
-            const bool headBatchable = cheapPass && !lit;
+            const bool headBatchable = cheapPass;
             if (headBatchable)
             {
                 GEngine->InstancedRunReset();
-                if (GEngine->InstancedRunAdd(oi->object->Transform()))
+                if (GEngine->InstancedRunAdd(oi->object->Transform(), instanceLights(oi)))
                 {
                     while (runEnd < _drawMergers.Size())
                     {
@@ -1692,11 +1693,11 @@ void Scene::DrawObjectsAndShadowsPass1()
                         if (oj->object->GetShape() != shape || oj->drawLOD != oi->drawLOD ||
                             oj->passNum != oi->passNum || !oj->object->Static() ||
                             oj->object->DeformsSharedShape(oj->drawLOD) ||
-                            (sShape->Special() | oj->object->GetObjSpecial()) != headSpecial || litByLocalLight(oj))
+                            (sShape->Special() | oj->object->GetObjSpecial()) != headSpecial)
                         {
                             break;
                         }
-                        if (!GEngine->InstancedRunAdd(oj->object->Transform()))
+                        if (!GEngine->InstancedRunAdd(oj->object->Transform(), instanceLights(oj)))
                         {
                             break;
                         }
