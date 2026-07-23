@@ -771,6 +771,10 @@ class LODShape: public RefCountWithLinks
 	float _invArmor; // inverse armor value
 	float _logArmor; // logarithm of armor value
 
+	// Draw list bucketing state for this shape. The epoch is incremented each frame.
+	mutable unsigned int _drawBucketEpoch = 0;
+	mutable int _drawBucketSlot = 0;
+
 	public:
 	__forceinline PackedColor Color() const {return _color;}
 	__forceinline PackedColor ColorTop() const {return _colorTop;}
@@ -809,6 +813,21 @@ class LODShape: public RefCountWithLinks
 	ConvexComponents *GetConvexComponents(int level) const;
 
 	bool CheckLegalCreator() const;
+
+	int ResolveDrawBucket( unsigned int epoch, int nextSlot, bool &firstSeen ) const
+	{
+		if ( _drawBucketEpoch != epoch )
+		{
+			_drawBucketEpoch = epoch;
+			_drawBucketSlot = nextSlot;
+			firstSeen = true;
+		}
+		else
+		{
+			firstSeen = false;
+		}
+		return _drawBucketSlot;
+	}
 
 	protected:
 	void DoClear();
