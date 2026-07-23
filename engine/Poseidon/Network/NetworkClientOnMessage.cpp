@@ -2271,15 +2271,15 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 DeleteCommandMessage dc;
                 dc.TransferMsg(ctx);
+                if (dc.subgrp)
+                {
+                    dc.subgrp->DeleteCommand(dc.object);
+                }
                 for (int i = 0; i < _remoteObjects.Size(); i++)
                 {
                     NetworkRemoteObjectInfo& info = _remoteObjects[i];
                     if (info.id == dc.object)
                     {
-                        if (dc.subgrp && info.object)
-                        {
-                            dc.subgrp->DeleteCommand(dc.index, dynamic_cast<Command*>(info.object.GetLink()));
-                        }
                         if (DiagLevel >= 1)
                         {
                             DiagLogF("Client: remote command destroyed %d:%d", dc.object.creator, dc.object.id);

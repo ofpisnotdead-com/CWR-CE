@@ -189,27 +189,29 @@ static bool CheckSupplyDone(AISubgroupContext* context)
     EntityAI* veh = subgrp->Leader()->GetVehicle();
     AI_ERROR(veh);
 
-#define UNALLOC()                           \
-    if (transport->GetAllocSupply() == veh) \
-        transport->SetAllocSupply(nullptr);
     VehicleSupply* transport = dyn_cast<VehicleSupply, Object>(cmd->_target);
+    auto finish = [&](int state, bool clearPlan, bool reportStatus)
+    {
+        if (clearPlan)
+            subgrp->ClearPlan();
+        if (transport && transport->GetAllocSupply() == veh)
+            transport->SetAllocSupply(nullptr);
+        if (reportStatus)
+            ReportStatus(subgrp->Leader(), cmd->_message);
+        context->_fsm->SetState(state, context);
+        return true;
+    };
+
     if (Glob.time > cmd->_time)
     { // timeout
-        context->_fsm->SetState(SSupplyFail, context);
-        subgrp->ClearPlan();
-        if (transport)
-            UNALLOC(); // unalloc supply
-        return true;
+        return finish(SSupplyFail, true, false);
     }
 
     // wait until we are fully filled or source is exhausted
     //	if (!transport || transport->GetTotalDammage() >= 1.0)
     if (!transport)
     {
-        // unalloc supply
         context->_fsm->SetState(SSupplyFail, context);
-        if (transport)
-            UNALLOC(); // unalloc supply
         return true;
     }
 
@@ -224,49 +226,31 @@ static bool CheckSupplyDone(AISubgroupContext* context)
         case Command::Heal:
             if (veh->NeedsAmbulance() <= 0.01)
             {
-                context->_fsm->SetState(SSupplySucceed, context);
-                UNALLOC(); // unalloc supply
-                ReportStatus(subgrp->Leader(), cmd->_message);
-                return true;
+                return finish(SSupplySucceed, false, true);
             }
             if (!transport->GetType()->IsAttendant() || transport->IsDammageDestroyed())
             {
-                context->_fsm->SetState(SSupplyFail, context);
-                UNALLOC(); // unalloc supply
-                ReportStatus(subgrp->Leader(), cmd->_message);
-                return true;
+                return finish(SSupplyFail, false, true);
             }
             return false;
         case Command::Repair:
             if (veh->NeedsRepair() <= 0.05)
             {
-                context->_fsm->SetState(SSupplySucceed, context);
-                UNALLOC(); // unalloc supply
-                ReportStatus(subgrp->Leader(), cmd->_message);
-                return true;
+                return finish(SSupplySucceed, false, true);
             }
             if (transport->GetRepairCargo() <= 10 || transport->IsDammageDestroyed())
             {
-                context->_fsm->SetState(SSupplyFail, context);
-                UNALLOC(); // unalloc supply
-                ReportStatus(subgrp->Leader(), cmd->_message);
-                return true;
+                return finish(SSupplyFail, false, true);
             }
             return false;
         case Command::Refuel:
             if (veh->NeedsRefuel() <= 0.01)
             {
-                context->_fsm->SetState(SSupplySucceed, context);
-                UNALLOC(); // unalloc supply
-                ReportStatus(subgrp->Leader(), cmd->_message);
-                return true;
+                return finish(SSupplySucceed, false, true);
             }
             if (transport->GetFuelCargo() <= 10 || transport->IsDammageDestroyed())
             {
-                context->_fsm->SetState(SSupplyFail, context);
-                UNALLOC(); // unalloc supply
-                ReportStatus(subgrp->Leader(), cmd->_message);
-                return true;
+                return finish(SSupplyFail, false, true);
             }
             return false;
         case Command::Rearm:
@@ -275,27 +259,18 @@ static bool CheckSupplyDone(AISubgroupContext* context)
                 // check if we are able to take something from the supply
                 if (veh->NeedsInfantryRearm() <= 0.01 || !CheckAbleToRearm(veh, transport))
                 {
-                    context->_fsm->SetState(SSupplySucceed, context);
-                    UNALLOC(); // unalloc supply
-                    ReportStatus(subgrp->Leader(), cmd->_message);
-                    return true;
+                    return finish(SSupplySucceed, false, true);
                 }
             }
             else
             {
                 if (veh->NeedsRearm() <= 0.01)
                 {
-                    context->_fsm->SetState(SSupplySucceed, context);
-                    UNALLOC(); // unalloc supply
-                    ReportStatus(subgrp->Leader(), cmd->_message);
-                    return true;
+                    return finish(SSupplySucceed, false, true);
                 }
                 if (transport->GetAmmoCargo() <= 10 || transport->IsDammageDestroyed())
                 {
-                    context->_fsm->SetState(SSupplyFail, context);
-                    UNALLOC(); // unalloc supply
-                    ReportStatus(subgrp->Leader(), cmd->_message);
-                    return true;
+                    return finish(SSupplyFail, false, true);
                 }
             }
             return false;
@@ -335,9 +310,7 @@ static bool CheckSupplyDone(AISubgroupContext* context)
             return false;
         default:
             Fail("Command");
-            context->_fsm->SetState(SSupplyFail, context);
-            UNALLOC(); // unalloc supply
-            return true;
+            return finish(SSupplyFail, false, false);
     }
 }
 
@@ -841,4 +814,3 @@ static void SupplyExit(AISubgroupContext* context)
         vehInto->SupplyFinished(leader);
     }
 }
-

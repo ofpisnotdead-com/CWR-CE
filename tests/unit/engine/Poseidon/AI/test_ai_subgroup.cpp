@@ -2,7 +2,28 @@
 #include <Poseidon/AI/ArcadeTemplate.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <string>
+
 using namespace Poseidon;
+
+namespace
+{
+std::string ReadTextFile(const std::filesystem::path& path)
+{
+    std::ifstream input(path);
+    REQUIRE(input);
+    return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+}
+
+std::filesystem::path SourcePath(const std::filesystem::path& path)
+{
+    return std::filesystem::path(TESTS_ROOT_DIR).parent_path() / path;
+}
+} // namespace
+
 TEST_CASE("arcadeTemplate compiles", "[ai]")
 {
     REQUIRE(sizeof(ArcadeTemplate) > 0);
@@ -32,4 +53,40 @@ TEST_CASE("ExperienceForDestroyedCost covers the top-bucket band (no zero gap)",
     REQUIRE(ExperienceForDestroyedCost(99999.0f) == 3.0f); // far above -> catch-all
 
     ExperienceDestroyTable = saved;
+}
+
+TEST_CASE("supply completion releases state before its synchronous transition", "[ai][supply]")
+{
+    const std::string source = ReadTextFile(SourcePath("engine/Poseidon/AI/AISubgroupFSMSupply.inc"));
+    const size_t finish = source.find("auto finish =");
+    REQUIRE(finish != std::string::npos);
+    const size_t clearPlan = source.find("subgrp->ClearPlan()", finish);
+    const size_t unallocate = source.find("transport->SetAllocSupply(nullptr)", finish);
+    const size_t report = source.find("ReportStatus(subgrp->Leader(), cmd->_message)", finish);
+    const size_t transition = source.find("context->_fsm->SetState(state, context)", finish);
+
+    REQUIRE(clearPlan != std::string::npos);
+    REQUIRE(unallocate != std::string::npos);
+    REQUIRE(report != std::string::npos);
+    REQUIRE(transition != std::string::npos);
+    CHECK(clearPlan < transition);
+    CHECK(unallocate < transition);
+    CHECK(report < transition);
+}
+
+TEST_CASE("remote command deletion resolves the subgroup task by network id", "[ai][network]")
+{
+    const std::string subgroup = ReadTextFile(SourcePath("engine/Poseidon/AI/AISubgroup.cpp"));
+    const size_t deletion = subgroup.find("void AISubgroup::DeleteCommand(NetworkId id)");
+    REQUIRE(deletion != std::string::npos);
+    CHECK(subgroup.find("task && task->GetNetworkId() == id", deletion) != std::string::npos);
+
+    const std::string client = ReadTextFile(SourcePath("engine/Poseidon/Network/NetworkClientOnMessage.cpp"));
+    const size_t message = client.find("case NMTDeleteCommand:");
+    REQUIRE(message != std::string::npos);
+    const size_t nextMessage = client.find("case NMTCreateObject:", message);
+    REQUIRE(nextMessage != std::string::npos);
+    const std::string deleteCommandCase = client.substr(message, nextMessage - message);
+    CHECK(deleteCommandCase.find("dc.subgrp->DeleteCommand(dc.object)") != std::string::npos);
+    CHECK(deleteCommandCase.find("dynamic_cast<Command*>") == std::string::npos);
 }

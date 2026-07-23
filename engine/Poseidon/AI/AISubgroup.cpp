@@ -1046,35 +1046,31 @@ void AISubgroup::InsertCommand(int index, Command* cmd)
     GetCurrent()->_fsm->SetState(0);
 }
 
-void AISubgroup::DeleteCommand(int index, Command* cmd)
+void AISubgroup::DeleteCommand(NetworkId id)
 {
-    if (index >= _stack.Size())
+    int n = _stack.Size();
+    for (int i = 0; i < n; i++)
     {
-        Fail("Bad index");
-        return;
-    }
-
-    AI_ERROR(_stack[index]._task->GetNetworkId() == cmd->GetNetworkId());
-    if (index == _stack.Size() - 1)
-    {
-        // FIX: remove dummy items
-        for (int i = index - 1; i >= 0; i--)
+        Command* task = _stack[i]._task;
+        if (task && task->GetNetworkId() == id)
         {
-            if (!_stack[i]._fsm)
+            _stack.Delete(i);
+            if (i == n - 1)
             {
-                _stack.Delete(i, 1);
+                if (GetCurrent())
+                {
+                    AISubgroupContext context(this);
+                    context._task = GetCurrent()->_task;
+                    context._fsm = GetCurrent()->_fsm;
+                    PopTask(&context, false);
+                }
             }
+            else
+            {
+                RptF("Warning: Delete out of order");
+            }
+            break;
         }
-
-        AISubgroupContext context(this);
-        context._task = GetCurrent()->_task;
-        context._fsm = GetCurrent()->_fsm;
-        PopTask(&context, false);
-    }
-    else
-    {
-        RptF("Warning: Delete out of order");
-        _stack.Delete(index);
     }
 }
 

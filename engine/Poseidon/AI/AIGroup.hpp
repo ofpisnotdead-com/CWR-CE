@@ -75,7 +75,7 @@ public:
 	void OnTaskCreated(int index, Command &cmd) override;
 	void OnTaskDeleted(int index, Command &cmd) override;
 	void InsertCommand(int index, Command *cmd);
-	void DeleteCommand(int index, Command *cmd);
+	void DeleteCommand(NetworkId id);
 
 	// access to data members
 	// _whoAmI is a loose OLink that nulls the instant the leader unit dies — which can
