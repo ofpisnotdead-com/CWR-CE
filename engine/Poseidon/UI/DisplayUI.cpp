@@ -14,6 +14,7 @@
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
 
 #include <Poseidon/IO/Streams/QBStream.hpp>
+#include <Poseidon/UI/Locale/Stringtable/CodepageTranscode.hpp>
 #include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
 
 #include <Random/randomGen.hpp>
@@ -1212,7 +1213,8 @@ Control* DisplaySelectIsland::OnCreateCtrl(int type, int idc, const ParamEntry& 
                     continue;
                 }
 
-                int index = lbox->AddString(Pars >> "CfgWorlds" >> name >> "description");
+                int index = lbox->AddString(
+                    Poseidon::DecodeLegacyTextToRString(Pars >> "CfgWorlds" >> name >> "description", GLanguage));
                 lbox->SetData(index, name);
                 if (stricmp(name, Glob.header.worldname) == 0)
                 {
@@ -1526,7 +1528,8 @@ void DisplayCustomArcade::InsertGames()
 
             CTreeItem* itemWorld = itemCampaign->AddChild();
 
-            itemWorld->text = Pars >> "CfgWorlds" >> name >> "description";
+            itemWorld->text =
+                Poseidon::DecodeLegacyTextToRString(Pars >> "CfgWorlds" >> name >> "description", GLanguage);
             itemWorld->data = name;
             bool wexp = stricmp(Glob.header.worldname, name) == 0;
             if (wexp && Glob.header.filename[0] == 0)
@@ -1601,7 +1604,8 @@ void DisplayCustomArcade::InsertGames()
 
                     CTreeItem* itemWorld = itemCampaign->AddChild();
 
-                    itemWorld->text = Pars >> "CfgWorlds" >> name >> "description";
+                    itemWorld->text =
+                        Poseidon::DecodeLegacyTextToRString(Pars >> "CfgWorlds" >> name >> "description", GLanguage);
                     itemWorld->data = name;
                     bool wexp = stricmp(Glob.header.worldname, name) == 0;
                     _finddata_t info;

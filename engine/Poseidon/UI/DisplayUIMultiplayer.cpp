@@ -1,6 +1,8 @@
 #include <Poseidon/UI/Map/UIMap.hpp>
 using namespace Poseidon;
 #include <Poseidon/Core/Config/EngineConfig.hpp>
+#include <Poseidon/UI/Locale/Stringtable/CodepageTranscode.hpp>
+#include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
 #include <Poseidon/Core/Config/UserConfig.hpp>
 #include <Poseidon/Core/resincl.hpp>
 #include <Poseidon/World/Terrain/Landscape.hpp>
@@ -2116,7 +2118,8 @@ Control* DisplayServer::OnCreateCtrl(int type, int idc, const ParamEntry& cls)
                     continue;
                 }
 
-                int index = lbox->AddString(Pars >> "CfgWorlds" >> name >> "description");
+                int index = lbox->AddString(
+                    Poseidon::DecodeLegacyTextToRString(Pars >> "CfgWorlds" >> name >> "description", GLanguage));
                 lbox->SetData(index, name);
                 if (stricmp(name, Glob.header.worldname) == 0)
                 {
@@ -2723,7 +2726,8 @@ Control* DisplayRemoteMissions::OnCreateCtrl(int type, int idc, const ParamEntry
                     continue;
                 }
 
-                int index = lbox->AddString(Pars >> "CfgWorlds" >> name >> "description");
+                int index = lbox->AddString(
+                    Poseidon::DecodeLegacyTextToRString(Pars >> "CfgWorlds" >> name >> "description", GLanguage));
                 lbox->SetData(index, name);
                 if (stricmp(name, Glob.header.worldname) == 0)
                 {

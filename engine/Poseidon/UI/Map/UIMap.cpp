@@ -3,6 +3,8 @@
 #include <Poseidon/Core/Config/EngineConfig.hpp>
 #include <Poseidon/Core/Config/UserConfig.hpp>
 #include <Poseidon/UI/Map/UIMap.hpp>
+#include <Poseidon/UI/Locale/Stringtable/CodepageTranscode.hpp>
+#include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
 // #include "win.h"
 #include <SDL3/SDL_scancode.h>
 #include <Poseidon/World/Entities/Infantry/Person.hpp>
@@ -1176,7 +1178,7 @@ void CStaticMap::DrawName(const ParamEntry& cls)
     float size = _sizeNames * (_invScaleX * 0.05);
     saturate(size, 0.5 * _fontNames->Height(), 2.0 * _fontNames->Height());
 
-    RString text = cls >> "name";
+    RString text = Poseidon::DecodeLegacyTextToRString(cls >> "name", GLanguage);
     float h = size;
     float w = GEngine->GetTextWidth(size, _fontNames, text);
 

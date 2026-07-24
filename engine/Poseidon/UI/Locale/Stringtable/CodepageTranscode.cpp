@@ -347,6 +347,38 @@ static bool ContainsStrongCentralEuropeanWord(const std::string& text)
     return false;
 }
 
+static bool ContainsStrongWesternEuropeanWord(const std::string& text)
+{
+    // å/Å/æ/Æ have no equivalent codepoint in CP1250 or CP1251, so their presence
+    // overrides the preferred codepage. ø/Ø is deliberately excluded even though it
+    // shares that property: byte 0xF8 is CP1250's common ř, so treating it as Nordic
+    // evidence would misread genuine Czech text (IsLikelyCentralEuropeanMojibakeInCp1252
+    // already flags it as a mojibake risk for the same reason).
+    static constexpr const char* kStrongLetters[] = {
+        "\xC3\xA5", // å
+        "\xC3\x85", // Å
+        "\xC3\xA6", // æ
+        "\xC3\x86", // Æ
+    };
+
+    for (const char* letter : kStrongLetters)
+    {
+        size_t pos = text.find(letter);
+        while (pos != std::string::npos)
+        {
+            const bool leftAscii = pos > 0 && IsAsciiAlpha(static_cast<unsigned char>(text[pos - 1]));
+            const size_t after = pos + std::strlen(letter);
+            const bool rightAscii = after < text.size() && IsAsciiAlpha(static_cast<unsigned char>(text[after]));
+            if (leftAscii || rightAscii)
+            {
+                return true;
+            }
+            pos = text.find(letter, pos + 1);
+        }
+    }
+    return false;
+}
+
 static int CountUtf8CodepointsInRange(const std::string& text, uint32_t first, uint32_t last)
 {
     int count = 0;
@@ -581,6 +613,13 @@ Codepage SelectLegacyTextCodepage(const std::string& input, Codepage preferredCp
             if (IsCyrillicDominant(candidate.decoded) && ContainsCyrillicMojibake(cp1252))
             {
                 candidate.score -= 220;
+            }
+        }
+        else if (candidate.cp == Codepage::CP1252)
+        {
+            if (ContainsStrongWesternEuropeanWord(candidate.decoded))
+            {
+                candidate.score -= 180;
             }
         }
     }
