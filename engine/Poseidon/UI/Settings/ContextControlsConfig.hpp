@@ -18,6 +18,10 @@ class ContextControlsConfig
 
     std::array<InputProfile, ContextCount> profiles;
 
+    // Set by Load when the file predated the current action set and was seeded
+    // with defaults for the actions it lacked. The caller re-saves to persist it.
+    bool migratedOnLoad = false;
+
     void LoadDefaults();
     bool Load(const std::string& path);
     bool Save(const std::string& path) const;

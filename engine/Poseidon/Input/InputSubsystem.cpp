@@ -1046,6 +1046,10 @@ void InputSubsystem::LoadKeys()
         contextControls.LoadDefaults();
         contextControls.Save(contextControlsPath);
     }
+    else if (contextControls.migratedOnLoad)
+    {
+        contextControls.Save(contextControlsPath);
+    }
     profiles_ = contextControls.profiles;
 
     // GInput.userKeys is no longer a persistence source. Keep it empty so

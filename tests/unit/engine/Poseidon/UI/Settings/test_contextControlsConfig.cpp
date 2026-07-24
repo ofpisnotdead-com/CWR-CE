@@ -96,18 +96,18 @@ TEST_CASE("ContextControlsConfig: Save then Load preserves an empty positional s
     std::filesystem::remove(path);
 }
 
-// Regression: a real, full contextControls.cfg captured from a user profile that
-// predates UAVoiceOverNetPushToTalk. Loading it and copying the profiles is the
-// exact path InputSubsystem::LoadKeys runs (`profiles_ = contextControls.profiles`).
-// This guards that path stays crash-free and parses a complete config correctly,
-// including a bound action carrying two codes and the new action being absent.
-TEST_CASE("ContextControlsConfig: loads a real prior config and copies profiles cleanly",
+// A real, full contextControls.cfg captured from a version-2 user profile, from
+// before several actions existed. Loading and copying the profiles is the path
+// InputSubsystem::LoadKeys runs: listed bindings are preserved, and actions the
+// file lacks are seeded with their defaults.
+TEST_CASE("ContextControlsConfig: an older config keeps its bindings and defaults new actions",
           "[Settings][ContextControlsConfig]")
 {
     REQUIRE_FIXTURE("cfg/contextControls_prior.cfg");
 
     ContextControlsConfig cfg;
     REQUIRE(cfg.Load(GET_FIXTURE("cfg/contextControls_prior.cfg")));
+    CHECK(cfg.migratedOnLoad);
 
     // The array copy that used to fault when object files disagreed on UAN.
     std::array<InputProfile, ContextControlsConfig::ContextCount> copy = cfg.profiles;
@@ -128,6 +128,87 @@ TEST_CASE("ContextControlsConfig: loads a real prior config and copies profiles 
     REQUIRE(chat.size() == 1);
     CHECK(chat[0].code.toLegacy() == 56);
 
-    // The config predates push-to-talk: the new action loads as simply unbound.
-    CHECK(copy[(int)InputContext::Infantry].BindingCount(UAVoiceOverNetPushToTalk) == 0);
+    // Push-to-talk was absent from the file; migration seeds its CapsLock default.
+    CHECK(
+        copy[(int)InputContext::Infantry].HasBinding(UAVoiceOverNetPushToTalk, InputCode::Key(SDL_SCANCODE_CAPSLOCK)));
+}
+
+// A complete version-2 config, as the current engine writes it minus the actions
+// added since (map zoom, cheat entry). It parses across every context; the actions
+// it lists are kept, the ones it predates are seeded to their defaults, and a save
+// then reload comes up current with the fill persisted.
+TEST_CASE("ContextControlsConfig: a full version-2 config parses and migrates to 3",
+          "[Settings][ContextControlsConfig]")
+{
+    REQUIRE_FIXTURE("cfg/contextControls_v2_full.cfg");
+    const int inf = (int)InputContext::Infantry;
+
+    ContextControlsConfig migrated;
+    REQUIRE(migrated.Load(GET_FIXTURE("cfg/contextControls_v2_full.cfg")));
+    CHECK(migrated.migratedOnLoad);
+
+    // Listed v2 actions parse and keep their values.
+    CHECK(migrated.profiles[inf].BindingCount(UAFire) > 0);
+    CHECK(migrated.profiles[inf].HasBinding(UAVoiceOverNetPushToTalk, InputCode::Key(SDL_SCANCODE_CAPSLOCK)));
+    // The Map-context optics ZoomIn (ctxMapZoomIn) is name-adjacent to the new
+    // MapZoomIn action but stays its own binding.
+    CHECK(migrated.profiles[(int)InputContext::Map].BindingCount(UAZoomIn) > 0);
+
+    // Actions the file predates are seeded to their defaults, including the cheat
+    // trigger's Shift + Numpad-Minus combo.
+    CHECK(migrated.profiles[inf].HasBinding(UAMapZoomIn, InputCode::Key(SDL_SCANCODE_KP_PLUS)));
+    CHECK(migrated.profiles[inf].HasBinding(UAMapZoomOut, InputCode::Key(SDL_SCANCODE_KP_MINUS)));
+    const auto& cheat = migrated.profiles[inf].GetBindingEntries(UACheatEntry);
+    REQUIRE(cheat.size() == 1);
+    CHECK(cheat[0].code == InputCode::Key(SDL_SCANCODE_KP_MINUS));
+    CHECK(cheat[0].modifier == InputCode::Key(SDL_SCANCODE_LSHIFT));
+
+    // Save the modernized config and reload it: now current, no second migration,
+    // seeded defaults still present.
+    const std::string path = TmpPath("context_controls_v2_full_migrated.cfg");
+    std::filesystem::remove(path);
+    REQUIRE(migrated.Save(path));
+
+    ContextControlsConfig reloaded;
+    REQUIRE(reloaded.Load(path));
+    CHECK_FALSE(reloaded.migratedOnLoad);
+    CHECK(reloaded.profiles[inf].HasBinding(UAMapZoomIn, InputCode::Key(SDL_SCANCODE_KP_PLUS)));
+    CHECK(reloaded.profiles[inf].HasBinding(UAVoiceOverNetPushToTalk, InputCode::Key(SDL_SCANCODE_CAPSLOCK)));
+
+    std::filesystem::remove(path);
+}
+
+// A version-1 config, older still: it predates push-to-talk as well as the newest
+// actions. Loading migrates it across the two-version gap, keeping its bindings and
+// seeding every action it lacks - push-to-talk, map zoom, and cheat entry.
+TEST_CASE("ContextControlsConfig: a full version-1 config parses and migrates", "[Settings][ContextControlsConfig]")
+{
+    REQUIRE_FIXTURE("cfg/contextControls_v1_full.cfg");
+    const int inf = (int)InputContext::Infantry;
+
+    ContextControlsConfig migrated;
+    REQUIRE(migrated.Load(GET_FIXTURE("cfg/contextControls_v1_full.cfg")));
+    CHECK(migrated.migratedOnLoad);
+
+    // A listed binding is kept.
+    CHECK(migrated.profiles[inf].BindingCount(UAFire) > 0);
+
+    // Every action the file predates is seeded to its default.
+    CHECK(migrated.profiles[inf].HasBinding(UAVoiceOverNetPushToTalk, InputCode::Key(SDL_SCANCODE_CAPSLOCK)));
+    CHECK(migrated.profiles[inf].HasBinding(UAMapZoomIn, InputCode::Key(SDL_SCANCODE_KP_PLUS)));
+    CHECK(migrated.profiles[inf].HasBinding(UAMapZoomOut, InputCode::Key(SDL_SCANCODE_KP_MINUS)));
+    CHECK(migrated.profiles[inf].BindingCount(UACheatEntry) == 1);
+
+    // Save and reload comes up current with the fill persisted.
+    const std::string path = TmpPath("context_controls_v1_full_migrated.cfg");
+    std::filesystem::remove(path);
+    REQUIRE(migrated.Save(path));
+
+    ContextControlsConfig reloaded;
+    REQUIRE(reloaded.Load(path));
+    CHECK_FALSE(reloaded.migratedOnLoad);
+    CHECK(reloaded.profiles[inf].HasBinding(UAVoiceOverNetPushToTalk, InputCode::Key(SDL_SCANCODE_CAPSLOCK)));
+    CHECK(reloaded.profiles[inf].HasBinding(UAMapZoomIn, InputCode::Key(SDL_SCANCODE_KP_PLUS)));
+
+    std::filesystem::remove(path);
 }

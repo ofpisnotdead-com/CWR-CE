@@ -13,7 +13,7 @@ namespace Poseidon
 {
 namespace
 {
-constexpr int kContextControlsVersion = 2;
+constexpr int kContextControlsVersion = 3;
 constexpr int kGamepadButtonA = 0;
 constexpr int kGamepadButtonB = 1;
 constexpr int kGamepadButtonX = 2;
@@ -230,21 +230,30 @@ bool ContextControlsConfig::Load(const std::string& path)
     int version = 0;
     if (auto* e = cfg.FindEntry("contextControlsVersion"))
         version = (int)*e;
-    (void)version;
 
-    for (InputProfile& profile : profiles)
-        profile.ClearAll();
+    // A file written before newer actions existed has no entries for them. Seed
+    // each profile with defaults first so those actions come up bound, then let
+    // the file override the actions it does list.
+    const bool seedDefaults = version < kContextControlsVersion;
+    migratedOnLoad = seedDefaults;
 
     UserActionDesc* descs = InputSubsystem::GetUserActionDesc();
     for (int c = 0; c < ContextCount; ++c)
     {
         InputContext ctx = static_cast<InputContext>(c);
         InputProfile& profile = profiles[c];
+        profile.ClearAll();
+        if (seedDefaults)
+        {
+            profile.LoadDefaults();
+            ApplyContextDefaults(ctx, profile);
+        }
         for (int a = 0; a < UAN; ++a)
         {
             const ParamEntry* entry = cfg.FindEntry(BindingName(ctx, descs[a]));
             if (!entry)
                 continue;
+            profile.ClearBindings(static_cast<UserAction>(a));
 
             const ParamEntry* modEntry = cfg.FindEntry(ModifierName(ctx, descs[a]));
             const ParamEntry* scaleEntry = cfg.FindEntry(ScaleName(ctx, descs[a]));
