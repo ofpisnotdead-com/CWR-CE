@@ -1721,6 +1721,11 @@ void CHTMLContainer::LoadBuffer(const char* filenameHint, const char* utf8Text, 
             // text
             in.unget();
             RString text = ReadText(in, _fontP->GetLangID());
+
+            // Make sure newly-converted codepoints are in UTF-8 representation
+            const Poseidon::Codepage cp = Poseidon::CodepageForLanguage((const char*)GLanguage);
+            text = Poseidon::DecodeLegacyTextToRString(text.Data(), cp);
+
             switch (item.context)
             {
                 case HTMLNone:
