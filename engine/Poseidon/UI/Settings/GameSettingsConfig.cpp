@@ -5,6 +5,7 @@
 
 #include <Poseidon/Foundation/Platform/AppConfig.hpp>
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
+#include <Poseidon/UI/Settings/SettingsFile.hpp>
 #include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
 #include <Poseidon/Core/Application.hpp>
 #include <Poseidon/Core/Config/EngineConfig.hpp>
@@ -13,9 +14,7 @@
 #include <Poseidon/World/Scene/Scene.hpp>
 #include <Poseidon/Foundation/Strings/Mbcs.hpp>
 
-#include <filesystem>
 #include <cmath>
-#include <system_error>
 #include <Poseidon/Foundation/Common/FltOpts.hpp>
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <Poseidon/Foundation/Framework/Log.hpp>
@@ -136,8 +135,7 @@ bool GameSettingsConfig::Normalize(const Environment& env)
 
 bool GameSettingsConfig::Load(const std::string& path)
 {
-    std::error_code ec;
-    if (!std::filesystem::exists(path, ec))
+    if (!SettingsFileExists(path))
         return false;
 
     ParamFile cfg;
@@ -160,11 +158,6 @@ bool GameSettingsConfig::Load(const std::string& path)
 
 bool GameSettingsConfig::Save(const std::string& path) const
 {
-    std::error_code ec;
-    std::filesystem::path p(path);
-    if (p.has_parent_path())
-        std::filesystem::create_directories(p.parent_path(), ec);
-
     ParamFile cfg;
     cfg.Add("textLanguage", RString(textLanguage.c_str()));
     cfg.Add("voiceLanguage", RString(voiceLanguage.c_str()));
@@ -172,8 +165,7 @@ bool GameSettingsConfig::Save(const std::string& path) const
     cfg.Add("preferredViewDistance", preferredViewDistance);
     cfg.Add("respectMissionViewDistance", respectMissionViewDistance);
 
-    cfg.Save(RString(path.c_str()));
-    return std::filesystem::exists(path, ec);
+    return WriteSettingsFile(path, cfg);
 }
 
 bool EnsureGameSettingsFile(GameSettingsConfig& cfg, const std::string& path,

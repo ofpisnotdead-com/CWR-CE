@@ -4,9 +4,8 @@
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Input/UserActionDesc.hpp>
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
+#include <Poseidon/UI/Settings/SettingsFile.hpp>
 
-#include <filesystem>
-#include <system_error>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 
 namespace Poseidon
@@ -215,12 +214,9 @@ void ContextControlsConfig::LoadDefaults()
 
 bool ContextControlsConfig::Load(const std::string& path)
 {
-    std::error_code ec;
-    if (!std::filesystem::exists(path, ec))
-        return false;
-
     ParamFile cfg;
-    cfg.Parse(RString(path.c_str()));
+    if (!ReadSettingsFile(path, cfg))
+        return false;
 
     int version = 0;
     if (auto* e = cfg.FindEntry("contextControlsVersion"))
@@ -269,11 +265,6 @@ bool ContextControlsConfig::Load(const std::string& path)
 
 bool ContextControlsConfig::Save(const std::string& path) const
 {
-    std::error_code ec;
-    std::filesystem::path p(path);
-    if (p.has_parent_path())
-        std::filesystem::create_directories(p.parent_path(), ec);
-
     ParamFile cfg;
     cfg.Add("contextControlsVersion", kContextControlsVersion);
 
@@ -304,7 +295,6 @@ bool ContextControlsConfig::Save(const std::string& path) const
         }
     }
 
-    cfg.Save(RString(path.c_str()));
-    return std::filesystem::exists(path, ec);
+    return WriteSettingsFile(path, cfg);
 }
 } // namespace Poseidon
