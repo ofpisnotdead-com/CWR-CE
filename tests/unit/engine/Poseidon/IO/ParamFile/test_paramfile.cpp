@@ -21,6 +21,9 @@
 #include <limits.h>
 #ifndef MAX_PATH
 #define MAX_PATH PATH_MAX
+#if __APPLE__
+#include <mach-o/dyld.h>
+#endif
 #endif
 #endif
 
@@ -50,7 +53,12 @@ static RString GetExecutableDirectory()
         GetModuleFileNameA(nullptr, exePath, MAX_PATH);
         char* lastSlash = strrchr(exePath, '\\');
 #else
+#if __APPLE__
+        uint32_t len = sizeof(exePath) - 1;
+        _NSGetExecutablePath(exePath, &len);
+#else
         ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+#endif
         if (len > 0)
             exePath[len] = '\0';
         else

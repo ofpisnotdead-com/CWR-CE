@@ -37,6 +37,11 @@ if(WIN32)
         ws2_32 winmm version comctl32 ole32 shell32
         legacy_stdio_definitions.lib
     )
+elseif(APPLE)
+    target_link_libraries(PoseidonStudio PRIVATE
+        Poseidon PoseidonOpenAL
+        pthread dl
+    )
 else()
     target_link_libraries(PoseidonStudio PRIVATE
         -Wl,--start-group

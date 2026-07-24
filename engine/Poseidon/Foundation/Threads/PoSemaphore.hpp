@@ -13,6 +13,18 @@ class PoSemaphore : public RefCountSafe
 
     HANDLE handle;
 
+#elif __APPLE__
+
+    // macOS has removed POSIX semaphores (sem_init returns ENOTSUP).
+    // Use pthread mutex + condition variable as a portable replacement.
+    struct
+    {
+        pthread_mutex_t mutex;
+        pthread_cond_t cond;
+        long waiters;
+    } lock;
+    long counter;
+
 #else
 
     sem_t sem;
