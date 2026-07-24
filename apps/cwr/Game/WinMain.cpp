@@ -5,10 +5,12 @@
 #include "GameApplication.hpp"
 #include <Poseidon/Core/ProgressSystem.hpp> // Needed for complete type in Application
 #include <Poseidon/Foundation/Common/ConsoleUtils.hpp>
+#include <Poseidon/Foundation/Platform/CppRuntimeWarning.hpp>
 #include <Poseidon/Foundation/Platform/CrashHandler.hpp>
 
 int PASCAL WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR szCmdLine, int sw)
 {
+    Poseidon::Foundation::WarnIfCppRuntimeIsOlder();
     Poseidon::Foundation::InstallCrashHandler(nullptr);
     if (!strstr(szCmdLine, "--check"))
         Poseidon::Foundation::attachParentConsole();
