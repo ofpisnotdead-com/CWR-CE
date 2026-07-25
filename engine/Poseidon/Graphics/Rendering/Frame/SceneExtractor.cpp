@@ -112,6 +112,7 @@ void bucketDraw(SceneInputs& s, PassId passId, SceneDraw&& draw)
             s.skyDraws.push_back(std::move(draw));
             break;
         case PassId::Opaque:
+        case PassId::Terrain:
             s.worldOpaqueDraws.push_back(std::move(draw));
             break;
         case PassId::Cutout:

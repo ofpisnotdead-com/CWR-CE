@@ -612,7 +612,6 @@ TEST_CASE("VSConst: register indices are non-overlapping", "[Graphics][GL33]")
 #include <glad/gl.h>
 
 extern int MipmapSizeGL33(PacFormat format, int w, int h);
-extern void InitGLPixelFormat(TextureDescGL33& desc, PacFormat format, bool enableDXT);
 
 TEST_CASE("TextureDescGL33: struct has expected fields", "[Graphics][GL33][Texture]")
 {
