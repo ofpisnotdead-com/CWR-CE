@@ -6,6 +6,7 @@
 #include <Poseidon/Game/Mission/MissionTemplateCatalog.hpp>
 #include <Poseidon/Network/NetworkServerCommon.hpp>
 #include <Poseidon/UI/DisplayUI.hpp>
+#include <Poseidon/UI/OptionsUICommon.hpp>
 
 #include <cctype>
 #include <filesystem>
@@ -94,7 +95,8 @@ struct ContentModFixture
         std::ofstream(modDir / "mod.json") << R"({"modId":"trikit","name":"Tri Kit","version":"1.0"})";
         fs::create_directories(modDir / "Campaigns" / "TriCampaign");
         std::ofstream(modDir / "Campaigns" / "TriCampaign" / "description.ext").put('x');
-        fs::create_directories(modDir / "Anims");
+        fs::create_directories(modDir / "Anims" / "intro.tri");
+        std::ofstream(modDir / "Anims" / "intro.tri" / "mission.sqm").put('x');
         fs::create_directories(root / "Missions" / "base_arc.tri");
         fs::create_directories(modDir / "Missions" / "mod_arc.tri");
         fs::create_directories(modDir / "Missions" / "CSLA");
@@ -135,8 +137,7 @@ TEST_CASE("arcade Custom Game tree lists a mod's single mission alongside the ba
 {
     ContentModFixture mod;
 
-    // Both the mod's unpacked Missions/mod_arc.tri and the base game's Missions/base_arc.tri surface
-    // for the world. Without mod-root enumeration the mod mission is absent (base only).
+    // Both the mod and base unpacked missions surface for the world.
     CHECK(ArcadeHas("tri", "mod_arc"));
     CHECK(ArcadeHas("tri", "base_arc"));
 }
@@ -163,4 +164,25 @@ TEST_CASE("a content mod surfaces MP missions and both template kinds", "[ui][mi
 
     CHECK(TemplateListHas(true, "tri", "mod_tpl"));
     CHECK(TemplateListHas(false, "tri", "mod_sptpl"));
+}
+
+TEST_CASE("a mod's Anims folder hosts a bare-name island intro", "[ui][cutscene][anims]")
+{
+    ContentModFixture mod;
+
+    // A bare cutscenes[] name resolves to the mod's Anims/<name>.<world>/.
+    const std::string hosted = (const char*)ResolveCutsceneAnimsSubdir(RString("tri"), RString("intro"));
+    CHECK(hosted.find("@triContent") != std::string::npos);
+
+    // Windows-authored configs differ in case from the on-disk folder, so the loose resolution must fold
+    // case (world "TRI"/name "Intro" against the on-disk intro.tri).
+    const std::string folded = (const char*)ResolveCutsceneAnimsSubdir(RString("TRI"), RString("Intro"));
+    CHECK(folded.find("@triContent") != std::string::npos);
+
+    // The "..\addons\.." packed form and an unknown intro both fall back to the base anims/ bank.
+    const std::string packed =
+        (const char*)ResolveCutsceneAnimsSubdir(RString("tri"), RString("..\\addons\\triisl\\intro"));
+    const std::string missing = (const char*)ResolveCutsceneAnimsSubdir(RString("noe"), RString("intro"));
+    CHECK(packed.find("@triContent") == std::string::npos);
+    CHECK(missing.find("@triContent") == std::string::npos);
 }

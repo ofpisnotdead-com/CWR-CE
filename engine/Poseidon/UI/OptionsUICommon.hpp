@@ -45,6 +45,7 @@ void AddDeadIdentity(RString identity);
 void SetMissionDisplayName(RString campaign, RString battle, RString mission, RString displayName);
 void AddMission(RString campaign, RString battle, RString mission, RString displayName);
 void StartRandomCutscene(RString world);
+RString ResolveCutsceneAnimsSubdir(RString world, RString name);
 RString GetCampaignMissionDirectory(RString campaign, RString mission);
 
 struct CountedString : SerializeClass
