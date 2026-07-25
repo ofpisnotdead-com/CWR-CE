@@ -607,6 +607,9 @@ class EngineGL33 : public Engine
     bool GetRequestedFullscreenMode(int& w, int& h, int& refresh) const override;
     bool SetSwapInterval(int interval) override;
     int GetSwapInterval() const override;
+    void StartTextInput() override;
+    void StopTextInput() override;
+    bool IsTextInputActive() const override;
 
     void DestroySurfaces();
 

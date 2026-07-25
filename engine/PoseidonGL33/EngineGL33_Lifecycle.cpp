@@ -650,6 +650,23 @@ int EngineGL33::GetSwapInterval() const
     return v;
 }
 
+void EngineGL33::StartTextInput()
+{
+    if (_sdlWindow)
+        SDL_StartTextInput(_sdlWindow);
+}
+
+void EngineGL33::StopTextInput()
+{
+    if (_sdlWindow)
+        SDL_StopTextInput(_sdlWindow);
+}
+
+bool EngineGL33::IsTextInputActive() const
+{
+    return _sdlWindow && SDL_TextInputActive(_sdlWindow);
+}
+
 bool EngineGL33::SetWindowMode(WindowMode mode)
 {
     if (!_sdlWindow)

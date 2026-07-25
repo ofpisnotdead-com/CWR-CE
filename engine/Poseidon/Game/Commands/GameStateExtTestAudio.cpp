@@ -160,6 +160,7 @@ GameValue TriSetRenderScale(const GameState*, GameValuePar);
 GameValue TriSetMsaa(const GameState*, GameValuePar);
 GameValue TriPerfStats(const GameState*, GameValuePar);
 GameValue TriSetVsync(const GameState*, GameValuePar);
+GameValue TriTextInputActive(const GameState*);
 GameValue TriPerfDumpShapes(const GameState*, GameValuePar);
 GameValue TriPerfReset(const GameState*, GameValuePar);
 GameValue TriShadowSetDarkness(const GameState*, GameValuePar);
@@ -2862,6 +2863,7 @@ INIT_MODULE(GameStateExtTest, 3)
     GGameState.NewFunction(GameFunction(GameString, "triCheatMapTeleport", TriCheatMapTeleport, GameBool));
     GGameState.NewNularOp(GameNular(GameScalar, "triViewDistance", TriViewDistance));
     GGameState.NewNularOp(GameNular(GameScalar, "triFps", TriFps));
+    GGameState.NewNularOp(GameNular(GameScalar, "triTextInputActive", TriTextInputActive));
     GGameState.NewNularOp(GameNular(GameScalar, "triMemoryMB", TriMemoryMB));
     GGameState.NewFunction(GameFunction(GameString, "triConsoleRun", TriConsoleRun, GameString));
     GGameState.NewFunction(

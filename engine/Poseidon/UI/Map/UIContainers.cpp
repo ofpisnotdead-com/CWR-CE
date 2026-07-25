@@ -1433,6 +1433,13 @@ bool ControlsContainer::SetFocus(ControlId& id, bool up, bool def)
         ctrl->OnSetFocus(up, def);
     }
     _indexFocused = id;
+    if (GEngine)
+    {
+        if (ctrl && ctrl->WantsTextInput())
+            GEngine->StartTextInput();
+        else
+            GEngine->StopTextInput();
+    }
     return true;
 }
 

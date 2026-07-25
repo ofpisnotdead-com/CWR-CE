@@ -79,6 +79,7 @@ public:
 	virtual bool OnSetFocus(bool up = true, bool def = false);	// return false if focus cannot not be gained
 
 	virtual bool OnKillFocus();	// return false if focus cannot be killed
+	virtual bool WantsTextInput() const {return false;}	// true for real text-entry controls (CEdit/C3DEdit)
 	virtual bool CanBeDefault() const {return false;}
 	bool IsDefault() {return _default;}
 	void SetDefault() {_default = true;}

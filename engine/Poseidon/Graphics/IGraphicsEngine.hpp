@@ -79,6 +79,10 @@ class IGraphicsEngine
     virtual bool SetSwapInterval(int /*interval*/) { return false; }
     virtual int GetSwapInterval() const { return 1; }
 
+    virtual void StartTextInput() {}
+    virtual void StopTextInput() {}
+    virtual bool IsTextInputActive() const { return false; }
+
     virtual void SetGamma(float g) = 0;
     virtual float GetGamma() const = 0;
 
