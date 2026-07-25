@@ -13,6 +13,24 @@
 namespace Poseidon
 {
 
+std::filesystem::path FilesystemPathFromUtf8(const std::string& path)
+{
+#ifdef _WIN32
+    return std::filesystem::path(Utf8PathToWide(path.c_str()));
+#else
+    return std::filesystem::path(path);
+#endif
+}
+
+std::string FilesystemPathToUtf8(const std::filesystem::path& path)
+{
+#ifdef _WIN32
+    return WidePathToUtf8(path.wstring().c_str());
+#else
+    return path.string();
+#endif
+}
+
 #ifdef _WIN32
 std::wstring Utf8PathToWide(const char* path)
 {
@@ -155,6 +173,17 @@ bool FileExistsUtf8(const char* path)
     return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY) == 0;
 }
 
+std::FILE* OpenFileUtf8(const char* path, const char* mode)
+{
+    const std::wstring widePath = Utf8PathToWide(path);
+    const std::wstring wideMode = Utf8PathToWide(mode);
+    if (widePath.empty() || wideMode.empty())
+    {
+        return nullptr;
+    }
+    return ::_wfopen(widePath.c_str(), wideMode.c_str());
+}
+
 std::vector<char> ReadFileUtf8(const char* path)
 {
     const std::wstring widePath = Utf8PathToWide(path);
@@ -250,6 +279,11 @@ bool FileExistsUtf8(const char* path)
 {
     std::error_code ec;
     return std::filesystem::is_regular_file(std::filesystem::path(path ? path : ""), ec);
+}
+
+std::FILE* OpenFileUtf8(const char* path, const char* mode)
+{
+    return std::fopen(path, mode);
 }
 
 std::vector<char> ReadFileUtf8(const char* path)

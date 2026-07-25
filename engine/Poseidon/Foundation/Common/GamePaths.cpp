@@ -1,10 +1,14 @@
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <Poseidon/Foundation/Common/PlatformPaths.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <cstdlib>
 #include <filesystem>
 #include <algorithm>
 #include <ctype.h>
 #include <system_error>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace fs = std::filesystem;
 
@@ -31,11 +35,10 @@ static std::string getSystemTempDir(const char* codename)
     std::string lower(codename);
     std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 #ifdef _WIN32
-    const char* tmp = std::getenv("TEMP");
-    if (!tmp)
-        tmp = std::getenv("TMP");
-    if (tmp)
-        return std::string(tmp) + "\\" + lower;
+    wchar_t tmp[MAX_PATH + 1] = {};
+    const DWORD size = ::GetTempPathW(MAX_PATH, tmp);
+    if (size > 0 && size <= MAX_PATH)
+        return Poseidon::WidePathToUtf8(tmp) + lower;
     return "C:\\Temp\\" + lower;
 #else
     return "/tmp/" + lower;
@@ -63,7 +66,7 @@ std::string GamePaths::ResolveUserContentDir(const char* codename, const char* p
 }
 
 ResolvedGamePaths GamePaths::Resolve(const char* codename, const char* cfgBase, const char* productName, bool oldPaths,
-                                      const char* oldPathsRoot)
+                                     const char* oldPathsRoot)
 {
     ResolvedGamePaths resolved;
     resolved.codename = codename;
@@ -77,7 +80,7 @@ ResolvedGamePaths GamePaths::Resolve(const char* codename, const char* cfgBase, 
         if (oldPathsRoot && oldPathsRoot[0] != '\0')
             root = oldPathsRoot;
         else
-            root = fs::current_path().string();
+            root = Poseidon::FilesystemPathToUtf8(fs::current_path());
 
         resolved.userDir = resolveDir("", root);
         resolved.userContentDir = resolved.userDir;
@@ -137,15 +140,14 @@ void GamePaths::Initialize(const char* codename, const char* cfgBase, const char
     m_mpMissionsDir = resolved.mpMissionsDir;
     m_oldPaths = resolved.oldPaths;
 
-    std::error_code ec;
-    fs::create_directories(m_userDir, ec);
-    fs::create_directories(m_cacheDir, ec);
-    fs::create_directories(m_tempDir, ec);
-    fs::create_directories(m_userContentDir, ec);
-    fs::create_directories(m_modsDir, ec);
-    fs::create_directories(m_workshopDir, ec);
-    fs::create_directories(m_missionsDir, ec);
-    fs::create_directories(m_mpMissionsDir, ec);
+    Poseidon::CreateDirectoryUtf8(m_userDir.c_str());
+    Poseidon::CreateDirectoryUtf8(m_cacheDir.c_str());
+    Poseidon::CreateDirectoryUtf8(m_tempDir.c_str());
+    Poseidon::CreateDirectoryUtf8(m_userContentDir.c_str());
+    Poseidon::CreateDirectoryUtf8(m_modsDir.c_str());
+    Poseidon::CreateDirectoryUtf8(m_workshopDir.c_str());
+    Poseidon::CreateDirectoryUtf8(m_missionsDir.c_str());
+    Poseidon::CreateDirectoryUtf8(m_mpMissionsDir.c_str());
 
     m_initialized = true;
 }

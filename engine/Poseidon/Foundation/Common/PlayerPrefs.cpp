@@ -1,5 +1,6 @@
 #include <Poseidon/Foundation/Common/PlayerPrefs.hpp>
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <cstdlib>
 #include <fstream>
 #include <unordered_map>
@@ -18,7 +19,7 @@ std::string prefsFilePath(const char* appName)
 std::unordered_map<std::string, std::string> loadPrefs(const char* appName)
 {
     std::unordered_map<std::string, std::string> prefs;
-    std::ifstream file(prefsFilePath(appName));
+    std::ifstream file(Poseidon::FilesystemPathFromUtf8(prefsFilePath(appName)));
     if (!file.is_open())
         return prefs;
 
@@ -36,7 +37,7 @@ std::unordered_map<std::string, std::string> loadPrefs(const char* appName)
 
 void savePrefs(const char* appName, const std::unordered_map<std::string, std::string>& prefs)
 {
-    std::ofstream file(prefsFilePath(appName));
+    std::ofstream file(Poseidon::FilesystemPathFromUtf8(prefsFilePath(appName)));
     if (!file.is_open())
         return;
 

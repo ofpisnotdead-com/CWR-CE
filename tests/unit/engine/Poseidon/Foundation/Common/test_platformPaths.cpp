@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
+#include <Poseidon/Foundation/Common/PlayerPrefs.hpp>
 #include <Poseidon/Foundation/Common/PlatformPaths.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 
 #include <cstdlib>
 #include <fstream>
@@ -13,10 +15,9 @@ namespace
 
 bool dirExists(const std::string& path)
 {
-    return fs::is_directory(path);
+    return fs::is_directory(Poseidon::FilesystemPathFromUtf8(path));
 }
 
-#ifndef _WIN32
 /// RAII helper to set/restore an environment variable for test isolation.
 struct ScopedEnv
 {
@@ -30,18 +31,28 @@ struct ScopedEnv
         hadOld = (prev != nullptr);
         if (hadOld)
             oldValue = prev;
+#ifdef _WIN32
+        _putenv_s(varName, value);
+#else
         setenv(varName, value, 1);
+#endif
     }
 
     ~ScopedEnv()
     {
+#ifdef _WIN32
+        if (hadOld)
+            _putenv_s(name.c_str(), oldValue.c_str());
+        else
+            _putenv_s(name.c_str(), "");
+#else
         if (hadOld)
             setenv(name.c_str(), oldValue.c_str(), 1);
         else
             unsetenv(name.c_str());
+#endif
     }
 };
-#endif
 
 } // anonymous namespace
 
@@ -61,6 +72,31 @@ TEST_CASE("getUserDataDir returns non-empty path", "[platformPaths]")
     REQUIRE(dirExists(dir));
     fs::remove_all(dir);
 }
+
+#ifdef _WIN32
+TEST_CASE("Windows user directories preserve UTF-8 app names", "[platformPaths][windows][utf8]")
+{
+    const std::string appName = "\xE6\xB5\x8B\xE8\xAF\x95";
+    const std::string dir = Poseidon::Foundation::getUserDataDir(appName.c_str());
+
+    REQUIRE(dir.find(appName) != std::string::npos);
+    REQUIRE(dirExists(dir));
+    fs::remove_all(Poseidon::FilesystemPathFromUtf8(dir));
+}
+
+TEST_CASE("Windows player preferences persist in UTF-8 user directories", "[platformPaths][windows][utf8]")
+{
+    const std::string root =
+        Poseidon::FilesystemPathToUtf8(fs::temp_directory_path()) + "/cwr_prefs_\xE6\xB5\x8B\xE8\xAF\x95";
+    REQUIRE(Poseidon::CreateDirectoryUtf8(root.c_str()));
+
+    ScopedEnv userDir("POSEIDON_USER_DIR", root.c_str());
+    Poseidon::Foundation::prefsSetString("CWR", "PlayerName", "\xE4\xB8\x81");
+    REQUIRE(Poseidon::Foundation::prefsGetString("CWR", "PlayerName") == "\xE4\xB8\x81");
+
+    fs::remove_all(Poseidon::FilesystemPathFromUtf8(root));
+}
+#endif
 
 TEST_CASE("getUserCacheDir returns non-empty path", "[platformPaths]")
 {

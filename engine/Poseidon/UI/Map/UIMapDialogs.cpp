@@ -12,6 +12,7 @@
 #include <Poseidon/World/Detection/Detector.hpp>
 #include <Poseidon/Game/Commands/GameStateExt.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <Poseidon/Foundation/Enums/EnumNames.hpp>
 #include <Poseidon/Network/Network.hpp>
 #include <Poseidon/Game/Chat.hpp>
@@ -943,7 +944,7 @@ void DisplayDebriefing::CreateDebriefing()
 
     FILE* file = nullptr;
     if (doOutput)
-        file = fopen((GamePaths::Instance().UserDir() + "rating.log").c_str(), "a+");
+        file = OpenFileUtf8((GamePaths::Instance().UserDir() + "rating.log").c_str(), "a+");
 #endif
 
     // mission name

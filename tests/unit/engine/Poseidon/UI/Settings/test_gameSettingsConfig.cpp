@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <Poseidon/UI/Settings/GameSettingsConfig.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 
 #include <filesystem>
 #include <random>
@@ -130,6 +131,23 @@ TEST_CASE("GameSettingsConfig: save and load round-trip every field", "[Settings
     CHECK(dst.blood == src.blood);
     CHECK(dst.preferredViewDistance == src.preferredViewDistance);
     CHECK(dst.respectMissionViewDistance == src.respectMissionViewDistance);
+}
+
+TEST_CASE("GameSettingsConfig: saves under a UTF-8 user directory", "[Settings][GameSettings][utf8]")
+{
+    const std::string root = Poseidon::FilesystemPathToUtf8(std::filesystem::temp_directory_path()) +
+                             "/gamesettings_\xE6\xB5\x8B\xE8\xAF\x95";
+    const std::string path = root + "/game.cfg";
+
+    GameSettingsConfig src;
+    src.textLanguage = "Chinese";
+    REQUIRE(src.Save(path));
+
+    GameSettingsConfig dst;
+    REQUIRE(dst.Load(path));
+    CHECK(dst.textLanguage == "Chinese");
+
+    std::filesystem::remove_all(Poseidon::FilesystemPathFromUtf8(root));
 }
 
 TEST_CASE("GameSettingsConfig: missing file leaves instance untouched", "[Settings][GameSettings]")

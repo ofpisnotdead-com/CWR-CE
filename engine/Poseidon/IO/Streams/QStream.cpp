@@ -153,11 +153,7 @@ FileBufferLoaded::FileBufferLoaded(const char* name)
         CloseHandle(file);
     }
 #else
-    HANDLE file = ::CreateFile(name, GENERIC_READ, FILE_SHARE_READ,
-                               nullptr, // security
-                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
-                               nullptr // template
-    );
+    HANDLE file = OpenFileForRead(name);
     if (file != INVALID_HANDLE_VALUE)
     {
         DWORD size = ::GetFileSize(file, nullptr);
@@ -260,7 +256,7 @@ bool QIFStream::FileExists(const char* name)
 #ifdef POSIX_FILES
     return FilePathExists(name);
 #else
-    HANDLE check = ::CreateFile(name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    HANDLE check = OpenFileForRead(name);
     if (check == INVALID_HANDLE_VALUE)
     {
         return false;

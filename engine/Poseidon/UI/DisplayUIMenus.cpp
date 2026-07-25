@@ -28,6 +28,7 @@
 #include <Poseidon/Core/SaveVersion.hpp>
 #include <Poseidon/Core/Profile/ProfileManager.hpp>
 #include <Poseidon/Foundation/Platform/GamePaths.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <filesystem>
 #include <limits.h>
 #include <stdio.h>
@@ -661,7 +662,8 @@ bool DisplayNewUser::CanDestroy()
         if (!_edit || stricmp(name, _name) != 0)
         {
             std::string profileDir = ProfileManager::GetProfileDirPath(GamePaths::Instance().UserDir(), name);
-            if (std::filesystem::is_directory(profileDir))
+            std::error_code ec;
+            if (std::filesystem::is_directory(FilesystemPathFromUtf8(profileDir), ec))
             {
                 // player already exist
                 CreateMsgBox(MB_BUTTON_OK, LocalizeString(IDS_MSG_PLAYER_EXIST));

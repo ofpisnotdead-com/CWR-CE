@@ -258,6 +258,20 @@ TEST_CASE("Poseidon::ProfileManager::GetProfileDirPath", "[profile]")
     REQUIRE(path2 == "/base/Users/Test/");
 }
 
+TEST_CASE("A UTF-8 profile path remains usable on the second run", "[profile][windows][repro]")
+{
+    TempDirGuard tmp;
+    const std::string profileName = "\xE4\xB8\x81";
+
+    REQUIRE(Poseidon::ProfileManager::CreateProfile(tmp.path, profileName));
+    const auto profiles = Poseidon::ProfileManager::EnumerateProfiles(tmp.path);
+    REQUIRE(profiles.size() == 1);
+    REQUIRE(profiles.front().name == profileName);
+
+    REQUIRE(Poseidon::ProfileManager::EnsureProfileDirectory(tmp.path, profiles.front().name));
+    REQUIRE(Poseidon::ProfileManager::EnumerateProfiles(tmp.path).size() == 1);
+}
+
 TEST_CASE("Poseidon::ProfileManager::EnumerateProfiles edge cases", "[profile]")
 {
     SECTION("non-existent basePath returns empty")

@@ -3,7 +3,6 @@
 #include <string>
 #include <vector>
 
-
 /// Profile information
 
 namespace Poseidon
@@ -45,6 +44,9 @@ std::string GetProfileCfgPath(const std::string& basePath, const std::string& na
 /// Get the path to a specific profile's directory.
 /// Returns basePath/Users/{name}/ (with trailing separator).
 std::string GetProfileDirPath(const std::string& basePath, const std::string& name);
+
+/// Ensure a profile's directory exists.
+bool EnsureProfileDirectory(const std::string& basePath, const std::string& name);
 
 /// Create a new profile with default UserInfo.cfg.
 /// Creates the directory and writes default config via UserConfig::SaveToFile().

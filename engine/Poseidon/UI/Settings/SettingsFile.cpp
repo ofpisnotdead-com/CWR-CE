@@ -1,5 +1,6 @@
 #include <Poseidon/UI/Settings/SettingsFile.hpp>
 
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
 
 #include <Poseidon/Foundation/Strings/RString.hpp>
@@ -12,8 +13,7 @@ namespace Poseidon
 
 bool SettingsFileExists(const std::string& path)
 {
-    std::error_code ec;
-    return std::filesystem::exists(path, ec);
+    return FileExistsUtf8(path.c_str());
 }
 
 bool ReadSettingsFile(const std::string& path, ParamFile& cfg)
@@ -27,7 +27,7 @@ bool ReadSettingsFile(const std::string& path, ParamFile& cfg)
 bool WriteSettingsFile(const std::string& path, const ParamFile& cfg)
 {
     std::error_code ec;
-    std::filesystem::path p(path);
+    std::filesystem::path p = FilesystemPathFromUtf8(path);
     if (p.has_parent_path())
         std::filesystem::create_directories(p.parent_path(), ec);
 

@@ -178,6 +178,26 @@ TEST_CASE("UTF-8 file helpers read and write non-ASCII binary paths", "[poseidon
     REQUIRE(read == std::vector<char>(payload, payload + sizeof(payload)));
 }
 
+TEST_CASE("UTF-8 stdio helper opens non-ASCII cache paths", "[poseidon-base][io][fileops][utf8]")
+{
+    TempIoDir dir("utf8_stdio");
+    const std::string cacheDir = dir.root.string() + "/\xE6\xB5\x8B\xE8\xAF\x95";
+    const std::string path = cacheDir + "/cache.bin";
+    REQUIRE(Poseidon::CreateDirectoryUtf8(cacheDir.c_str()));
+
+    std::FILE* output = Poseidon::OpenFileUtf8(path.c_str(), "wb");
+    REQUIRE(output != nullptr);
+    REQUIRE(std::fwrite("cache", 1, 5, output) == 5);
+    std::fclose(output);
+
+    std::FILE* input = Poseidon::OpenFileUtf8(path.c_str(), "rb");
+    REQUIRE(input != nullptr);
+    char bytes[5] = {};
+    REQUIRE(std::fread(bytes, 1, sizeof(bytes), input) == sizeof(bytes));
+    std::fclose(input);
+    REQUIRE(std::string(bytes, sizeof(bytes)) == "cache");
+}
+
 TEST_CASE("UTF-8 directory helper creates non-ASCII mission folders", "[poseidon-base][io][fileops][utf8]")
 {
     TempIoDir dir("utf8_mission_directory");
