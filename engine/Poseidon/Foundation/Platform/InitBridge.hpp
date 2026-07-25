@@ -34,6 +34,13 @@ bool IsMenuOverriddenByMod();
 /// RscOptionsShell, RscDisplayMainRemaster, …) on top of Res, restoring resources
 /// a mod's bin/resource shadowed.
 void MergeBaseResourceExtra();
+
+/// True when a mod's bin/config replaced the base master config (it won the ParseConfig
+/// enumeration). Config init reads this to restore the base config-extra a mod's config shadowed.
+bool IsConfigOverriddenByMod();
+/// Merge the base game's config-extra.cpp (remaster config additions: CfgLanguages) on top of
+/// Pars, restoring config a mod's bin/config shadowed.
+void MergeBaseConfigExtra();
 } // namespace Poseidon
 #include <Poseidon/Foundation/Modules/Modules.hpp>
 namespace Poseidon { class ParamFile; }

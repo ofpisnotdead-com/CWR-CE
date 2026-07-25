@@ -559,6 +559,24 @@ TEST_CASE("ParamFile - Update from another class", "[paramfile][update]")
     }
 }
 
+TEST_CASE("ParamFile - Locked arrays do not stop add-only updates", "[paramfile][update]")
+{
+    ParamFile target;
+    ParamEntry* original = target.AddArray("vehicleClass");
+    original->AddValue("base");
+    target.SetAccessMode(PAReadAndCreate);
+
+    ParamFile source;
+    ParamEntry* replacement = source.AddArray("vehicleClass");
+    replacement->AddValue("mod");
+    source.AddClass("ConfigMergeFixUnit");
+
+    target.Update(source);
+
+    REQUIRE((target >> "vehicleClass")[0].GetValue() == RStringB("base"));
+    REQUIRE(target.FindEntry("ConfigMergeFixUnit") != nullptr);
+}
+
 // Test 13: Compact and Memory Management
 
 TEST_CASE("ParamFile - Compact", "[paramfile][memory]")

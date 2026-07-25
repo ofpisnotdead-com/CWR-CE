@@ -1,6 +1,6 @@
-# Mounts the @badmodel fixture mod (a CfgVehicles class with model="") and loads a
-# mission, so the test can createVehicle the empty-model class. --mods-dir is relative
-# to the game CWD (the data dir). See create_vehicle_empty_model.test.sqf.
+# Mounts the @badmodel addon fixture (a CfgVehicles class with model="") and
+# loads a mission, so the test can createVehicle the empty-model class.
+# --mods-dir is relative to the game CWD (the data dir).
 binary = "PoseidonGame"
 mission = "tests/integration/missions/action_menu_weapon.Demo"
 extra_args = ["--mods-dir", "../../tests/fixtures/mods-badmodel", "--mod", "@badmodel", "--no-strict"]
