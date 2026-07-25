@@ -149,6 +149,10 @@ std::string ResolveFromRootByMetadata(const std::filesystem::path& root, const s
 bool LooksLikeMod(const std::string& dir)
 {
     namespace fs = std::filesystem;
+    // Classic engine roots plus the player-content roots the browsers scan additively; matched
+    // case-insensitively, so the canonical names here recognize any casing on disk.
+    constexpr const char* kModContentDirs[] = {"AddOns",     "Dta",       "Bin",         "Campaigns", "Missions",
+                                               "MPMissions", "Templates", "SPTemplates", "Anims"};
     std::error_code ec;
     for (fs::directory_iterator it(dir, ec), end; it != end; it.increment(ec))
     {
@@ -156,11 +160,14 @@ bool LooksLikeMod(const std::string& dir)
             break;
         const std::string name = LowerAscii(it->path().filename().string());
         std::error_code mec;
-        // addons/dta/campaigns + a bin/ config override are what a mod changes.
-        // Missions/MPMissions are deliberately excluded — mission packs are a
-        // separate content type, not mods.
-        if (it->is_directory(mec) && (name == "addons" || name == "dta" || name == "bin" || name == "campaigns"))
-            return true;
+        if (it->is_directory(mec))
+        {
+            for (const char* root : kModContentDirs)
+            {
+                if (name == LowerAscii(root))
+                    return true;
+            }
+        }
         if (it->is_regular_file(mec) && name == "mod.json")
             return true;
     }

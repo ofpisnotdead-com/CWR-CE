@@ -169,6 +169,22 @@ using Poseidon::Foundation::Time;
 const float LogErrorLimit = 1.0f;
 extern const char* GameStateNames[];
 
+// Add an MPMissions root plus its immediate subfolders, so a mod grouping missions one level down
+// (MPMissions/<Category>/<mission>.pbo) is found by name. Root added even when absent, as before.
+static void AppendMissionDirWithSubfolders(std::vector<std::string>& dirs, const std::filesystem::path& base)
+{
+    dirs.push_back(base.string());
+    std::error_code ec;
+    for (std::filesystem::directory_iterator it(base, ec), end; !ec && it != end; it.increment(ec))
+    {
+        std::error_code dec;
+        if (it->is_directory(dec))
+        {
+            dirs.push_back(it->path().string());
+        }
+    }
+}
+
 std::vector<std::string> Poseidon::GetMPMissionLookupDirectories()
 {
     std::vector<std::string> dirs;
@@ -185,20 +201,21 @@ std::vector<std::string> Poseidon::GetMPMissionLookupDirectories()
                 return false;
             }
             auto* active = static_cast<ActiveModMissionDirs*>(context);
-            active->dirs->push_back((std::filesystem::path((const char*)dir) / GameDirs::MPMissions).string());
-            active->dirs->push_back((std::filesystem::path((const char*)dir) / "mpmissions").string());
+            AppendMissionDirWithSubfolders(*active->dirs,
+                                           std::filesystem::path((const char*)dir) / GameDirs::MPMissions);
+            AppendMissionDirWithSubfolders(*active->dirs, std::filesystem::path((const char*)dir) / "mpmissions");
             return false;
         },
         &ctx);
 
-    dirs.emplace_back((const char*)GetMPMissionsDir());
+    AppendMissionDirWithSubfolders(dirs, std::filesystem::path((const char*)GetMPMissionsDir()));
 
     if (!AppConfig::Instance().IsSimulateMode())
     {
         const std::string userDir = GamePaths::Instance().MPMissionsDir();
         if (!userDir.empty() && std::find(dirs.begin(), dirs.end(), userDir) == dirs.end())
         {
-            dirs.emplace_back(userDir);
+            AppendMissionDirWithSubfolders(dirs, std::filesystem::path(userDir));
         }
     }
     return dirs;

@@ -13,6 +13,7 @@
 #include <Poseidon/IO/Serialization/ParamArchive.hpp>
 #include <Poseidon/Core/SaveVersion.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
+#include <Poseidon/Core/ModSystem.hpp>
 #include <Random/randomGen.hpp>
 #include <Poseidon/UI/Locale/Stringtable/CodepageTranscode.hpp>
 #include <Poseidon/Game/Scripting/Scripts.hpp>
@@ -22,8 +23,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <cctype>
 #include <memory>
 #include <optional>
+#include <set>
+#include <vector>
 #include <Poseidon/Foundation/Common/FltOpts.hpp>
 #include <Poseidon/Foundation/Containers/Array.hpp>
 #include <Poseidon/Foundation/Framework/AppFrame.hpp>
@@ -145,6 +149,73 @@ void DisplaySingleMission::OnLBDblClick(int idc, int curSel)
     }
 }
 
+namespace
+{
+std::string MissionKey(const char* name)
+{
+    std::string key(name ? name : "");
+    for (char& c : key)
+        c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+    return key;
+}
+} // namespace
+
+// Every active mod's Missions/ (mods first, so a mod mission wins dedup) then the game root,
+// matching the load side where CreateSingleMissionBank prefers a mod PBO.
+std::vector<RString> GetSPMissionLookupDirs(const RString& subDir)
+{
+    std::vector<RString> dirs;
+    struct Ctx
+    {
+        std::vector<RString>* dirs;
+        const RString* sub;
+    } ctx{&dirs, &subDir};
+    ModSystem::EnumDirectories(
+        [](RStringB dir, void* context) -> bool
+        {
+            if (dir.GetLength() == 0)
+                return false;
+            auto* active = static_cast<Ctx*>(context);
+            active->dirs->push_back(RString((const char*)dir) + RString("\\Missions\\") + *active->sub);
+            return false;
+        },
+        &ctx);
+    dirs.push_back(RString("Missions\\") + subDir);
+    return dirs;
+}
+
+RString ResolveSPMissionSubdir(RString subDir, RString mission)
+{
+    struct Ctx
+    {
+        RString subDir;
+        RString mission;
+        RString result;
+    } ctx{subDir, mission, RString("Missions\\") + subDir};
+
+    ModSystem::EnumDirectories(
+        [](RStringB dir, void* context) -> bool
+        {
+            if (dir.GetLength() == 0)
+                return false;
+
+            auto* active = static_cast<Ctx*>(context);
+            const RString missionDir = RString((const char*)dir) + RString("\\Missions\\") + active->subDir;
+            const RString probe = missionDir + active->mission;
+            _finddata_t info;
+            const intptr_t h = _findfirst(probe, &info);
+            if (h == -1)
+                return false;
+
+            _findclose(h);
+            active->result = missionDir;
+            return true;
+        },
+        &ctx);
+
+    return ctx.result;
+}
+
 void DisplaySingleMission::LoadDirectory()
 {
     ProgressStart(LocalizeString(IDS_LOAD_WORLD));
@@ -163,8 +234,18 @@ void DisplaySingleMission::LoadDirectory()
         lbox->SetValue(index, -2); // subdirectory
     }
 
-    RString dir = RString("Missions\\") + _directory;
+    std::set<std::string> seen;
+    for (const RString& dir : GetSPMissionLookupDirs(_directory))
+    {
+        ScanMissionDirectory(dir, lbox, seen);
+    }
+    lbox->SortItemsByValue();
+    lbox->SetCurSel(0);
+    ProgressFinish();
+}
 
+void DisplaySingleMission::ScanMissionDirectory(const RString& dir, C3DListBox* lbox, std::set<std::string>& seen)
+{
     const char* searchStr = "briefingName";
     int searchLen = strlen(searchStr);
 
@@ -183,6 +264,11 @@ void DisplaySingleMission::LoadDirectory()
                 int n = name.GetLength() - 4;
                 PoseidonAssert(stricmp(name + n, ".pbo") == 0);
                 RString nameNoExt = name.Substring(0, n);
+
+                if (!seen.insert(MissionKey(nameNoExt)).second)
+                {
+                    continue;
+                }
 
                 // create bank (temporary)
                 QFBank bank;
@@ -272,6 +358,11 @@ void DisplaySingleMission::LoadDirectory()
             if ((info.attrib & _A_SUBDIR) != 0 && info.name[0] != '.')
             {
                 RString name = info.name;
+
+                if (!seen.insert(MissionKey(name)).second)
+                {
+                    continue;
+                }
 
                 if (strchr(name, '.'))
                 {
@@ -386,9 +477,6 @@ void DisplaySingleMission::LoadDirectory()
         } while (0 == _findnext(h, &info));
         _findclose(h);
     }
-    lbox->SortItemsByValue();
-    lbox->SetCurSel(0);
-    ProgressFinish();
 }
 
 RString GetOverviewFile(RString dir)
@@ -463,11 +551,14 @@ void DisplaySingleMission::OnChangeMission()
     }
 
     RString mission = lbox->GetData(sel);
-    RString directory = RString("missions\\") + _directory + mission;
+    const int missionType = lbox->GetValue(sel);
+    const RString missionSubdir =
+        missionType == 1 ? RString("Missions\\") + _directory : ResolveSPMissionSubdir(_directory, mission);
+    RString directory = missionSubdir + mission;
 
-    if (lbox->GetValue(sel) < 0)
+    if (missionType < 0)
     {
-        if (lbox->GetValue(sel) == -1)
+        if (missionType == -1)
         {
             RString filename = GetOverviewFile(directory + RString("\\"));
             if (filename.GetLength() > 0)
@@ -491,7 +582,7 @@ void DisplaySingleMission::OnChangeMission()
 
     RString filename;
     MissionLanguageDetector::MissionPreviewInfo preview;
-    if (lbox->GetValue(sel) == 1)
+    if (missionType == 1)
     {
         RString bank = CreateSingleMissionBank(directory);
         if (bank.GetLength() == 0)

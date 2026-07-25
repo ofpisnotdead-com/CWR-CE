@@ -3,6 +3,8 @@
 #include <Poseidon/UI/DisplayUI.hpp>
 #include <Poseidon/Network/Network.hpp>
 #include <Poseidon/Game/Chat.hpp>
+#include <set>
+#include <string>
 
 // Shared utility functions
 
@@ -21,12 +23,15 @@ RString GetSaveDirectoryCampaign(RString campaign);
 RString GetSaveDirectoryMission(RString world, RString mission);
 RString GetTmpSaveDirectory();
 RString CreateSingleMissionBank(RString filename);
+RString ResolveSPMissionSubdir(RString subDir, RString mission);
 void CreatePath(RString path);
 void SetBaseDirectory(RString dir);
 void SetBaseSubdirectory(RString dir);
 void SetCampaign(RString name);
 void SetMission(RString world, RString mission, RString subdir);
 void SetMission(RString world, RString mission);
+// Missions subdir of the active mod dir (or base game) that hosts an unpacked arcade single mission.
+RString ResolveArcadeMissionSubdir(RString world, RString mission);
 void ApplyCurrentMissionViewDistance();
 RString GetBaseDirectory();
 RString GetBaseSubdirectory();
@@ -136,6 +141,7 @@ class DisplaySingleMission : public Display
     void LoadParams();
     void SaveParams();
     void LoadDirectory();
+    void ScanMissionDirectory(const RString& dir, C3DListBox* lbox, std::set<std::string>& seen);
     void RefreshLanguage();
 };
 

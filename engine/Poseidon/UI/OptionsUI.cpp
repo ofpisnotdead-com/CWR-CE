@@ -847,6 +847,42 @@ void SetMission(RString world, RString mission, RString subdir)
     UpdateCurrentMissionViewDistance();
 }
 
+RString ResolveArcadeMissionSubdir(RString world, RString mission)
+{
+    // An arcade single mission may live unpacked under an active mod's missions/. Return the owning
+    // root's missions subdir so SetMission loads it from there; fall back to the base game's missions/.
+    struct Ctx
+    {
+        RString world;
+        RString mission;
+        RString result;
+    } ctx{world, mission, GetMissionsDir()};
+
+    ModSystem::EnumDirectories(
+        [](RStringB dir, void* context) -> bool
+        {
+            if (dir.GetLength() == 0)
+            {
+                return false;
+            }
+            auto* c = static_cast<Ctx*>(context);
+            const RString subdir = RString((const char*)dir) + RString("/") + GetMissionsDir();
+            const RString probe = subdir + c->mission + RString(".") + c->world;
+            _finddata_t info;
+            const intptr_t h = _findfirst(probe, &info);
+            if (h != -1)
+            {
+                _findclose(h);
+                c->result = subdir;
+                return true;
+            }
+            return false;
+        },
+        &ctx);
+
+    return ctx.result;
+}
+
 void SetMission(RString world, RString mission)
 {
     SetMission(world, mission, GetMissionsDir());

@@ -43,6 +43,12 @@ TEST_CASE("LooksLikeMod recognizes mod markers, ignores bare folders", "[mods][c
     MakeModFolder(root, "withAddons", "addons");
     MakeModFolder(root, "withBin", "Bin"); // markers are case-insensitive
     MakeModFolder(root, "withCampaigns", "Campaigns");
+    // Content-only packs: a mod may host player content without any addon/engine dir.
+    MakeModFolder(root, "withMissions", "Missions");
+    MakeModFolder(root, "withMPMissions", "MPMissions");
+    MakeModFolder(root, "withTemplates", "Templates");
+    MakeModFolder(root, "withSPTemplates", "SPTemplates");
+    MakeModFolder(root, "withAnims", "anims");
     std::filesystem::create_directories(root / "manifest");
     std::ofstream(root / "manifest" / "mod.json", std::ios::binary) << "{}";
     std::filesystem::create_directories(root / "empty");
@@ -52,6 +58,11 @@ TEST_CASE("LooksLikeMod recognizes mod markers, ignores bare folders", "[mods][c
     CHECK(LooksLikeMod((root / "withAddons").string()));
     CHECK(LooksLikeMod((root / "withBin").string()));
     CHECK(LooksLikeMod((root / "withCampaigns").string()));
+    CHECK(LooksLikeMod((root / "withMissions").string()));
+    CHECK(LooksLikeMod((root / "withMPMissions").string()));
+    CHECK(LooksLikeMod((root / "withTemplates").string()));
+    CHECK(LooksLikeMod((root / "withSPTemplates").string()));
+    CHECK(LooksLikeMod((root / "withAnims").string()));
     CHECK(LooksLikeMod((root / "manifest").string()));
     CHECK_FALSE(LooksLikeMod((root / "empty").string())); // no marker
     CHECK_FALSE(LooksLikeMod((root / "junk").string()));  // stray file is not a marker

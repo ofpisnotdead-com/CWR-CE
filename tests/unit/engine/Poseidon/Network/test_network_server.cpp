@@ -158,6 +158,39 @@ TEST_CASE("Network constants are defined", "[network][networkServer]")
     REQUIRE(DSMinBandwidth == 8 * 1024 * 1024);
 }
 
+TEST_CASE("GetMPMissionLookupDirectories includes a mod's MPMissions subfolders", "[network][mission]")
+{
+    // A mod grouping MP missions one level down (MPMissions/<Category>/<mission>.pbo) must be
+    // hostable: each subfolder has to be a lookup root, else the subfolder mission fails to load.
+    const std::filesystem::path modRoot = MakeTempDir();
+    const std::filesystem::path modDir = modRoot / "@triMP";
+    std::filesystem::create_directories(modDir / "MPMissions" / "CSLA");
+    std::filesystem::create_directories(modDir / "MPMissions" / "Baltic");
+
+    ScopedModPath scoped(modDir);
+    const std::vector<std::string> dirs = Poseidon::GetMPMissionLookupDirectories();
+
+    auto has = [&](const std::filesystem::path& p)
+    {
+        const std::string want = NormalizePathForCompare(p);
+        for (const std::string& d : dirs)
+        {
+            if (NormalizePathForCompare(d) == want)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    CHECK(has(modDir / "MPMissions"));
+    CHECK(has(modDir / "MPMissions" / "CSLA"));
+    CHECK(has(modDir / "MPMissions" / "Baltic"));
+
+    std::error_code ec;
+    std::filesystem::remove_all(modRoot, ec);
+}
+
 TEST_CASE("mission file transfer sends contiguous segments and waits for client ack", "[network][mission][transfer]")
 {
     struct Player

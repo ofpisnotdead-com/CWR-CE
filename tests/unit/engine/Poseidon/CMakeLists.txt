@@ -480,6 +480,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     UI/test_main_menu_layout.cpp
     UI/test_notebook_theme.cpp
     UI/test_optionsUI.cpp
+    UI/test_addon_content.cpp
     UI/test_profile_squad_audit.cpp
     UI/test_press_button_page.cpp
     UI/test_press_key_page.cpp

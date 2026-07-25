@@ -9,6 +9,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <string>
+#include <vector>
 #include <Poseidon/Foundation/Containers/Array.hpp>
 #include <Poseidon/Foundation/Framework/AppFrame.hpp>
 #include <Poseidon/Foundation/Framework/DebugLog.hpp>
@@ -106,6 +107,46 @@ std::string ResolveModRootAlias(const char* name)
 
     ModSystem::EnumDirectories(ResolveModRootAliasCallback, &context);
     return context.resolved;
+}
+
+// Collapse "<seg>/.." and strip a leading "addons" so a root-relative intro path
+// ("anims/..\addons\<island>\intro.<world>\...") maps into island <island>'s bank; "" otherwise.
+std::string NormalizeAddonBankPath(const char* name)
+{
+    if (!name || !strstr(name, ".."))
+        return {};
+
+    std::vector<std::string> parts;
+    for (const char* p = name; *p;)
+    {
+        const char* sep = strpbrk(p, "/\\");
+        std::string comp = sep ? std::string(p, sep - p) : std::string(p);
+        if (comp == "..")
+        {
+            if (parts.empty())
+                return {};
+            parts.pop_back();
+        }
+        else if (!comp.empty() && comp != ".")
+        {
+            parts.push_back(std::move(comp));
+        }
+        if (!sep)
+            break;
+        p = sep + 1;
+    }
+
+    if (parts.size() < 2 || !EqualPathComponent(parts[0], "addons", 6))
+        return {};
+
+    std::string out;
+    for (size_t i = 1; i < parts.size(); ++i)
+    {
+        if (!out.empty())
+            out += '\\';
+        out += parts[i];
+    }
+    return out;
 }
 } // namespace
 
@@ -1455,6 +1496,32 @@ void QIFStreamB::AutoOpen(const char* name, IQFBankContext* context)
     if (!modAlias.empty())
     {
         QIFStream::open(modAlias.c_str());
+        if (_sharedData && !_sharedData->GetError())
+        {
+            return;
+        }
+    }
+
+    if (GUseFileBanks)
+    {
+        std::string norm = NormalizeAddonBankPath(name0);
+        if (!norm.empty())
+        {
+            QFBank* bank = AutoBank(norm.c_str());
+            if (bank)
+            {
+                if (context && !context->IsAccessible(bank))
+                {
+                    RptF("AutoOpen %s: access denied", name0);
+                    return;
+                }
+                open(*bank, norm.c_str() + bank->GetPrefix().GetLength());
+                if (_sharedData)
+                {
+                    _bank = bank;
+                }
+            }
+        }
     }
 }
 
@@ -1498,7 +1565,25 @@ bool QIFStreamB::FileExist(const char* name, IQFBankContext* context)
     }
 
     std::string modAlias = ResolveModRootAlias(name);
-    return !modAlias.empty();
+    if (!modAlias.empty())
+    {
+        return true;
+    }
+
+    if (GUseFileBanks)
+    {
+        std::string norm = NormalizeAddonBankPath(name);
+        if (!norm.empty())
+        {
+            QFBank* bank = AutoBank(norm.c_str());
+            if (bank && (!context || context->IsAccessible(bank)) &&
+                bank->FileExists(norm.c_str() + bank->GetPrefix().GetLength()))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 struct EncryptorInformation

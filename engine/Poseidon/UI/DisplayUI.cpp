@@ -42,7 +42,11 @@
 #include <direct.h>
 #endif
 #include <sys/stat.h>
+#include <cctype>
+#include <set>
+#include <string>
 
+#include <Poseidon/Core/ModSystem.hpp>
 #include <Poseidon/Network/Network.hpp>
 
 #include <Poseidon/Game/Chat.hpp>
@@ -1340,6 +1344,11 @@ void DisplayCustomArcade::OnButtonClicked(int idc)
     }
 }
 
+namespace
+{
+bool IsModProvidedMission(const char* world, const char* mission);
+} // namespace
+
 void DisplayCustomArcade::OnChildDestroyed(int idd, int exit)
 {
     switch (idd)
@@ -1386,12 +1395,14 @@ void DisplayCustomArcade::OnChildDestroyed(int idd, int exit)
                 {
                     snprintf(buffer, sizeof(buffer), "Campaigns\\%s\\Missions\\%s.%s", (const char*)campaign,
                              (const char*)mission, (const char*)world);
+                    DeleteDirectoryStructure(buffer);
                 }
-                else
+                else if (!IsModProvidedMission(world, mission))
                 {
+                    // A mod's mission is read-only content; only base-game/user missions delete here.
                     snprintf(buffer, sizeof(buffer), "Missions\\%s.%s", (const char*)mission, (const char*)world);
+                    DeleteDirectoryStructure(buffer);
                 }
-                DeleteDirectoryStructure(buffer);
                 InsertGames();
             }
             break;
@@ -1489,6 +1500,86 @@ void DisplayCustomArcade::OnTreeSelChanged(int idc)
     Display::OnTreeSelChanged(idc);
 }
 
+namespace
+{
+// True when <mission>.<world> comes from an active mod (read-only, not deletable here).
+bool IsModProvidedMission(const char* world, const char* mission)
+{
+    struct Ctx
+    {
+        const char* world;
+        const char* mission;
+        bool isMod;
+    } ctx{world, mission, false};
+    ModSystem::EnumDirectories(
+        [](RStringB dir, void* context) -> bool
+        {
+            if (dir.GetLength() == 0)
+                return false;
+            auto* c = static_cast<Ctx*>(context);
+            char probe[512];
+            snprintf(probe, sizeof(probe), "%s/Missions/%s.%s", (const char*)dir, c->mission, c->world);
+            _finddata_t info;
+            const intptr_t h = _findfirst(probe, &info);
+            if (h != -1)
+            {
+                _findclose(h);
+                c->isMod = true;
+                return true;
+            }
+            return false;
+        },
+        &ctx);
+    return ctx.isMod;
+}
+} // namespace
+
+// Unpacked <mission>.<world> dirs under each active mod's Missions/ (mods first) then the base,
+// deduped case-folded so a mod mission wins, matching the load side.
+AutoArray<RString> CollectArcadeWorldMissions(RString world)
+{
+    struct Ctx
+    {
+        const char* world;
+        std::set<std::string> seen;
+        AutoArray<RString> names;
+    } ctx{world, {}, {}};
+    ModSystem::EnumDirectories(
+        [](RStringB dir, void* context) -> bool
+        {
+            auto* c = static_cast<Ctx*>(context);
+            char pattern[512];
+            if (dir.GetLength() == 0)
+                snprintf(pattern, sizeof(pattern), "Missions\\*.%s", c->world);
+            else
+                snprintf(pattern, sizeof(pattern), "%s/Missions\\*.%s", (const char*)dir, c->world);
+            _finddata_t info;
+            intptr_t h = _findfirst(pattern, &info);
+            if (h == -1)
+                return false;
+            do
+            {
+                if ((info.attrib & _A_SUBDIR) != 0 && info.name[0] != '.')
+                {
+                    char missionName[256];
+                    snprintf(missionName, sizeof(missionName), "%s", (const char*)info.name);
+                    char* ext = strrchr(missionName, '.');
+                    if (ext)
+                        *ext = 0;
+                    std::string key(missionName);
+                    for (char& ch : key)
+                        ch = static_cast<char>(tolower(static_cast<unsigned char>(ch)));
+                    if (c->seen.insert(key).second)
+                        c->names.Append() = RString(missionName);
+                }
+            } while (_findnext(h, &info) == 0);
+            _findclose(h);
+            return false;
+        },
+        &ctx);
+    return ctx.names;
+}
+
 void DisplayCustomArcade::InsertGames()
 {
     CTree* tree = dynamic_cast<CTree*>(GetCtrl(IDC_CUST_GAME));
@@ -1536,33 +1627,16 @@ void DisplayCustomArcade::InsertGames()
             {
                 selected = itemWorld;
             }
-            _finddata_t info;
-            char buffer[256];
-            snprintf(buffer, sizeof(buffer), "Missions\\*.%s", (const char*)name);
-            intptr_t h = _findfirst(buffer, &info);
-            if (h != -1)
+            // Base game's Missions/ plus every active mod's (mods first, additively).
+            AutoArray<RString> arcadeMissions = CollectArcadeWorldMissions(name);
+            for (int mi = 0; mi < arcadeMissions.Size(); ++mi)
             {
-                do
-                {
-                    if ((info.attrib & _A_SUBDIR) != 0 && info.name[0] != '.')
-                    {
-                        char name[256];
-                        snprintf(name, sizeof(name), "%s", (const char*)info.name);
-                        char* ext = strrchr(name, '.');
-                        if (ext)
-                        {
-                            *ext = 0;
-                        }
-                        CTreeItem* itemMission = itemWorld->AddChild();
-                        itemMission->text = name;
-                        itemMission->data = name;
-                        if (wexp && stricmp(Glob.header.filename, name) == 0)
-                        {
-                            selected = itemMission;
-                        }
-                    }
-                } while (_findnext(h, &info) == 0);
-                _findclose(h);
+                const RString& missionName = arcadeMissions[mi];
+                CTreeItem* itemMission = itemWorld->AddChild();
+                itemMission->text = missionName;
+                itemMission->data = missionName;
+                if (wexp && stricmp(Glob.header.filename, missionName) == 0)
+                    selected = itemMission;
             }
             itemWorld->SortChildren();
         }

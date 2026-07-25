@@ -1066,6 +1066,9 @@ RString GetBaseSubdirectory();
 void SetBaseDirectory(RString dir);
 void SetMission(RString world, RString mission);
 
+std::vector<RString> GetSPMissionLookupDirs(const RString& subDir);
+AutoArray<RString> CollectArcadeWorldMissions(RString world);
+
 bool ProcessTemplateName(RString name);
 bool ProcessTemplateName(RString name, RString dir);
 bool ParseMission(bool multiplayer);

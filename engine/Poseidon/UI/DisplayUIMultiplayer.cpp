@@ -2503,10 +2503,10 @@ struct AddModMPMissionsContext
     RString island;
 };
 
-void AddModMPMissionFilesInDir(AddModMPMissionsContext* ctx, const char* modDir, const char* missionsDir)
+void ScanMPMissionBanksInDir(AddModMPMissionsContext* ctx, const char* dir)
 {
     char pattern[1024];
-    snprintf(pattern, sizeof(pattern), "%s%c%s%c*.pbo", modDir, PATH_SEP, missionsDir, PATH_SEP);
+    snprintf(pattern, sizeof(pattern), "%s%c*.pbo", dir, PATH_SEP);
 
     _finddata_t info;
     intptr_t h = _findfirst(pattern, &info);
@@ -2517,6 +2517,32 @@ void AddModMPMissionFilesInDir(AddModMPMissionsContext* ctx, const char* modDir,
             if ((info.attrib & _A_SUBDIR) == 0 && MPMissionBankMatchesIsland(info.name, ctx->island))
             {
                 AddMPMissionBankRow(ctx->lbox, info.name);
+            }
+        } while (0 == _findnext(h, &info));
+        _findclose(h);
+    }
+}
+
+void AddModMPMissionFilesInDir(AddModMPMissionsContext* ctx, const char* modDir, const char* missionsDir)
+{
+    char base[1024];
+    snprintf(base, sizeof(base), "%s%c%s", modDir, PATH_SEP, missionsDir);
+    ScanMPMissionBanksInDir(ctx, base);
+
+    // Mods usually group missions one level down (MPMissions/<Category>/<mission>.pbo); scan those subfolders too.
+    char subPattern[1024];
+    snprintf(subPattern, sizeof(subPattern), "%s%c*", base, PATH_SEP);
+    _finddata_t info;
+    intptr_t h = _findfirst(subPattern, &info);
+    if (h != -1)
+    {
+        do
+        {
+            if ((info.attrib & _A_SUBDIR) != 0 && info.name[0] != '.')
+            {
+                char subDir[1024];
+                snprintf(subDir, sizeof(subDir), "%s%c%s", base, PATH_SEP, info.name);
+                ScanMPMissionBanksInDir(ctx, subDir);
             }
         } while (0 == _findnext(h, &info));
         _findclose(h);

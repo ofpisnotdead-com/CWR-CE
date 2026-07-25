@@ -1,0 +1,30 @@
+version=10;
+class Mission
+{
+	class Intel
+	{
+		briefingName="Tri SP Loose";
+		viewDistance=777;
+	};
+	class Groups
+	{
+		items=1;
+		class Item0
+		{
+			side="WEST";
+			class Vehicles
+			{
+				items=1;
+				class Item0
+				{
+					position[]={7943.6,194.3,7171.8};
+					id=0;
+					side="WEST";
+					vehicle="SoldierWB";
+					player="PLAYER COMMANDER";
+					leader=1;
+				};
+			};
+		};
+	};
+};
