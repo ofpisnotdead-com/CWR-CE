@@ -151,7 +151,7 @@ struct MergeShapeSlot
     unsigned int epoch = 0;
     std::vector<MergeSubBucket> subs;
 };
-}
+} // namespace
 
 // Groups _drawMergers so objects of equal (passNum, shape, drawLOD) are contiguous, for instancing.
 static void BucketDrawMergersByShape(SortObjectList& mergers)
@@ -1438,8 +1438,6 @@ static void DrawSortObject(SortObject* oi)
 
 void Scene::DrawObjectsAndShadowsPass1()
 {
-    GEngine->UploadLocalLights(_aLights);
-
     // select first objects - those with highest visual priority
 
     int s = 0, t = 0;

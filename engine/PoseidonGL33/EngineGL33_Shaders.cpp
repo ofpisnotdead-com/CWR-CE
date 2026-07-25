@@ -494,6 +494,279 @@ void main() {
 }
 )";
 
+// Instanced heightmap terrain: samples the height map in the VS to compute
+// position, normal and UV, then runs the same per-vertex lighting as vsTransform.
+static const char s_vsTerrainGLSL[] = R"(#version 330 core
+layout(std140) uniform VSConstants {
+    mat4 proj;
+    mat4 view;
+    mat4 world;
+    vec4 sunDir;
+    vec4 ambient;
+    vec4 diffuse;
+    vec4 emissive;
+    vec4 fogParam;
+    vec4 camPos;
+    vec4 specular;
+    vec4 specEn;
+    vec4 sunEn;
+    vec4 vpScale;
+    vec4 hmParams0;
+    vec4 hmParams1;
+    mat4 texMat0;
+    mat4 texMat1;
+    vec4 texCtrl;
+    vec4 matDiffuseRaw;
+    vec4 matAmbientRaw;
+    vec4 _padLights[31];
+    mat4 lightVP;
+};
+
+layout(std140) uniform LocalLights {
+    vec4 count;
+    vec4 pos[64];
+    vec4 diffuse[64];
+    vec4 ambient[64];
+    vec4 dir[64];
+} localLights;
+
+uniform sampler2D heightMap;
+uniform sampler2D jitterMap;
+// per-segment light set: [count, idx0, idx1, ...] runs; handle 0 = empty
+uniform usamplerBuffer lightSetTable;
+// x=landGrid, y=subdivCount, z=invEffSubdiv, w=detailScale
+uniform vec4 terrainParams;
+// x=jitterScale, y=invJitterSize
+uniform vec4 terrainParams2;
+
+layout(location = 0) in vec2 gridIJ;
+// xy = land cell, z = array layer, w = isSimple
+layout(location = 1) in ivec4 iCell;
+layout(location = 2) in vec2 cellOriginRel;
+// handle into lightSetTable
+layout(location = 3) in uint iLightSet;
+
+out vec4 vColor;
+out vec4 vSpecColor;
+out vec2 vUV0;
+out vec2 vUV1;
+out float vFogTC;
+out vec3 vWorldRel;
+flat out float vLayer;
+flat out float vSimple;
+
+float hmAt(ivec2 t) {
+    ivec2 sz = textureSize(heightMap, 0);
+    return texelFetch(heightMap, clamp(t, ivec2(0), sz - ivec2(1)), 0).r;
+}
+
+void main() {
+    float terrainGrid = 1.0 / hmParams0.x;
+    int subdiv = int(terrainParams.y);
+    ivec2 tIdx = iCell.xy * subdiv + ivec2(gridIJ + 0.5);
+
+    float h = hmAt(tIdx);
+    vec2 localXZ = gridIJ * terrainGrid;
+    vec3 worldPos = vec3(cellOriginRel.x + localXZ.x, h - hmParams0.w, cellOriginRel.y + localXZ.y);
+
+    float xd = hmAt(tIdx + ivec2(1, 0)) - hmAt(tIdx + ivec2(-1, 0));
+    float zd = hmAt(tIdx + ivec2(0, 1)) - hmAt(tIdx + ivec2(0, -1));
+    vec3 worldNormal = -normalize(cross(vec3(terrainGrid, xd, 0.0), vec3(0.0, zd, terrainGrid)));
+
+    vec4 viewPos = view * vec4(worldPos, 1.0);
+    gl_Position = proj * viewPos;
+    vWorldRel = worldPos;
+
+    vec2 baseUV = gridIJ * terrainParams.z;
+    vec2 jUV = (vec2(iCell.xy) + baseUV + 0.5) * terrainParams2.y;
+    vec2 jit = texture(jitterMap, jUV).rg * terrainParams2.x;
+    vUV0 = baseUV + jit;
+    vUV1 = vUV0 * terrainParams.w;
+    vLayer = float(iCell.z);
+    vSimple = float(iCell.w);
+
+    float NdotL = max(0.0, dot(worldNormal, -sunDir.xyz));
+    vec4 litColor;
+    litColor.rgb = emissive.rgb + ambient.rgb * sunEn.x + diffuse.rgb * NdotL * sunEn.x;
+    litColor.a   = emissive.a   + ambient.a   * sunEn.x + diffuse.a   * NdotL * sunEn.x;
+
+    const float MIN_INSIDE2 = 0.95677279;
+    const float MAX_INSIDE2 = 0.98063081;
+    float nightLocal = (sunEn.x > 0.5) ? sunEn.y : 1.0;
+    // Fetch the number of lights influencing this cell
+    uint nLights = texelFetch(lightSetTable, int(iLightSet)).r;
+    for (uint i = 0u; i < nLights; i++)
+    {
+        // Fetch the index of the light from the lightSetTable
+        uint idx = texelFetch(lightSetTable, int(iLightSet + 1u + i)).r;
+        vec4 lpos = localLights.pos[idx];
+        vec4 ldir = localLights.dir[idx];
+        vec3 toLight = lpos.xyz - worldPos;
+        float size2 = dot(toLight, toLight);
+        float startAtten2 = lpos.w * lpos.w;
+        float endAtten2 = startAtten2 * 100.0;
+        if (size2 >= endAtten2)
+        {
+            continue;
+        }
+
+        float cone = 1.0;
+        if (ldir.w > 0.5)
+        {
+            float inside = -dot(toLight, ldir.xyz);
+            if (inside <= 0.0)
+            {
+                continue;
+            }
+            float cos2 = (inside * inside) / size2;
+            if (cos2 < MIN_INSIDE2)
+            {
+                continue;
+            }
+            cone = clamp((cos2 - MIN_INSIDE2) / (MAX_INSIDE2 - MIN_INSIDE2), 0.0, 1.0);
+        }
+
+        vec3 ldif = localLights.diffuse[idx].rgb * matDiffuseRaw.rgb * nightLocal;
+        vec3 lamb = localLights.ambient[idx].rgb * matAmbientRaw.rgb * nightLocal;
+        float atten = (size2 >= startAtten2) ? (startAtten2 / size2) : 1.0;
+        float cosFi = dot(toLight, worldNormal);
+        vec3 contrib;
+        if (cosFi > 0.0)
+        {
+            cosFi *= inversesqrt(size2);
+            contrib = (ldif * cosFi + lamb) * (atten * cone);
+        }
+        else
+        {
+            contrib = lamb * atten;
+        }
+        litColor.rgb += contrib;
+    }
+
+    vColor = clamp(litColor, 0.0, 1.0);
+
+    vec3 spec = vec3(0.0);
+    if (specEn.x > 0.5 && sunEn.x > 0.0) {
+        vec3 viewDir = normalize(camPos.xyz - worldPos);
+        vec3 halfVec = normalize(-sunDir.xyz + viewDir);
+        float NdotH = max(0.0, dot(worldNormal, halfVec));
+        float specPow = max(1.0, specular.w);
+        spec = specular.rgb * pow(NdotH, specPow) * sunEn.x;
+    }
+    vSpecColor = vec4(clamp(spec, 0.0, 1.0), 0.0);
+
+    float dist = length(worldPos - camPos.xyz);
+    float fogFactor = clamp(1.0 - (dist - fogParam.x) * fogParam.y, 0.0, 1.0);
+    vFogTC = (fogParam.z > 0.5) ? fogFactor : 1.0;
+}
+)";
+
+// PSTerrain - PSDetail with a sampler2DArray surface texture
+static const char s_psTerrainGLSL[] = R"(#version 330 core
+layout(std140) uniform PSConstants {
+    vec4 fogColor;
+    vec4 alphaRef;
+    vec4 shadowCtl;
+    vec4 constColor;
+    vec4 _pad4;
+    vec4 _pad5;
+    vec4 _pad6;
+    vec4 rgbEyeCoef;
+    mat4 cascadeVP[4];
+    vec4 cascadeSplits;
+    vec4 cascadeCtl;
+    vec4 camFwd;
+};
+
+uniform sampler2DArray tex0;     // surface array, clamp sampler (unit 0)
+uniform sampler2DArray tex0Wrap; // same array, repeat sampler (unit 5)
+uniform sampler2D tex1;
+
+in vec4 vColor;
+in vec4 vSpecColor;
+in vec2 vUV0;
+in vec2 vUV1;
+in float vFogTC;
+flat in float vLayer;
+flat in float vSimple;
+
+uniform sampler2DArray shadowMap;
+in vec3 vWorldRel;
+
+out vec4 fragColor;
+
+void main() {
+    // Tileable (simple) cells sample with repeat sampler, others with clamp sampler
+    vec3 uvl = vec3(vUV0, vLayer);
+    vec4 t0 = (vSimple > 0.5) ? texture(tex0Wrap, uvl) : texture(tex0, uvl);
+    vec4 t1 = texture(tex1, vUV1);
+    vec4 r0 = vColor * t0;
+    r0 *= constColor;
+    r0.rgb *= t1.a * 2.0;
+    r0 += vSpecColor;
+
+    if (shadowCtl.x > 0.5) {
+        int nC = int(cascadeCtl.x);
+        int omniN = int(cascadeCtl.w);
+        float eyeDepth = dot(vWorldRel, camFwd.xyz);
+        float dist3D = length(vWorldRel);
+        int ci = nC;
+        for (int i = 0; i < 4; ++i) {
+            if (i >= nC) break;
+            float metric = (i < omniN) ? dist3D : eyeDepth;
+            if (metric <= cascadeSplits[i]) { ci = i; break; }
+        }
+        if (ci < nC) {
+            float ts = shadowCtl.w;
+            float prevEdge = (ci > 0) ? cascadeSplits[ci - 1] : 0.0;
+            float ciMetric = (ci < omniN) ? dist3D : eyeDepth;
+            float band = (cascadeSplits[ci] - prevEdge) * 0.15;
+            float bw = (ci + 1 < nC) ? clamp((ciMetric - (cascadeSplits[ci] - band)) / max(band, 0.001), 0.0, 1.0) : 0.0;
+            float litSum = 0.0;
+            float wSum = 0.0;
+            for (int p = 0; p < 4; ++p) {
+                int c = ci + p;
+                if (c >= nC) break;
+                float w = (p == 0) ? (1.0 - bw) : ((wSum <= 0.0) ? 1.0 : ((p == 1) ? bw : 0.0));
+                if (w <= 0.0) continue;
+                vec4 cp = cascadeVP[c] * vec4(vWorldRel, 1.0);
+                vec3 sc = cp.xyz / cp.w;
+                vec2 suv = sc.xy * 0.5 + 0.5;
+                if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && sc.z > 0.0 && sc.z < 1.0) {
+                    float bias = cascadeCtl.z * float(c + 1) * float(c + 1);
+                    float lit = 0.0;
+                    for (int dyi = -1; dyi <= 1; ++dyi)
+                        for (int dxi = -1; dxi <= 1; ++dxi)
+                            lit += (sc.z - bias > texture(shadowMap, vec3(suv + vec2(float(dxi), float(dyi)) * ts, float(c))).r) ? 0.0 : 1.0;
+                    litSum += w * (lit / 9.0);
+                    wSum += w;
+                }
+            }
+            if (wSum > 0.0) {
+                float lit = litSum / wSum;
+                float lastSplit = cascadeSplits[nC - 1];
+                float fade = clamp((lastSplit - eyeDepth) / max(cascadeCtl.y, 0.001), 0.0, 1.0);
+                float strength = (1.0 - lit) * fade * clamp(vFogTC, 0.0, 1.0);
+                r0.rgb *= mix(1.0, shadowCtl.z, strength);
+            }
+        }
+    }
+
+    if (alphaRef.z > 0.5) {
+        float cov = clamp((r0.a - alphaRef.x) / max(fwidth(r0.a), 1e-4) + 0.5, 0.0, 1.0);
+        if (cov <= 0.0) discard;
+        r0.a = cov;
+    } else if (r0.a - alphaRef.x * alphaRef.y < 0.0) discard;
+
+    float luminance = clamp(dot(r0.rgb, rgbEyeCoef.rgb), 0.0, 1.0);
+    float nightBlend = clamp(luminance + rgbEyeCoef.a, 0.0, 1.0);
+    r0.rgb = mix(vec3(luminance), r0.rgb, nightBlend);
+
+    r0.rgb = mix(fogColor.rgb, r0.rgb, vFogTC);
+    fragColor = alphaRef.w > 0.5 ? vec4(1.0, 0.0, 0.0, 1.0) : r0;
+}
+)";
+
 // PSGrass — grass blending with alpha from coefficients
 static const char s_psGrassGLSL[] = R"(#version 330 core
 layout(std140) uniform PSConstants {
@@ -913,12 +1186,14 @@ void EngineGL33::UploadPSConstant(int reg, const float* data)
 static GLuint s_vsScreenObj = 0;
 static GLuint s_vsTransformObj = 0;
 static GLuint s_vsShadowObj = 0;
+static GLuint s_vsTerrainObj = 0;
 
 void EngineGL33::InitVertexShaders()
 {
     s_vsScreenObj = CompileGLShader(GL_VERTEX_SHADER, s_vsScreenGLSL, "vsScreen");
     s_vsTransformObj = CompileGLShader(GL_VERTEX_SHADER, s_vsTransformGLSL, "vsTransform");
     s_vsShadowObj = CompileGLShader(GL_VERTEX_SHADER, s_vsShadowGLSL, "vsShadow");
+    s_vsTerrainObj = CompileGLShader(GL_VERTEX_SHADER, s_vsTerrainGLSL, "vsTerrain");
 
     // Bind the VS UBO to base 0 once; subsequent FlushVSConstants only
     // update buffer contents.
@@ -968,6 +1243,11 @@ void EngineGL33::DeinitVertexShaders()
     {
         glDeleteShader(s_vsShadowObj);
         s_vsShadowObj = 0;
+    }
+    if (s_vsTerrainObj)
+    {
+        glDeleteShader(s_vsTerrainObj);
+        s_vsTerrainObj = 0;
     }
     if (s_vsUBO)
     {
@@ -1057,6 +1337,7 @@ PassState EngineGL33::BuildPassState(const FrameState& frame, PassId passId)
     switch (passId)
     {
         case PassId::Opaque:
+        case PassId::Terrain:
             ps.depthMode = DepthModeV4::Normal;
             ps.blendMode = BlendModeV4::Opaque;
             ps.fogMode = FogMode::Enabled;
@@ -1305,23 +1586,45 @@ void EngineGL33::UploadVSMaterialConstants(const TLMaterial& mat, bool sunEnable
 // Upload the active local (point) lights for per-vertex night illumination.
 // Positions are stored camera-relative to match the VS world transform, which
 // subtracts the camera position (PrepareMeshTLImpl camera-relative rendering).
-void EngineGL33::UploadLocalLights(const LightList& aLights)
+void EngineGL33::BuildLocalLightMap(const LightList& aLights)
 {
-    const float* camPos = _frameState.cameraPos;
     _localLightIndices.clear();
     int n = 0;
     for (int i = 0; i < aLights.Size() && n < kMaxLocalLights; i++)
     {
         Light* light = aLights[i];
         if (!light)
+        {
             continue;
+        }
         LightDescription desc;
         light->GetDescription(desc);
-        bool isSpot = desc.type == LTSpotLight;
-        if (desc.type != LTPoint && !isSpot)
+        if (desc.type != LTPoint && desc.type != LTSpotLight)
+        {
             continue;
+        }
+        _localLightIndices[light] = n++;
+    }
+}
 
-        _localLightIndices[light] = n;
+void EngineGL33::UploadLocalLights(const LightList& aLights)
+{
+    BuildLocalLightMap(aLights);
+
+    const float* camPos = _frameState.cameraPos;
+    for (int i = 0; i < aLights.Size(); i++)
+    {
+        Light* light = aLights[i];
+        if (!light)
+            continue;
+        auto it = _localLightIndices.find(light);
+        if (it == _localLightIndices.end())
+            continue;
+        const int n = it->second;
+
+        LightDescription desc;
+        light->GetDescription(desc);
+        const bool isSpot = desc.type == LTSpotLight;
 
         float* p = s_localLights + (1 + n) * 4;
         p[0] = desc.pos.X() - camPos[0];
@@ -1348,10 +1651,8 @@ void EngineGL33::UploadLocalLights(const LightList& aLights)
         dir[1] = beam.Y();
         dir[2] = beam.Z();
         dir[3] = isSpot ? 1.0f : 0.0f;
-
-        n++;
     }
-    s_localLights[0] = static_cast<float>(n);
+    s_localLights[0] = static_cast<float>(_localLightIndices.size());
     if (!s_localLightsUBO)
         return;
     GL33Bind::UniformBuffer(s_localLightsUBO);
@@ -1588,6 +1889,8 @@ uint64_t HashShaderSources()
     add(s_psWaterGLSL);
     add(s_psFlatGLSL);
     add(s_psShadowGLSL);
+    add(s_vsTerrainGLSL);
+    add(s_psTerrainGLSL);
     return h;
 }
 
@@ -1723,6 +2026,7 @@ void EngineGL33::InitPixelShaders()
         const char* name;
     };
     PSCompileInfo psInfos[] = {
+        {PSTerrain, s_psTerrainGLSL, "psTerrain"},
         {PSNormal, s_psNormalGLSL, "psNormal"}, {PSDetail, s_psDetailGLSL, "psDetail"},
         {PSGrass, s_psGrassGLSL, "psGrass"},    {PSWater, s_psWaterGLSL, "psWater"},
         {PSFlat, s_psFlatGLSL, "psFlat"},       {PSShadow, s_psShadowGLSL, "psShadow"},
@@ -1780,11 +2084,20 @@ void EngineGL33::InitPixelShaders()
         GLint locHeight = glGetUniformLocation(prog, "heightMap");
         if (locHeight >= 0)
             glUniform1i(locHeight, 3); // terrain height map on texture unit 3
+        GLint locJitter = glGetUniformLocation(prog, "jitterMap");
+        if (locJitter >= 0)
+            glUniform1i(locJitter, 4); // terrain UV jitter map on texture unit 4
+        GLint locWrap = glGetUniformLocation(prog, "tex0Wrap");
+        if (locWrap >= 0)
+            glUniform1i(locWrap, 5); // terrain surface array again, repeat sampler
+        GLint locLightSet = glGetUniformLocation(prog, "lightSetTable");
+        if (locLightSet >= 0)
+            glUniform1i(locLightSet, 6); // terrain per-segment light-set buffer texture on unit 6
         glUseProgram(0);
     };
 
     // Build combined programs: one per (vs x specular x mode x shader) = 2*2*2*5 = 40
-    GLuint vsObjs[NVertexShaders] = {s_vsScreenObj, s_vsTransformObj, s_vsShadowObj};
+    GLuint vsObjs[NVertexShaders] = {s_vsScreenObj, s_vsTransformObj, s_vsShadowObj, s_vsTerrainObj};
     for (int v = 0; v < NVertexShaders; v++)
     {
         if (!vsObjs[v])
@@ -1795,6 +2108,10 @@ void EngineGL33::InitPixelShaders()
             {
                 for (int i = 0; i < NPixelShaders; i++)
                 {
+                    // VSTerrain pairs only with PSTerrain and vice versa
+                    if ((v == VSTerrain) != (i == PSTerrain))
+                        continue;
+
                     const uint32_t key = (static_cast<uint32_t>(v) << 24) | (static_cast<uint32_t>(s) << 16) |
                                          (static_cast<uint32_t>(m) << 8) | static_cast<uint32_t>(i);
                     GLuint prog = 0;

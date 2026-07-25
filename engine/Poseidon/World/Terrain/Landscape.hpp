@@ -710,6 +710,9 @@ class Landscape: public SerializeClass
 		const LandBegEnd &bigRect, Scene &scene, const GroundLayerInfo &layer
 	);
 
+	void PrepareInstancedTerrain();
+	void DrawGroundInstanced(const LandBegEnd &bigRect, Scene &scene);
+
 	void SurfacePlane( Plane &plane, float x, float z ) const;
 
 	// simple inteface

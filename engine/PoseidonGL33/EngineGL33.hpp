@@ -70,6 +70,7 @@ enum PixelShaderID
     PSWater,
     PSFlat,
     PSShadow, // unlit cutout: constant black + alpha
+    PSTerrain,
     NPixelShaders,
     PSNone = NPixelShaders
 };
@@ -103,6 +104,7 @@ enum VertexShaderID
     VSScreen,
     VSTransform,
     VSShadow, // unlit transform, shadow path
+    VSTerrain,
     NVertexShaders,
     VSNone = NVertexShaders
 };
@@ -392,7 +394,15 @@ class EngineGL33 : public Engine
     bool _pointSampling;
     bool _enableReorder;
 
-    // GL sampler objects: 8 combos of point(4) | clampU(1) | clampV(2)
+    enum SamplerIndex : unsigned int
+    {
+        SamplerRepeat = 0, // linear, wrap both axes (the default)
+        SamplerClampU = 1,
+        SamplerClampV = 2,
+        SamplerClamp = SamplerClampU | SamplerClampV, // linear, clamp both axes
+        SamplerPoint = 4,
+    };
+    // GL sampler objects, indexed by bits defined in SamplerIndex
     unsigned int _samplerObjects[8] = {};
     void CreateSamplerStates();
     void DestroySamplerStates();
@@ -601,6 +611,12 @@ class EngineGL33 : public Engine
     void FinishDraw() override;
     void NextFrame() override;
     void SetTerrainHeightmap(const float* heights, int width, int height, float invGrid) override;
+    void PrepareTerrain(const TerrainSetup& setup) override;
+    void DrawTerrain(const LandCell* cells, size_t count, const TLMaterial& mat) override;
+    void BeginTerrain(const LightList& lights) override;
+    unsigned AddTerrainLightSet(const LightList& lights) override;
+    void FreeTerrainInstanced();
+    void CreateTerrainBatches(struct TerrainInstancedGL33& t, int nTextures, const TerrainTexture* textures);
     bool LandClipInVS() const override;
     void SetLandClipParams(float enable, Vector3Par boundingCenter) override;
     void DrawTestPattern(const char* name) override;
@@ -698,6 +714,7 @@ class EngineGL33 : public Engine
     unsigned int _shadowMapTex = 0;                // GL depth texture ARRAY to sample
     int _shadowMapRes = 0;                         // its resolution
     unsigned int _heightMapTex = 0;                // GL R32F terrain height texture
+    struct TerrainInstancedGL33* _terrainInst = nullptr; // instanced terrain state
     int _shadowCascades = 0;                       // active cascade count this frame
     int _shadowOmniCount = 0;                      // leading omni (camera-sphere) tiers — distance-selected
     float _shadowMapVP[kShadowCascades * 16] = {}; // per-cascade light view-projections (column-major)
@@ -948,7 +965,8 @@ class EngineGL33 : public Engine
     PassState BuildPassState(const FrameState& frame, Poseidon::PassId passId);
     void UploadVSWorldMatrix(const float worldMatrix[16]);
     void UploadVSMaterialConstants(const Poseidon::TLMaterial& mat, bool sunEnabled);
-    void UploadLocalLights(const LightList& aLights) override;
+    void UploadLocalLights(const LightList& aLights);
+    void BuildLocalLightMap(const LightList& aLights);
     int ResolveLocalLightIndices(const LightList& lights, int* out) const;
     void SetLocalLightIndices(const int* indices, int count);
     void PackInstanceLights(int slot, const LightList& lights);

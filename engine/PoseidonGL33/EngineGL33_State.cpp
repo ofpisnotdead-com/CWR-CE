@@ -24,9 +24,9 @@ void EngineGL33::CreateSamplerStates()
     const float aniso = maxAniso < 16.0f ? maxAniso : 16.0f;
     for (int i = 0; i < 8; i++)
     {
-        bool point = (i & 4) != 0;
-        bool clampU = (i & 1) != 0;
-        bool clampV = (i & 2) != 0;
+        bool point = (i & SamplerPoint) != 0;
+        bool clampU = (i & SamplerClampU) != 0;
+        bool clampV = (i & SamplerClampV) != 0;
 
         GLenum minFilter = point ? GL_NEAREST_MIPMAP_NEAREST : GL_LINEAR_MIPMAP_LINEAR;
         GLenum magFilter = point ? GL_NEAREST : GL_LINEAR;
@@ -53,7 +53,7 @@ void EngineGL33::DestroySamplerStates()
 
 void EngineGL33::ApplySamplerState()
 {
-    int bits = (_pointSampling ? 4 : 0) | (_lastClampU ? 1 : 0) | (_lastClampV ? 2 : 0);
+    int bits = (_pointSampling ? SamplerPoint : 0) | (_lastClampU ? SamplerClampU : 0) | (_lastClampV ? SamplerClampV : 0);
     // Per-draw sampler routes through `BindSlot0` which physically
     // can only bind slot 0 — slot 1 (detail/grass/specular) keeps
     // the default linear-wrap sampler set during
