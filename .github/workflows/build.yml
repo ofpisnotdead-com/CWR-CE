@@ -85,7 +85,7 @@ jobs:
       CWR_PRESET: macos-${{ matrix.arch }}-clang-rwdi
       CWR_VCPKG_TRIPLET: ${{ matrix.arch }}-macos-clang
       CWR_BUILD_DIR: build/macos-${{ matrix.arch }}-clang-rwdi
-      CWR_CTEST_EXCLUDE: 'PoseidonTests - OAL -|PoseidonFoundationTests - potime - Common usage patterns|PoseidonFoundationTests - potime - Platform consistency|PoseidonFoundationTests - potime - Poseidon - Foundation - getSystemTime timing accuracy|PoseidonFoundationTests - potime - SLEEP_MS macro'
+      CWR_CTEST_EXCLUDE: 'PoseidonTests - OAL -|PoseidonFoundationTests - potime - Platform consistency|PoseidonFoundationTests - potime - Poseidon - Foundation - getSystemTime timing accuracy|PoseidonFoundationTests - potime - SLEEP_MS macro'
       CWR_DIST_DIR: dist/${{ matrix.arch }}-macos-rwdi
       CWR_ARTIFACT_PREFIX: macOS-${{ matrix.arch }}-rwdi
 
