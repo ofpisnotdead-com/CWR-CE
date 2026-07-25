@@ -152,7 +152,7 @@ bool LooksLikeMod(const std::string& dir)
     // Classic engine roots plus the player-content roots the browsers scan additively; matched
     // case-insensitively, so the canonical names here recognize any casing on disk.
     constexpr const char* kModContentDirs[] = {"AddOns",     "Dta",       "Bin",         "Campaigns", "Missions",
-                                               "MPMissions", "Templates", "SPTemplates", "Anims"};
+                                               "MPMissions", "Templates", "SPTemplates", "Anims",     "Fonts"};
     std::error_code ec;
     for (fs::directory_iterator it(dir, ec), end; it != end; it.increment(ec))
     {

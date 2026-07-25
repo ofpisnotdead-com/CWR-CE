@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 // FreeType TTF mapping for an engine font family.  Each prefix matches a
 // family of names like `tahomaB24`, `cwrBodyB36`, etc.; the trailing digits
 // are parsed at draw time for pixel size.
@@ -34,6 +36,10 @@ struct FreeTypeFontMapping
 // Active mapping lookup.  Returns nullptr if no prefix matches.
 // `lowName` must be already lowercased (`strlwr` applied).
 const FreeTypeFontMapping* FindFontMapping(const char* lowName);
+
+// Resolve a mapping's ttfPath (e.g. "Fonts\cwr_body.ttf") to the file to open.
+// An enabled mod's copy of that path wins over the base file, "" if neither exists.
+std::string ResolveMappedFontPath(const char* ttfPath);
 
 // Refresh every cached Font::_ftRenderer pointer against the mapping table.
 // Call after mutating the table (e.g. via SetFontMappingTuning) — old renderers

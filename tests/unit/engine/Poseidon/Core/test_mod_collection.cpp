@@ -49,6 +49,7 @@ TEST_CASE("LooksLikeMod recognizes mod markers, ignores bare folders", "[mods][c
     MakeModFolder(root, "withTemplates", "Templates");
     MakeModFolder(root, "withSPTemplates", "SPTemplates");
     MakeModFolder(root, "withAnims", "anims");
+    MakeModFolder(root, "withFonts", "Fonts"); // a font-only pack is a valid mod on its own
     std::filesystem::create_directories(root / "manifest");
     std::ofstream(root / "manifest" / "mod.json", std::ios::binary) << "{}";
     std::filesystem::create_directories(root / "empty");
@@ -63,6 +64,7 @@ TEST_CASE("LooksLikeMod recognizes mod markers, ignores bare folders", "[mods][c
     CHECK(LooksLikeMod((root / "withTemplates").string()));
     CHECK(LooksLikeMod((root / "withSPTemplates").string()));
     CHECK(LooksLikeMod((root / "withAnims").string()));
+    CHECK(LooksLikeMod((root / "withFonts").string()));
     CHECK(LooksLikeMod((root / "manifest").string()));
     CHECK_FALSE(LooksLikeMod((root / "empty").string())); // no marker
     CHECK_FALSE(LooksLikeMod((root / "junk").string()));  // stray file is not a marker

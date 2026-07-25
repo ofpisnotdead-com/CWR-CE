@@ -22,7 +22,7 @@ constexpr int kCanonicalSlot = 0;
 // Mirrors `font.cpp`'s s_slot0 table.  The unit test
 // `FontSystem matches font.cpp's slot-0 mapping` pins the two together.
 const char* const kSlot0FontPaths[] = {
-    "fonts\\cwr_title.ttf", "fonts\\cwr_body.ttf", "fonts\\cwr_mono.ttf", "fonts\\cwr_serif.ttf", "fonts\\cwr_hand.ttf",
+    "Fonts\\cwr_title.ttf", "Fonts\\cwr_body.ttf", "Fonts\\cwr_mono.ttf", "Fonts\\cwr_serif.ttf", "Fonts\\cwr_hand.ttf",
 };
 } // namespace
 

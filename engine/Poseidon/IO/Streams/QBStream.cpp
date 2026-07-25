@@ -109,6 +109,29 @@ std::string ResolveModRootAlias(const char* name)
     return context.resolved;
 }
 
+struct ModOverrideContext
+{
+    std::string rel;
+    std::string resolved;
+};
+
+bool ResolveModOverrideCallback(RStringB dir, void* opaque)
+{
+    if (dir.GetLength() == 0)
+        return false; // base game: served by the normal loose open, not treated as an override
+
+    auto* context = static_cast<ModOverrideContext*>(opaque);
+    std::string candidate = (const char*)dir;
+    if (!candidate.empty() && candidate.back() != '/' && candidate.back() != '\\')
+        candidate += "/";
+    candidate += context->rel;
+    if (!QIFStream::FileExists(candidate.c_str()))
+        return false;
+
+    context->resolved = std::move(candidate);
+    return true;
+}
+
 // Collapse "<seg>/.." and strip a leading "addons" so a root-relative intro path
 // ("anims/..\addons\<island>\intro.<world>\...") maps into island <island>'s bank; "" otherwise.
 std::string NormalizeAddonBankPath(const char* name)
@@ -149,6 +172,21 @@ std::string NormalizeAddonBankPath(const char* name)
     return out;
 }
 } // namespace
+
+std::string ResolveModOverride(const char* relPath)
+{
+    if (!relPath || !*relPath)
+        return {};
+
+    ModOverrideContext context;
+    context.rel = relPath;
+    for (char& c : context.rel)
+        if (c == '\\')
+            c = '/';
+
+    ModSystem::EnumDirectories(ResolveModOverrideCallback, &context);
+    return context.resolved;
+}
 
 QFBank::QFBank()
 {
