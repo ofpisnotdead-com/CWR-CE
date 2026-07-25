@@ -14,34 +14,24 @@ using namespace Poseidon;
 #undef GetObject
 #endif
 
-// OPRW magic used by serialized landscape binaries
-#ifdef _MSC_VER
-static const int OPRW_MAGIC = 'WRPO';
-#else
-static const int OPRW_MAGIC = StrToInt("OPRW");
-#endif
-
-TEST_CASE("WRP: synthetic placeholder is rejected as non-OPRW", "[Formats][WRP]")
-{
-    const char* path = GET_FIXTURE("wrp/test_world.wrp");
-
-    QIFStream file;
-    file.open(path);
-    REQUIRE(!file.fail());
-
-    int magic = 0;
-    file.read(&magic, sizeof(magic));
-    REQUIRE(!file.fail());
-    REQUIRE(magic == OPRW_MAGIC);
-}
-
-TEST_CASE("WRP: WrpReader rejects synthetic placeholder terrain", "[Formats][WRP]")
+TEST_CASE("WRP: WrpReader loads sparse object IDs from fixture terrain", "[Formats][WRP]")
 {
     const char* path = GET_FIXTURE("wrp/test_world.wrp");
 
     WrpReader reader;
-    REQUIRE_FALSE(reader.Load(path));
-    REQUIRE(reader.GetError() != nullptr);
+    REQUIRE(reader.Load(path));
+    REQUIRE(reader.GetFormat() == WrpReader::RVW_V4);
+    REQUIRE(reader.GetGridX() == 4);
+    REQUIRE(reader.GetGridZ() == 4);
+    REQUIRE(reader.GetHeightmapSize() == 16);
+    REQUIRE(reader.GetTextureCount() == 1);
+    REQUIRE(reader.GetObjectCount() == 3);
+    CHECK(reader.GetObject(0).id == 17);
+    CHECK(reader.GetObject(1).id == 2);
+    CHECK(reader.GetObject(2).id == 9);
+    CHECK(std::string(reader.GetObject(0).name) == R"(data3d\dummy17.p3d)");
+    CHECK(std::string(reader.GetObject(1).name) == R"(data3d\dummy2.p3d)");
+    CHECK(std::string(reader.GetObject(2).name) == R"(data3d\dummy9.p3d)");
 }
 
 TEST_CASE("WRP: WrpReader loads large OPRW with objects", "[Formats][WRP][GameData]")
@@ -118,7 +108,7 @@ static std::vector<char> BuildRvw4Blob()
     for (int i = 0; i < 4 * 4; i++)
         put(&cell, sizeof(cell)); // texture indices
 
-    char texName[32] = "landtext\mo.pac";
+    char texName[32] = R"(landtext\mo.pac)";
     put(texName, sizeof(texName));
     char emptyTex[32] = {};
     for (int i = 1; i < 512; i++)
@@ -130,7 +120,7 @@ static std::vector<char> BuildRvw4Blob()
         put(matrix, sizeof(matrix));
         put(&id, sizeof(id));
         char name[76] = {};
-        snprintf(name, sizeof(name), "data3d\dummy%d.p3d", id);
+        snprintf(name, sizeof(name), R"(data3d\dummy%d.p3d)", id);
         put(name, sizeof(name));
     }
     return blob;
@@ -155,5 +145,5 @@ TEST_CASE("WRP: RVW re-parse after a probe-to-EOF and seekg sees all objects", "
     REQUIRE(fallback.Load(s));
     REQUIRE(fallback.GetFormat() == WrpReader::RVW_V4);
     REQUIRE(fallback.GetObjectCount() == 2);
-    REQUIRE(std::string((const char*)fallback.GetObject(0).name) == "data3d\dummy0.p3d");
+    REQUIRE(std::string((const char*)fallback.GetObject(0).name) == R"(data3d\dummy0.p3d)");
 }

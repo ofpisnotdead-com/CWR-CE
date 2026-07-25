@@ -1925,7 +1925,7 @@ void Landscape::RebuildIDCache()
                     _objectIds[id] = obj;
                     if (id > maxId)
                     {
-                        id = maxId;
+                        maxId = id;
                     }
                 }
                 else

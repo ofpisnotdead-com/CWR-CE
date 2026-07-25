@@ -267,6 +267,7 @@ list(APPEND POSEIDON_TEST_SOURCES
 
     # World tests (batch-08)
     World/test_terrain.cpp
+    World/test_landscape_object_ids.cpp
     World/test_occlusion_contour.cpp
     World/test_occlusion_sphere_edge.cpp
     World/test_landscape_layout.cpp
