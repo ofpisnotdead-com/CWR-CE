@@ -11,6 +11,7 @@
 #include <Poseidon/Core/SaveVersion.hpp>
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <Poseidon/Core/Global.hpp>
+#include <Poseidon/UI/OptionsUICommon.hpp>
 
 #include <fstream>
 #include <ctime>
@@ -848,4 +849,14 @@ TEST_CASE("Addon metadata banks load through GFileBanks and QIFStreamB",
     }
 
     GUseFileBanks = origUseFileBanks;
+}
+
+TEST_CASE("GetCampaignSaveDirectory resolves a non-campaign mission to the Tmp save dir",
+          "[game][gameStateExt][savegame]")
+{
+    // An empty campaign (multiplayer or standalone mission) resolves to the
+    // created Tmp save directory.
+    const RString dir = GetCampaignSaveDirectory(RString(""));
+    CHECK(dir == GetTmpSaveDirectory());
+    CHECK(std::filesystem::exists(std::filesystem::path(static_cast<const char*>(dir))));
 }

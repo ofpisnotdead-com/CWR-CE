@@ -249,6 +249,7 @@ RString GetCampaignSaveDirectory(RString campaign)
 {
     if (campaign.GetLength() == 0)
     {
+        return GetTmpSaveDirectory();
     }
     RString dir = GetUserDirectory() + RString("Saved/campaigns/") + campaign + RString("/");
     return dir;
