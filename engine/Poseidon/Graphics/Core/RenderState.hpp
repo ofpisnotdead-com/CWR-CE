@@ -53,6 +53,7 @@ enum class FogMode
 enum class PassId
 {
     Opaque,
+    Terrain,
     Cutout,
     Transparent,
     Shadow,
@@ -72,6 +73,8 @@ constexpr const char* PassIdName(PassId id)
     {
         case PassId::Opaque:
             return "Opaque";
+        case PassId::Terrain:
+            return "Terrain";
         case PassId::Cutout:
             return "Cutout";
         case PassId::Transparent:

@@ -18,6 +18,7 @@
 #include <Poseidon/World/Terrain/LandscapeShared.hpp>
 
 #include <mutex>
+#include <vector>
 #include <float.h>
 #include <cmath>
 #include <Poseidon/Foundation/Common/FltOpts.hpp>
@@ -36,6 +37,7 @@
 #include <Poseidon/Foundation/Types/LLinks.hpp>
 #include <Poseidon/Foundation/Types/Pointers.hpp>
 #include <Poseidon/Foundation/platform.hpp>
+#include <Poseidon/Graphics/Rendering/Lighting/Material.hpp>
 #include <Random/randomGen.hpp>
 
 // LandCache::Fill generates segments on multiple TaskPool threads. Each segment
@@ -1265,6 +1267,173 @@ GrassMode GrassModes[] = {
 
 const int NGrassModes = sizeof(GrassModes) / sizeof(*GrassModes);
 
+// Toggles between instanced and mesh-based / baked terrain rendering
+bool GGl33TerrainInstanced = false;
+
+static std::vector<Engine::LandCell> g_landCells;
+// Is the current terrain state valid for instanced rendering?
+static bool g_instSetupValid = false;
+
+namespace
+{
+struct VisibleSegment
+{
+    int xBeg, zBeg;
+    Vector3 center;
+    float radius;
+    unsigned lightSet;
+};
+} // namespace
+
+static std::vector<VisibleSegment> g_visibleSegments;
+
+void Landscape::PrepareInstancedTerrain()
+{
+    if (g_instSetupValid)
+    {
+        return;
+    }
+
+    const int subdiv = 1 << (_terrainRangeLog - _landRangeLog);
+    const int nTex = _texture.Size();
+
+    std::vector<Engine::TerrainTexture> textures(nTex);
+    for (int i = 0; i < nTex; i++)
+    {
+        textures[i].texture = _texture[i];
+        textures[i].simple = TextureIsSimple(i);
+    }
+
+    // Apply per-vertex randomized UV jitter to make texture tiling less obvious
+    const size_t jw = static_cast<size_t>(_landRange);
+    std::vector<float> jitter(jw * jw * 2, 0.0f);
+    for (size_t z = 0; z < jw; z++)
+    {
+        for (size_t x = 0; x < jw; x++)
+        {
+            const RandomInfo& r = _random(x, z);
+            jitter[(z * jw + x) * 2 + 0] = static_cast<float>(r.uOff);
+            jitter[(z * jw + x) * 2 + 1] = static_cast<float>(r.vOff);
+        }
+    }
+
+    Engine::TerrainSetup setup;
+    setup.nTextures = nTex;
+    setup.textures = textures.data();
+    setup.subdivCount = subdiv;
+    setup.landGrid = _landGrid;
+    setup.jitter = jitter.data();
+    setup.jitterW = jw;
+    setup.jitterH = jw;
+    _engine->PrepareTerrain(setup);
+
+    g_instSetupValid = true;
+}
+
+// Gets the material used for instanced terrain rendering.
+// Has to be rebuilt each frame, because Combine reads current eye accommodation.
+static TLMaterial InstancedTerrainMaterial()
+{
+    TLMaterial base;
+    GAnimatorDefault.GetMaterial(base, 0);
+    Ref<TexMaterial> tm = GTexMaterialBank.New("#Terrain");
+    TLMaterial mat = base;
+    if (tm)
+    {
+        tm->Combine(mat, base);
+    }
+    return mat;
+}
+
+void Landscape::DrawGroundInstanced(const LandBegEnd& bigRect, Scene& scene)
+{
+    // Ensure terrain setup is up to date before cull + render
+    PrepareInstancedTerrain();
+
+    Camera* cam = scene.GetCamera();
+    const int subdiv = 1 << (_terrainRangeLog - _landRangeLog);
+    const float halfSegment = LandSegmentSize * _landGrid * 0.5f;
+    auto clampT = [this](int v) { return v < 0 ? 0 : (v >= _terrainRange ? _terrainRange - 1 : v); };
+
+    _engine->BeginTerrain(scene.ActiveLights());
+
+    // 1. Frustum cull 8x8 cell segments
+    g_visibleSegments.clear();
+    for (int x = bigRect.xBeg; x < bigRect.xEnd; x += LandSegmentSize)
+    {
+        for (int z = bigRect.zBeg; z < bigRect.zEnd; z += LandSegmentSize)
+        {
+            // Compute min and max Y for the segment
+            float minY = FLT_MAX, maxY = -FLT_MAX;
+            for (int cz = 0; cz <= LandSegmentSize; cz++)
+            {
+                for (int cx = 0; cx <= LandSegmentSize; cx++)
+                {
+                    float y = GetData(clampT((x + cx) * subdiv), clampT((z + cz) * subdiv));
+                    minY = std::min(minY, y);
+                    maxY = std::max(maxY, y);
+                }
+            }
+
+            VisibleSegment seg;
+            seg.xBeg = x;
+            seg.zBeg = z;
+            seg.center = Vector3((x + LandSegmentSize * 0.5f) * _landGrid, (minY + maxY) * 0.5f,
+                                 (z + LandSegmentSize * 0.5f) * _landGrid);
+            float halfY = (maxY - minY) * 0.5f;
+            seg.radius = sqrtf(halfSegment * halfSegment * 2.0f + halfY * halfY) + _landGrid;
+
+            if (cam->IsClipped(seg.center, seg.radius, 1))
+            {
+                continue;
+            }
+
+            seg.lightSet = 0;
+            g_visibleSegments.push_back(seg);
+        }
+    }
+
+    // 2. Compute per-segment local lights
+    LightList work(true);
+    for (VisibleSegment& seg : g_visibleSegments)
+    {
+        work.Resize(0);
+        const LightList& lights = scene.SelectLights(seg.center, seg.radius, work);
+        seg.lightSet = _engine->AddTerrainLightSet(lights);
+    }
+
+    // 3. Expand and gather each segment's cells into a single vector
+    g_landCells.clear();
+    for (const VisibleSegment& seg : g_visibleSegments)
+    {
+        for (int cz = 0; cz < LandSegmentSize; cz++)
+        {
+            for (int cx = 0; cx < LandSegmentSize; cx++)
+            {
+                const int wx = seg.xBeg + cx, wz = seg.zBeg + cz;
+                int ti = ClippedTextureIndex(wz, wx);
+                if (ti <= 0)
+                {
+                    // Out of range or no texture, skip this cell
+                    continue;
+                }
+                Engine::LandCell cell;
+                cell.cellX = wx;
+                cell.cellZ = wz;
+                cell.texIndex = ti;
+                cell.lightSet = seg.lightSet;
+                g_landCells.push_back(cell);
+            }
+        }
+    }
+
+    // 4. Draw all gathered cells
+    if (!g_landCells.empty())
+    {
+        _engine->DrawTerrain(g_landCells.data(), g_landCells.size(), InstancedTerrainMaterial());
+    }
+}
+
 void Landscape::DrawGround(const LandBegEnd& bigRect, Scene& scene, const GroundLayerInfo& layer)
 {
     auto t0 = TerrainProfile::Now();
@@ -1509,7 +1678,14 @@ void Landscape::DrawRect(Scene& scene, const LandBegEnd& bigRect)
         GEngine->EnableNightEye(nightEye);
 
         GroundLayerInfo opaqueLayer;
-        DrawGround(bigRect, scene, opaqueLayer);
+        if (GGl33TerrainInstanced)
+        {
+            DrawGroundInstanced(bigRect, scene);
+        }
+        else
+        {
+            DrawGround(bigRect, scene, opaqueLayer);
+        }
     }
 #endif
 
@@ -1842,6 +2018,7 @@ void Landscape::FlushHeightmapToRenderer()
     }
     _engine->SetTerrainHeightmap(static_cast<const float*>(_data.RawData()), w, h, _invTerrainGrid);
     _heightmapDirty = false;
+    g_instSetupValid = false;
 }
 
 void Landscape::Draw(Scene& scene)
