@@ -390,10 +390,11 @@ class Engine : public IGraphicsEngine
 
     virtual void PrepareTerrain(const TerrainSetup& setup) {}
     virtual void DrawTerrain(const LandCell* cells, size_t count, const TLMaterial& mat) {}
+    // Draws instanced water for the given cells at seaLevel. surfaceTex is the current animation frame.
+    virtual void DrawWater(const LandCell* cells, size_t count, const TLMaterial& mat, Texture* surfaceTex, float seaLevel) {}
 
-    // Begins the frame's terrain pass: resets per-frame state and builds the light-index
-    // map the following AddTerrainLightSet calls resolve against.
-    virtual void BeginTerrain(const LightList& lights) {}
+    // Begins the frame's ground pass (land + water)
+    virtual void BeginGround(const LightList& lights) {}
     // Adds a terrain light set and returns an opaque handle to it.
     virtual unsigned AddTerrainLightSet(const LightList& lights) { return 0; }
 
