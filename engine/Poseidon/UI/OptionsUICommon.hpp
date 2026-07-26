@@ -24,6 +24,7 @@ RString GetSaveDirectoryMission(RString world, RString mission);
 RString GetTmpSaveDirectory();
 RString CreateSingleMissionBank(RString filename);
 RString ResolveSPMissionSubdir(RString subDir, RString mission);
+void EnsureContinueSave(RString dir);
 void CreatePath(RString path);
 void SetBaseDirectory(RString dir);
 void SetBaseSubdirectory(RString dir);

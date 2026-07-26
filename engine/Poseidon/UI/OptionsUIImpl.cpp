@@ -11,6 +11,7 @@
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
 #include <Poseidon/Core/Progress.hpp>
 #include <Poseidon/IO/Serialization/ParamArchive.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <Poseidon/Core/SaveVersion.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
 #include <Poseidon/Core/ModSystem.hpp>
@@ -491,11 +492,12 @@ void LoadMissionPreviewHtml(C3DHTML* html, RString filename, const MissionLangua
     html->LoadBuffer(filename, combined, false);
 }
 
-static void CheckContinueSave(RString dir)
+void EnsureContinueSave(RString dir)
 {
     RString resume = dir + RString("continue.fps");
     if (QIFStream::FileExists(resume))
     {
+        RepairMissingFilePermissionsUtf8(resume);
         return;
     }
 
@@ -510,23 +512,23 @@ static void CheckContinueSave(RString dir)
             time_t timeAutosave = getFileModTime(autosave);
             if (timeSave >= timeAutosave)
             {
-                ::CopyFile(save, resume, FALSE);
+                CopyFileUtf8(save, resume, false);
             }
             else
             {
-                ::CopyFile(autosave, resume, FALSE);
+                CopyFileUtf8(autosave, resume, false);
             }
         }
         else
         {
-            ::CopyFile(save, resume, FALSE);
+            CopyFileUtf8(save, resume, false);
         }
     }
     else
     {
         if (QIFStream::FileExists(autosave))
         {
-            ::CopyFile(autosave, resume, FALSE);
+            CopyFileUtf8(autosave, resume, false);
         }
     }
 }
@@ -606,7 +608,7 @@ void DisplaySingleMission::OnChangeMission()
 
     // update buttons
     RString dir = GetMissionSaveDirectory(_directory + mission);
-    CheckContinueSave(dir);
+    EnsureContinueSave(dir);
     RString save = dir + RString("continue.fps");
     if (QIFStream::FileExists(save))
     {
@@ -1081,7 +1083,7 @@ void DisplayCampaignLoad::OnChangeCampaign()
             }
         }
         RString dir = GetCampaignSaveDirectory(campaign.campaignName);
-        CheckContinueSave(dir);
+        EnsureContinueSave(dir);
         RString save = dir + RString("continue.fps");
         if (QIFStream::FileExists(save))
         {

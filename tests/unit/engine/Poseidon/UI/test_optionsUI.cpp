@@ -3,12 +3,41 @@
 #include <Poseidon/UI/Options/OptionsShell.hpp>
 #include <Poseidon/UI/OptionsUI.hpp>
 #include <Poseidon/UI/Controls/UIControlsBase.hpp>
+#include <Poseidon/UI/OptionsUICommon.hpp>
 #include <Poseidon/UI/UITestEngine.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <chrono>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <system_error>
 
 using namespace Poseidon;
+namespace fs = std::filesystem;
+
+namespace
+{
+struct TempOptionsDir
+{
+    fs::path root;
+
+    TempOptionsDir()
+    {
+        const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+        root = fs::temp_directory_path() / ("poseidon_options_" + std::to_string(nonce));
+        fs::create_directories(root);
+    }
+
+    ~TempOptionsDir()
+    {
+        std::error_code ec;
+        fs::permissions(root, fs::perms::owner_all, fs::perm_options::add, ec);
+        fs::remove_all(root, ec);
+    }
+};
+} // namespace
+
 TEST_CASE("optionsUI compiles", "[optionsUI][tier3]")
 {
     REQUIRE(sizeof(AbstractOptionsUI) > 0);
@@ -165,4 +194,20 @@ TEST_CASE("OptionsPage cycle membership helper only accepts listed IDCs", "[opti
     CHECK_FALSE(page.ContainsCycleIdc(1105, cycle, 3));
     CHECK_FALSE(page.ContainsCycleIdc(-1, cycle, 3));
     CHECK_FALSE(page.ContainsCycleIdc(1101, nullptr, 3));
+}
+
+TEST_CASE("Continue save selection creates a readable copy", "[optionsUI][savegame]")
+{
+    TempOptionsDir dir;
+    const fs::path save = dir.root / "save.fps";
+    const fs::path continueSave = dir.root / "continue.fps";
+    std::ofstream(save, std::ios::binary) << "saved-world";
+
+    const std::string saveDir = dir.root.string() + "/";
+    EnsureContinueSave(saveDir.c_str());
+
+    std::ifstream input(continueSave, std::ios::binary);
+    std::string payload;
+    input >> payload;
+    CHECK(payload == "saved-world");
 }

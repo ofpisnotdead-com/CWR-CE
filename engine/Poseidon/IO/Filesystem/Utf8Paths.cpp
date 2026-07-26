@@ -1,6 +1,7 @@
 #include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 
 #include <Poseidon/Foundation/platform.hpp>
+#include <Poseidon/IO/Filesystem/FileOps.hpp>
 
 #include <filesystem>
 #include <fstream>
@@ -8,6 +9,8 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <sys/stat.h>
 #endif
 
 namespace Poseidon
@@ -145,6 +148,11 @@ bool CopyFileUtf8(const char* src, const char* dst, bool failIfExists)
     return ::CopyFileW(wideSrc.c_str(), wideDst.c_str(), failIfExists ? TRUE : FALSE) != FALSE;
 }
 
+bool RepairMissingFilePermissionsUtf8(const char* path)
+{
+    return FileExistsUtf8(path);
+}
+
 bool CreateDirectoryUtf8(const char* path)
 {
     const std::wstring widePath = Utf8PathToWide(path);
@@ -257,11 +265,55 @@ std::vector<DirectoryEntryUtf8> ListDirectoryEntriesUtf8(const char* dir)
 
 bool CopyFileUtf8(const char* src, const char* dst, bool failIfExists)
 {
+    if (!src || !src[0] || !dst || !dst[0])
+    {
+        return false;
+    }
+
+    LocalPath(nativeSrc, src);
+    LocalPath(nativeDst, dst);
+    char resolvedSrc[MaxFileName];
+    if (!ResolveFilePath(nativeSrc, resolvedSrc, sizeof(resolvedSrc)))
+    {
+        return false;
+    }
+
+    std::filesystem::path destination(nativeDst);
+    char resolvedDst[MaxFileName];
+    if (ResolveFilePath(nativeDst, resolvedDst, sizeof(resolvedDst)))
+    {
+        destination = resolvedDst;
+    }
+    else if (const std::filesystem::path parent = destination.parent_path();
+             !parent.empty() && ResolveFilePath(parent.string().c_str(), resolvedDst, sizeof(resolvedDst)))
+    {
+        destination = std::filesystem::path(resolvedDst) / destination.filename();
+    }
+
     std::error_code ec;
     const auto options =
         failIfExists ? std::filesystem::copy_options::none : std::filesystem::copy_options::overwrite_existing;
-    return std::filesystem::copy_file(std::filesystem::path(src ? src : ""), std::filesystem::path(dst ? dst : ""),
-                                      options, ec);
+    return std::filesystem::copy_file(std::filesystem::path(resolvedSrc), destination, options, ec);
+}
+
+bool RepairMissingFilePermissionsUtf8(const char* path)
+{
+    LocalPath(nativePath, path ? path : "");
+    char resolvedPath[MaxFileName];
+    if (!ResolveFilePath(nativePath, resolvedPath, sizeof(resolvedPath)))
+    {
+        return false;
+    }
+    struct stat info{};
+    if (stat(resolvedPath, &info) != 0 || !S_ISREG(info.st_mode))
+    {
+        return false;
+    }
+    if ((info.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO)) != 0)
+    {
+        return true;
+    }
+    return chmod(resolvedPath, S_IRUSR | S_IWUSR) == 0;
 }
 
 bool CreateDirectoryUtf8(const char* path)
