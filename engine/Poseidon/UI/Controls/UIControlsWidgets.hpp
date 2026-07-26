@@ -976,17 +976,17 @@ class C3DScrollBar
 	Vector3 _right;
 	Vector3 _down;
 
-	float _minPos;
-	float _maxPos;
-	float _curPos;
-	float _page;
-	float _lineStep;
-	float _pageStep;
+	float _minPos = 0.0f;
+	float _maxPos = 0.0f;
+	float _curPos = 0.0f;
+	float _page = 0.0f;
+	float _lineStep = 0.0f;
+	float _pageStep = 0.0f;
 
-	float _thumbOffset;
+	float _thumbOffset = 0.0f;
 	bool _thumbLocked;
 
-	bool _enabled;
+	bool _enabled = true;
 
 	PackedColor _color;
 
