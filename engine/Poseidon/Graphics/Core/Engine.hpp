@@ -362,11 +362,10 @@ class Engine : public IGraphicsEngine
     // Upload the terrain height grid as a GPU texture. Default no-op for headless backends.
     virtual void SetTerrainHeightmap(const float* /*heights*/, int /*width*/, int /*height*/, float /*invGrid*/) {}
 
-    // One visible land cell to draw
-    struct LandCell
+    // One visible 8x8 land segment to draw
+    struct GroundSegment
     {
-        int cellX, cellZ;  // land-cell coords
-        int texIndex;      // texture index
+        int cellX, cellZ;  // segment's land cell corner
         unsigned lightSet; // opaque handle from AddTerrainLightSet
     };
 
@@ -382,16 +381,19 @@ class Engine : public IGraphicsEngine
     {
         int nTextures;
         const TerrainTexture* textures;
-        int subdivCount;     // render-grid subdivisions per land cell, per axis
-        float landGrid;      // land-cell size in metres
-        const float* jitter; // 2 floats (u,v offset) per land-grid point, jitterW x jitterH row-major
+        int subdivCount;                // render-grid subdivisions per land cell, per axis
+        int segmentSize;                // land cells per segment, per axis
+        float landGrid;                 // land-cell size in metres
+        const float* jitter;            // 2 floats (u,v offset) per land-grid point, jitterW x jitterH row-major
         int jitterW, jitterH;
+        const int* cellTexIndex;        // per-cell texture index, cellRange x cellRange row-major
+        const unsigned char* cellWater; // per-cell water flag, cellRange x cellRange row-major
+        int cellRange;
     };
 
     virtual void PrepareTerrain(const TerrainSetup& setup) {}
-    virtual void DrawTerrain(const LandCell* cells, size_t count, const TLMaterial& mat) {}
-    // Draws instanced water for the given cells at seaLevel. surfaceTex is the current animation frame.
-    virtual void DrawWater(const LandCell* cells, size_t count, const TLMaterial& mat, Texture* surfaceTex, float seaLevel) {}
+    virtual void DrawTerrain(const GroundSegment* segments, size_t count, const TLMaterial& mat) {}
+    virtual void DrawWater(const GroundSegment* segments, size_t count, const TLMaterial& mat, Texture* surfaceTex, float seaLevel) {}
 
     // Begins the frame's ground pass (land + water)
     virtual void BeginGround(const LightList& lights) {}

@@ -156,6 +156,22 @@ float computeFog(vec3 P)
 }
 )";
 
+// Sun light plus the segment's local-light set, clamped.
+static const char s_fnGroundLight[] = R"(
+vec4 groundLight(vec3 worldNormal, vec3 P, uint lightSet)
+{
+    vec4 litColor = sunLight(worldNormal);
+    float nightLocal = (sunEn.x > 0.5) ? sunEn.y : 1.0;
+    uint nLights = texelFetch(lightSetTable, int(lightSet)).r;
+    for (uint i = 0u; i < nLights; i++)
+    {
+        uint idx = texelFetch(lightSetTable, int(lightSet + 1u + i)).r;
+        litColor.rgb += localLight(idx, P, worldNormal, nightLocal);
+    }
+    return clamp(litColor, 0.0, 1.0);
+}
+)";
+
 // PSConstants UBO for the lit object/terrain shaders (with cascade data).
 static const char s_chunkPSConstants[] = R"(
 layout(std140) uniform PSConstants {
@@ -478,19 +494,21 @@ static const char s_vsTerrainGLSL[] = R"(#version 330 core
 
 uniform sampler2D heightMap;
 uniform sampler2D jitterMap;
+// per land cell: R = array layer, G = packed(batch<<2 | simple<<1 | validLand, water<<8)
+uniform usampler2D cellInfo;
 // per-segment light set: [count, idx0, idx1, ...] runs; handle 0 = empty
 uniform usamplerBuffer lightSetTable;
 // x=landGrid, y=subdivCount, z=invEffSubdiv, w=detailScale
 uniform vec4 terrainParams;
 // x=jitterScale, y=invJitterSize
 uniform vec4 terrainParams2;
+uniform int drawBatch;
 
-layout(location = 0) in vec2 gridIJ;
-// xy = land cell, z = array layer, w = isSimple
-layout(location = 1) in ivec4 iCell;
-layout(location = 2) in vec2 cellOriginRel;
+// cellX, cellZ within segment, gridI, gridJ within cell
+layout(location = 0) in vec4 segVert;
+layout(location = 1) in ivec2 iSegOrigin;
 // handle into lightSetTable
-layout(location = 3) in uint iLightSet;
+layout(location = 2) in uint iLightSet;
 
 //#include <vs_varyings_out>
 flat out float vLayer;
@@ -505,15 +523,27 @@ float hmAt(ivec2 t) {
 //#include <fn_local_light>
 //#include <fn_sun_specular>
 //#include <fn_compute_fog>
+//#include <fn_ground_light>
 
 void main() {
+    ivec2 worldCell = iSegOrigin + ivec2(segVert.xy);
+    ivec2 cs = textureSize(cellInfo, 0);
+    uvec2 ci = texelFetch(cellInfo, clamp(worldCell, ivec2(0), cs - ivec2(1)), 0).rg;
+    uint flags = ci.y;
+    if ((flags & 1u) == 0u || int((flags >> 2) & 0x3Fu) != drawBatch) {
+        gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+        return;
+    }
+
+    vec2 gridIJ = segVert.zw;
     float terrainGrid = 1.0 / hmParams0.x;
     int subdiv = int(terrainParams.y);
-    ivec2 tIdx = iCell.xy * subdiv + ivec2(gridIJ + 0.5);
+    ivec2 tIdx = worldCell * subdiv + ivec2(gridIJ + 0.5);
 
     float h = hmAt(tIdx);
     vec2 localXZ = gridIJ * terrainGrid;
-    vec3 worldPos = vec3(cellOriginRel.x + localXZ.x, h - hmParams0.w, cellOriginRel.y + localXZ.y);
+    vec2 cellOrigin = vec2(worldCell) * terrainParams.x - hmParams0.yz;
+    vec3 worldPos = vec3(cellOrigin.x + localXZ.x, h - hmParams0.w, cellOrigin.y + localXZ.y);
 
     float xd = hmAt(tIdx + ivec2(1, 0)) - hmAt(tIdx + ivec2(-1, 0));
     float zd = hmAt(tIdx + ivec2(0, 1)) - hmAt(tIdx + ivec2(0, -1));
@@ -525,24 +555,14 @@ void main() {
     vec3 P = worldPos;
 
     vec2 baseUV = gridIJ * terrainParams.z;
-    vec2 jUV = (vec2(iCell.xy) + baseUV + 0.5) * terrainParams2.y;
+    vec2 jUV = (vec2(worldCell) + baseUV + 0.5) * terrainParams2.y;
     vec2 jit = texture(jitterMap, jUV).rg * terrainParams2.x;
     vUV0 = baseUV + jit;
     vUV1 = vUV0 * terrainParams.w;
-    vLayer = float(iCell.z);
-    vSimple = float(iCell.w);
+    vLayer = float(ci.x);
+    vSimple = float((flags >> 1) & 1u);
 
-    vec4 litColor = sunLight(worldNormal);
-
-    float nightLocal = (sunEn.x > 0.5) ? sunEn.y : 1.0;
-    uint nLights = texelFetch(lightSetTable, int(iLightSet)).r;
-    for (uint i = 0u; i < nLights; i++)
-    {
-        uint idx = texelFetch(lightSetTable, int(iLightSet + 1u + i)).r;
-        litColor.rgb += localLight(idx, P, worldNormal, nightLocal);
-    }
-
-    vColor = clamp(litColor, 0.0, 1.0);
+    vColor = groundLight(worldNormal, P, iLightSet);
     vSpecColor = vec4(sunSpecular(P, worldNormal), 0.0);
     vFogTC = computeFog(P);
 }
@@ -585,13 +605,13 @@ static const char s_vsWaterInstGLSL[] = R"(#version 330 core
 //#include <vs_local_lights_ubo>
 
 uniform usamplerBuffer lightSetTable;
-// x=seaLevel, y=invSubdiv, z=specTile
+// x=seaLevel, y=invSubdiv, z=specTile, w=landGrid
 uniform vec4 waterParams;
 
-layout(location = 0) in vec2 gridIJ;
-layout(location = 1) in ivec4 iCell;
-layout(location = 2) in vec2 cellOriginRel;
-layout(location = 3) in uint iLightSet;
+// cellX, cellZ within segment, gridI, gridJ within cell
+layout(location = 0) in vec4 segVert;
+layout(location = 1) in ivec2 iSegOrigin;
+layout(location = 2) in uint iLightSet;
 
 //#include <vs_varyings_out>
 
@@ -599,11 +619,15 @@ layout(location = 3) in uint iLightSet;
 //#include <fn_local_light>
 //#include <fn_sun_specular>
 //#include <fn_compute_fog>
+//#include <fn_ground_light>
 
 void main() {
+    ivec2 worldCell = iSegOrigin + ivec2(segVert.xy);
+    vec2 gridIJ = segVert.zw;
     float terrainGrid = 1.0 / hmParams0.x;
     vec2 localXZ = gridIJ * terrainGrid;
-    vec3 worldPos = vec3(cellOriginRel.x + localXZ.x, waterParams.x - hmParams0.w, cellOriginRel.y + localXZ.y);
+    vec2 cellOrigin = vec2(worldCell) * waterParams.w - hmParams0.yz;
+    vec3 worldPos = vec3(cellOrigin.x + localXZ.x, waterParams.x - hmParams0.w, cellOrigin.y + localXZ.y);
     vec3 worldNormal = vec3(0.0, 1.0, 0.0);
 
     gl_Position = proj * (view * vec4(worldPos, 1.0));
@@ -615,15 +639,7 @@ void main() {
     vUV0 = uv;
     vUV1 = uv * waterParams.z;
 
-    vec4 litColor = sunLight(worldNormal);
-    float nightLocal = (sunEn.x > 0.5) ? sunEn.y : 1.0;
-    uint nLights = texelFetch(lightSetTable, int(iLightSet)).r;
-    for (uint i = 0u; i < nLights; i++)
-    {
-        uint idx = texelFetch(lightSetTable, int(iLightSet + 1u + i)).r;
-        litColor.rgb += localLight(idx, P, worldNormal, nightLocal);
-    }
-    vColor = clamp(litColor, 0.0, 1.0);
+    vColor = groundLight(worldNormal, P, iLightSet);
     vSpecColor = vec4(sunSpecular(P, worldNormal), 0.0);
     vFogTC = computeFog(P);
 }
@@ -828,6 +844,7 @@ static const GLSLChunk s_glslChunks[] = {
     {"fn_local_light", s_fnLocalLight},
     {"fn_sun_specular", s_fnSunSpecular},
     {"fn_compute_fog", s_fnComputeFog},
+    {"fn_ground_light", s_fnGroundLight},
     {"ps_constants", s_chunkPSConstants},
     {"ps_varyings_lit", s_chunkPSVaryingsLit},
     {"fn_cascade_shadow", s_fnCascadeShadow},
@@ -1967,6 +1984,9 @@ void EngineGL33::InitPixelShaders()
         GLint locLightSet = glGetUniformLocation(prog, "lightSetTable");
         if (locLightSet >= 0)
             glUniform1i(locLightSet, 6); // terrain per-segment light-set buffer texture on unit 6
+        GLint locCellInfo = glGetUniformLocation(prog, "cellInfo");
+        if (locCellInfo >= 0)
+            glUniform1i(locCellInfo, 7); // per-cell layer/flags map on unit 7
         glUseProgram(0);
     };
 

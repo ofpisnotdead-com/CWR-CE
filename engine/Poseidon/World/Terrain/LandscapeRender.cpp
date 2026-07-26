@@ -1270,25 +1270,9 @@ const int NGrassModes = sizeof(GrassModes) / sizeof(*GrassModes);
 // Toggles between instanced and mesh-based / baked terrain rendering
 bool GGl33TerrainInstanced = false;
 
-static std::vector<Engine::LandCell> g_landCells;
-static std::vector<Engine::LandCell> g_waterCells;
+static std::vector<Engine::GroundSegment> g_segInstances;
 // Is the current terrain state valid for instanced rendering?
 static bool g_instSetupValid = false;
-
-// Per-land-cell water mask, indexed [z * range + x]. A cell is marked when its lowest
-// terrain point can be reached by the tide at its highest (min height <= maxTide + maxWave).
-static std::vector<uint8_t> g_waterCellMask;
-static int g_waterCellMaskRange = 0;
-
-static bool WaterCellMaskAt(int x, int z)
-{
-    if (x < 0 || z < 0 || x >= g_waterCellMaskRange || z >= g_waterCellMaskRange)
-    {
-        // Beyond the map -> open sea
-        return true;
-    }
-    return g_waterCellMask[static_cast<size_t>(z) * g_waterCellMaskRange + x] != 0;
-}
 
 namespace
 {
@@ -1333,24 +1317,18 @@ void Landscape::PrepareInstancedTerrain()
         }
     }
 
-    Engine::TerrainSetup setup;
-    setup.nTextures = nTex;
-    setup.textures = textures.data();
-    setup.subdivCount = subdiv;
-    setup.landGrid = _landGrid;
-    setup.jitter = jitter.data();
-    setup.jitterW = jw;
-    setup.jitterH = jw;
-    _engine->PrepareTerrain(setup);
-
-    // Precompute the water cell mask
+    // Per-cell texture index and water flag. A cell holds water when its lowest terrain point can be
+    // reached by the tide at its highest (min height <= maxTide + maxWave).
     auto clampT = [this](int v) { return v < 0 ? 0 : (v >= _terrainRange ? _terrainRange - 1 : v); };
-    g_waterCellMaskRange = _landRange;
-    g_waterCellMask.assign(static_cast<size_t>(_landRange) * _landRange, 0);
-    for (int lz = 0; lz < _landRange; lz++)
+    const int R = _landRange;
+    std::vector<int> cellTex(static_cast<size_t>(R) * R);
+    std::vector<uint8_t> cellWater(static_cast<size_t>(R) * R, 0);
+    for (int lz = 0; lz < R; lz++)
     {
-        for (int lx = 0; lx < _landRange; lx++)
+        for (int lx = 0; lx < R; lx++)
         {
+            const size_t i = static_cast<size_t>(lz) * R + lx;
+            cellTex[i] = ClippedTextureIndex(lz, lx);
             float minH = FLT_MAX;
             for (int tz = 0; tz <= subdiv; tz++)
             {
@@ -1361,10 +1339,24 @@ void Landscape::PrepareInstancedTerrain()
             }
             if (minH <= maxTide + maxWave)
             {
-                g_waterCellMask[static_cast<size_t>(lz) * _landRange + lx] = 1;
+                cellWater[i] = 1;
             }
         }
     }
+
+    Engine::TerrainSetup setup;
+    setup.nTextures = nTex;
+    setup.textures = textures.data();
+    setup.subdivCount = subdiv;
+    setup.segmentSize = LandSegmentSize;
+    setup.landGrid = _landGrid;
+    setup.jitter = jitter.data();
+    setup.jitterW = jw;
+    setup.jitterH = jw;
+    setup.cellTexIndex = cellTex.data();
+    setup.cellWater = cellWater.data();
+    setup.cellRange = R;
+    _engine->PrepareTerrain(setup);
 
     g_instSetupValid = true;
 }
@@ -1454,67 +1446,44 @@ void Landscape::DrawGroundInstanced(const LandBegEnd& bigRect, Scene& scene)
         seg.lightSet = _engine->AddTerrainLightSet(lights);
     }
 
-    // 3. Expand and gather each segment's solid and water cells
-    g_landCells.clear();
-    g_waterCells.clear();
+    // 3. Generate segment instances for rendering
+    g_segInstances.clear();
+    g_segInstances.reserve(g_visibleSegments.size());
     for (const VisibleSegment& seg : g_visibleSegments)
     {
-        for (int cz = 0; cz < LandSegmentSize; cz++)
-        {
-            for (int cx = 0; cx < LandSegmentSize; cx++)
-            {
-                const int wx = seg.xBeg + cx, wz = seg.zBeg + cz;
-
-                int ti = ClippedTextureIndex(wz, wx);
-                if (ti > 0)
-                {
-                    Engine::LandCell cell;
-                    cell.cellX = wx;
-                    cell.cellZ = wz;
-                    cell.texIndex = ti;
-                    cell.lightSet = seg.lightSet;
-                    g_landCells.push_back(cell);
-                }
-
-                if (WaterCellMaskAt(wx, wz))
-                {
-                    Engine::LandCell wc;
-                    wc.cellX = wx;
-                    wc.cellZ = wz;
-                    wc.texIndex = 0;
-                    wc.lightSet = seg.lightSet;
-                    g_waterCells.push_back(wc);
-                }
-            }
-        }
+        Engine::GroundSegment s;
+        s.cellX = seg.xBeg;
+        s.cellZ = seg.zBeg;
+        s.lightSet = seg.lightSet;
+        g_segInstances.push_back(s);
     }
 
-    // 4. Draw all gathered cells
-    if (!g_landCells.empty())
+    if (g_segInstances.empty())
     {
-        _engine->DrawTerrain(g_landCells.data(), g_landCells.size(), InstancedTerrainMaterial());
+        return;
     }
-    if (!g_waterCells.empty())
+
+    _engine->DrawTerrain(g_segInstances.data(), g_segInstances.size(), InstancedTerrainMaterial());
+
+    Texture* waterTex = _texture[0];
+    if (!waterTex)
     {
-        Texture* waterTex = _texture[0];
-        if (waterTex)
-        {
-            float texPhase = fastFmod(Glob.time.toFloat(), 2);
-            if (texPhase > 1.0f)
-            {
-                texPhase = 2 - texPhase;
-            }
-            int n = waterTex->AnimationLength();
-            if (n > 1)
-            {
-                int i = toIntFloor(texPhase * n);
-                saturate(i, 0, n - 1);
-                waterTex = waterTex->GetAnimation(i);
-            }
-            _engine->DrawWater(g_waterCells.data(), g_waterCells.size(), InstancedWaterMaterial(), waterTex,
-                               _seaLevelWave);
-        }
+        return;
     }
+
+    float texPhase = fastFmod(Glob.time.toFloat(), 2);
+    if (texPhase > 1.0f)
+    {
+        texPhase = 2 - texPhase;
+    }
+    int n = waterTex->AnimationLength();
+    if (n > 1)
+    {
+        int i = toIntFloor(texPhase * n);
+        saturate(i, 0, n - 1);
+        waterTex = waterTex->GetAnimation(i);
+    }
+    _engine->DrawWater(g_segInstances.data(), g_segInstances.size(), InstancedWaterMaterial(), waterTex, _seaLevelWave);
 }
 
 void Landscape::DrawGround(const LandBegEnd& bigRect, Scene& scene, const GroundLayerInfo& layer)
