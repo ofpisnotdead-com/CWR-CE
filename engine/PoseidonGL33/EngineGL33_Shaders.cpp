@@ -579,6 +579,56 @@ void main() {
 }
 )";
 
+// Instanced water: the terrain instance layout drawn flat at sea level with an up normal, paired with PSDetail.
+static const char s_vsWaterInstGLSL[] = R"(#version 330 core
+//#include <vs_constants>
+//#include <vs_local_lights_ubo>
+
+uniform usamplerBuffer lightSetTable;
+// x=seaLevel, y=invSubdiv, z=specTile
+uniform vec4 waterParams;
+
+layout(location = 0) in vec2 gridIJ;
+layout(location = 1) in ivec4 iCell;
+layout(location = 2) in vec2 cellOriginRel;
+layout(location = 3) in uint iLightSet;
+
+//#include <vs_varyings_out>
+
+//#include <fn_sun_light>
+//#include <fn_local_light>
+//#include <fn_sun_specular>
+//#include <fn_compute_fog>
+
+void main() {
+    float terrainGrid = 1.0 / hmParams0.x;
+    vec2 localXZ = gridIJ * terrainGrid;
+    vec3 worldPos = vec3(cellOriginRel.x + localXZ.x, waterParams.x - hmParams0.w, cellOriginRel.y + localXZ.y);
+    vec3 worldNormal = vec3(0.0, 1.0, 0.0);
+
+    gl_Position = proj * (view * vec4(worldPos, 1.0));
+    vWorldRel = worldPos;
+    vec3 P = worldPos;
+
+    // Surface texture tiles once per land cell; U runs along Z, V along X
+    vec2 uv = vec2(gridIJ.y, gridIJ.x) * waterParams.y;
+    vUV0 = uv;
+    vUV1 = uv * waterParams.z;
+
+    vec4 litColor = sunLight(worldNormal);
+    float nightLocal = (sunEn.x > 0.5) ? sunEn.y : 1.0;
+    uint nLights = texelFetch(lightSetTable, int(iLightSet)).r;
+    for (uint i = 0u; i < nLights; i++)
+    {
+        uint idx = texelFetch(lightSetTable, int(iLightSet + 1u + i)).r;
+        litColor.rgb += localLight(idx, P, worldNormal, nightLocal);
+    }
+    vColor = clamp(litColor, 0.0, 1.0);
+    vSpecColor = vec4(sunSpecular(P, worldNormal), 0.0);
+    vFogTC = computeFog(P);
+}
+)";
+
 // PSGrass — grass blending with alpha from coefficients
 static const char s_psGrassGLSL[] = R"(#version 330 core
 layout(std140) uniform PSConstants {
@@ -992,6 +1042,7 @@ static GLuint s_vsScreenObj = 0;
 static GLuint s_vsTransformObj = 0;
 static GLuint s_vsShadowObj = 0;
 static GLuint s_vsTerrainObj = 0;
+static GLuint s_vsWaterInstObj = 0;
 
 void EngineGL33::InitVertexShaders()
 {
@@ -999,6 +1050,7 @@ void EngineGL33::InitVertexShaders()
     s_vsTransformObj = CompileGLShader(GL_VERTEX_SHADER, s_vsTransformGLSL, "vsTransform");
     s_vsShadowObj = CompileGLShader(GL_VERTEX_SHADER, s_vsShadowGLSL, "vsShadow");
     s_vsTerrainObj = CompileGLShader(GL_VERTEX_SHADER, s_vsTerrainGLSL, "vsTerrain");
+    s_vsWaterInstObj = CompileGLShader(GL_VERTEX_SHADER, s_vsWaterInstGLSL, "vsWaterInst");
 
     // Bind the VS UBO to base 0 once; subsequent FlushVSConstants only
     // update buffer contents.
@@ -1053,6 +1105,11 @@ void EngineGL33::DeinitVertexShaders()
     {
         glDeleteShader(s_vsTerrainObj);
         s_vsTerrainObj = 0;
+    }
+    if (s_vsWaterInstObj)
+    {
+        glDeleteShader(s_vsWaterInstObj);
+        s_vsWaterInstObj = 0;
     }
     if (s_vsUBO)
     {
@@ -1702,6 +1759,7 @@ uint64_t HashShaderSources()
     add(s_psShadowGLSL);
     add(s_vsTerrainGLSL);
     add(s_psTerrainGLSL);
+    add(s_vsWaterInstGLSL);
     // Hash the fragment bodies too so editing one invalidates the binary cache
     for (const auto& c : s_glslChunks)
     {
@@ -1913,7 +1971,7 @@ void EngineGL33::InitPixelShaders()
     };
 
     // Build combined programs: one per (vs x specular x mode x shader) = 2*2*2*5 = 40
-    GLuint vsObjs[NVertexShaders] = {s_vsScreenObj, s_vsTransformObj, s_vsShadowObj, s_vsTerrainObj};
+    GLuint vsObjs[NVertexShaders] = {s_vsScreenObj, s_vsTransformObj, s_vsShadowObj, s_vsTerrainObj, s_vsWaterInstObj};
     for (int v = 0; v < NVertexShaders; v++)
     {
         if (!vsObjs[v])
@@ -1926,6 +1984,9 @@ void EngineGL33::InitPixelShaders()
                 {
                     // VSTerrain pairs only with PSTerrain and vice versa
                     if ((v == VSTerrain) != (i == PSTerrain))
+                        continue;
+                    // VSWaterInst reuses PSDetail
+                    if (v == VSWaterInst && i != PSDetail)
                         continue;
 
                     const uint32_t key = (static_cast<uint32_t>(v) << 24) | (static_cast<uint32_t>(s) << 16) |

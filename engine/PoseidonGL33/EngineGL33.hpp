@@ -105,6 +105,7 @@ enum VertexShaderID
     VSTransform,
     VSShadow, // unlit transform, shadow path
     VSTerrain,
+    VSWaterInst,
     NVertexShaders,
     VSNone = NVertexShaders
 };
@@ -613,7 +614,9 @@ class EngineGL33 : public Engine
     void SetTerrainHeightmap(const float* heights, int width, int height, float invGrid) override;
     void PrepareTerrain(const TerrainSetup& setup) override;
     void DrawTerrain(const LandCell* cells, size_t count, const TLMaterial& mat) override;
-    void BeginTerrain(const LightList& lights) override;
+    void DrawWater(const LandCell* cells, size_t count, const TLMaterial& mat, Texture* surfaceTex,
+                   float seaLevel) override;
+    void BeginGround(const LightList& lights) override;
     unsigned AddTerrainLightSet(const LightList& lights) override;
     void FreeTerrainInstanced();
     void CreateTerrainBatches(struct TerrainInstancedGL33& t, int nTextures, const TerrainTexture* textures);
