@@ -6,6 +6,7 @@
 #include <Poseidon/Foundation/Platform/FPUSetup.hpp>
 #include <Poseidon/Foundation/Platform/PoseidonInit.hpp>
 #include <Poseidon/Core/Config/Config.hpp>
+#include <Poseidon/Core/Config/UserConfig.hpp>
 #include <Poseidon/Foundation/Platform/AppConfig.hpp>
 #include <Poseidon/Foundation/Platform/GamePaths.hpp>
 #include <Poseidon/Foundation/Platform/StartupError.hpp>
@@ -64,7 +65,8 @@ using namespace Poseidon;
 namespace Poseidon
 {
 void CreateClient(RString, int, RString);
-}
+RString GetUserParams();
+} // namespace Poseidon
 
 namespace Poseidon
 {
@@ -258,6 +260,12 @@ void ApplyAspectPolicy(DisplayConfig& cfg)
 
     const int w = GEngine->Width();
     const int h = GEngine->Height();
+    UserConfig& userConfig = USER_CONFIG;
+    if (Poseidon::Presentation::ConfigureUserFov(userConfig, w, h))
+    {
+        const RString userPath = Poseidon::GetUserParams();
+        userConfig.SaveToFile(userPath);
+    }
     const AspectRatio::Settings settings = Poseidon::Presentation::Apply(w, h);
 
     // Diagnostic — full resolved policy so log inspection makes

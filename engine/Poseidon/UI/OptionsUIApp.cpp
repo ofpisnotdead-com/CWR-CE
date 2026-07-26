@@ -13,6 +13,7 @@ using namespace Poseidon;
 
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/UI/Settings/GameSettingsConfig.hpp>
+#include <Poseidon/UI/Settings/Presentation.hpp>
 
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
 #include <Poseidon/Core/Progress.hpp>
@@ -383,10 +384,17 @@ void StartCampaign(RString campaign, Display* disp)
 
 static void UpdateUserProfile()
 {
+    const RString userPath = GetUserParams();
+    USER_CONFIG.LoadFromFile(userPath);
     InputSubsystem::Instance().LoadKeys();
     UserConfig_LoadDifficulties(USER_CONFIG);
 
     GEngine->LoadConfig();
+    const int width = GEngine->Width();
+    const int height = GEngine->Height();
+    if (Poseidon::Presentation::ConfigureUserFov(USER_CONFIG, width, height))
+        USER_CONFIG.SaveToFile(userPath);
+    Poseidon::Presentation::Apply(GEngine->Width(), GEngine->Height());
     GScene->LoadConfig();
     if (GSoundsys)
     {

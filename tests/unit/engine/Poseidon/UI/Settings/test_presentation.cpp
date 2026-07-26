@@ -1,6 +1,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "Poseidon/Core/Profile/UserConfig.hpp"
 #include "Poseidon/UI/Settings/Presentation.hpp"
 
 // Presentation::Resolve — the single aspect decision point's rule table,
@@ -98,4 +99,34 @@ TEST_CASE("Presentation: live dev override drives the resolve", "[Settings][Pres
     const Poseidon::AspectRatio::Settings p = Poseidon::Presentation::Resolve(1920, 1080);
     CHECK(p.worldLeft == Catch::Approx(0.0f));
     CHECK(p.worldRight == Catch::Approx(1.0f));
+}
+
+TEST_CASE("Presentation: custom profile FOV survives viewport changes", "[Settings][Presentation]")
+{
+    Poseidon::Presentation::SetPolicy(Poseidon::AspectRatio::Modern, Poseidon::AspectRatio::Clamp21x9);
+    Poseidon::UserConfig config;
+    config.SetCustomFov(1.5f, 0.8f);
+    CHECK_FALSE(Poseidon::Presentation::ConfigureUserFov(config, 1920, 1080));
+
+    const Poseidon::AspectRatio::Settings initial = Poseidon::Presentation::Resolve(1920, 1080);
+    CHECK(initial.leftFOV == Catch::Approx(1.5f));
+    CHECK(initial.topFOV == Catch::Approx(0.8f));
+
+    const Poseidon::AspectRatio::Settings resized = Poseidon::Presentation::Resolve(2560, 1080);
+    CHECK(resized.leftFOV == Catch::Approx(1.5f));
+    CHECK(resized.topFOV == Catch::Approx(0.8f));
+
+    config.SetAutomaticFov();
+    CHECK_FALSE(Poseidon::Presentation::ConfigureUserFov(config, 2560, 1080));
+}
+
+TEST_CASE("Presentation: generated profile FOV keeps automatic sizing", "[Settings][Presentation]")
+{
+    Poseidon::Presentation::SetPolicy(Poseidon::AspectRatio::Modern, Poseidon::AspectRatio::Clamp21x9);
+    Poseidon::UserConfig config;
+    CHECK_FALSE(Poseidon::Presentation::ConfigureUserFov(config, 2560, 1080));
+
+    const Poseidon::AspectRatio::Settings resized = Poseidon::Presentation::Resolve(2560, 1080);
+    CHECK(resized.leftFOV == Catch::Approx(0.75f * (2560.0f / 1080.0f)));
+    CHECK(resized.topFOV == Catch::Approx(0.75f));
 }
