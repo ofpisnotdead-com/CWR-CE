@@ -16,62 +16,14 @@
 #include <sstream>
 #include <map>
 #include <vector>
+#include <string_view>
+#include <cstring>
 
-// Screen-space vertex shader (pre-transformed TLVertex).
-// Attribute layout matches VAO: pos(vec3)@0, rhw(float)@1, color@2, specular@3, uv0@4, uv1@5
-static const char s_vsScreenGLSL[] = R"(#version 330 core
-// Shared VS UBO; vsScreen reads vpScale at slot 21 (offset 336 bytes).
-// The 21-slot prefix is laid out so the byte offsets match what
-// vsTransform reads; vsScreen ignores those fields, but std140
-// requires the layout to match the shared binding's contents.
-layout(std140) uniform VSConstants {
-    mat4 _pad_proj;     // slots 0..3 — VSTransform's projection
-    mat4 _pad_view;     // slots 4..7
-    mat4 _pad_world;    // slots 8..11
-    vec4 _pad_sunDir;   // slot 12
-    vec4 _pad_ambient;  // 13
-    vec4 _pad_diffuse;  // 14
-    vec4 _pad_emissive; // 15
-    vec4 _pad_fog;      // 16
-    vec4 _pad_camPos;   // 17
-    vec4 _pad_spec;     // 18
-    vec4 _pad_specEn;   // 19
-    vec4 _pad_sunEn;    // 20
-    vec4 vpScale;       // 21 — {2/width, 2/height, 0, 0}
-};
+// Reusable GLSL fragments spliced into the shaders by AssembleShader() at
+// shader compile time via a `//#include <name>` comment-directive
 
-layout(location = 0) in vec3 aPos;
-layout(location = 1) in float aRhw;
-layout(location = 2) in vec4 aColor;
-layout(location = 3) in vec4 aSpecular;
-layout(location = 4) in vec2 aUV0;
-layout(location = 5) in vec2 aUV1;
-
-out vec4 vColor;
-out vec4 vSpecColor;
-out vec2 vUV0;
-out vec2 vUV1;
-out float vFogTC;
-out vec3 vWorldRel;
-
-void main() {
-    float w = 1.0 / aRhw;
-    gl_Position.x = (aPos.x * vpScale.x - 1.0) * w;
-    gl_Position.y = (1.0 - aPos.y * vpScale.y) * w;
-    gl_Position.z = aPos.z * w;
-    gl_Position.w = w;
-    vColor = aColor;
-    vSpecColor = aSpecular;
-    vUV0 = aUV0;
-    vUV1 = aUV1;
-    vFogTC = aSpecular.a;
-    vWorldRel = vec3(0.0); // screen draws are never shadow-mapped
-}
-)";
-
-// 3D mesh vertex shader with lighting, fog, and texture generation.
-// Separate Proj/View/World transform.
-static const char s_vsTransformGLSL[] = R"(#version 330 core
+// Full VSConstants UBO
+static const char s_chunkVSConstants[] = R"(
 layout(std140) uniform VSConstants {
     mat4 proj;          // c0-c3
     mat4 view;          // c4-c7
@@ -96,15 +48,17 @@ layout(std140) uniform VSConstants {
     vec4 _padLights[31];// c35-c65: reserved
     mat4 lightVP;       // c66-c69: shadow-map light view-projection (sampled per fragment)
 };
+)";
 
-// Per-instance world matrices (perf effort 08). Plain glDrawElements has
-// gl_InstanceID == 0, so slot 0 carries the classic single world matrix
-// and non-instanced draws are unchanged.
+// Per-instance world matrices (binding 2)
+static const char s_chunkVSWorldInstances[] = R"(
 layout(std140) uniform WorldInstances {
     mat4 worldArr[256];
 };
+)";
 
 // The view's active local lights (binding 4)
+static const char s_chunkVSLocalLightsUBO[] = R"(
 layout(std140) uniform LocalLights {
     vec4 count;        // .x = active light count
     vec4 pos[64];      // xyz camera-relative world pos, w = startAtten
@@ -112,6 +66,269 @@ layout(std140) uniform LocalLights {
     vec4 ambient[64];  // raw ambient
     vec4 dir[64];      // xyz beam dir (world), w = isSpot
 } localLights;
+)";
+
+// Standard mesh-VS outputs
+static const char s_chunkVSVaryingsOut[] = R"(
+out vec4 vColor;
+out vec4 vSpecColor;
+out vec2 vUV0;
+out vec2 vUV1;
+out float vFogTC;
+out vec3 vWorldRel;
+)";
+
+// Sun (directional) contribution to a vertex.
+static const char s_fnSunLight[] = R"(
+vec4 sunLight(vec3 worldNormal)
+{
+    float NdotL = max(0.0, dot(worldNormal, -sunDir.xyz));
+    vec4 litColor;
+    litColor.rgb = emissive.rgb + ambient.rgb * sunEn.x + diffuse.rgb * NdotL * sunEn.x;
+    litColor.a   = emissive.a   + ambient.a   * sunEn.x + diffuse.a   * NdotL * sunEn.x;
+    return litColor;
+}
+)";
+
+// One local point/spot light's contribution at a vertex (0 if out of range).
+// Quadratic falloff past startAtten (cut at 100x); spots gate by cone (cos 8/12deg).
+static const char s_fnLocalLight[] = R"(
+vec3 localLight(uint idx, vec3 P, vec3 worldNormal, float nightLocal)
+{
+    const float MIN_INSIDE2 = 0.95677279; // (cos 12deg)^2
+    const float MAX_INSIDE2 = 0.98063081; // (cos 8deg)^2
+    vec4 lpos = localLights.pos[idx];
+    vec4 ldir = localLights.dir[idx];
+    vec3 toLight = lpos.xyz - P;
+    float size2 = dot(toLight, toLight);
+    float startAtten2 = lpos.w * lpos.w;
+    float endAtten2 = startAtten2 * 100.0;
+    if (size2 >= endAtten2)
+        return vec3(0.0);
+
+    float cone = 1.0;
+    if (ldir.w > 0.5)
+    {
+        float inside = -dot(toLight, ldir.xyz);
+        if (inside <= 0.0)
+            return vec3(0.0);
+        float cos2 = (inside * inside) / size2;
+        if (cos2 < MIN_INSIDE2)
+            return vec3(0.0);
+        cone = clamp((cos2 - MIN_INSIDE2) / (MAX_INSIDE2 - MIN_INSIDE2), 0.0, 1.0);
+    }
+
+    vec3 ldif = localLights.diffuse[idx].rgb * matDiffuseRaw.rgb * nightLocal;
+    vec3 lamb = localLights.ambient[idx].rgb * matAmbientRaw.rgb * nightLocal;
+    float atten = (size2 >= startAtten2) ? (startAtten2 / size2) : 1.0;
+    float cosFi = dot(toLight, worldNormal);
+    if (cosFi > 0.0)
+    {
+        cosFi *= inversesqrt(size2);
+        return (ldif * cosFi + lamb) * (atten * cone);
+    }
+    return lamb * atten;
+}
+)";
+
+// Sun specular colour (clamped) at a vertex.
+static const char s_fnSunSpecular[] = R"(
+vec3 sunSpecular(vec3 P, vec3 worldNormal)
+{
+    if (specEn.x > 0.5 && sunEn.x > 0.0) {
+        vec3 viewDir = normalize(camPos.xyz - P);
+        vec3 halfVec = normalize(-sunDir.xyz + viewDir);
+        float NdotH = max(0.0, dot(worldNormal, halfVec));
+        float specPow = max(1.0, specular.w);
+        return clamp(specular.rgb * pow(NdotH, specPow) * sunEn.x, 0.0, 1.0);
+    }
+    return vec3(0.0);
+}
+)";
+
+// Per-vertex fog factor (1 = no fog).
+static const char s_fnComputeFog[] = R"(
+float computeFog(vec3 P)
+{
+    float dist = length(P - camPos.xyz);
+    float fogFactor = clamp(1.0 - (dist - fogParam.x) * fogParam.y, 0.0, 1.0);
+    return (fogParam.z > 0.5) ? fogFactor : 1.0;
+}
+)";
+
+// PSConstants UBO for the lit object/terrain shaders (with cascade data).
+static const char s_chunkPSConstants[] = R"(
+layout(std140) uniform PSConstants {
+    vec4 fogColor;    // c0
+    vec4 alphaRef;    // c1: {ref, enabled, alphaToCoverage, flatDebug}
+    vec4 shadowCtl;   // c2: {enable, bias, darkness, texelSize}
+    vec4 constColor; // c3: per-object IsColored tint (white = no-op)
+    vec4 _pad4;
+    vec4 _pad5;
+    vec4 _pad6;
+    vec4 rgbEyeCoef;  // c7
+    mat4 cascadeVP[4]; // c8-c23: per-cascade light view-projection
+    vec4 cascadeSplits;// c24: per-tier select distance (omni: radius; frustum: far eye-depth)
+    vec4 cascadeCtl;   // c25: {count, fadeRange, biasBase, omniCount}
+    vec4 camFwd;       // c26: camera forward (eye-depth = dot(vWorldRel, camFwd))
+};
+)";
+
+// Standard lit-object fragment inputs + shadow sampler + output.
+static const char s_chunkPSVaryingsLit[] = R"(
+in vec4 vColor;
+in vec4 vSpecColor;
+in vec2 vUV0;
+in vec2 vUV1;
+in float vFogTC;
+
+uniform sampler2DArray shadowMap; // unit 2 — cascade depth-map array (unused unless shadowCtl.x>0.5)
+in vec3 vWorldRel;
+
+out vec4 fragColor;
+)";
+
+// Cascaded/omni shadow lookup; darkens the lit colour where shadowed.
+static const char s_fnCascadeShadow[] = R"(
+vec3 cascadeShadow(vec3 color)
+{
+    if (shadowCtl.x > 0.5) {
+        // Tiered shadow maps: the first omniCount tiers are camera-centred spheres
+        // (selected by 3D distance, so a caster in ANY direction around the player —
+        // including behind the camera — casts into view); the rest are frustum
+        // slices reaching the far view distance (selected by eye-depth). Pick the
+        // tightest matching tier, then advance to the first tier whose projection is
+        // in bounds (coverage fallthrough, so a too-tight near tier never drops the
+        // shadow). 3x3-PCF the layer, cross-fade to the next tier over a band, fade
+        // at the far edge, and dim by the fog factor so distant shadows aren't harsh.
+        // cascadeCtl = {count, fadeRange, biasBase, omniCount}; cascadeSplits =
+        // per-tier select distance (omni: sphere radius; frustum: far eye-depth).
+        int nC = int(cascadeCtl.x);
+        int omniN = int(cascadeCtl.w);
+        float eyeDepth = dot(vWorldRel, camFwd.xyz);
+        float dist3D = length(vWorldRel);
+        int ci = nC;
+        for (int i = 0; i < 4; ++i) {
+            if (i >= nC) break;
+            float metric = (i < omniN) ? dist3D : eyeDepth;
+            if (metric <= cascadeSplits[i]) { ci = i; break; }
+        }
+        if (ci < nC) {
+            float ts = shadowCtl.w;
+            float prevEdge = (ci > 0) ? cascadeSplits[ci - 1] : 0.0;
+            float ciMetric = (ci < omniN) ? dist3D : eyeDepth;
+            float band = (cascadeSplits[ci] - prevEdge) * 0.15;
+            float bw = (ci + 1 < nC) ? clamp((ciMetric - (cascadeSplits[ci] - band)) / max(band, 0.001), 0.0, 1.0) : 0.0;
+            float litSum = 0.0;
+            float wSum = 0.0;
+            for (int p = 0; p < 4; ++p) {
+                int c = ci + p;
+                if (c >= nC) break;
+                // p0 = primary, p1 = blend partner; while nothing has covered yet a
+                // later p force-samples the next looser tier (coverage fallthrough).
+                float w = (p == 0) ? (1.0 - bw) : ((wSum <= 0.0) ? 1.0 : ((p == 1) ? bw : 0.0));
+                if (w <= 0.0) continue;
+                vec4 cp = cascadeVP[c] * vec4(vWorldRel, 1.0);
+                vec3 sc = cp.xyz / cp.w;
+                vec2 suv = sc.xy * 0.5 + 0.5;
+                if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && sc.z > 0.0 && sc.z < 1.0) {
+                    float bias = cascadeCtl.z * float(c + 1) * float(c + 1);
+                    float lit = 0.0;
+                    for (int dy = -1; dy <= 1; ++dy)
+                        for (int dx = -1; dx <= 1; ++dx)
+                            lit += (sc.z - bias > texture(shadowMap, vec3(suv + vec2(float(dx), float(dy)) * ts, float(c))).r) ? 0.0 : 1.0;
+                    litSum += w * (lit / 9.0);
+                    wSum += w;
+                }
+            }
+            if (wSum > 0.0) {
+                float lit = litSum / wSum;
+                float lastSplit = cascadeSplits[nC - 1];
+                float fade = clamp((lastSplit - eyeDepth) / max(cascadeCtl.y, 0.001), 0.0, 1.0);
+                float strength = (1.0 - lit) * fade * clamp(vFogTC, 0.0, 1.0); // dimmer in fog / far
+                color *= mix(1.0, shadowCtl.z, strength);
+            }
+        }
+    }
+    return color;
+}
+)";
+
+// Alpha-to-coverage / hard alpha-test; returns the coverage-adjusted alpha (or discards).
+static const char s_fnAlphaTest[] = R"(
+float alphaTest(float a)
+{
+    if (alphaRef.z > 0.5) {
+        // Alpha-to-coverage: sharpen alpha around the cutout threshold so the
+        // MSAA resolve grades sub-pixel cutout features (fence wire, foliage)
+        // instead of the hard test keeping or killing the whole pixel.
+        float cov = clamp((a - alphaRef.x) / max(fwidth(a), 1e-4) + 0.5, 0.0, 1.0);
+        if (cov <= 0.0) discard;
+        return cov;
+    } else if (a - alphaRef.x * alphaRef.y < 0.0) discard;
+    return a;
+}
+)";
+
+// Fog blend + flat-debug; returns the final fragment colour.
+static const char s_fnFogOut[] = R"(
+vec4 finalizeFog(vec4 c)
+{
+    c.rgb = mix(fogColor.rgb, c.rgb, vFogTC);
+    return alphaRef.w > 0.5 ? vec4(1.0, 0.0, 0.0, 1.0) : c;
+}
+)";
+
+// Night-eye desaturation then fog output.
+static const char s_fnNightFogOut[] = R"(
+//#include <fn_fog_out>
+
+vec4 finalizeNightFog(vec4 c)
+{
+    float luminance = clamp(dot(c.rgb, rgbEyeCoef.rgb), 0.0, 1.0);
+    float nightBlend = clamp(luminance + rgbEyeCoef.a, 0.0, 1.0);
+    c.rgb = mix(vec3(luminance), c.rgb, nightBlend);
+    return finalizeFog(c);
+}
+)";
+
+// Screen-space vertex shader (pre-transformed TLVertex).
+// Attribute layout matches VAO: pos(vec3)@0, rhw(float)@1, color@2, specular@3, uv0@4, uv1@5
+static const char s_vsScreenGLSL[] = R"(#version 330 core
+// vsScreen reads only vpScale (c21); it declares the full shared VSConstants
+// block so the std140 layout matches the binding's contents.
+//#include <vs_constants>
+
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in float aRhw;
+layout(location = 2) in vec4 aColor;
+layout(location = 3) in vec4 aSpecular;
+layout(location = 4) in vec2 aUV0;
+layout(location = 5) in vec2 aUV1;
+
+//#include <vs_varyings_out>
+
+void main() {
+    float w = 1.0 / aRhw;
+    gl_Position.x = (aPos.x * vpScale.x - 1.0) * w;
+    gl_Position.y = (1.0 - aPos.y * vpScale.y) * w;
+    gl_Position.z = aPos.z * w;
+    gl_Position.w = w;
+    vColor = aColor;
+    vSpecColor = aSpecular;
+    vUV0 = aUV0;
+    vUV1 = aUV1;
+    vFogTC = aSpecular.a;
+    vWorldRel = vec3(0.0); // screen draws are never shadow-mapped
+}
+)";
+
+// 3D mesh vertex shader with lighting, fog, and texture generation.
+// Separate Proj/View/World transform.
+static const char s_vsTransformGLSL[] = R"(#version 330 core
+//#include <vs_constants>
+//#include <vs_world_instances>
+//#include <vs_local_lights_ubo>
 
 // Per gl_InstanceID: which local lights apply. arr[i] = {indices 0..3 as bytes in .x,
 // indices 4..7 in .y, count in .z}.
@@ -126,12 +343,7 @@ layout(location = 1) in vec3 normal;
 layout(location = 2) in vec2 uv;
 layout(location = 3) in uint landClip;
 
-out vec4 vColor;
-out vec4 vSpecColor;
-out vec2 vUV0;
-out vec2 vUV1;
-out float vFogTC;
-out vec3 vWorldRel;
+//#include <vs_varyings_out>
 
 // Terrain height (.x, absolute) and world-space slope (.yz = dY/dx, dY/dz) at absolute
 // world XZ, matching Landscape::SurfaceY (two-triangle interpolation of the height grid).
@@ -159,6 +371,11 @@ vec3 landClipSurface(vec2 absXZ) {
     return vec3(h, grad * invGrid);
 }
 
+//#include <fn_sun_light>
+//#include <fn_local_light>
+//#include <fn_sun_specular>
+//#include <fn_compute_fog>
+
 void main() {
     vec4 worldPos    = worldArr[gl_InstanceID] * vec4(pos, 1.0);
     vec3 worldNormal = normalize(mat3(worldArr[gl_InstanceID]) * normal);
@@ -181,77 +398,22 @@ void main() {
     vec4 viewPos     = view * worldPos;
     gl_Position      = proj * viewPos;
     vWorldRel        = worldPos.xyz; // camera-relative world pos for cascade shadow lookup
+    vec3 P           = worldPos.xyz;
 
-    float NdotL = max(0.0, dot(worldNormal, -sunDir.xyz));
-    vec4 litColor;
-    litColor.rgb = emissive.rgb + ambient.rgb * sunEn.x + diffuse.rgb * NdotL * sunEn.x;
-    litColor.a   = emissive.a   + ambient.a   * sunEn.x + diffuse.a   * NdotL * sunEn.x;
+    vec4 litColor = sunLight(worldNormal);
 
-    // Local lights: per-vertex point/spot contribution mirroring LightPoint/LightReflector.
-    // Quadratic falloff past startAtten (cut at 100x); spotlights gate by a cone factor
-    // (full inside cos 8deg, zero outside cos 12deg). DisableSun materials (sunEn.x == 0)
-    // take the full-night strength the legacy SetupLights forced.
-    const float MIN_INSIDE2 = 0.95677279; // (cos 12deg)^2
-    const float MAX_INSIDE2 = 0.98063081; // (cos 8deg)^2
     float nightLocal = (sunEn.x > 0.5) ? sunEn.y : 1.0;
     uvec4 li = lightIdx.arr[gl_InstanceID];
     int nLights = int(li.z);
     for (int i = 0; i < nLights; i++)
     {
         uint idx = ((i < 4 ? li.x : li.y) >> (8u * uint(i & 3))) & 0xFFu;
-        vec4 lpos = localLights.pos[idx];
-        vec4 ldir = localLights.dir[idx];
-        vec3 toLight = lpos.xyz - worldPos.xyz;
-        float size2 = dot(toLight, toLight);
-        float startAtten2 = lpos.w * lpos.w;
-        float endAtten2 = startAtten2 * 100.0;
-        if (size2 >= endAtten2)
-            continue;
-
-        float cone = 1.0;
-        if (ldir.w > 0.5)
-        {
-            float inside = -dot(toLight, ldir.xyz);
-            if (inside <= 0.0)
-                continue;
-            float cos2 = (inside * inside) / size2;
-            if (cos2 < MIN_INSIDE2)
-                continue;
-            cone = clamp((cos2 - MIN_INSIDE2) / (MAX_INSIDE2 - MIN_INSIDE2), 0.0, 1.0);
-        }
-
-        vec3 ldif = localLights.diffuse[idx].rgb * matDiffuseRaw.rgb * nightLocal;
-        vec3 lamb = localLights.ambient[idx].rgb * matAmbientRaw.rgb * nightLocal;
-        float atten = (size2 >= startAtten2) ? (startAtten2 / size2) : 1.0;
-        float cosFi = dot(toLight, worldNormal);
-        vec3 contrib;
-        if (cosFi > 0.0)
-        {
-            cosFi *= inversesqrt(size2);
-            contrib = (ldif * cosFi + lamb) * (atten * cone);
-        }
-        else
-        {
-            contrib = lamb * atten;
-        }
-        litColor.rgb += contrib;
+        litColor.rgb += localLight(idx, P, worldNormal, nightLocal);
     }
 
     vColor = clamp(litColor, 0.0, 1.0);
-
-    vec3 spec = vec3(0.0);
-    if (specEn.x > 0.5 && sunEn.x > 0.0) {
-        vec3 viewDir = normalize(camPos.xyz - worldPos.xyz);
-        vec3 halfVec = normalize(-sunDir.xyz + viewDir);
-        float NdotH = max(0.0, dot(worldNormal, halfVec));
-        float specPow = max(1.0, specular.w);
-        spec = specular.rgb * pow(NdotH, specPow) * sunEn.x;
-    }
-    vSpecColor = vec4(clamp(spec, 0.0, 1.0), 0.0);
-
-    float dist = length(worldPos.xyz - camPos.xyz);
-    float fogFactor = clamp(1.0 - (dist - fogParam.x) * fogParam.y, 0.0, 1.0);
-    vFogTC = (fogParam.z > 0.5) ? fogFactor : 1.0;
+    vSpecColor = vec4(sunSpecular(P, worldNormal), 0.0);
+    vFogTC = computeFog(P);
 
     vUV0 = (texCtrl.x > 0.5) ? (texMat0 * vec4(uv, 0, 1)).xy : uv;
     vUV1 = (texCtrl.y > 0.5) ? (texMat1 * vec4(uv, 0, 1)).xy : uv;
@@ -260,156 +422,41 @@ void main() {
 
 // PSNormal — diffuse * texture + specular + fog + night vision
 static const char s_psNormalGLSL[] = R"(#version 330 core
-layout(std140) uniform PSConstants {
-    vec4 fogColor;    // c0
-    vec4 alphaRef;    // c1: {ref, enabled, alphaToCoverage, flatDebug}
-    vec4 shadowCtl;   // c2: {enable, bias, darkness, texelSize}
-    vec4 constColor; // c3: per-object IsColored tint (white = no-op)
-    vec4 _pad4;
-    vec4 _pad5;
-    vec4 _pad6;
-    vec4 rgbEyeCoef;  // c7
-    mat4 cascadeVP[4]; // c8-c23: per-cascade light view-projection
-    vec4 cascadeSplits;// c24: per-tier select distance (omni: radius; frustum: far eye-depth)
-    vec4 cascadeCtl;   // c25: {count, fadeRange, biasBase, omniCount}
-    vec4 camFwd;       // c26: camera forward (eye-depth = dot(vWorldRel, camFwd))
-};
+//#include <ps_constants>
 
 uniform sampler2D tex0;
 
-in vec4 vColor;
-in vec4 vSpecColor;
-in vec2 vUV0;
-in vec2 vUV1;
-in float vFogTC;
-
-uniform sampler2DArray shadowMap; // unit 2 — cascade depth-map array (unused unless shadowCtl.x>0.5)
-in vec3 vWorldRel;
-
-out vec4 fragColor;
+//#include <ps_varyings_lit>
+//#include <fn_cascade_shadow>
+//#include <fn_alpha_test>
+//#include <fn_night_fog_out>
 
 void main() {
-    // No gl_FragDepth — opaque draws use DepthMode::Normal (stencil
-    // ALWAYS+REPLACE 0).  Even if early-Z fires the stencil write
-    // before discard, REPLACE 0 to a stencil already 0 (cleared at
-    // frame start, never written non-zero outside the shadow
-    // accumulator pass) is idempotent.  Removing the late-test forcing
-    // lets early-Z and hierarchical-Z work — meaningful perf win on
-    // opaque-heavy scenes.
+    // No gl_FragDepth — opaque draws use DepthMode::Normal (idempotent stencil
+    // REPLACE 0), so early-Z / hierarchical-Z stay enabled.
     vec4 r0 = vColor * texture(tex0, vUV0);
     r0 *= constColor; // per-object IsColored tint (opacity + fade); white = no-op
     r0.rgb += vSpecColor.rgb;
 
-    if (shadowCtl.x > 0.5) {
-        // Tiered shadow maps: the first omniCount tiers are camera-centred spheres
-        // (selected by 3D distance, so a caster in ANY direction around the player —
-        // including behind the camera — casts into view); the rest are frustum
-        // slices reaching the far view distance (selected by eye-depth). Pick the
-        // tightest matching tier, then advance to the first tier whose projection is
-        // in bounds (coverage fallthrough, so a too-tight near tier never drops the
-        // shadow). 3x3-PCF the layer, cross-fade to the next tier over a band, fade
-        // at the far edge, and dim by the fog factor so distant shadows aren't harsh.
-        // cascadeCtl = {count, fadeRange, biasBase, omniCount}; cascadeSplits =
-        // per-tier select distance (omni: sphere radius; frustum: far eye-depth).
-        int nC = int(cascadeCtl.x);
-        int omniN = int(cascadeCtl.w);
-        float eyeDepth = dot(vWorldRel, camFwd.xyz);
-        float dist3D = length(vWorldRel);
-        int ci = nC;
-        for (int i = 0; i < 4; ++i) {
-            if (i >= nC) break;
-            float metric = (i < omniN) ? dist3D : eyeDepth;
-            if (metric <= cascadeSplits[i]) { ci = i; break; }
-        }
-        if (ci < nC) {
-            float ts = shadowCtl.w;
-            float prevEdge = (ci > 0) ? cascadeSplits[ci - 1] : 0.0;
-            float ciMetric = (ci < omniN) ? dist3D : eyeDepth;
-            float band = (cascadeSplits[ci] - prevEdge) * 0.15;
-            float bw = (ci + 1 < nC) ? clamp((ciMetric - (cascadeSplits[ci] - band)) / max(band, 0.001), 0.0, 1.0) : 0.0;
-            float litSum = 0.0;
-            float wSum = 0.0;
-            for (int p = 0; p < 4; ++p) {
-                int c = ci + p;
-                if (c >= nC) break;
-                // p0 = primary, p1 = blend partner; while nothing has covered yet a
-                // later p force-samples the next looser tier (coverage fallthrough).
-                float w = (p == 0) ? (1.0 - bw) : ((wSum <= 0.0) ? 1.0 : ((p == 1) ? bw : 0.0));
-                if (w <= 0.0) continue;
-                vec4 cp = cascadeVP[c] * vec4(vWorldRel, 1.0);
-                vec3 sc = cp.xyz / cp.w;
-                vec2 suv = sc.xy * 0.5 + 0.5;
-                if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && sc.z > 0.0 && sc.z < 1.0) {
-                    float bias = cascadeCtl.z * float(c + 1) * float(c + 1);
-                    float lit = 0.0;
-                    for (int dy = -1; dy <= 1; ++dy)
-                        for (int dx = -1; dx <= 1; ++dx)
-                            lit += (sc.z - bias > texture(shadowMap, vec3(suv + vec2(float(dx), float(dy)) * ts, float(c))).r) ? 0.0 : 1.0;
-                    litSum += w * (lit / 9.0);
-                    wSum += w;
-                }
-            }
-            if (wSum > 0.0) {
-                float lit = litSum / wSum;
-                float lastSplit = cascadeSplits[nC - 1];
-                float fade = clamp((lastSplit - eyeDepth) / max(cascadeCtl.y, 0.001), 0.0, 1.0);
-                float strength = (1.0 - lit) * fade * clamp(vFogTC, 0.0, 1.0); // dimmer in fog / far
-                r0.rgb *= mix(1.0, shadowCtl.z, strength);
-            }
-        }
-    }
-
-    if (alphaRef.z > 0.5) {
-        // Alpha-to-coverage: sharpen alpha around the cutout threshold so the
-        // MSAA resolve grades sub-pixel cutout features (fence wire, foliage)
-        // instead of the hard test keeping or killing the whole pixel.
-        float cov = clamp((r0.a - alphaRef.x) / max(fwidth(r0.a), 1e-4) + 0.5, 0.0, 1.0);
-        if (cov <= 0.0) discard;
-        r0.a = cov;
-    } else if (r0.a - alphaRef.x * alphaRef.y < 0.0) discard;
-
-    float luminance= clamp(dot(r0.rgb, rgbEyeCoef.rgb), 0.0, 1.0);
-    float nightBlend = clamp(luminance + rgbEyeCoef.a, 0.0, 1.0);
-    r0.rgb = mix(vec3(luminance), r0.rgb, nightBlend);
-
-    r0.rgb = mix(fogColor.rgb, r0.rgb, vFogTC);
-    fragColor = alphaRef.w > 0.5 ? vec4(1.0, 0.0, 0.0, 1.0) : r0;
+    r0.rgb = cascadeShadow(r0.rgb);
+    r0.a = alphaTest(r0.a);
+    fragColor = finalizeNightFog(r0);
 }
 )";
 
 // PSDetail — detail texturing (two texture samples, detail blend)
 static const char s_psDetailGLSL[] = R"(#version 330 core
-layout(std140) uniform PSConstants {
-    vec4 fogColor;
-    vec4 alphaRef;
-    vec4 shadowCtl;   // c2: {enable, bias, darkness, texelSize}
-    vec4 constColor; // c3: per-object IsColored tint (white = no-op)
-    vec4 _pad4;
-    vec4 _pad5;
-    vec4 _pad6;
-    vec4 rgbEyeCoef;
-    mat4 cascadeVP[4]; // c8-c23: per-cascade light view-projection
-    vec4 cascadeSplits;// c24: per-tier select distance (omni: radius; frustum: far eye-depth)
-    vec4 cascadeCtl;   // c25: {count, fadeRange, biasBase, omniCount}
-    vec4 camFwd;       // c26: camera forward (eye-depth = dot(vWorldRel, camFwd))
-};
+//#include <ps_constants>
 
 uniform sampler2D tex0;
 uniform sampler2D tex1;
 
-in vec4 vColor;
-in vec4 vSpecColor;
-in vec2 vUV0;
-in vec2 vUV1;
-in float vFogTC;
-
-uniform sampler2DArray shadowMap; // unit 2 — cascade depth-map array (unused unless shadowCtl.x>0.5)
-in vec3 vWorldRel;
-
-out vec4 fragColor;
+//#include <ps_varyings_lit>
+//#include <fn_cascade_shadow>
+//#include <fn_alpha_test>
+//#include <fn_night_fog_out>
 
 void main() {
-    // No gl_FragDepth — see PSNormal.
     vec4 t0 = texture(tex0, vUV0);
     vec4 t1 = texture(tex1, vUV1);
     vec4 r0 = vColor * t0;
@@ -417,118 +464,17 @@ void main() {
     r0.rgb *= t1.a * 2.0;
     r0 += vSpecColor;
 
-    if (shadowCtl.x > 0.5) {
-        // Tiered shadow maps: the first omniCount tiers are camera-centred spheres
-        // (selected by 3D distance, so a caster in ANY direction around the player —
-        // including behind the camera — casts into view); the rest are frustum
-        // slices reaching the far view distance (selected by eye-depth). Pick the
-        // tightest matching tier, then advance to the first tier whose projection is
-        // in bounds (coverage fallthrough, so a too-tight near tier never drops the
-        // shadow). 3x3-PCF the layer, cross-fade to the next tier over a band, fade
-        // at the far edge, and dim by the fog factor so distant shadows aren't harsh.
-        // cascadeCtl = {count, fadeRange, biasBase, omniCount}; cascadeSplits =
-        // per-tier select distance (omni: sphere radius; frustum: far eye-depth).
-        int nC = int(cascadeCtl.x);
-        int omniN = int(cascadeCtl.w);
-        float eyeDepth = dot(vWorldRel, camFwd.xyz);
-        float dist3D = length(vWorldRel);
-        int ci = nC;
-        for (int i = 0; i < 4; ++i) {
-            if (i >= nC) break;
-            float metric = (i < omniN) ? dist3D : eyeDepth;
-            if (metric <= cascadeSplits[i]) { ci = i; break; }
-        }
-        if (ci < nC) {
-            float ts = shadowCtl.w;
-            float prevEdge = (ci > 0) ? cascadeSplits[ci - 1] : 0.0;
-            float ciMetric = (ci < omniN) ? dist3D : eyeDepth;
-            float band = (cascadeSplits[ci] - prevEdge) * 0.15;
-            float bw = (ci + 1 < nC) ? clamp((ciMetric - (cascadeSplits[ci] - band)) / max(band, 0.001), 0.0, 1.0) : 0.0;
-            float litSum = 0.0;
-            float wSum = 0.0;
-            for (int p = 0; p < 4; ++p) {
-                int c = ci + p;
-                if (c >= nC) break;
-                // p0 = primary, p1 = blend partner; while nothing has covered yet a
-                // later p force-samples the next looser tier (coverage fallthrough).
-                float w = (p == 0) ? (1.0 - bw) : ((wSum <= 0.0) ? 1.0 : ((p == 1) ? bw : 0.0));
-                if (w <= 0.0) continue;
-                vec4 cp = cascadeVP[c] * vec4(vWorldRel, 1.0);
-                vec3 sc = cp.xyz / cp.w;
-                vec2 suv = sc.xy * 0.5 + 0.5;
-                if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && sc.z > 0.0 && sc.z < 1.0) {
-                    float bias = cascadeCtl.z * float(c + 1) * float(c + 1);
-                    float lit = 0.0;
-                    for (int dy = -1; dy <= 1; ++dy)
-                        for (int dx = -1; dx <= 1; ++dx)
-                            lit += (sc.z - bias > texture(shadowMap, vec3(suv + vec2(float(dx), float(dy)) * ts, float(c))).r) ? 0.0 : 1.0;
-                    litSum += w * (lit / 9.0);
-                    wSum += w;
-                }
-            }
-            if (wSum > 0.0) {
-                float lit = litSum / wSum;
-                float lastSplit = cascadeSplits[nC - 1];
-                float fade = clamp((lastSplit - eyeDepth) / max(cascadeCtl.y, 0.001), 0.0, 1.0);
-                float strength = (1.0 - lit) * fade * clamp(vFogTC, 0.0, 1.0); // dimmer in fog / far
-                r0.rgb *= mix(1.0, shadowCtl.z, strength);
-            }
-        }
-    }
-
-    if (alphaRef.z > 0.5) {
-        // Alpha-to-coverage: sharpen alpha around the cutout threshold so the
-        // MSAA resolve grades sub-pixel cutout features (fence wire, foliage)
-        // instead of the hard test keeping or killing the whole pixel.
-        float cov = clamp((r0.a - alphaRef.x) / max(fwidth(r0.a), 1e-4) + 0.5, 0.0, 1.0);
-        if (cov <= 0.0) discard;
-        r0.a = cov;
-    } else if (r0.a - alphaRef.x * alphaRef.y < 0.0) discard;
-
-    float luminance = clamp(dot(r0.rgb, rgbEyeCoef.rgb), 0.0, 1.0);
-    float nightBlend = clamp(luminance + rgbEyeCoef.a, 0.0, 1.0);
-    r0.rgb = mix(vec3(luminance), r0.rgb, nightBlend);
-
-    r0.rgb = mix(fogColor.rgb, r0.rgb, vFogTC);
-    fragColor = alphaRef.w > 0.5 ? vec4(1.0, 0.0, 0.0, 1.0) : r0;
+    r0.rgb = cascadeShadow(r0.rgb);
+    r0.a = alphaTest(r0.a);
+    fragColor = finalizeNightFog(r0);
 }
 )";
 
 // Instanced heightmap terrain: samples the height map in the VS to compute
 // position, normal and UV, then runs the same per-vertex lighting as vsTransform.
 static const char s_vsTerrainGLSL[] = R"(#version 330 core
-layout(std140) uniform VSConstants {
-    mat4 proj;
-    mat4 view;
-    mat4 world;
-    vec4 sunDir;
-    vec4 ambient;
-    vec4 diffuse;
-    vec4 emissive;
-    vec4 fogParam;
-    vec4 camPos;
-    vec4 specular;
-    vec4 specEn;
-    vec4 sunEn;
-    vec4 vpScale;
-    vec4 hmParams0;
-    vec4 hmParams1;
-    mat4 texMat0;
-    mat4 texMat1;
-    vec4 texCtrl;
-    vec4 matDiffuseRaw;
-    vec4 matAmbientRaw;
-    vec4 _padLights[31];
-    mat4 lightVP;
-};
-
-layout(std140) uniform LocalLights {
-    vec4 count;
-    vec4 pos[64];
-    vec4 diffuse[64];
-    vec4 ambient[64];
-    vec4 dir[64];
-} localLights;
+//#include <vs_constants>
+//#include <vs_local_lights_ubo>
 
 uniform sampler2D heightMap;
 uniform sampler2D jitterMap;
@@ -546,12 +492,7 @@ layout(location = 2) in vec2 cellOriginRel;
 // handle into lightSetTable
 layout(location = 3) in uint iLightSet;
 
-out vec4 vColor;
-out vec4 vSpecColor;
-out vec2 vUV0;
-out vec2 vUV1;
-out float vFogTC;
-out vec3 vWorldRel;
+//#include <vs_varyings_out>
 flat out float vLayer;
 flat out float vSimple;
 
@@ -559,6 +500,11 @@ float hmAt(ivec2 t) {
     ivec2 sz = textureSize(heightMap, 0);
     return texelFetch(heightMap, clamp(t, ivec2(0), sz - ivec2(1)), 0).r;
 }
+
+//#include <fn_sun_light>
+//#include <fn_local_light>
+//#include <fn_sun_specular>
+//#include <fn_compute_fog>
 
 void main() {
     float terrainGrid = 1.0 / hmParams0.x;
@@ -576,6 +522,7 @@ void main() {
     vec4 viewPos = view * vec4(worldPos, 1.0);
     gl_Position = proj * viewPos;
     vWorldRel = worldPos;
+    vec3 P = worldPos;
 
     vec2 baseUV = gridIJ * terrainParams.z;
     vec2 jUV = (vec2(iCell.xy) + baseUV + 0.5) * terrainParams2.y;
@@ -585,115 +532,36 @@ void main() {
     vLayer = float(iCell.z);
     vSimple = float(iCell.w);
 
-    float NdotL = max(0.0, dot(worldNormal, -sunDir.xyz));
-    vec4 litColor;
-    litColor.rgb = emissive.rgb + ambient.rgb * sunEn.x + diffuse.rgb * NdotL * sunEn.x;
-    litColor.a   = emissive.a   + ambient.a   * sunEn.x + diffuse.a   * NdotL * sunEn.x;
+    vec4 litColor = sunLight(worldNormal);
 
-    const float MIN_INSIDE2 = 0.95677279;
-    const float MAX_INSIDE2 = 0.98063081;
     float nightLocal = (sunEn.x > 0.5) ? sunEn.y : 1.0;
-    // Fetch the number of lights influencing this cell
     uint nLights = texelFetch(lightSetTable, int(iLightSet)).r;
     for (uint i = 0u; i < nLights; i++)
     {
-        // Fetch the index of the light from the lightSetTable
         uint idx = texelFetch(lightSetTable, int(iLightSet + 1u + i)).r;
-        vec4 lpos = localLights.pos[idx];
-        vec4 ldir = localLights.dir[idx];
-        vec3 toLight = lpos.xyz - worldPos;
-        float size2 = dot(toLight, toLight);
-        float startAtten2 = lpos.w * lpos.w;
-        float endAtten2 = startAtten2 * 100.0;
-        if (size2 >= endAtten2)
-        {
-            continue;
-        }
-
-        float cone = 1.0;
-        if (ldir.w > 0.5)
-        {
-            float inside = -dot(toLight, ldir.xyz);
-            if (inside <= 0.0)
-            {
-                continue;
-            }
-            float cos2 = (inside * inside) / size2;
-            if (cos2 < MIN_INSIDE2)
-            {
-                continue;
-            }
-            cone = clamp((cos2 - MIN_INSIDE2) / (MAX_INSIDE2 - MIN_INSIDE2), 0.0, 1.0);
-        }
-
-        vec3 ldif = localLights.diffuse[idx].rgb * matDiffuseRaw.rgb * nightLocal;
-        vec3 lamb = localLights.ambient[idx].rgb * matAmbientRaw.rgb * nightLocal;
-        float atten = (size2 >= startAtten2) ? (startAtten2 / size2) : 1.0;
-        float cosFi = dot(toLight, worldNormal);
-        vec3 contrib;
-        if (cosFi > 0.0)
-        {
-            cosFi *= inversesqrt(size2);
-            contrib = (ldif * cosFi + lamb) * (atten * cone);
-        }
-        else
-        {
-            contrib = lamb * atten;
-        }
-        litColor.rgb += contrib;
+        litColor.rgb += localLight(idx, P, worldNormal, nightLocal);
     }
 
     vColor = clamp(litColor, 0.0, 1.0);
-
-    vec3 spec = vec3(0.0);
-    if (specEn.x > 0.5 && sunEn.x > 0.0) {
-        vec3 viewDir = normalize(camPos.xyz - worldPos);
-        vec3 halfVec = normalize(-sunDir.xyz + viewDir);
-        float NdotH = max(0.0, dot(worldNormal, halfVec));
-        float specPow = max(1.0, specular.w);
-        spec = specular.rgb * pow(NdotH, specPow) * sunEn.x;
-    }
-    vSpecColor = vec4(clamp(spec, 0.0, 1.0), 0.0);
-
-    float dist = length(worldPos - camPos.xyz);
-    float fogFactor = clamp(1.0 - (dist - fogParam.x) * fogParam.y, 0.0, 1.0);
-    vFogTC = (fogParam.z > 0.5) ? fogFactor : 1.0;
+    vSpecColor = vec4(sunSpecular(P, worldNormal), 0.0);
+    vFogTC = computeFog(P);
 }
 )";
 
 // PSTerrain - PSDetail with a sampler2DArray surface texture
 static const char s_psTerrainGLSL[] = R"(#version 330 core
-layout(std140) uniform PSConstants {
-    vec4 fogColor;
-    vec4 alphaRef;
-    vec4 shadowCtl;
-    vec4 constColor;
-    vec4 _pad4;
-    vec4 _pad5;
-    vec4 _pad6;
-    vec4 rgbEyeCoef;
-    mat4 cascadeVP[4];
-    vec4 cascadeSplits;
-    vec4 cascadeCtl;
-    vec4 camFwd;
-};
+//#include <ps_constants>
 
 uniform sampler2DArray tex0;     // surface array, clamp sampler (unit 0)
 uniform sampler2DArray tex0Wrap; // same array, repeat sampler (unit 5)
 uniform sampler2D tex1;
 
-in vec4 vColor;
-in vec4 vSpecColor;
-in vec2 vUV0;
-in vec2 vUV1;
-in float vFogTC;
+//#include <ps_varyings_lit>
 flat in float vLayer;
 flat in float vSimple;
-
-uniform sampler2DArray shadowMap;
-in vec3 vWorldRel;
-
-out vec4 fragColor;
+//#include <fn_cascade_shadow>
+//#include <fn_alpha_test>
+//#include <fn_night_fog_out>
 
 void main() {
     // Tileable (simple) cells sample with repeat sampler, others with clamp sampler
@@ -705,65 +573,9 @@ void main() {
     r0.rgb *= t1.a * 2.0;
     r0 += vSpecColor;
 
-    if (shadowCtl.x > 0.5) {
-        int nC = int(cascadeCtl.x);
-        int omniN = int(cascadeCtl.w);
-        float eyeDepth = dot(vWorldRel, camFwd.xyz);
-        float dist3D = length(vWorldRel);
-        int ci = nC;
-        for (int i = 0; i < 4; ++i) {
-            if (i >= nC) break;
-            float metric = (i < omniN) ? dist3D : eyeDepth;
-            if (metric <= cascadeSplits[i]) { ci = i; break; }
-        }
-        if (ci < nC) {
-            float ts = shadowCtl.w;
-            float prevEdge = (ci > 0) ? cascadeSplits[ci - 1] : 0.0;
-            float ciMetric = (ci < omniN) ? dist3D : eyeDepth;
-            float band = (cascadeSplits[ci] - prevEdge) * 0.15;
-            float bw = (ci + 1 < nC) ? clamp((ciMetric - (cascadeSplits[ci] - band)) / max(band, 0.001), 0.0, 1.0) : 0.0;
-            float litSum = 0.0;
-            float wSum = 0.0;
-            for (int p = 0; p < 4; ++p) {
-                int c = ci + p;
-                if (c >= nC) break;
-                float w = (p == 0) ? (1.0 - bw) : ((wSum <= 0.0) ? 1.0 : ((p == 1) ? bw : 0.0));
-                if (w <= 0.0) continue;
-                vec4 cp = cascadeVP[c] * vec4(vWorldRel, 1.0);
-                vec3 sc = cp.xyz / cp.w;
-                vec2 suv = sc.xy * 0.5 + 0.5;
-                if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && sc.z > 0.0 && sc.z < 1.0) {
-                    float bias = cascadeCtl.z * float(c + 1) * float(c + 1);
-                    float lit = 0.0;
-                    for (int dyi = -1; dyi <= 1; ++dyi)
-                        for (int dxi = -1; dxi <= 1; ++dxi)
-                            lit += (sc.z - bias > texture(shadowMap, vec3(suv + vec2(float(dxi), float(dyi)) * ts, float(c))).r) ? 0.0 : 1.0;
-                    litSum += w * (lit / 9.0);
-                    wSum += w;
-                }
-            }
-            if (wSum > 0.0) {
-                float lit = litSum / wSum;
-                float lastSplit = cascadeSplits[nC - 1];
-                float fade = clamp((lastSplit - eyeDepth) / max(cascadeCtl.y, 0.001), 0.0, 1.0);
-                float strength = (1.0 - lit) * fade * clamp(vFogTC, 0.0, 1.0);
-                r0.rgb *= mix(1.0, shadowCtl.z, strength);
-            }
-        }
-    }
-
-    if (alphaRef.z > 0.5) {
-        float cov = clamp((r0.a - alphaRef.x) / max(fwidth(r0.a), 1e-4) + 0.5, 0.0, 1.0);
-        if (cov <= 0.0) discard;
-        r0.a = cov;
-    } else if (r0.a - alphaRef.x * alphaRef.y < 0.0) discard;
-
-    float luminance = clamp(dot(r0.rgb, rgbEyeCoef.rgb), 0.0, 1.0);
-    float nightBlend = clamp(luminance + rgbEyeCoef.a, 0.0, 1.0);
-    r0.rgb = mix(vec3(luminance), r0.rgb, nightBlend);
-
-    r0.rgb = mix(fogColor.rgb, r0.rgb, vFogTC);
-    fragColor = alphaRef.w > 0.5 ? vec4(1.0, 0.0, 0.0, 1.0) : r0;
+    r0.rgb = cascadeShadow(r0.rgb);
+    r0.a = alphaTest(r0.a);
+    fragColor = finalizeNightFog(r0);
 }
 )";
 
@@ -787,19 +599,12 @@ layout(std140) uniform PSConstants {
 uniform sampler2D tex0;
 uniform sampler2D tex1;
 
-in vec4 vColor;
-in vec4 vSpecColor;
-in vec2 vUV0;
-in vec2 vUV1;
-in float vFogTC;
-
-uniform sampler2DArray shadowMap; // unit 2 — cascade depth-map array (unused unless shadowCtl.x>0.5)
-in vec3 vWorldRel;
-
-out vec4 fragColor;
+//#include <ps_varyings_lit>
+//#include <fn_cascade_shadow>
+//#include <fn_alpha_test>
+//#include <fn_fog_out>
 
 void main() {
-    // No gl_FragDepth — see PSNormal.
     vec4 t0 = texture(tex0, vUV0);
     vec4 t1 = texture(tex1, vUV1);
 
@@ -809,77 +614,11 @@ void main() {
     r0.rgb = vColor.rgb * t0.rgb;
     r0.a = clamp((grassCoef1.a * 2.0 - 1.0) + t1.a, 0.0, 1.0);
     r0.rgb = clamp(r0.rgb * t1.rgb * 2.0, 0.0, 1.0);
-    if (shadowCtl.x > 0.5) {
-        // Tiered shadow maps: the first omniCount tiers are camera-centred spheres
-        // (selected by 3D distance, so a caster in ANY direction around the player —
-        // including behind the camera — casts into view); the rest are frustum
-        // slices reaching the far view distance (selected by eye-depth). Pick the
-        // tightest matching tier, then advance to the first tier whose projection is
-        // in bounds (coverage fallthrough, so a too-tight near tier never drops the
-        // shadow). 3x3-PCF the layer, cross-fade to the next tier over a band, fade
-        // at the far edge, and dim by the fog factor so distant shadows aren't harsh.
-        // cascadeCtl = {count, fadeRange, biasBase, omniCount}; cascadeSplits =
-        // per-tier select distance (omni: sphere radius; frustum: far eye-depth).
-        int nC = int(cascadeCtl.x);
-        int omniN = int(cascadeCtl.w);
-        float eyeDepth = dot(vWorldRel, camFwd.xyz);
-        float dist3D = length(vWorldRel);
-        int ci = nC;
-        for (int i = 0; i < 4; ++i) {
-            if (i >= nC) break;
-            float metric = (i < omniN) ? dist3D : eyeDepth;
-            if (metric <= cascadeSplits[i]) { ci = i; break; }
-        }
-        if (ci < nC) {
-            float ts = shadowCtl.w;
-            float prevEdge = (ci > 0) ? cascadeSplits[ci - 1] : 0.0;
-            float ciMetric = (ci < omniN) ? dist3D : eyeDepth;
-            float band = (cascadeSplits[ci] - prevEdge) * 0.15;
-            float bw = (ci + 1 < nC) ? clamp((ciMetric - (cascadeSplits[ci] - band)) / max(band, 0.001), 0.0, 1.0) : 0.0;
-            float litSum = 0.0;
-            float wSum = 0.0;
-            for (int p = 0; p < 4; ++p) {
-                int c = ci + p;
-                if (c >= nC) break;
-                // p0 = primary, p1 = blend partner; while nothing has covered yet a
-                // later p force-samples the next looser tier (coverage fallthrough).
-                float w = (p == 0) ? (1.0 - bw) : ((wSum <= 0.0) ? 1.0 : ((p == 1) ? bw : 0.0));
-                if (w <= 0.0) continue;
-                vec4 cp = cascadeVP[c] * vec4(vWorldRel, 1.0);
-                vec3 sc = cp.xyz / cp.w;
-                vec2 suv = sc.xy * 0.5 + 0.5;
-                if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && sc.z > 0.0 && sc.z < 1.0) {
-                    float bias = cascadeCtl.z * float(c + 1) * float(c + 1);
-                    float lit = 0.0;
-                    for (int dy = -1; dy <= 1; ++dy)
-                        for (int dx = -1; dx <= 1; ++dx)
-                            lit += (sc.z - bias > texture(shadowMap, vec3(suv + vec2(float(dx), float(dy)) * ts, float(c))).r) ? 0.0 : 1.0;
-                    litSum += w * (lit / 9.0);
-                    wSum += w;
-                }
-            }
-            if (wSum > 0.0) {
-                float lit = litSum / wSum;
-                float lastSplit = cascadeSplits[nC - 1];
-                float fade = clamp((lastSplit - eyeDepth) / max(cascadeCtl.y, 0.001), 0.0, 1.0);
-                float strength = (1.0 - lit) * fade * clamp(vFogTC, 0.0, 1.0); // dimmer in fog / far
-                r0.rgb *= mix(1.0, shadowCtl.z, strength);
-            }
-        }
-    }
+    r0.rgb = cascadeShadow(r0.rgb);
     r0.a = clamp(grassCoef2.a * r0.a * 2.0, 0.0, 1.0);
 
-    if (alphaRef.z > 0.5) {
-        // Alpha-to-coverage: sharpen alpha around the cutout threshold so the
-        // MSAA resolve grades sub-pixel cutout features (fence wire, foliage)
-        // instead of the hard test keeping or killing the whole pixel.
-        float cov = clamp((r0.a - alphaRef.x) / max(fwidth(r0.a), 1e-4) + 0.5, 0.0, 1.0);
-        if (cov <= 0.0) discard;
-        r0.a = cov;
-    } else if (r0.a - alphaRef.x * alphaRef.y < 0.0) discard;
-
-    r0.rgb = mix(fogColor.rgb, r0.rgb, vFogTC);
-    fragColor = alphaRef.w > 0.5 ? vec4(1.0, 0.0, 0.0, 1.0) : r0;
+    r0.a = alphaTest(r0.a);
+    fragColor = finalizeFog(r0);
 }
 )";
 
@@ -899,16 +638,8 @@ layout(std140) uniform PSConstants {
 uniform sampler2D tex0;
 uniform sampler2D tex1;
 
-in vec4 vColor;
-in vec4 vSpecColor;
-in vec2 vUV0;
-in vec2 vUV1;
-in float vFogTC;
-
-uniform sampler2DArray shadowMap; // unit 2 — cascade depth-map array (unused unless shadowCtl.x>0.5)
-in vec3 vWorldRel;
-
-out vec4 fragColor;
+//#include <ps_varyings_lit>
+//#include <fn_fog_out>
 
 void main() {
     vec4 t0 = texture(tex0, vUV0);
@@ -917,8 +648,7 @@ void main() {
     float spec = clamp(dot(lightDir.xyz, bumpNormal), 0.0, 1.0);
     vec4 r0 = vColor * t0;
     r0.rgb += spec;
-    r0.rgb = mix(fogColor.rgb, r0.rgb, vFogTC);
-    fragColor = alphaRef.w > 0.5 ? vec4(1.0, 0.0, 0.0, 1.0) : r0;
+    fragColor = finalizeFog(r0);
 }
 )";
 
@@ -927,44 +657,14 @@ void main() {
 // (matches DX8 with-D3DRS_LIGHTING-FALSE behaviour for shadows).  vUV0 carries
 // the cutout texture coords so PSShadow can alpha-test through leaf gaps.
 static const char s_vsShadowGLSL[] = R"(#version 330 core
-layout(std140) uniform VSConstants {
-    mat4 proj;          // c0-c3
-    mat4 view;          // c4-c7
-    mat4 world;         // c8-c11
-    vec4 sunDir;        // c12
-    vec4 ambient;       // c13
-    vec4 diffuse;       // c14
-    vec4 emissive;      // c15
-    vec4 fogParam;      // c16
-    vec4 camPos;        // c17
-    vec4 specular;      // c18
-    vec4 specEn;        // c19
-    vec4 sunEn;         // c20
-    vec4 vpScale;       // c21 — VSScreen only, declared for layout parity
-    vec4 hmParams0;     // c22: terrain heightmap {invGrid, camX, camZ, camY}
-    vec4 hmParams1;     // c23: land clip {boundingCenter.xyz, enable}
-    mat4 texMat0;       // c24-c27
-    mat4 texMat1;       // c28-c31
-    vec4 texCtrl;       // c32
-};
-
-// Per-instance world matrices (perf effort 08). Plain glDrawElements has
-// gl_InstanceID == 0, so slot 0 carries the classic single world matrix
-// and non-instanced draws are unchanged.
-layout(std140) uniform WorldInstances {
-    mat4 worldArr[256];
-};
+//#include <vs_constants>
+//#include <vs_world_instances>
 
 layout(location = 0) in vec3 pos;
 layout(location = 1) in vec3 normal;
 layout(location = 2) in vec2 uv;
 
-out vec4 vColor;
-out vec4 vSpecColor;
-out vec2 vUV0;
-out vec2 vUV1;
-out float vFogTC;
-out vec3 vWorldRel;
+//#include <vs_varyings_out>
 
 void main() {
     vec4 worldPos = worldArr[gl_InstanceID] * vec4(pos, 1.0);
@@ -1063,14 +763,113 @@ static bool TryLoadShaderOverride(const char* name, std::string& out)
     return true;
 }
 
+// Registry of the reusable fragments a `//#include <name>` directive can pull in.
+struct GLSLChunk
+{
+    std::string_view name;
+    const char* body;
+};
+static const GLSLChunk s_glslChunks[] = {
+    {"vs_constants", s_chunkVSConstants},
+    {"vs_world_instances", s_chunkVSWorldInstances},
+    {"vs_local_lights_ubo", s_chunkVSLocalLightsUBO},
+    {"vs_varyings_out", s_chunkVSVaryingsOut},
+    {"fn_sun_light", s_fnSunLight},
+    {"fn_local_light", s_fnLocalLight},
+    {"fn_sun_specular", s_fnSunSpecular},
+    {"fn_compute_fog", s_fnComputeFog},
+    {"ps_constants", s_chunkPSConstants},
+    {"ps_varyings_lit", s_chunkPSVaryingsLit},
+    {"fn_cascade_shadow", s_fnCascadeShadow},
+    {"fn_alpha_test", s_fnAlphaTest},
+    {"fn_fog_out", s_fnFogOut},
+    {"fn_night_fog_out", s_fnNightFogOut},
+};
+
+static const char* FindGLSLChunk(std::string_view name)
+{
+    for (const auto& c : s_glslChunks)
+    {
+        if (c.name == name)
+        {
+            return c.body;
+        }
+    }
+    return nullptr;
+}
+
+// Splice `//#include <name>` directives (recursively) into the shader text.
+static void AssembleShaderInto(const char* source, std::string& out, int depth)
+{
+    if (depth > 8)
+    {
+        LOG_ERROR(Graphics, "GL33: shader #include nested too deep");
+        return;
+    }
+    static const char kMarker[] = "//#include";
+    const size_t kMarkerLen = sizeof(kMarker) - 1;
+    for (const char* p = source; *p;)
+    {
+        const char* eol = p;
+        while (*eol && *eol != '\n')
+        {
+            ++eol;
+        }
+        const char* next = (*eol == '\n') ? eol + 1 : eol;
+
+        const char* s = p;
+        while (s < eol && (*s == ' ' || *s == '\t'))
+        {
+            ++s;
+        }
+
+        if (static_cast<size_t>(eol - s) >= kMarkerLen && memcmp(s, kMarker, kMarkerLen) == 0)
+        {
+            const char* a = static_cast<const char*>(memchr(s, '<', eol - s));
+            const char* b = a ? static_cast<const char*>(memchr(a, '>', eol - a)) : nullptr;
+            if (a && b)
+            {
+                std::string_view chunkName(a + 1, b - a - 1);
+                if (const char* body = FindGLSLChunk(chunkName))
+                {
+                    AssembleShaderInto(body, out, depth + 1);
+                    if (!out.empty() && out.back() != '\n')
+                    {
+                        out.push_back('\n');
+                    }
+                }
+                else
+                {
+                    LOG_ERROR(Graphics, "GL33: unknown shader #include '{}'", std::string(chunkName));
+                }
+                p = next;
+                continue;
+            }
+        }
+        out.append(p, next - p);
+        p = next;
+    }
+}
+
+static std::string AssembleShader(const char* source)
+{
+    std::string out;
+    out.reserve(strlen(source) + 4096);
+    AssembleShaderInto(source, out, 0);
+    return out;
+}
+
 static GLuint CompileGLShader(GLenum type, const char* source, const char* name)
 {
     std::string overrideSource;
     if (TryLoadShaderOverride(name, overrideSource))
         source = overrideSource.c_str();
 
+    std::string assembled = AssembleShader(source);
+    const char* finalSource = assembled.c_str();
+
     GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, nullptr);
+    glShaderSource(shader, 1, &finalSource, nullptr);
     glCompileShader(shader);
 
     GLint status = 0;
@@ -1903,6 +1702,11 @@ uint64_t HashShaderSources()
     add(s_psShadowGLSL);
     add(s_vsTerrainGLSL);
     add(s_psTerrainGLSL);
+    // Hash the fragment bodies too so editing one invalidates the binary cache
+    for (const auto& c : s_glslChunks)
+    {
+        add(c.body);
+    }
     return h;
 }
 
