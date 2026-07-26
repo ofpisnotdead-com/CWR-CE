@@ -56,6 +56,13 @@ Texture* HTMLField::GetTexture()
     }
 }
 
+CHTMLContainer::CHTMLContainer()
+    : _currentSection(0), _activeField(-1), _sizeH1(1), _sizeH2(1), _sizeH3(1), _sizeH4(1), _sizeH5(1), _sizeH6(1),
+      _sizeP(1), _indent(0)
+{
+    Init();
+}
+
 CHTMLContainer::CHTMLContainer(const ParamEntry& cls)
 {
     _bgColor = GetPackedColor(cls >> "colorBackground");
@@ -1358,6 +1365,7 @@ void CHTMLContainer::LoadBuffer(const char* filenameHint, const char* utf8Text, 
 
     QIStream in;
     in.init(utf8Buf.data(), static_cast<int>(utf8Buf.size()));
+    const int langID = _fontP ? _fontP->GetLangID() : 0;
 
     HTMLStackItem item(HTMLNone, HALeft, HFP);
     HTMLStack stack;
@@ -1728,7 +1736,7 @@ void CHTMLContainer::LoadBuffer(const char* filenameHint, const char* utf8Text, 
         {
             // text
             in.unget();
-            RString text = ReadHtmlBodyText(in, _fontP->GetLangID());
+            RString text = ReadHtmlBodyText(in, langID);
             switch (item.context)
             {
                 case HTMLNone:

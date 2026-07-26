@@ -6,6 +6,7 @@
 
 class IControl;
 class ControlsContainer;
+class CHTMLContainer;
 
 namespace Poseidon
 {
@@ -63,8 +64,9 @@ class UITestEngine
     // The rendered on-screen text, ignoring any semantic override: what the
     // player actually sees, which may be clipped or marquee-scrolled.
     static std::string GetControlDisplayText(IControl* ctrl);
-    // Concatenated text of an HTML control's parsed section fields ("" if not HTML)
+    // Concatenated text of an HTML control's current section ("" if not HTML)
     static std::string GetHtmlText(IControl* ctrl);
+    static std::string GetHtmlText(const CHTMLContainer& html);
     static void SetSemanticControlText(IControl* ctrl, const char* text);
     static void ClearSemanticControlText(IControl* ctrl);
 

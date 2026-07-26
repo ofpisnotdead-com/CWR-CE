@@ -583,6 +583,8 @@ protected:
 
 	RString _filename;
 	float _indent;
+	// Parser-only subclasses provide page and text metrics without renderer services.
+	CHTMLContainer();
 public:
 
 	CHTMLContainer(const ParamEntry &cls);

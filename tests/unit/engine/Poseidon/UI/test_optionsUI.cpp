@@ -1,8 +1,11 @@
 #include <Poseidon/UI/Options/OptionsScrollList.hpp>
 #include <Poseidon/UI/Options/OptionsShell.hpp>
 #include <Poseidon/UI/OptionsUI.hpp>
+#include <Poseidon/UI/Controls/UIControlsBase.hpp>
 #include <Poseidon/UI/UITestEngine.hpp>
 #include <catch2/catch_test_macros.hpp>
+
+#include <cstring>
 
 using namespace Poseidon;
 TEST_CASE("optionsUI compiles", "[optionsUI][tier3]")
@@ -36,6 +39,16 @@ class TestSemanticControl : public IControl
     bool IsInside(float, float) override { return false; }
     void Move(float, float) override {}
     void OnDraw(float) override {}
+};
+
+class TestHtmlContainer : public CHTMLContainer
+{
+  public:
+    void SelectSection(const char* name) { _currentSection = FindSection(name); }
+
+    float GetPageWidth() const override { return 1000; }
+    float GetPageHeight() const override { return 1000; }
+    float GetTextWidth(float, Font*, const char* text) const override { return std::strlen(text); }
 };
 
 TEST_CASE("OptionsShell propagates the simulation flag to the display base", "[optionsUI][UI]")
@@ -87,6 +100,25 @@ TEST_CASE("UITestEngine returns semantic text when controls render a clipped mar
 
     UITestEngine::ClearSemanticControlText(&ctrl);
     CHECK(UITestEngine::GetControlText(&ctrl).empty());
+}
+
+TEST_CASE("UITestEngine returns text from the current HTML section", "[ui][html]")
+{
+    TestHtmlContainer html;
+    html.LoadBuffer("inline.html", R"html(<html><body>
+        <h1><a name="End1"></a>Mission complete</h1>
+        <p>Selected result</p>
+        <hr>
+        <h1><a name="End2"></a>Hidden alternate result</h1>
+    </body></html>)html");
+
+    REQUIRE(html.NSections() == 2);
+    html.SelectSection("End1");
+    CHECK(UITestEngine::GetHtmlText(html) == "Mission complete Selected result");
+    html.SelectSection("End2");
+    CHECK(UITestEngine::GetHtmlText(html) == "Hidden alternate result");
+    html.SelectSection("Missing");
+    CHECK(UITestEngine::GetHtmlText(html).empty());
 }
 
 TEST_CASE("OptionsScrollList::FormatCell clips idle cells and marquees focused overflow", "[optionsUI][UI]")
