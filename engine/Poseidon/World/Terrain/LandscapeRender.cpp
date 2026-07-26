@@ -1271,8 +1271,24 @@ const int NGrassModes = sizeof(GrassModes) / sizeof(*GrassModes);
 bool GGl33TerrainInstanced = false;
 
 static std::vector<Engine::LandCell> g_landCells;
+static std::vector<Engine::LandCell> g_waterCells;
 // Is the current terrain state valid for instanced rendering?
 static bool g_instSetupValid = false;
+
+// Per-land-cell water mask, indexed [z * range + x]. A cell is marked when its lowest
+// terrain point can be reached by the tide at its highest (min height <= maxTide + maxWave).
+static std::vector<uint8_t> g_waterCellMask;
+static int g_waterCellMaskRange = 0;
+
+static bool WaterCellMaskAt(int x, int z)
+{
+    if (x < 0 || z < 0 || x >= g_waterCellMaskRange || z >= g_waterCellMaskRange)
+    {
+        // Beyond the map -> open sea
+        return true;
+    }
+    return g_waterCellMask[static_cast<size_t>(z) * g_waterCellMaskRange + x] != 0;
+}
 
 namespace
 {
@@ -1327,6 +1343,29 @@ void Landscape::PrepareInstancedTerrain()
     setup.jitterH = jw;
     _engine->PrepareTerrain(setup);
 
+    // Precompute the water cell mask
+    auto clampT = [this](int v) { return v < 0 ? 0 : (v >= _terrainRange ? _terrainRange - 1 : v); };
+    g_waterCellMaskRange = _landRange;
+    g_waterCellMask.assign(static_cast<size_t>(_landRange) * _landRange, 0);
+    for (int lz = 0; lz < _landRange; lz++)
+    {
+        for (int lx = 0; lx < _landRange; lx++)
+        {
+            float minH = FLT_MAX;
+            for (int tz = 0; tz <= subdiv; tz++)
+            {
+                for (int tx = 0; tx <= subdiv; tx++)
+                {
+                    minH = std::min(minH, GetData(clampT(lx * subdiv + tx), clampT(lz * subdiv + tz)));
+                }
+            }
+            if (minH <= maxTide + maxWave)
+            {
+                g_waterCellMask[static_cast<size_t>(lz) * _landRange + lx] = 1;
+            }
+        }
+    }
+
     g_instSetupValid = true;
 }
 
@@ -1345,6 +1384,19 @@ static TLMaterial InstancedTerrainMaterial()
     return mat;
 }
 
+static TLMaterial InstancedWaterMaterial()
+{
+    TLMaterial base;
+    GAnimatorWater.GetMaterial(base, 0);
+    Ref<TexMaterial> tm = GTexMaterialBank.New("#Water");
+    TLMaterial mat = base;
+    if (tm)
+    {
+        tm->Combine(mat, base);
+    }
+    return mat;
+}
+
 void Landscape::DrawGroundInstanced(const LandBegEnd& bigRect, Scene& scene)
 {
     // Ensure terrain setup is up to date before cull + render
@@ -1355,7 +1407,7 @@ void Landscape::DrawGroundInstanced(const LandBegEnd& bigRect, Scene& scene)
     const float halfSegment = LandSegmentSize * _landGrid * 0.5f;
     auto clampT = [this](int v) { return v < 0 ? 0 : (v >= _terrainRange ? _terrainRange - 1 : v); };
 
-    _engine->BeginTerrain(scene.ActiveLights());
+    _engine->BeginGround(scene.ActiveLights());
 
     // 1. Frustum cull 8x8 cell segments
     g_visibleSegments.clear();
@@ -1402,8 +1454,9 @@ void Landscape::DrawGroundInstanced(const LandBegEnd& bigRect, Scene& scene)
         seg.lightSet = _engine->AddTerrainLightSet(lights);
     }
 
-    // 3. Expand and gather each segment's cells into a single vector
+    // 3. Expand and gather each segment's solid and water cells
     g_landCells.clear();
+    g_waterCells.clear();
     for (const VisibleSegment& seg : g_visibleSegments)
     {
         for (int cz = 0; cz < LandSegmentSize; cz++)
@@ -1411,18 +1464,27 @@ void Landscape::DrawGroundInstanced(const LandBegEnd& bigRect, Scene& scene)
             for (int cx = 0; cx < LandSegmentSize; cx++)
             {
                 const int wx = seg.xBeg + cx, wz = seg.zBeg + cz;
+
                 int ti = ClippedTextureIndex(wz, wx);
-                if (ti <= 0)
+                if (ti > 0)
                 {
-                    // Out of range or no texture, skip this cell
-                    continue;
+                    Engine::LandCell cell;
+                    cell.cellX = wx;
+                    cell.cellZ = wz;
+                    cell.texIndex = ti;
+                    cell.lightSet = seg.lightSet;
+                    g_landCells.push_back(cell);
                 }
-                Engine::LandCell cell;
-                cell.cellX = wx;
-                cell.cellZ = wz;
-                cell.texIndex = ti;
-                cell.lightSet = seg.lightSet;
-                g_landCells.push_back(cell);
+
+                if (WaterCellMaskAt(wx, wz))
+                {
+                    Engine::LandCell wc;
+                    wc.cellX = wx;
+                    wc.cellZ = wz;
+                    wc.texIndex = 0;
+                    wc.lightSet = seg.lightSet;
+                    g_waterCells.push_back(wc);
+                }
             }
         }
     }
@@ -1431,6 +1493,27 @@ void Landscape::DrawGroundInstanced(const LandBegEnd& bigRect, Scene& scene)
     if (!g_landCells.empty())
     {
         _engine->DrawTerrain(g_landCells.data(), g_landCells.size(), InstancedTerrainMaterial());
+    }
+    if (!g_waterCells.empty())
+    {
+        Texture* waterTex = _texture[0];
+        if (waterTex)
+        {
+            float texPhase = fastFmod(Glob.time.toFloat(), 2);
+            if (texPhase > 1.0f)
+            {
+                texPhase = 2 - texPhase;
+            }
+            int n = waterTex->AnimationLength();
+            if (n > 1)
+            {
+                int i = toIntFloor(texPhase * n);
+                saturate(i, 0, n - 1);
+                waterTex = waterTex->GetAnimation(i);
+            }
+            _engine->DrawWater(g_waterCells.data(), g_waterCells.size(), InstancedWaterMaterial(), waterTex,
+                               _seaLevelWave);
+        }
     }
 }
 
@@ -1703,7 +1786,10 @@ void Landscape::DrawRect(Scene& scene, const LandBegEnd& bigRect)
         if (!ENGINE_CONFIG.noLandscape)
         {
             GEngine->EnableReorderQueues(true);
-            DrawWater(bigRect, scene);
+            if (!GGl33TerrainInstanced)
+            {
+                DrawWater(bigRect, scene);
+            }
 
             DrawHorizont(scene);
         }

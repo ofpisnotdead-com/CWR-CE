@@ -74,8 +74,15 @@ struct TerrainInstancedGL33
     GLuint cachedProg = 0;
     GLint locTerrainParams = -1, locTerrainParams2 = -1;
 
+    GLuint cachedWaterProg = 0;
+    GLint locWaterParams = -1;
+
     std::vector<TerrainBatch> batches;
     std::vector<TexSlot> texSlots;
+
+    // Per-frame water cells.
+    // Water has a single texture so it needs no per-texture batching.
+    std::vector<GpuCellInstance> waterInstances;
 
     GLuint jitterTex = 0;
     float invJitterSize = 0.0f;
@@ -96,6 +103,7 @@ struct TerrainInstancedGL33
         {
             b.ResetFrameState();
         }
+        waterInstances.clear();
         lightSetData.assign(1, 0u);
     }
 };
@@ -423,7 +431,7 @@ void EngineGL33::FreeTerrainInstanced()
     _terrainInst = nullptr;
 }
 
-void EngineGL33::BeginTerrain(const LightList& lights)
+void EngineGL33::BeginGround(const LightList& lights)
 {
     if (!_terrainInst)
     {
@@ -545,8 +553,12 @@ void EngineGL33::DrawTerrain(const LandCell* cells, size_t count, const TLMateri
         glGenTextures(1, &t.lightSetTex);
     }
     glBindBuffer(GL_TEXTURE_BUFFER, t.lightSetTBO);
-    glBufferData(GL_TEXTURE_BUFFER, static_cast<GLsizeiptr>(t.lightSetData.size() * sizeof(unsigned)),
-                 t.lightSetData.data(), GL_STREAM_DRAW);
+    glBufferData(
+        GL_TEXTURE_BUFFER,
+        static_cast<GLsizeiptr>(t.lightSetData.size() * sizeof(unsigned)),
+        t.lightSetData.data(),
+        GL_STREAM_DRAW
+    );
     GL33Bind::ActiveUnit(6);
     glBindTexture(GL_TEXTURE_BUFFER, t.lightSetTex);
     glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, t.lightSetTBO);
@@ -593,15 +605,153 @@ void EngineGL33::DrawTerrain(const LandCell* cells, size_t count, const TLMateri
         GL33Bind::ActiveUnit(0);
         glBindTexture(GL_TEXTURE_2D_ARRAY, b.array);
         glBindBuffer(GL_ARRAY_BUFFER, t.instVBO);
-        glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(b.frameInstances.size() * sizeof(GpuCellInstance)), b.frameInstances.data(),
-                     GL_STREAM_DRAW);
-        glDrawElementsInstanced(GL_TRIANGLES, t.indexCount, GL_UNSIGNED_SHORT, nullptr,
-                                static_cast<GLsizei>(b.frameInstances.size()));
+        glBufferData(
+            GL_ARRAY_BUFFER,
+            static_cast<GLsizeiptr>(b.frameInstances.size() * sizeof(GpuCellInstance)),
+            b.frameInstances.data(),
+            GL_STREAM_DRAW
+        );
+        glDrawElementsInstanced(
+            GL_TRIANGLES,
+            t.indexCount,
+            GL_UNSIGNED_SHORT,
+            nullptr,
+            static_cast<GLsizei>(b.frameInstances.size())
+        );
         Poseidon::gPerfDrawCalls++;
     }
 
     // Clean up GL state
     glBindSampler(5, 0);
+    InvalidatePipelineCache();
+    _vertexShaderSel = VSNone;
+    _pixelShaderSel = PSNone;
+}
+
+void EngineGL33::DrawWater(const LandCell* cells, size_t count, const TLMaterial& mat, Texture* surfaceTex, float seaLevel)
+{
+    if (!_terrainInst || count <= 0)
+    {
+        return;
+    }
+
+    TerrainInstancedGL33& t = *_terrainInst;
+    if (!t.vao || t.indexCount <= 0)
+    {
+        return;
+    }
+
+    TextureGL33* surf = static_cast<TextureGL33*>(surfaceTex);
+    if (!surf)
+    {
+        return;
+    }
+
+    GLuint prog = _shaderProgram[VSWaterInst][PSSNormal][_pixelShaderModeSel][PSDetail];
+    if (!prog)
+    {
+        return;
+    }
+
+    BeginPass(PassId::Terrain);
+    ApplyBlendMode(BlendMode::Opaque);
+    ApplyDepthMode(DepthMode::Normal);
+    render::pipeline::SetPolygonOffsetForDecals(false);
+    glBindSampler(0, _samplerObjects[SamplerRepeat]);
+    glBindSampler(1, _samplerObjects[SamplerRepeat]);
+    SetAlphaTest(false);
+    const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    memcpy(_psConstants.constColor, white, sizeof(white));
+    UploadPSConstant(PSConstants::SlotConstColor, _psConstants.constColor);
+    SetShaderFogEnabled(true);
+    UploadVSMaterialConstants(mat, _sunEnabled);
+
+    glUseProgram(prog);
+    if (t.cachedWaterProg != prog)
+    {
+        t.cachedWaterProg = prog;
+        t.locWaterParams = glGetUniformLocation(prog, "waterParams");
+    }
+    const float invSubdiv = 1.0f / static_cast<float>(t.subdivCount);
+    if (t.locWaterParams >= 0)
+    {
+        glUniform4f(t.locWaterParams, seaLevel, invSubdiv, 32.0f, 0.0f);
+    }
+
+    // Water surface texture on unit 0, specular texture on unit 1
+    if (TextBankGL33* bank = TextBankDD())
+    {
+        bank->UseMipmap(surf, 0, 0);
+        GL33Bind::Tex2DForSampling(0, surf->GetHandle());
+        if (TextureGL33* spec = bank->GetSpecularTexture())
+        {
+            bank->UseMipmap(spec, 0, 0);
+            GL33Bind::Tex2DForSampling(1, spec->GetHandle());
+        }
+    }
+
+    // Upload the per-frame light set to a texture buffer and bind it on unit 6
+    if (t.lightSetData.empty())
+    {
+        t.lightSetData.push_back(0u);
+    }
+    if (!t.lightSetTBO)
+    {
+        glGenBuffers(1, &t.lightSetTBO);
+    }
+    if (!t.lightSetTex)
+    {
+        glGenTextures(1, &t.lightSetTex);
+    }
+    glBindBuffer(GL_TEXTURE_BUFFER, t.lightSetTBO);
+    glBufferData(
+        GL_TEXTURE_BUFFER,
+        static_cast<GLsizeiptr>(t.lightSetData.size() * sizeof(unsigned)),
+        t.lightSetData.data(),
+        GL_STREAM_DRAW
+    );
+    GL33Bind::ActiveUnit(6);
+    glBindTexture(GL_TEXTURE_BUFFER, t.lightSetTex);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, t.lightSetTBO);
+
+    const float camX = _frameState.cameraPos[0];
+    const float camZ = _frameState.cameraPos[2];
+    t.waterInstances.clear();
+    t.waterInstances.reserve(count);
+    for (size_t i = 0; i < count; i++)
+    {
+        const LandCell& c = cells[i];
+        GpuCellInstance g;
+        g.cellX = c.cellX;
+        g.cellZ = c.cellZ;
+        g.layer = 0;
+        g.simple = 0;
+        g.originRelX = static_cast<float>(c.cellX) * t.landGrid - camX;
+        g.originRelZ = static_cast<float>(c.cellZ) * t.landGrid - camZ;
+        g.lightSet = c.lightSet;
+        t.waterInstances.push_back(g);
+    }
+
+    GL33Bind::Vao(t.vao);
+    glBindBuffer(GL_ARRAY_BUFFER, t.instVBO);
+    glBufferData(
+        GL_ARRAY_BUFFER,
+        static_cast<GLsizeiptr>(t.waterInstances.size() * sizeof(GpuCellInstance)),
+        t.waterInstances.data(),
+        GL_STREAM_DRAW
+    );
+    glDrawElementsInstanced(
+        GL_TRIANGLES,
+        t.indexCount,
+        GL_UNSIGNED_SHORT,
+        nullptr,
+        static_cast<GLsizei>(t.waterInstances.size())
+    );
+    Poseidon::gPerfDrawCalls++;
+
+    // Clean up GL state
+    glBindSampler(0, 0);
+    glBindSampler(1, 0);
     InvalidatePipelineCache();
     _vertexShaderSel = VSNone;
     _pixelShaderSel = PSNone;
