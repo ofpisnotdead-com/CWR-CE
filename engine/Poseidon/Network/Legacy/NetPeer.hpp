@@ -2,6 +2,7 @@
 #include <Poseidon/Network/Legacy/NetApi.hpp>
 #include <Poseidon/Foundation/Common/Global.hpp>
 #include <Poseidon/Foundation/Threads/PoThread.hpp>
+#include <atomic>
 #ifdef _MSC_VER
 #pragma once
 #endif
@@ -31,8 +32,8 @@ class NetPeerUDP : public NetPeer
     Poseidon::Foundation::ThreadId listener;
     Poseidon::Foundation::ThreadId sender;
 
-    bool listen;  // is this port listening?
-    bool sending; // is this port sending?
+    std::atomic<bool> listen;  // is this port listening?
+    std::atomic<bool> sending; // is this port sending?
 
     friend THREAD_PROC_RETURN THREAD_PROC_MODE udpListen(void* param);
     friend THREAD_PROC_RETURN THREAD_PROC_MODE udpSend(void* param);
