@@ -10,6 +10,7 @@ using namespace Poseidon;
 #include <Poseidon/UI/Controls/UIControls.hpp>
 #include <Poseidon/Dev/Debug/DebugOverlay.hpp>
 #include <Poseidon/Core/ModSystem.hpp>
+#include <Poseidon/Core/Config/UserConfig.hpp>
 #include <Poseidon/Core/resincl.hpp>
 #include <Poseidon/UI/DisplayUI.hpp>
 #include <Poseidon/Game/Chat.hpp>
@@ -42,6 +43,14 @@ GameValue TriGetGLErrorCount(const GameState*);
 // ============================================================================
 // Window getters
 // ============================================================================
+
+GameValue TriGetDifficultyEnabled(const GameState* /*state*/, GameValuePar arg)
+{
+    const int type = toInt(static_cast<GameScalarType>(arg));
+    if (type < 0 || type >= DTN)
+        return GameValue(static_cast<float>(-1));
+    return GameValue(USER_CONFIG.IsEnabled(static_cast<DifficultyType>(type)) ? 1.0f : 0.0f);
+}
 
 GameValue TriGetResizable(const GameState* /*state*/)
 {
@@ -504,6 +513,8 @@ void EnsureGameStateExtTestGettersLinked() {}
 
 INIT_MODULE(GameStateExtTestGetters, 3)
 {
+    GGameState.NewFunction(GameFunction(GameScalar, "triGetDifficultyEnabled", TriGetDifficultyEnabled, GameScalar));
+
     // Window
     GGameState.NewNularOp(GameNular(GameString, "triGetResizable", TriGetResizable));
     GGameState.NewNularOp(GameNular(GameScalar, "triGetBackBufferNonBlackCount", TriGetBackBufferNonBlackCount));
