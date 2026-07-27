@@ -567,6 +567,9 @@ void EngineGL33::BackToFront()
     // pixels the user sees.
     ResolveSSAAToDefault();
 
+    // Before the overlay and the capture: corrects game + HUD, not the overlay.
+    ApplyGammaPass();
+
     // ImGui composites on top of game + HUD.  Render BEFORE the screenshot
     // capture so trident captures include the overlay (same pixels the user
     // sees after SwapWindow).  Both calls are safe no-ops when disabled.

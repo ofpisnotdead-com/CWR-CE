@@ -6,6 +6,7 @@
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
 #include <Poseidon/Graphics/Rendering/Lighting/Lights.hpp>
 #include <Poseidon/Graphics/Core/MatrixConversion.hpp>
+#include <Poseidon/Graphics/Core/GLDepthStencilState.hpp>
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
 
 #include <SDL3/SDL.h>
@@ -1605,6 +1606,128 @@ void EngineGL33::InitPixelShaders()
         UploadPSConstant(PSConstants::SlotRgbEyeCoef, _psConstants.rgbEyeCoef);
         DoSelectPixelShader(PSNormal, PSMDay, PSSNormal);
     }
+}
+
+static const char* s_vsGammaGLSL = R"(#version 330 core
+out vec2 vUV;
+void main()
+{
+    // Fullscreen triangle from gl_VertexID; no vertex buffer needed.
+    vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+    vUV = p;
+    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}
+)";
+
+static const char* s_psGammaGLSL = R"(#version 330 core
+in vec2 vUV;
+uniform sampler2D frame;
+uniform float invGamma;
+out vec4 fragColor;
+void main()
+{
+    vec3 c = texture(frame, vUV).rgb;
+    fragColor = vec4(pow(c, vec3(invGamma)), 1.0);
+}
+)";
+
+void EngineGL33::DestroyGammaTarget()
+{
+    if (_gammaTex)
+    {
+        GL33Bind::OnTexDeleted(_gammaTex);
+        glDeleteTextures(1, &_gammaTex);
+    }
+    if (_gammaVao)
+    {
+        GL33Bind::OnVaoDeleted(_gammaVao);
+        glDeleteVertexArrays(1, &_gammaVao);
+    }
+    if (_gammaProgram)
+        glDeleteProgram(_gammaProgram);
+    _gammaTex = _gammaVao = _gammaProgram = 0;
+    _gammaInvGammaLoc = -1;
+    _gammaTexW = _gammaTexH = 0;
+    _gammaUnavailable = false;
+}
+
+void EngineGL33::ApplyGammaPass()
+{
+    if (!_glContext || _gammaUnavailable)
+        return;
+    if (_gamma > 0.999f && _gamma < 1.001f)
+        return;
+
+    int winW = _w, winH = _h;
+    if (_sdlWindow)
+        SDL_GetWindowSizeInPixels(_sdlWindow, &winW, &winH);
+    if (winW <= 0 || winH <= 0)
+        return;
+
+    if (!_gammaProgram)
+    {
+        GLuint vs = CompileGLShader(GL_VERTEX_SHADER, s_vsGammaGLSL, "vsGamma");
+        GLuint fs = CompileGLShader(GL_FRAGMENT_SHADER, s_psGammaGLSL, "psGamma");
+        if (vs && fs)
+            _gammaProgram = LinkGLProgram(vs, fs, "gamma");
+        if (vs)
+            glDeleteShader(vs);
+        if (fs)
+            glDeleteShader(fs);
+        if (!_gammaProgram)
+        {
+            LOG_ERROR(Graphics, "GL33: gamma program failed to build, gamma correction disabled");
+            _gammaUnavailable = true;
+            return;
+        }
+        glUseProgram(_gammaProgram);
+        glUniform1i(glGetUniformLocation(_gammaProgram, "frame"), 0);
+        _gammaInvGammaLoc = glGetUniformLocation(_gammaProgram, "invGamma");
+        glGenVertexArrays(1, &_gammaVao);
+        glGenTextures(1, &_gammaTex);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, _gammaTex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    }
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, _gammaTex);
+    if (_gammaTexW != winW || _gammaTexH != winH)
+    {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, winW, winH, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        _gammaTexW = winW;
+        _gammaTexH = winH;
+    }
+    // The default framebuffer cannot be sampled, so copy it into the texture.
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, winW, winH);
+    glViewport(0, 0, winW, winH);
+
+    // Depth/blend/cull belong to ApplyPipeline; handed back below.
+    Poseidon::render::depthstencil::Disabled(/*hasStencil*/ false);
+    glDisable(GL_BLEND);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_SCISSOR_TEST);
+
+    glUseProgram(_gammaProgram);
+    glUniform1f(_gammaInvGammaLoc, 1.0f / _gamma);
+    // Unit 0's sampler object overrides the texture's own parameters; its mipmap
+    // min filter would leave this mipmap-less texture incomplete and sampling black.
+    glBindSampler(0, 0);
+    glBindVertexArray(_gammaVao);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindSampler(0, _samplerObjects[0]);
+    glUseProgram(0);
+    // The shader selector short-circuits on its cached selection, so it must be
+    // told the bound program is gone or the next frame's sky draws through it.
+    _pixelShaderSel = PSNone;
+    GL33Bind::Invalidate();
+    InvalidatePipelineCache();
 }
 
 void EngineGL33::DeinitPixelShaders()

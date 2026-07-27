@@ -7,11 +7,6 @@
 #include <Poseidon/Graphics/Rendering/Lighting/Lights.hpp>
 #include <Poseidon/Graphics/Core/MatrixConversion.hpp>
 
-#include <SDL3/SDL.h>
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
 void EngineGL33::SetFogColor(ColorVal /*fog*/)
 {
     if (!_glContext)
@@ -27,49 +22,10 @@ void EngineGL33::SetFogColor(ColorVal /*fog*/)
     UploadPSFogColor(_fogColor);
 }
 
-void EngineGL33::DoSetGamma()
-{
-#ifdef _WIN32
-    if (!_sdlWindow)
-        return;
-
-    SDL_PropertiesID props = SDL_GetWindowProperties(_sdlWindow);
-    HWND hwnd = (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
-    if (!hwnd)
-        return;
-
-    HDC hdc = GetDC(hwnd);
-    if (!hdc)
-        return;
-
-    WORD ramp[3][256];
-    float eGamma = 1.0f / _gamma;
-    ramp[0][0] = ramp[1][0] = ramp[2][0] = 0;
-    for (int i = 1; i < 256; i++)
-    {
-        float x = i * (1.0f / 255.0f);
-        float fx = powf(x, eGamma);
-        int ifx = static_cast<int>(fx * 65535.0f);
-        if (ifx < 0)
-            ifx = 0;
-        if (ifx > 65535)
-            ifx = 65535;
-        ramp[0][i] = ramp[1][i] = ramp[2][i] = static_cast<WORD>(ifx);
-    }
-    SetDeviceGammaRamp(hdc, ramp);
-    ReleaseDC(hwnd, hdc);
-    LOG_DEBUG(Graphics, "GL33: set gamma {:.3f}", _gamma);
-#endif
-}
-
 void EngineGL33::SetGamma(float gamma)
 {
     saturate(gamma, 1e-3f, 1e3f);
     _gamma = gamma;
-    if (_sdlWindow)
-    {
-        DoSetGamma();
-    }
 }
 
 void EngineGL33::SetBias(int bias)

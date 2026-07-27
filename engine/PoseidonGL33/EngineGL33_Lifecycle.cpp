@@ -534,7 +534,6 @@ bool EngineGL33::ResetHard()
     PreReset(true);
     DestroySurfaces();
 
-    DoSetGamma();
     InitGL();
 
     PostReset();
@@ -1080,6 +1079,7 @@ void EngineGL33::ShutdownGL()
 
     DeinitVertexShaders();
     DeinitPixelShaders();
+    DestroyGammaTarget();
     DestroySamplerStates();
     DestroyVBTL();
     DestroyVB();
