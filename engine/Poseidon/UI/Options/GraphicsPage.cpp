@@ -69,6 +69,12 @@ void RederivePreset(GraphicsConfig& cfg)
 }
 } // namespace
 
+// Bound at construction so row queries work on a page never shown.
+GraphicsPage::GraphicsPage()
+{
+    m_graphics.SetPage(this);
+}
+
 const char* GraphicsPage::TitleText() const
 {
     return LocalizeString("STR_DISP_MAIN_OPT_GRAPHICS");
@@ -196,6 +202,20 @@ int GraphicsPage::GraphicsProvider::RowValue(int row) const
     return 0;
 }
 
+// Brightness is a gain and gamma an exponent, so both rows print their value;
+// the bar carries the position in the range.
+const char* GraphicsPage::GraphicsProvider::SliderValueText(int row) const
+{
+    if (!m_page || (row != kRowBrightness && row != kRowGamma))
+        return nullptr;
+
+    const GraphicsConfig& c = m_page->m_cfg;
+    char buffer[16];
+    snprintf(buffer, sizeof(buffer), "%.1f", row == kRowBrightness ? c.brightness : c.gamma);
+    m_sliderValueText = buffer;
+    return m_sliderValueText.c_str();
+}
+
 void GraphicsPage::GraphicsProvider::SetRowValue(int row, int v)
 {
     if (!m_page)
@@ -282,8 +302,6 @@ void GraphicsPage::GraphicsProvider::SetRowValue(int row, int v)
 
 void GraphicsPage::Mount(OptionsShell& shell)
 {
-    m_graphics.SetPage(this);
-
     // Read graphics.cfg from disk so the rows reflect what's currently
     // live (which the boot path put there at autodetect time, and any
     // previous Unmount may have updated).  If the file is missing the

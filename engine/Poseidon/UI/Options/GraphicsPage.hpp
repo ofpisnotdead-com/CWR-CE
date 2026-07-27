@@ -15,8 +15,8 @@
 //   4 Particles & Volum.   Stepper Off/Low/High
 //   5 VSync                Stepper Off/On/Adaptive
 //   6 FPS Cap              Stepper Unlimited/30/60/90/120/144/240
-//   7 Brightness           Slider  0..100  (mapped 0.4..1.8 internally)
-//   8 Gamma                Slider  0..100  (mapped 0.5..2.3 internally)
+//   7 Brightness           Slider  0..100  (mapped 0.4..1.8, shown as the value)
+//   8 Gamma                Slider  0..100  (mapped 0.5..2.3, shown as the value)
 // + Close                  Action  (added by WithCloseRow)
 //
 // Quality Preset row is meta-state: selecting Low/Med/High/Ultra
@@ -38,6 +38,8 @@ namespace Poseidon
 class GraphicsPage : public ScrollListPage
 {
 public:
+	GraphicsPage();
+
 	const char* TitleText() const override;
 
 	static int BrightnessToSlider(float value);
@@ -81,9 +83,11 @@ private:
 		OptionsScrollList::RowDef RowFor(int row) const override;
 		int  RowValue(int row) const override;
 		void SetRowValue(int row, int v) override;
+		const char* SliderValueText(int row) const override;
 
 	private:
 		GraphicsPage* m_page = nullptr;
+		mutable std::string m_sliderValueText;
 	};
 
 	GraphicsConfig                  m_cfg;
