@@ -796,7 +796,6 @@ void EngineGL33::DrawWater(const GroundSegment* segments, size_t count, const TL
     ApplyDepthMode(DepthMode::Normal);
     render::pipeline::SetPolygonOffsetForDecals(false);
     glBindSampler(0, _samplerObjects[SamplerRepeat]);
-    glBindSampler(1, _samplerObjects[SamplerRepeat]);
     SetAlphaTest(false);
     const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     memcpy(_psConstants.constColor, white, sizeof(white));
@@ -860,7 +859,6 @@ void EngineGL33::DrawWater(const GroundSegment* segments, size_t count, const TL
 
     // Clean up GL state
     glBindSampler(0, 0);
-    glBindSampler(1, _samplerObjects[SamplerRepeat]);
     InvalidatePipelineCache();
     _vertexShaderSel = VSNone;
     _pixelShaderSel = PSNone;
