@@ -45,9 +45,37 @@ LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep)
     if (f != INVALID_HANDLE_VALUE)
     {
         MINIDUMP_EXCEPTION_INFORMATION mei = {GetCurrentThreadId(), ep, FALSE};
-        MiniDumpWriteDump(proc, GetCurrentProcessId(), f, MiniDumpWithDataSegs, &mei, nullptr, nullptr);
+        BOOL written = MiniDumpWriteDump(proc, GetCurrentProcessId(), f, MiniDumpWithDataSegs, &mei, nullptr, nullptr);
+        DWORD error = written ? ERROR_SUCCESS : GetLastError();
+        bool normalDump = false;
+        if (!written)
+        {
+            LARGE_INTEGER start = {};
+            if (SetFilePointerEx(f, start, nullptr, FILE_BEGIN) && SetEndOfFile(f))
+            {
+                written = MiniDumpWriteDump(proc, GetCurrentProcessId(), f, MiniDumpNormal, &mei, nullptr, nullptr);
+                error = written ? ERROR_SUCCESS : GetLastError();
+                normalDump = written;
+            }
+            else
+            {
+                error = GetLastError();
+            }
+        }
         CloseHandle(f);
-        fprintf(stderr, "  minidump: %s\n", dmp);
+        if (written)
+        {
+            fprintf(stderr, "  minidump: %s%s\n", dmp, normalDump ? " (without data segments)" : "");
+        }
+        else
+        {
+            DeleteFileA(dmp);
+            fprintf(stderr, "  minidump failed: %s (error 0x%08lX)\n", dmp, error);
+        }
+    }
+    else
+    {
+        fprintf(stderr, "  minidump failed: %s (error 0x%08lX)\n", dmp, GetLastError());
     }
 
     DWORD code = ep->ExceptionRecord->ExceptionCode;
