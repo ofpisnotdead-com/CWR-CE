@@ -6,6 +6,7 @@ set(POSEIDON_GL33_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/EngineGL33.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GLVertexAttribLayouts.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SDLEventWindow.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ShaderSources.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/TextureGL33.hpp
 )
 
