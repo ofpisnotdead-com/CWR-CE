@@ -8,6 +8,8 @@
 #include <Poseidon/UI/Settings/GraphicsConfig.hpp>
 
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <random>
 #include <string>
 #include <initializer_list>
@@ -44,9 +46,74 @@ TEST_CASE("GraphicsConfig: factory defaults match spec", "[Settings][GraphicsCon
     CHECK(c.shadowQuality == GraphicsConfig::TierHigh); // Ultra preset caps shadow at High
     CHECK(c.particlesQuality == GraphicsConfig::TierHigh);
     CHECK(c.vsync == GraphicsConfig::VsyncOn);
-    CHECK(c.fpsCap == 0);        // Unlimited
-    CHECK(c.brightness == 1.6f); // matches the original CWA default (engine.cpp cfg.ReadValue("brightness",1.6))
+    CHECK(c.fpsCap == 0); // Unlimited
+    CHECK(c.brightness == 1.6f);
+    CHECK(c.gamma == 1.2f);
+    CHECK(c.version == GraphicsConfig::kVersion);
+}
+
+// Migrate only touches a version-0 file whose gamma is still the stamped 1.0.
+TEST_CASE("GraphicsConfig: Migrate lifts an untouched gamma once", "[Settings][GraphicsConfig]")
+{
+    GraphicsConfig c;
+    c.version = 0;
+    c.gamma = 1.0f;
+
+    REQUIRE(c.Migrate());
+    CHECK(c.gamma == 1.2f);
+    CHECK(c.version == GraphicsConfig::kVersion);
+
+    CHECK_FALSE(c.Migrate());
+    CHECK(c.gamma == 1.2f);
+}
+
+TEST_CASE("GraphicsConfig: Migrate keeps a gamma the user chose", "[Settings][GraphicsConfig]")
+{
+    for (float chosen : {0.5f, 0.9f, 1.1f, 1.4f, 2.3f})
+    {
+        GraphicsConfig c;
+        c.version = 0;
+        c.gamma = chosen;
+
+        CHECK(c.Migrate());
+        CHECK(c.gamma == chosen);
+        CHECK(c.version == GraphicsConfig::kVersion);
+    }
+}
+
+TEST_CASE("GraphicsConfig: a versioned file is never migrated", "[Settings][GraphicsConfig]")
+{
+    GraphicsConfig c;
+    c.version = GraphicsConfig::kVersion;
+    c.gamma = 1.0f;
+
+    CHECK_FALSE(c.Migrate());
     CHECK(c.gamma == 1.0f);
+}
+
+TEST_CASE("GraphicsConfig: a file without a version reloads as version 0", "[Settings][GraphicsConfig]")
+{
+    const std::string path = TmpPath("graphics.cfg");
+    GraphicsConfig saved;
+    saved.LoadDefaults();
+    REQUIRE(saved.Save(path));
+
+    std::string text;
+    {
+        std::ifstream in(path);
+        text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    }
+    const std::string::size_type at = text.find("version=");
+    REQUIRE(at != std::string::npos);
+    text.erase(at, text.find('\n', at) - at + 1);
+    {
+        std::ofstream out(path, std::ios::trunc);
+        out << text;
+    }
+
+    GraphicsConfig loaded;
+    REQUIRE(loaded.Load(path));
+    CHECK(loaded.version == 0);
 }
 
 TEST_CASE("GraphicsConfig: Save then Load round-trips every field", "[Settings][GraphicsConfig]")

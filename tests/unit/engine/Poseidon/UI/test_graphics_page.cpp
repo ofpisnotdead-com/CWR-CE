@@ -52,7 +52,7 @@ TEST_CASE("GraphicsPage brightness and gamma rows show values, not percentages",
     REQUIRE(p.SliderValueText(7) != nullptr);
     CHECK(std::string(p.SliderValueText(7)) == "1.6");
     REQUIRE(p.SliderValueText(8) != nullptr);
-    CHECK(std::string(p.SliderValueText(8)) == "1.0");
+    CHECK(std::string(p.SliderValueText(8)) == "1.2");
 
     CHECK(p.SliderValueText(5) == nullptr);
 }

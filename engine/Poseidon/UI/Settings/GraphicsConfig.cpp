@@ -85,6 +85,21 @@ void GraphicsConfig::LoadDefaults()
     *this = GraphicsConfig{};
 }
 
+bool GraphicsConfig::Migrate()
+{
+    if (version >= kVersion)
+        return false;
+
+    // Only a file older than the version stamp reaches here, and its gamma is
+    // whatever first boot wrote.  1.0 is that stamped default and disables
+    // correction entirely; any other value was chosen, so it stays.
+    if (gamma == 1.0f)
+        gamma = 1.2f;
+
+    version = kVersion;
+    return true;
+}
+
 GraphicsConfig::Preset GraphicsConfig::PickPresetFromRam(int ramMB)
 {
     // Bucket boundaries in MB: 4 GB, 8 GB, 16 GB.  ramMB == 0 (unknown)
@@ -201,6 +216,10 @@ bool GraphicsConfig::Load(const std::string& path)
     ParamFile cfg;
     cfg.Parse(RString(path.c_str()));
 
+    version = 0;
+    if (auto* e = cfg.FindEntry("version"))
+        version = (int)*e;
+
     if (auto* e = cfg.FindEntry("qualityPreset"))
         qualityPreset = static_cast<Preset>((int)*e);
     if (auto* e = cfg.FindEntry("terrainDetail"))
@@ -249,6 +268,7 @@ bool GraphicsConfig::Save(const std::string& path) const
     cfg.Add("msaaSamples", msaaSamples);
     cfg.Add("brightness", brightness);
     cfg.Add("gamma", gamma);
+    cfg.Add("version", version);
 
     cfg.Save(RString(path.c_str()));
     return std::filesystem::exists(path, ec);

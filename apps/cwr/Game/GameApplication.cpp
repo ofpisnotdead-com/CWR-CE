@@ -384,6 +384,9 @@ void LoadAndApplyGraphicsConfig()
                  ramMB, path);
     }
 
+    if (cfg.Migrate() && cfg.Save(path))
+        LOG_INFO(Graphics, "LoadGraphicsConfig: migrated '{}' to version {}", path, GraphicsConfig::kVersion);
+
     LiveGraphicsEnv env;
     if (cfg.Normalize(env))
         LOG_INFO(Graphics, "LoadGraphicsConfig: normalized invalid fields (not persisted)");

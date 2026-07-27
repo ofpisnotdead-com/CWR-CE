@@ -78,8 +78,17 @@ public:
 	int       msaaSamples      = 0;             // MSAA on the frame target: 0 (off) / 2 / 4 / 8.
 	                                             // Default off — AA is being tuned via the dev panel
 	                                             // Render tab before a shipped default is picked
-	float     brightness       = 1.6f;          // 0.4..1.8 (1.6 = original CWA default: cfg.ReadValue("brightness",1.6))
-	float     gamma            = 1.0f;          // 0.5..2.3
+	float     brightness       = 1.6f;          // 0.4..1.8
+	float     gamma            = 1.2f;          // 0.5..2.3
+
+	// Schema version of the persisted file.  Load resets this to 0 first, so a
+	// file written before versioning reads back as 0 and Migrate can act on it.
+	static constexpr int kVersion = 1;
+	int       version          = kVersion;
+
+	// Bring a loaded config up to kVersion.  Returns true when the caller needs
+	// to persist the result.
+	bool Migrate();
 
 	// Reset every field to factory defaults.
 	void LoadDefaults();
