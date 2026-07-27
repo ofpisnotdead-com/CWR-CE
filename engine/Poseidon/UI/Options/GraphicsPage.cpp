@@ -41,10 +41,12 @@ int FloatToSlider(float v, float lo, float hi)
     float c = std::clamp(v, lo, hi);
     return (int)std::lround((c - lo) / (hi - lo) * 100.0f);
 }
+// Snapped to 0.1 so the printed value is exactly the value that gets stored.
 float SliderToFloat(int s, float lo, float hi)
 {
     int c = std::clamp(s, 0, 100);
-    return lo + (c / 100.0f) * (hi - lo);
+    const float raw = lo + (c / 100.0f) * (hi - lo);
+    return std::round(raw * 10.0f) / 10.0f;
 }
 
 std::string GraphicsCfgPath()

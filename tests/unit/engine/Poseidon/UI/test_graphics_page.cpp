@@ -3,6 +3,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <cmath>
 #include <string>
 
 using namespace Poseidon;
@@ -40,6 +41,21 @@ TEST_CASE("GraphicsPage gamma slider conversion clamps into range", "[UI][Graphi
     CHECK(GraphicsPage::SliderToGamma(50) == Catch::Approx(1.4f));
     CHECK(GraphicsPage::SliderToGamma(100) == Catch::Approx(2.3f));
     CHECK(GraphicsPage::SliderToGamma(120) == Catch::Approx(2.3f));
+}
+
+// The row text prints one decimal, so every slider position must land on one.
+TEST_CASE("GraphicsPage slider values snap to one decimal", "[UI][GraphicsPage]")
+{
+    for (int s = 0; s <= 100; ++s)
+    {
+        const float g = GraphicsPage::SliderToGamma(s);
+        CHECK(g == Catch::Approx(std::round(g * 10.0f) / 10.0f));
+        const float b = GraphicsPage::SliderToBrightness(s);
+        CHECK(b == Catch::Approx(std::round(b * 10.0f) / 10.0f));
+    }
+
+    CHECK(GraphicsPage::SliderToGamma(GraphicsPage::GammaToSlider(1.2f)) == Catch::Approx(1.2f));
+    CHECK(GraphicsPage::SliderToBrightness(GraphicsPage::BrightnessToSlider(1.6f)) == Catch::Approx(1.6f));
 }
 
 // Pins brightness and gamma to value text; other slider rows keep percent.
