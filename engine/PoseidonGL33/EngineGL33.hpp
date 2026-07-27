@@ -64,16 +64,17 @@ enum PixelShaderMode
 
 enum PixelShaderID
 {
-    PSNormal,
-    PSDetail,
-    PSGrass,
-    PSWater,
-    PSFlat,
-    PSShadow, // unlit cutout: constant black + alpha
-    PSTerrain,
-    NPixelShaders,
+    PSNormal = 0,
+    PSDetail = 1,
+    PSGrass = 2,
+    PSWater = 3,
+    PSFlat = 4,
+    PSShadow = 5, // unlit cutout: constant black + alpha
+    PSTerrain = 6,
+    NPixelShaders, // 7
     PSNone = NPixelShaders
 };
+static_assert(NPixelShaders == 7, "pixel shader set changed");
 
 struct alignas(16) PSConstants
 {
@@ -101,14 +102,15 @@ struct alignas(16) PSConstants
 
 enum VertexShaderID
 {
-    VSScreen,
-    VSTransform,
-    VSShadow, // unlit transform, shadow path
-    VSTerrain,
-    VSWaterInst,
-    NVertexShaders,
+    VSScreen = 0,
+    VSTransform = 1,
+    VSShadow = 2, // unlit transform, shadow path
+    VSTerrain = 3,
+    VSWaterInst = 4,
+    NVertexShaders, // 5
     VSNone = NVertexShaders
 };
+static_assert(NVertexShaders == 5, "vertex shader set changed");
 
 namespace VSConst
 {

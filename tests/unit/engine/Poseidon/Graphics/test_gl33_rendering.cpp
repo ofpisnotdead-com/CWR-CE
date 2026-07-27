@@ -566,27 +566,6 @@ TEST_CASE("PSConstants: default fogColor alpha is 1", "[Graphics][GL33]")
     REQUIRE(ps.alphaRef[0] == Catch::Approx(0.0f));
 }
 
-// Shader/TexGen Enum Value Tests
-
-TEST_CASE("VertexShaderID: VSScreen=0, VSTransform=1, VSShadow=2", "[Graphics][GL33]")
-{
-    REQUIRE(VSScreen == 0);
-    REQUIRE(VSTransform == 1);
-    REQUIRE(VSShadow == 2);
-    REQUIRE(NVertexShaders == 3);
-    REQUIRE(VSNone == NVertexShaders);
-}
-
-TEST_CASE("PixelShaderID: all modes have distinct values", "[Graphics][GL33]")
-{
-    REQUIRE(PSNormal == 0);
-    REQUIRE(PSDetail != PSNormal);
-    REQUIRE(PSGrass != PSDetail);
-    REQUIRE(PSWater != PSGrass);
-    REQUIRE(PSFlat != PSWater);
-    REQUIRE(PSNone == NPixelShaders);
-}
-
 TEST_CASE("VSConst: register indices are non-overlapping", "[Graphics][GL33]")
 {
     // VSTransform reads matrix slots; VSScreen reads vpScale.

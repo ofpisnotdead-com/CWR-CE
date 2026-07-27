@@ -3,13 +3,11 @@
 #include <glslang/Public/ShaderLang.h>
 #include <glslang/Public/ResourceLimits.h>
 
-#include <filesystem>
-#include <fstream>
-#include <regex>
-#include <sstream>
+#include <PoseidonGL33/ShaderSources.hpp>
+
 #include <string>
 #include <vector>
-#include <stddef.h>
+#include <cstddef>
 #include <catch2/catch_message.hpp>
 #include <cctype>
 
@@ -26,61 +24,20 @@
 // against GL 3.30 core profile rules.  A deletion of `vec3 worldNormal`
 // (or `vec4 viewPos`, or any other named local the downstream code
 // references) trips the parser with "undeclared identifier" at the
-// reference site.  The test compiles each `static const char s_*GLSL[]`
-// block in EngineGL33_Shaders.cpp and asserts info-log emptiness.
+// reference site.
 //
 // Limitation: we don't run the linker (no `glslang::TProgram`) —
 // individual stages compile, cross-stage `in`/`out` matching is
 // not verified here.  That's I-NEW territory if it ever becomes a
 // failure mode.
 
+using Poseidon::render::gl33::AllShaders;
+using Poseidon::render::gl33::PreprocessShaderSource;
+using Poseidon::render::gl33::ShaderModule;
+using Poseidon::render::gl33::ShaderStage;
+
 namespace
 {
-std::string ReadTextFile(const std::filesystem::path& p)
-{
-    std::ifstream f(p);
-    if (!f.is_open())
-        return {};
-    std::stringstream ss;
-    ss << f.rdbuf();
-    return ss.str();
-}
-
-struct ShaderBlock
-{
-    std::string symbol; // e.g. "s_vsTransformGLSL"
-    std::string source; // GLSL body between R"( and )"
-};
-
-// Extract every `static const char s_*GLSL[] = R"(...)";` block from the
-// shaders source file.  The raw-string delimiter is empty (`R"(`) so we
-// can match it without needing to know which delimiter token was used.
-std::vector<ShaderBlock> ExtractShaderBlocks(const std::string& src)
-{
-    std::vector<ShaderBlock> blocks;
-    static const std::regex header(R"(static\s+const\s+char\s+(s_\w+GLSL)\[\]\s*=\s*R\"\()");
-    auto begin = std::sregex_iterator(src.begin(), src.end(), header);
-    auto end = std::sregex_iterator();
-    for (auto it = begin; it != end; ++it)
-    {
-        const std::smatch& m = *it;
-        const std::string sym = m[1].str();
-        const size_t start = static_cast<size_t>(m.position(0)) + m.length(0);
-        const size_t close = src.find(")\"", start);
-        if (close == std::string::npos)
-            continue;
-        blocks.push_back({sym, src.substr(start, close - start)});
-    }
-    return blocks;
-}
-
-EShLanguage StageFromSymbol(const std::string& sym)
-{
-    // "s_vs..." prefix → vertex stage; everything else (PS, FS) → fragment.
-    if (sym.rfind("s_vs", 0) == 0)
-        return EShLangVertex;
-    return EShLangFragment;
-}
 
 struct CompileOutcome
 {
@@ -105,50 +62,22 @@ CompileOutcome CompileGLSL(const std::string& src, EShLanguage stage)
     return out;
 }
 
-struct GlslangInit
+EShLanguage ToGlslang(ShaderStage stage)
 {
-    GlslangInit() { glslang::InitializeProcess(); }
-    ~GlslangInit() { glslang::FinalizeProcess(); }
-};
-} // namespace
+    return stage == ShaderStage::Vertex ? EShLangVertex : EShLangFragment;
+}
 
-TEST_CASE("I-28: every shipped GL33 shader compiles cleanly under glslang", "[Graphics][Shaders][I-28]")
+const ShaderModule* FindModule(const char* name)
 {
-    GlslangInit init;
-
-    const std::filesystem::path shadersCpp =
-        std::filesystem::path(TESTS_ROOT_DIR).parent_path() / "engine" / "PoseidonGL33" / "EngineGL33_Shaders.cpp";
-    const std::string body = ReadTextFile(shadersCpp);
-    REQUIRE_FALSE(body.empty());
-
-    const auto blocks = ExtractShaderBlocks(body);
-    REQUIRE(blocks.size() >= 4); // at least VSTransform + PSNormal + VSScreen + PSFlat
-
-    for (const auto& b : blocks)
+    for (const auto& m : AllShaders())
     {
-        CAPTURE(b.symbol);
-        const auto outcome = CompileGLSL(b.source, StageFromSymbol(b.symbol));
-        CAPTURE(outcome.info);
-        REQUIRE(outcome.success);
+        if (std::string(m.name) == name)
+        {
+            return &m;
+        }
     }
+    return nullptr;
 }
-
-TEST_CASE("I-28: VSTransform exposes worldNormal and viewPos as named locals", "[Graphics][Shaders][I-28]")
-{
-    // Direct pin: the LIT vertex shader's lighting math depends on
-    // `worldNormal` and `viewPos` being declared and computed.  A
-    // delete-the-intermediate regression trips the glslang compile
-    // above; this test adds a structural sanity check so the names
-    // can't drift without an explicit rename touching this list.
-    const std::filesystem::path shadersCpp =
-        std::filesystem::path(TESTS_ROOT_DIR).parent_path() / "engine" / "PoseidonGL33" / "EngineGL33_Shaders.cpp";
-    const std::string body = ReadTextFile(shadersCpp);
-    REQUIRE(body.find("vec3 worldNormal") != std::string::npos);
-    REQUIRE(body.find("vec4 viewPos") != std::string::npos);
-}
-
-namespace
-{
 
 // Count occurrences of `needle` in `haystack` as a whole identifier
 // (boundaries: must not be preceded/followed by alphanumeric or '_').
@@ -171,22 +100,44 @@ int CountIdentifier(const std::string& haystack, const std::string& needle)
     return count;
 }
 
-// Find the GLSL block whose `static const char s_<symbol>GLSL[]` symbol
-// matches `symbol`.  Returns the body or empty string if not found.
-std::string FindShaderBlock(const std::string& src, const std::string& symbol)
+struct GlslangInit
 {
-    const std::string header = "static const char " + symbol + "[] = R\"(";
-    const size_t start = src.find(header);
-    if (start == std::string::npos)
-        return {};
-    const size_t bodyStart = start + header.size();
-    const size_t bodyEnd = src.find(")\"", bodyStart);
-    if (bodyEnd == std::string::npos)
-        return {};
-    return src.substr(bodyStart, bodyEnd - bodyStart);
-}
+    GlslangInit() { glslang::InitializeProcess(); }
+    ~GlslangInit() { glslang::FinalizeProcess(); }
+};
 
 } // namespace
+
+TEST_CASE("I-28: every shipped GL33 shader compiles cleanly under glslang", "[Graphics][Shaders][I-28]")
+{
+    GlslangInit init;
+
+    const auto& shaders = AllShaders();
+
+    for (const auto& m : shaders)
+    {
+        CAPTURE(m.name);
+        const std::string assembled = PreprocessShaderSource(m.source);
+        CAPTURE(assembled);
+        const auto outcome = CompileGLSL(assembled, ToGlslang(m.stage));
+        CAPTURE(outcome.info);
+        REQUIRE(outcome.success);
+    }
+}
+
+TEST_CASE("I-28: VSTransform exposes worldNormal and viewPos as named locals", "[Graphics][Shaders][I-28]")
+{
+    // Direct pin: the LIT vertex shader's lighting math depends on
+    // `worldNormal` and `viewPos` being declared and computed.  A
+    // delete-the-intermediate regression trips the glslang compile
+    // above; this test adds a structural sanity check so the names
+    // can't drift without an explicit rename touching this list.
+    const ShaderModule* vs = FindModule("vsTransform");
+    REQUIRE(vs != nullptr);
+    const std::string src = vs->source;
+    REQUIRE(src.find("vec3 worldNormal") != std::string::npos);
+    REQUIRE(src.find("vec4 viewPos") != std::string::npos);
+}
 
 TEST_CASE("I-28 (Option E): every named intermediate is declared AND used in the same shader block",
           "[Graphics][Shaders][I-28]")
@@ -216,14 +167,9 @@ TEST_CASE("I-28 (Option E): every named intermediate is declared AND used in the
     // Splitting these intermediates out of VSTransform into a
     // separate block (without porting the lighting math too) trips
     // this test before any visual regression.
-    const std::filesystem::path shadersCpp =
-        std::filesystem::path(TESTS_ROOT_DIR).parent_path() / "engine" / "PoseidonGL33" / "EngineGL33_Shaders.cpp";
-    const std::string src = ReadTextFile(shadersCpp);
-    REQUIRE_FALSE(src.empty());
-
     struct Requirement
     {
-        std::string shaderSymbol;
+        const char* shaderName;
         std::string identifier;
         int minOccurrences;
     };
@@ -233,16 +179,16 @@ TEST_CASE("I-28 (Option E): every named intermediate is declared AND used in the
         // once + 2 lighting uses (NdotL, NdotH).  viewPos: declared
         // once + 1 use (gl_Position = proj * viewPos).  Pin minimums
         // a hair below current counts to absorb non-semantic edits.
-        {"s_vsTransformGLSL", "worldNormal", 3},
-        {"s_vsTransformGLSL", "viewPos", 2},
+        {"vsTransform", "worldNormal", 3},
+        {"vsTransform", "viewPos", 2},
     };
 
     for (const auto& r : requirements)
     {
-        CAPTURE(r.shaderSymbol, r.identifier);
-        const std::string block = FindShaderBlock(src, r.shaderSymbol);
-        REQUIRE_FALSE(block.empty());
-        const int occurrences = CountIdentifier(block, r.identifier);
+        CAPTURE(r.shaderName, r.identifier);
+        const ShaderModule* mod = FindModule(r.shaderName);
+        REQUIRE(mod != nullptr);
+        const int occurrences = CountIdentifier(mod->source, r.identifier);
         CAPTURE(occurrences);
         REQUIRE(occurrences >= r.minOccurrences);
     }
