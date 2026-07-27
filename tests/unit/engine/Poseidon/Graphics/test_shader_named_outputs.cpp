@@ -50,12 +50,9 @@ CompileOutcome CompileGLSL(const std::string& src, EShLanguage stage)
     glslang::TShader shader(stage);
     const char* strings[1] = {src.c_str()};
     shader.setStrings(strings, 1);
-    shader.setEnvInput(glslang::EShSourceGlsl, stage, glslang::EShClientOpenGL, 330);
-    shader.setEnvClient(glslang::EShClientOpenGL, glslang::EShTargetOpenGL_450);
-    shader.setEnvTarget(glslang::EShTargetNone, glslang::EShTargetSpv_1_0);
+    shader.setEnvInput(glslang::EShSourceGlsl, stage, glslang::EShClientNone, 330);
     const TBuiltInResource* resources = GetDefaultResources();
-    const EShMessages rules = EShMsgDefault;
-    const bool ok = shader.parse(resources, 330, /*forwardCompatible*/ false, rules);
+    const bool ok = shader.parse(resources, 330, /*forwardCompatible*/ false, EShMsgDefault);
     CompileOutcome out;
     out.success = ok;
     out.info = shader.getInfoLog();
