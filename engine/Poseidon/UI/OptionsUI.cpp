@@ -1218,7 +1218,7 @@ void CampaignHistory::LoadWeaponPool(WeaponsInfo& pool)
             magazine->_reload = 0;
             if (type->_modes.Size() > 0)
             {
-                float reload = 0.8 + 0.2 * GRandGen.RandomValue();
+                float reload = 0.8 + 0.2 * GFxRandGen.RandomValue();
                 magazine->_reload = reload * type->_modes[0]->_reloadTime;
             }
             pool._magazinesPool.Add(magazine);
@@ -2204,7 +2204,7 @@ void StartRandomCutscene(RString world)
 
     const ParamEntry& cls = Pars >> "CfgWorlds" >> world >> "cutscenes";
     int n = cls.GetSize();
-    int i = toIntFloor(n * GRandGen.RandomValue());
+    int i = toIntFloor(n * GFxRandGen.RandomValue());
 
     RString name = cls[i];
 
