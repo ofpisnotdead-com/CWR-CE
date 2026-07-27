@@ -1268,7 +1268,7 @@ GrassMode GrassModes[] = {
 const int NGrassModes = sizeof(GrassModes) / sizeof(*GrassModes);
 
 // Toggles between instanced and mesh-based / baked terrain rendering
-bool GGl33TerrainInstanced = false;
+bool GGl33TerrainInstanced = true;
 
 static std::vector<Engine::GroundSegment> g_segInstances;
 // Is the current terrain state valid for instanced rendering?
