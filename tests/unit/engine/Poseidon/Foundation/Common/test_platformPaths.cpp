@@ -113,7 +113,7 @@ TEST_CASE("Different app names produce different directories", "[platformPaths]"
     fs::remove_all(dir2);
 }
 
-TEST_CASE("Config/data, doc, and cache dirs are distinct on Linux", "[platformPaths]")
+TEST_CASE("Config/data, doc, and cache dirs are distinct on non Windows", "[platformPaths]")
 {
     std::string config = Poseidon::Foundation::getUserConfigDir("TestApp_Distinct");
     std::string data = Poseidon::Foundation::getUserDataDir("TestApp_Distinct");
@@ -139,7 +139,71 @@ TEST_CASE("Config/data, doc, and cache dirs are distinct on Linux", "[platformPa
     fs::remove_all(cache);
 }
 
-#ifndef _WIN32
+#ifdef __APPLE__
+TEST_CASE("getUserConfigDir uses Library Application Support", "[platformPaths]")
+{
+    // Use a temp directory to override HOME
+    auto tmpHome = fs::temp_directory_path() / "test_home_fallback";
+    fs::create_directories(tmpHome);
+
+    ScopedEnv homeEnv("HOME", tmpHome.c_str());
+    std::string dir = Poseidon::Foundation::getUserConfigDir("TestApp");
+    REQUIRE(dir.find(tmpHome.string()) == 0);
+    REQUIRE(dir.find("Library/Application Support") != std::string::npos);
+    REQUIRE(dir.find("TestApp") != std::string::npos);
+    REQUIRE(dirExists(dir));
+
+    fs::remove_all(tmpHome);
+}
+
+TEST_CASE("getUserDataDir uses Library Application Support", "[platformPaths]")
+{
+    // Use a temp directory to override HOME
+    auto tmpHome = fs::temp_directory_path() / "test_home_fallback";
+    fs::create_directories(tmpHome);
+
+    ScopedEnv homeEnv("HOME", tmpHome.c_str());
+    std::string dir = Poseidon::Foundation::getUserDataDir("TestApp");
+    REQUIRE(dir.find(tmpHome.string()) == 0);
+    REQUIRE(dir.find("Library/Application Support") != std::string::npos);
+    REQUIRE(dir.find("TestApp") != std::string::npos);
+    REQUIRE(dirExists(dir));
+
+    fs::remove_all(tmpHome);
+}
+
+TEST_CASE("getUserCacheDir uses Library Caches", "[platformPaths]")
+{
+    // Use a temp directory to override HOME
+    auto tmpHome = fs::temp_directory_path() / "test_home_fallback";
+    fs::create_directories(tmpHome);
+
+    ScopedEnv homeEnv("HOME", tmpHome.c_str());
+    std::string dir = Poseidon::Foundation::getUserCacheDir("TestApp");
+    REQUIRE(dir.find(tmpHome.string()) == 0);
+    REQUIRE(dir.find("Library/Caches") != std::string::npos);
+    REQUIRE(dir.find("TestApp") != std::string::npos);
+    REQUIRE(dirExists(dir));
+
+    fs::remove_all(tmpHome);
+}
+
+TEST_CASE("getUserDocumentsDir uses Documents", "[platformPaths]")
+{
+    // Use a temp directory to override HOME
+    auto tmpHome = fs::temp_directory_path() / "test_home_fallback";
+    fs::create_directories(tmpHome);
+
+    ScopedEnv homeEnv("HOME", tmpHome.c_str());
+    std::string dir = Poseidon::Foundation::getUserDocumentsDir("TestApp");
+    REQUIRE(dir.find(tmpHome.string()) == 0);
+    REQUIRE(dir.find("Documents") != std::string::npos);
+    REQUIRE(dir.find("TestApp") != std::string::npos);
+    REQUIRE(dirExists(dir));
+
+    fs::remove_all(tmpHome);
+}
+#elif defined(__linux__)
 TEST_CASE("getUserConfigDir respects XDG_CONFIG_HOME", "[platformPaths]")
 {
     // Use a temp directory to override XDG_CONFIG_HOME
