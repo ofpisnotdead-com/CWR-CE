@@ -64,6 +64,8 @@ runs:
 
     - name: Setup CMake and Ninja
       uses: lukka/get-cmake@latest
+      with:
+        cmakeVersion: '4.4.0'
 
     - name: Restore vcpkg binary cache
       if: inputs.use-vcpkg-binary-cache == 'true'
