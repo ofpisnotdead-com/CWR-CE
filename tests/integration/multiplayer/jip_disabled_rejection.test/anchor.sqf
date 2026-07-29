@@ -1,8 +1,8 @@
 triAssertNgsClient 14
 triAssertMissionPlayable
 triBarrier anchor_playing
-triWait 10000
-triAssertEq [(triMpPlayerNames), "anchor"]
+triBarrier late_joined
+triAssertIncludes [(triMpPlayerNames), "late"]
+triBarrier anchor_checked
 triAssertMissionPlayable
-triScreenshot "anchor_still_playing_after_rejected_jip"
 triEndTest

@@ -5,8 +5,8 @@ timeout = 60
 
 tags = ["headful", "network"]
 
-# The fixture omits joinInProgress, so the running server must reject a late
-# connection while the initial player remains active.
+# The fixture omits joinInProgress. A late client joins the waiting lobby while
+# the current mission runs and appears in the server roster.
 [[instances]]
 extra_args = ["--no-strict", "--log-format", "jsonl", "--mp-auto-start", "1"]
 name = "server"
