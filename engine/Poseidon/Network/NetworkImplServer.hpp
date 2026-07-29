@@ -189,6 +189,9 @@ struct NetworkPlayerInfo
     // Player is joining into a game already in progress (JIP)
     bool jip;
 
+    // Player is waiting for the current mission to finish
+    bool waitingForMission;
+
     // Questions asked
     AutoArray<IntegrityQuestionInfo> integrityQuestions;
     // IntegrityQuestion integrityQuestion[IntegrityQuestionTypeCount];

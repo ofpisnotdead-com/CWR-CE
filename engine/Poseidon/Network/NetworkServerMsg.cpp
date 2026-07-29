@@ -246,6 +246,7 @@ void NetworkServer::OnCreatePlayer(int player, bool botClient, const char* name)
     }
 
     NetworkPlayerInfo* pInfo = OnPlayerCreate(player, name);
+    pInfo->waitingForMission = _state >= NGSTransferMission && !_missionHeader.joinInProgress;
 
     if (isJip)
     {
@@ -678,7 +679,12 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
             info->state = NGSPrepareSide;
             info->missionFileValid = false;
         }
-        ChangeGameState gs(_state);
+        NetworkGameState stateToSend = _state;
+        if (!info->waitingForMission && stateToSend > NGSPrepareRole)
+        {
+            stateToSend = NGSPrepareRole;
+        }
+        ChangeGameState gs(stateToSend);
         SendMsg(info->dpid, &gs, NMFGuaranteed);
 
         // if game is already in progress, send how long is played already

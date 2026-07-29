@@ -558,6 +558,7 @@ NetworkPlayerInfo* NetworkServer::OnPlayerCreate(int dpid, const char* name)
     info.integrityCheckNext = UINT_MAX;
     info.connectionProblemsReported = false;
     info.jip = false;
+    info.waitingForMission = false;
     info.kickedOff = false;
     info.nextQuestionId = 1;
 
