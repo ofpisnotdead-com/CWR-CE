@@ -504,6 +504,12 @@ public:
 	virtual void AskForInflameFire(Fireplace *fireplace, bool fire) = 0;
 	// Ask vehicle for user defined animation
 	virtual void AskForAnimationPhase(Entity *vehicle, RString animation, float phase) = 0;
+	// Add smoke source to destroyed object
+	virtual void AddSmokeSource(Object* obj) = 0;
+	// Ask transport owner to change gunner hidden state
+	virtual void AskForGunnerHidden(Transport* vehicle, float hidden) = 0;
+	// Ask transport owner to change commander hidden state
+	virtual void AskForCommanderHidden(Transport* vehicle, float hidden) = 0;
 	// Copy unit info from one person to other
 	virtual void CopyUnitInfo(Person *from, Person *to) = 0;
 	// Return estimated end of mission time
