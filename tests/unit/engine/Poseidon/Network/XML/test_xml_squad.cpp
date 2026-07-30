@@ -1,9 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <Poseidon/Network/XML/Xml.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
 #include "../../test_fixtures.hpp"
 #include <filesystem>
-#include <fstream>
 #include <string.h>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 
@@ -16,14 +16,14 @@ TEST_CASE("DownloadFile fetches raw HTTPS squad XML fixture", "[xml][squad][down
 {
     const auto outDir = std::filesystem::temp_directory_path() / "poseidon_xml_squad_tests";
     std::filesystem::create_directories(outDir);
-    const auto outFile = outDir / "squad_https.xml";
+    const auto outFile = outDir / std::filesystem::path(u8"\u010desk\u00fd_klan") / "squad_https.xml";
     std::filesystem::remove(outFile);
 
     REQUIRE(DownloadFile("https://gist.githubusercontent.com/simi/b4dbb7fea11cb4c7e7b1c090e5e065bc/raw/squad.xml",
-                         outFile.string().c_str(), nullptr, 1024 * 1024));
+                         Poseidon::FilesystemPathToUtf8(outFile).c_str(), nullptr, 1024 * 1024));
 
-    std::ifstream input(outFile, std::ios::binary);
-    const std::string body{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    const std::vector<char> downloaded = Poseidon::ReadFileUtf8(Poseidon::FilesystemPathToUtf8(outFile).c_str());
+    const std::string body(downloaded.begin(), downloaded.end());
     REQUIRE(body.find("<squad nick=\"CWR\">") != std::string::npos);
     REQUIRE(body.find("<picture>synthetic_grid.paa</picture>") != std::string::npos);
 }

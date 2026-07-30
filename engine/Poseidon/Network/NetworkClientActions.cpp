@@ -2160,7 +2160,7 @@ void NetworkClient::TransferFileToServer(RString dest, RString source)
     const DWORD start = GlobalTickCount();
     const int segments = Poseidon::SendNetworkFileTransferSegments<TransferFileToServerMessage>(
         dest, data.data(), static_cast<int>(data.size()),
-        [this](TransferFileToServerMessage& msg) { SendMsg(&msg, NMFGuaranteed | NMFHighPriority); });
+        [this](TransferFileToServerMessage& msg) { SendMsg(&msg, NMFGuaranteed); });
     LOG_INFO(Network, "[NMTTransferFileToServer] upload queued src='{}' dst='{}' bytes={} segments={} enqueueMs={}",
              (const char*)source, (const char*)dest, data.size(), segments, GlobalTickCount() - start);
 }

@@ -5,7 +5,10 @@
 #include <Poseidon/Foundation/Memory/MemHeap.hpp>
 #include <Poseidon/Core/Application.hpp>
 
-namespace Poseidon { class Command; }
+namespace Poseidon
+{
+class Command;
+}
 
 #include <Poseidon/Audio/Speaker.hpp>
 #include <Poseidon/AI/Path/ArcadeWaypoint.hpp>
@@ -131,7 +134,6 @@ class NetworkComponent : public INetworkComponent
 
     // files currently receiving
     AutoArray<ReceivingFile> _files;
-    AutoArray<RString> _sentCustomFileTransfers;
 
 #if _ENABLE_CHEATS
     // Statistics about messages by types

@@ -100,100 +100,6 @@ extern const char* GameStateNames[];
 #define BODIES_ON_BOT_CLIENT 10
 #define BODIES_ON_CLIENTS 20
 
-static int NetworkPlayerFaceTransferOwner(RString path)
-{
-    const char prefix[] = "tmp/players/";
-    const int prefixLen = static_cast<int>(sizeof(prefix) - 1);
-    const char* data = path;
-    if (strncmp(data, prefix, prefixLen) != 0)
-    {
-        return -1;
-    }
-
-    const char* owner = data + prefixLen;
-    const char* slash = strchr(owner, '/');
-    if (!slash)
-    {
-        return -1;
-    }
-
-    const char* name = slash + 1;
-    if (stricmp(name, "face.paa") != 0 && stricmp(name, "face.jpg") != 0)
-    {
-        return -1;
-    }
-
-    for (const char* p = owner; p < slash; ++p)
-    {
-        if (*p < '0' || *p > '9')
-        {
-            return -1;
-        }
-    }
-    return atoi(owner);
-}
-
-static AutoArray<int> PendingTransferredNetworkFaceRefreshes;
-
-static int RefreshTransferredNetworkFace(int player)
-{
-    if (!GWorld || player < 0)
-    {
-        return 0;
-    }
-
-    int refreshed = 0;
-    for (int i = 0; i < GWorld->NVehicles(); ++i)
-    {
-        Person* person = dyn_cast<Person>(GWorld->GetVehicle(i));
-        if (!person || person->GetRemotePlayer() != player || stricmp(person->GetInfo()._face, "custom") != 0)
-        {
-            continue;
-        }
-
-        AIUnitInfo& info = person->GetInfo();
-        person->SetFace(info._face, info._name);
-        refreshed++;
-    }
-    if (refreshed > 0)
-    {
-        LOG_INFO(Network, "Refreshed {} custom face assignment(s) for transferred player face {}", refreshed, player);
-    }
-    return refreshed;
-}
-
-static void QueueTransferredNetworkFaceRefresh(int player)
-{
-    if (player < 0)
-    {
-        return;
-    }
-    for (int i = 0; i < PendingTransferredNetworkFaceRefreshes.Size(); ++i)
-    {
-        if (PendingTransferredNetworkFaceRefreshes[i] == player)
-        {
-            return;
-        }
-    }
-    PendingTransferredNetworkFaceRefreshes.Add(player);
-    LOG_INFO(Network, "Queued custom face refresh for transferred player face {}", player);
-}
-
-static void FlushTransferredNetworkFaceRefreshes()
-{
-    for (int i = 0; i < PendingTransferredNetworkFaceRefreshes.Size();)
-    {
-        if (RefreshTransferredNetworkFace(PendingTransferredNetworkFaceRefreshes[i]) > 0)
-        {
-            PendingTransferredNetworkFaceRefreshes.Delete(i);
-        }
-        else
-        {
-            ++i;
-        }
-    }
-}
-
 // Check if given unit is in list of units
 static bool FindUnit(NetworkObject* soldier, RefArray<NetworkObject>& units)
 {
@@ -336,6 +242,29 @@ static void ExecuteNamedRemoteExec(GameState* gstate, RString name, GameValuePar
     }
     gstate->Execute(name + RString(" _this"));
     gstate->EndContext();
+}
+
+void NetworkClient::ApplySquadIdentity(int player, Person* person)
+{
+    const PlayerIdentity* identity = FindIdentity(player);
+    if (!identity || !person)
+        return;
+
+    AIUnitInfo& info = person->GetInfo();
+    info._squadTitle = RString();
+    info._squadPicture = nullptr;
+    if (identity->squad)
+    {
+        info._squadTitle = identity->squad->title;
+        if (identity->squad->picture.GetLength() > 0)
+        {
+            const RString picture = Poseidon::FindNetworkSquadPicturePath(
+                Poseidon::GetUserDirectory(), identity->squad->nick, identity->squad->picture,
+                [](const RString& path) { return Poseidon::FileExistsUtf8(path); });
+            if (picture.GetLength() > 0)
+                info._squadPicture = GlobLoadTexture(picture);
+        }
+    }
 }
 
 bool NetworkClient::TryApplySelectPlayer(const SelectPlayerMessage& pl, bool allowPending)
@@ -491,6 +420,7 @@ bool NetworkClient::TryApplyChangeOwner(const ChangeOwnerMessage& co, bool allow
         }
         LOG_INFO(Network, "ChangeOwner: applied local object {}:{} localObjects={} remoteObjects={}",
                  localObject.id.creator, localObject.id.id, _localObjects.Size(), _remoteObjects.Size());
+        ApplySquadIdentity(co.owner, dynamic_cast<Person*>(object));
 #if CHECK_MSG
         CheckLocalObjects();
 #endif
@@ -533,6 +463,7 @@ bool NetworkClient::TryApplyChangeOwner(const ChangeOwnerMessage& co, bool allow
     }
     LOG_INFO(Network, "ChangeOwner: applied remote object {}:{} localObjects={} remoteObjects={}", info.id.creator,
              info.id.id, _localObjects.Size(), _remoteObjects.Size());
+    ApplySquadIdentity(co.owner, dynamic_cast<Person*>(object));
     return true;
 }
 
@@ -783,10 +714,10 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 RString serverDir = Poseidon::BuildNetworkServerPlayerUploadDir(GetServerTmpDir(), identity.dpnid);
                 if (relativeDstDir.GetLength() > 0 && serverDir.GetLength() > 0)
                 {
-                    CreatePath(dstDir);
+                    Poseidon::CreateDirectoryUtf8(dstDir);
                     if (!transfer)
                     {
-                        CreatePath(serverDir);
+                        Poseidon::CreateDirectoryUtf8(serverDir);
                     }
                     RString src = srcDir + RString("face.paa");
                     if (QIFStream::FileExists(src) && FileSize(src) <= MaxCustomFaceSize)
@@ -794,7 +725,6 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                         RString dst = Poseidon::GetUserDirectory() +
                                       Poseidon::BuildNetworkPlayerAssetTmpPath(identity.dpnid, RString("face.paa"));
                         Poseidon::CopyFileUtf8(src, dst, false);
-                        QueueTransferredNetworkFaceRefresh(identity.dpnid);
                         RString server = Poseidon::BuildNetworkServerPlayerAssetUploadPath(
                             GetServerTmpDir(), identity.dpnid, RString("face.paa"));
                         if (transfer)
@@ -814,7 +744,6 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                             RString dst = Poseidon::GetUserDirectory() +
                                           Poseidon::BuildNetworkPlayerAssetTmpPath(identity.dpnid, RString("face.jpg"));
                             Poseidon::CopyFileUtf8(src, dst, false);
-                            QueueTransferredNetworkFaceRefresh(identity.dpnid);
                             RString server = Poseidon::BuildNetworkServerPlayerAssetUploadPath(
                                 GetServerTmpDir(), identity.dpnid, RString("face.jpg"));
                             if (transfer)
@@ -844,10 +773,10 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                         Poseidon::BuildNetworkServerPlayerSoundUploadDir(GetServerTmpDir(), identity.dpnid);
                     if (relativeDstDir.GetLength() > 0 && serverDir.GetLength() > 0)
                     {
-                        CreatePath(dstDir);
+                        Poseidon::CreateDirectoryUtf8(dstDir);
                         if (!transfer)
                         {
-                            CreatePath(serverDir);
+                            Poseidon::CreateDirectoryUtf8(serverDir);
                         }
                         for (int i = 0; i < sounds.Size(); i++)
                         {
@@ -936,6 +865,14 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             int index = _squads.Add(new SquadIdentity());
             SquadIdentity* squad = _squads[index];
             squad->TransferMsg(ctx);
+            for (int i = 0; i < _identities.Size(); i++)
+            {
+                PlayerIdentity& identity = _identities[i];
+                if (identity.squadId == squad->id)
+                {
+                    identity.squad = squad;
+                }
+            }
         }
         break;
         case NMTMissionHeader:
@@ -1048,11 +985,6 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 LOG_INFO(Network, "[NMTTransferFile] completed receive path='{}' bytes={} segments={}",
                          (const char*)wirePath, transfer.totSize, transfer.totSegments);
-                const int player = NetworkPlayerFaceTransferOwner(wirePath);
-                if (RefreshTransferredNetworkFace(player) <= 0)
-                {
-                    QueueTransferredNetworkFaceRefresh(player);
-                }
             }
         }
         break;
@@ -1907,7 +1839,6 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 copy._to->SetInfo(info);
                 copy._to->SetFace(info._face, info._name);
                 copy._to->SetGlasses(info._glasses);
-                FlushTransferredNetworkFaceRefreshes();
             }
         }
         break;
@@ -2212,6 +2143,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                         CreateLocalObject(_clientInfo);
 
                         _state = NGSPlay;
+                        ApplySquadIdentity(_player, GWorld ? GWorld->GetRealPlayer() : nullptr);
 
                         // Run client-side init scripts for JIP players
                         if (_jip)
@@ -2491,8 +2423,6 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             RptF("Client: Unhandled user message %d", (int)type);
             break;
     }
-
-    FlushTransferredNetworkFaceRefreshes();
 
 #ifndef NDEBUG
     if (_state == NGSPlay && validBefore)

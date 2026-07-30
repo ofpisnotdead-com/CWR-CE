@@ -620,6 +620,8 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
         SendMsg(identity.dpnid, squad, NMFGuaranteed);
     }
 
+    bool hasCustomFace = stricmp(identity.face, "custom") == 0;
+
     for (int i = 0; i < _identities.Size(); i++)
     {
         PlayerIdentity& player = _identities[i];
@@ -628,13 +630,19 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
             // send all faces and sounds to new player
             //						if (notBotClient)
             {
-                TransferFace(identity.dpnid, player.dpnid);
+                if (stricmp(player.face, "custom") == 0)
+                {
+                    TransferFace(identity.dpnid, player.dpnid);
+                }
                 TransferCustomRadio(identity.dpnid, player.dpnid);
             }
             // send new face and sound to all players
             //						if (!client || client->GetPlayer() != player.dpnid)
             {
-                TransferFace(player.dpnid, identity.dpnid);
+                if (hasCustomFace)
+                {
+                    TransferFace(player.dpnid, identity.dpnid);
+                }
                 TransferCustomRadio(player.dpnid, identity.dpnid);
             }
             // send all identities to new player

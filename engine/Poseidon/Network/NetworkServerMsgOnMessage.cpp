@@ -854,29 +854,7 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             }
 
             transfer.path = Poseidon::NormalizeNetworkServerPlayerUploadPath(transfer.path, GetServerTmpDir(), from);
-            const Poseidon::NetworkPlayerUploadKind uploadKind =
-                Poseidon::ClassifyNetworkServerPlayerUploadPath(transfer.path, GetServerTmpDir(), from);
-            if (ReceiveFileSegment(transfer) > 0)
-            {
-                LOG_INFO(Network, "[NMTTransferFileToServer] completed receive from={} path='{}' bytes={} segments={}",
-                         from, (const char*)transfer.path, transfer.totSize, transfer.totSegments);
-                for (int i = 0; i < _players.Size(); i++)
-                {
-                    const NetworkPlayerInfo& peer = _players[i];
-                    if (peer.dpid == from || peer.dpid == _botClient)
-                    {
-                        continue;
-                    }
-                    if (uploadKind == Poseidon::NetworkPlayerUploadKind::Face)
-                    {
-                        TransferFace(peer.dpid, from);
-                    }
-                    else if (uploadKind == Poseidon::NetworkPlayerUploadKind::Sound)
-                    {
-                        TransferCustomRadio(peer.dpid, from);
-                    }
-                }
-            }
+            ReceiveFileSegment(transfer);
         }
         break;
         case NMTSetFlagOwner:

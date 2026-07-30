@@ -1555,7 +1555,34 @@ GameValue TriPlayerFace(const GameState* /*state*/)
     return GameValue((const char*)player->GetInfo()._face);
 }
 
-/// triSetPlayerPref <name> — write the persisted last-used profile name (the
+GameValue TriAssertPlayerSquad(const GameState* /*state*/, GameValuePar arg)
+{
+    const GameArrayType& values = arg;
+    if (values.Size() != 2 || values[0].GetType() != GameString || values[1].GetType() != GameString)
+        return GameValue("FAIL:expected_title_picture");
+    if (!GWorld || !GWorld->GetRealPlayer())
+        return GameValue("FAIL:no_player");
+
+    const AIUnitInfo& info = GWorld->GetRealPlayer()->GetInfo();
+    const RString expectedTitle = static_cast<GameStringType>(values[0]);
+    const RString expectedPicture = static_cast<GameStringType>(values[1]);
+    if (info._squadTitle != expectedTitle)
+        return GameValue("FAIL:title");
+    if (expectedPicture.GetLength() == 0)
+        return GameValue("OK");
+    if (!info._squadPicture)
+        return GameValue("FAIL:picture_missing");
+    const char* pictureName = info._squadPicture->GetName();
+    const char* slash = strrchr(pictureName, '/');
+    const char* backslash = strrchr(pictureName, '\\');
+    if (backslash && (!slash || backslash > slash))
+        slash = backslash;
+    if (RString(slash ? slash + 1 : pictureName) != expectedPicture)
+        return GameValue("FAIL:picture");
+    return GameValue("OK");
+}
+
+/// triSetPlayerPref <name> - write the persisted last-used profile name (the
 /// PlayerName pref). A sequence phase uses this to leave a stale pref for the
 /// next boot. Returns "OK".
 GameValue TriSetPlayerPref(const GameState* /*state*/, GameValuePar arg)
@@ -2462,97 +2489,6 @@ GameValue TriAssertNetworkAssetExistsForPlayerName(const GameState* /*state*/, G
     return GameValue(buf);
 }
 
-GameValue TriNetworkAssetByteForPlayerName(const GameState* /*state*/, GameValuePar arg)
-{
-    if (arg.GetType() != GameArray)
-        return GameValue("FAIL:expected_array");
-    const GameArrayType& a = arg;
-    if (a.Size() < 4)
-        return GameValue("FAIL:need_kind_player_file_offset");
-    if (a[0].GetType() != GameString || a[1].GetType() != GameString || a[2].GetType() != GameString ||
-        a[3].GetType() != GameScalar)
-        return GameValue("FAIL:invalid_argument_type");
-
-    const GameStringType playerArg = static_cast<GameStringType>(a[1]);
-    const AutoArray<PlayerIdentity>* identities = GNetworkManager.GetIdentities();
-    const PlayerIdentity* found = nullptr;
-    if (identities)
-    {
-        for (int i = 0; i < identities->Size(); ++i)
-        {
-            if (stricmp((const char*)(*identities)[i].name, (const char*)playerArg) == 0)
-            {
-                found = &(*identities)[i];
-                break;
-            }
-        }
-    }
-    if (!found)
-        return GameValue("FAIL:no_identity");
-
-    char owner[32];
-    snprintf(owner, sizeof(owner), "%d", found->dpnid);
-    const GameStringType kindArg = static_cast<GameStringType>(a[0]);
-    const GameStringType fileArg = static_cast<GameStringType>(a[2]);
-    const RString relativePath = Poseidon::BuildNetworkTransferredAssetProbeTmpPath(
-        RString((const char*)kindArg), RString(owner), RString((const char*)fileArg));
-    if (relativePath.GetLength() == 0)
-        return GameValue("FAIL:invalid_asset_path");
-
-    const std::vector<char> bytes = Poseidon::ReadFileUtf8(Poseidon::GetUserDirectory() + relativePath);
-    const int offset = toInt(static_cast<float>(a[3]));
-    if (offset < 0 || offset >= static_cast<int>(bytes.size()))
-        return GameValue("FAIL:offset_out_of_range");
-
-    char result[64];
-    snprintf(result, sizeof(result), "%zu:%u", bytes.size(), static_cast<unsigned char>(bytes[offset]));
-    return GameValue(result);
-}
-
-GameValue TriReplaceAndUploadCustomSound(const GameState* /*state*/, GameValuePar arg)
-{
-    if (arg.GetType() != GameArray)
-        return GameValue("FAIL:expected_array");
-    const GameArrayType& a = arg;
-    if (a.Size() < 2 || a[0].GetType() != GameString || a[1].GetType() != GameString)
-        return GameValue("FAIL:need_source_and_sound_name");
-
-    const GameStringType sourceArg = static_cast<GameStringType>(a[0]);
-    const GameStringType soundArg = static_cast<GameStringType>(a[1]);
-    const RString sourceName((const char*)sourceArg);
-    const RString soundName((const char*)soundArg);
-    if (!Poseidon::IsSafeNetworkAssetPathComponent(sourceName) || !Poseidon::IsSafeNetworkAssetPathComponent(soundName))
-        return GameValue("FAIL:invalid_file_name");
-
-    NetworkClient* client = GNetworkManager.GetClient();
-    if (!client || client->GetPlayer() <= 0)
-        return GameValue("FAIL:no_network_client");
-
-    const RString userDirectory = Poseidon::GetUserDirectory();
-    const RString sourcePath = userDirectory + sourceName;
-    const RString soundPath = userDirectory + RString("Sound/") + soundName;
-    const std::vector<char> current = Poseidon::ReadFileUtf8(soundPath);
-    const std::vector<char> replacement = Poseidon::ReadFileUtf8(sourcePath);
-    if (current.empty() || replacement.empty())
-        return GameValue("FAIL:missing_or_empty_file");
-    if (current.size() != replacement.size())
-        return GameValue("FAIL:size_mismatch");
-    if (current == replacement)
-        return GameValue("FAIL:content_unchanged");
-    if (!Poseidon::WriteFileUtf8(soundPath, replacement.data(), replacement.size()))
-        return GameValue("FAIL:write_failed");
-
-    const RString destination =
-        Poseidon::BuildNetworkServerPlayerSoundUploadPath(GetServerTmpDir(), client->GetPlayer(), soundName);
-    if (destination.GetLength() == 0)
-        return GameValue("FAIL:invalid_upload_path");
-    client->TransferFileToServer(destination, soundPath);
-
-    char result[64];
-    snprintf(result, sizeof(result), "OK:%zu", replacement.size());
-    return GameValue(result);
-}
-
 GameValue TriAssertNetworkAssetExistsForAnyPeer(const GameState* /*state*/, GameValuePar arg)
 {
     if (arg.GetType() != GameArray)
@@ -3123,14 +3059,11 @@ INIT_MODULE(GameStateExtTest, 3)
         GameFunction(GameString, "triAssertNetworkAssetExistsForRole", TriAssertNetworkAssetExistsForRole, GameArray));
     GGameState.NewFunction(GameFunction(GameString, "triAssertNetworkAssetExistsForPlayerName",
                                         TriAssertNetworkAssetExistsForPlayerName, GameArray));
-    GGameState.NewFunction(
-        GameFunction(GameString, "triNetworkAssetByteForPlayerName", TriNetworkAssetByteForPlayerName, GameArray));
-    GGameState.NewFunction(
-        GameFunction(GameString, "triReplaceAndUploadCustomSound", TriReplaceAndUploadCustomSound, GameArray));
     GGameState.NewFunction(GameFunction(GameString, "triAssertNetworkAssetExistsForAnyPeer",
                                         TriAssertNetworkAssetExistsForAnyPeer, GameArray));
     GGameState.NewFunction(GameFunction(GameString, "triAssertNetworkAssetExistsForAnyPeerBytes",
                                         TriAssertNetworkAssetExistsForAnyPeerBytes, GameArray));
+    GGameState.NewFunction(GameFunction(GameString, "triAssertPlayerSquad", TriAssertPlayerSquad, GameArray));
     GGameState.NewFunction(GameFunction(GameString, "triMpAssignSelf", TriMpAssignSelf, GameScalar));
     GGameState.NewFunction(GameFunction(GameString, "triMpAssignSelfSlot", TriMpAssignSelfSlot, GameString));
     GGameState.NewFunction(GameFunction(GameString, "triMpSlotTaken", TriMpSlotTaken, GameString));
