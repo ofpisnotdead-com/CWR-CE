@@ -6,6 +6,26 @@
 #include <limits.h>
 #include <math.h>
 #include <utility>
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+#include <xmmintrin.h> // _mm_cvtss_si32 / _mm_set_ss
+#endif
+
+// std::nearbyint() does not become a single instruction: on both gcc and clang
+// (without -ffast-math) it emits a libm nearbyintf() call that reads the FP
+// environment via fegetenv, because nearbyint must not raise the inexact flag.
+// Profiling put fegetenv + nearbyintf + rintf at ~28% of frame CPU. cvtss2si
+// (SSE2, the x86-64 baseline) rounds a float to int using the MXCSR mode
+// (default round-to-nearest-ties-to-even, exactly the x86 FPU / DX8 behaviour
+// this code documents) in one instruction, with no libm call and no FP-env
+// access. Falls back to std::nearbyint on non-x86.
+inline int fastRoundToInt(float x)
+{
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+    return _mm_cvtss_si32(_mm_set_ss(x));
+#else
+    return static_cast<int>(std::nearbyint(x));
+#endif
+}
 
 // fast float helpers
 
@@ -137,34 +157,37 @@ inline float fastRound(float x)
     // `GetPhase`'s `floor` landed one frame behind, `dif` overflowed
     // `_frame`, the interpolation `(frame - dif)*oldPhase` flipped negative,
     // and `Head::Animate` cleared `_lipInfo`.
-    return std::nearbyint(x);
+    return static_cast<float>(fastRoundToInt(x));
 }
 
 inline int toLargeInt(float f)
 {
     // Round to nearest, ties-to-even - the original x86 x87 `fistp` behaviour
     // (the DX8 reference); `(int)f` would truncate.
-    // Clamp before cast: x87 fistp silently saturated on overflow; C++ UB.
-    float r = std::nearbyint(f);
-    if (r >= 2147483648.0f)  return 2147483647;   // INT_MAX
-    if (r < -2147483648.0f)  return -2147483648;  // INT_MIN
-    return static_cast<int>(r);
+    // Clamp before cast: x87 fistp silently saturated on overflow; C++ UB
+    // (cvtss2si returns 0x80000000 on out-of-range).
+    if (f >= 2147483648.0f)  return 2147483647;   // INT_MAX
+    if (f < -2147483648.0f)  return -2147483648;  // INT_MIN
+    return fastRoundToInt(f);
 }
 
 inline __int64 to64bInt(float f)
 {
+#if defined(__x86_64__) || defined(_M_X64)
+    return _mm_cvtss_si64(_mm_set_ss(f));
+#else
     return (__int64)std::nearbyint(f);
+#endif
 }
 
 inline int toInt(float fval)
 {
     // Round to nearest, ties-to-even - the x86 FPU default that the DX8
-    // reference uses.  nearbyint honours the current rounding mode and lowers
-    // to a single cvtss2si.
-    float r = std::nearbyint(fval);
-    if (r >= 2147483648.0f)  return 2147483647;
-    if (r < -2147483648.0f)  return -2147483648;
-    return static_cast<int>(r);
+    // reference uses.  fastRoundToInt() lowers to a single cvtss2si (what the
+    // old comment wrongly assumed std::nearbyint would do).
+    if (fval >= 2147483648.0f)  return 2147483647;
+    if (fval < -2147483648.0f)  return -2147483648;
+    return fastRoundToInt(fval);
 }
 
 inline int toInt(double f)
