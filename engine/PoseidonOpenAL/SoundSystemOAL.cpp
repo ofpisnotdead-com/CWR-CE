@@ -347,10 +347,42 @@ void SoundSystemOAL::Activate(bool active)
     if (!_context)
         return;
 
+    std::lock_guard<std::recursive_mutex> lk(_audioMutex);
+    if (_outputActive == active)
+        return;
+
+    _outputActive = active;
+    if (!active)
+        ApplyListenerGain();
+    UpdateContextState();
     if (active)
-        alcProcessContext(static_cast<ALCcontext*>(_context));
-    else
+        ApplyListenerGain();
+}
+
+void SoundSystemOAL::SetSimulationRunning(bool running)
+{
+    std::lock_guard<std::recursive_mutex> lk(_audioMutex);
+    if (_simulationRunning == running)
+        return;
+
+    _simulationRunning = running;
+    UpdateContextState();
+}
+
+void SoundSystemOAL::UpdateContextState()
+{
+    if (!_context)
+        return;
+
+    const bool suspend = !_outputActive && !_simulationRunning;
+    if (_contextSuspended == suspend)
+        return;
+
+    if (suspend)
         alcSuspendContext(static_cast<ALCcontext*>(_context));
+    else
+        alcProcessContext(static_cast<ALCcontext*>(_context));
+    _contextSuspended = suspend;
 }
 
 // --- EFX (EAX reverb) implementation ---
@@ -823,6 +855,7 @@ bool SoundSystemOAL::SwitchOutputDevice(const char* name)
 
     _device = newDevice;
     _context = newContext;
+    _contextSuspended = false;
     alcProcessContext(newContext);
 
     // EAX availability tracks the new device.
@@ -840,6 +873,7 @@ bool SoundSystemOAL::SwitchOutputDevice(const char* name)
     SetCDVolume(cd);
     SetWaveVolume(wave);
     SetSpeechVolume(speech);
+    UpdateContextState();
     if (wantEAX && _canEAX)
         EnableEAX(true);
 
@@ -942,19 +976,23 @@ void SoundSystemOAL::UpdateMixer()
     _volumeAdjustSpeech = DX8::mixerAdjust(speechVolExp, maxVolExp);
     _volumeAdjustMusic = DX8::mixerAdjust(musicVolExp, maxVolExp);
 
-    // DX8 _mixer->SetWaveVolume(MaxVolume()*0.1) → OAL alListenerf(AL_GAIN, ...)
-    float maxRawVol = (std::max)({_waveVolume, _speechVolume, _cdVolume});
-    alListenerf(AL_GAIN, DX8::listenerGain(maxRawVol));
+    ApplyListenerGain();
 
     LOG_DEBUG(Audio, "UpdateMixer: wave={} speech={} music={} gain={} (vols {}/{}/{})", _volumeAdjustEffect,
-              _volumeAdjustSpeech, _volumeAdjustMusic, DX8::listenerGain(maxRawVol), _waveVolume, _speechVolume,
-              _cdVolume);
+              _volumeAdjustSpeech, _volumeAdjustMusic, _listenerGain, _waveVolume, _speechVolume, _cdVolume);
 
     for (auto* wave : _waves)
     {
         if (wave)
             wave->SetVolumeAdjust(_volumeAdjustEffect, _volumeAdjustSpeech, _volumeAdjustMusic);
     }
+}
+
+void SoundSystemOAL::ApplyListenerGain()
+{
+    float maxRawVol = (std::max)({_waveVolume, _speechVolume, _cdVolume});
+    _listenerGain = _outputActive ? DX8::listenerGain(maxRawVol) : 0.f;
+    alListenerf(AL_GAIN, _listenerGain);
 }
 
 static bool PreviewAdvance(IWave* wave, float deltaT)
