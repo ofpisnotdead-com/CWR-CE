@@ -1419,13 +1419,19 @@ void DisplayMultiplayerSetup::OnChildDestroyed(int idd, int exit)
             case IDD_MISSION:
             {
                 Display::OnChildDestroyed(idd, exit);
+                const bool connectionStalled =
+                    GetNetworkManager().IsControlsPaused() || GetNetworkManager().GetLastMsgAgeReliable() > 10.0f;
+                const bool disconnectOnly =
+                    ResolveClientDebriefingMode(exit == IDC_MAIN_QUIT, connectionStalled,
+                                                GetNetworkManager().GetGameState() == NGSNone) ==
+                    ClientDebriefingMode::DisconnectOnly;
                 // In auto-assign mode, reaching this point means a mission was played
                 if (!AppConfig::Instance().GetMPAssign().empty())
                     GApp->m_exitCode =
                         ResolveMultiplayerAutomationExitCode(GApp->m_exitCode, GApp->m_closeRequest, true);
                 GetNetworkManager().DestroyAllObjects();
                 GetNetworkManager().ClientReady(NGSDebriefing);
-                CreateChild(new DisplayClientDebriefing(this, false));
+                CreateChild(new DisplayClientDebriefing(this, false, disconnectOnly));
             }
             break;
             case IDD_CLIENT_WAIT:
@@ -1436,8 +1442,15 @@ void DisplayMultiplayerSetup::OnChildDestroyed(int idd, int exit)
                 }
                 break;
             case IDD_DEBRIEFING:
+            {
+                const auto* debriefing = dynamic_cast<const DisplayClientDebriefing*>(_child.GetRef());
+                const bool disconnectOnly = debriefing && debriefing->IsDisconnectOnly();
                 Display::OnChildDestroyed(idd, exit);
-                if (GetNetworkManager().IsGameMaster())
+                if (disconnectOnly)
+                {
+                    Exit(IDC_CANCEL);
+                }
+                else if (GetNetworkManager().IsGameMaster())
                 {
                     _transferMission = true;
                     _loadIsland = true;
@@ -1448,6 +1461,7 @@ void DisplayMultiplayerSetup::OnChildDestroyed(int idd, int exit)
                     Exit(IDC_CANCEL);
                 }
                 break;
+            }
             default:
                 Display::OnChildDestroyed(idd, exit);
                 break;

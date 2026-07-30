@@ -56,6 +56,15 @@ void UpdateDebriefingActionLabels(DisplayDebriefing* display)
     if (!display)
         return;
 
+    if (display->IsDisconnectOnly())
+    {
+        if (auto* ctrl = dynamic_cast<CActiveText*>(display->GetCtrl(IDC_DEBRIEFING_RESTART)))
+            ctrl->ShowCtrl(false);
+        if (auto* ctrl = dynamic_cast<CActiveText*>(display->GetCtrl(IDC_CANCEL)))
+            ctrl->SetText(LocalizeString(IDS_DISP_DISCONNECT));
+        return;
+    }
+
     if (GetNetworkManager().IsServer() || GetNetworkManager().IsGameMaster())
     {
         if (auto* ctrl = dynamic_cast<CActiveText*>(display->GetCtrl(IDC_DEBRIEFING_RESTART)))
@@ -529,7 +538,8 @@ void DisplayGetReady::Destroy()
     }
     DisplayMap::Destroy();
 }
-DisplayDebriefing::DisplayDebriefing(ControlsContainer* parent, bool animation) : Display(parent)
+DisplayDebriefing::DisplayDebriefing(ControlsContainer* parent, bool animation, bool disconnectOnly)
+    : Display(parent), _disconnectOnly(disconnectOnly)
 {
     //	GWorld->EnableDisplay(false);
     Load("RscDisplayDebriefing");
@@ -540,7 +550,7 @@ DisplayDebriefing::DisplayDebriefing(ControlsContainer* parent, bool animation) 
 
     GetCtrl(IDC_DEBRIEFING_PAD2)->ShowCtrl(false);
 
-    if (GetNetworkManager().IsServer() || GetNetworkManager().IsGameMaster())
+    if (!_disconnectOnly && (GetNetworkManager().IsServer() || GetNetworkManager().IsGameMaster()))
     {
         // server
         _server = true;
@@ -723,7 +733,7 @@ void DisplayDebriefing::OnHTMLLink(int idc, RString link)
 
 void DisplayDebriefing::OnSimulate(EntityAI* vehicle)
 {
-    if (_server)
+    if (!_disconnectOnly && _server)
     {
         if (!GetNetworkManager().IsServer() && !GetNetworkManager().IsGameMaster())
         {
@@ -736,7 +746,7 @@ void DisplayDebriefing::OnSimulate(EntityAI* vehicle)
             }
         }
     }
-    else
+    else if (!_disconnectOnly)
     {
         if (GetNetworkManager().IsServer() || GetNetworkManager().IsGameMaster())
         {

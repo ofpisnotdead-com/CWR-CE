@@ -959,7 +959,10 @@ void DisplayMultiplayerSetup::OnLBDrop(float x, float y)
 
 // Client and server briefing, debriefing
 
-DisplayClientDebriefing::DisplayClientDebriefing(ControlsContainer* parent, bool animation) : base(parent, animation) {}
+DisplayClientDebriefing::DisplayClientDebriefing(ControlsContainer* parent, bool animation, bool disconnectOnly)
+    : base(parent, animation, disconnectOnly)
+{
+}
 
 void DisplayClientDebriefing::OnSimulate(EntityAI* vehicle)
 {

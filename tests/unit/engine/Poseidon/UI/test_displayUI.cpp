@@ -5,6 +5,7 @@
 #include <Poseidon/UI/Map/UIMap.hpp>
 #include <Poseidon/AI/AI.hpp>
 #include <Poseidon/UI/DisplayUI.hpp>
+#include <Poseidon/UI/DisplayUICommon.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <SDL3/SDL_scancode.h>
 #include <string>
@@ -29,4 +30,13 @@ TEST_CASE("displayUI names double-tap keyboard and mouse bindings", "[UI][displa
 {
     CHECK(std::string((const char*)GetKeyName(InputBindingDoubleTapCode((int)SDL_SCANCODE_G))).find("2x ") == 0);
     CHECK(std::string((const char*)GetKeyName(InputBindingDoubleTapCode(INPUT_DEVICE_MOUSE + 1))).find("2x ") == 0);
+}
+
+TEST_CASE("stalled client abort uses a disconnect-only debriefing", "[UI][multiplayer][disconnect]")
+{
+    CHECK(ResolveClientDebriefingMode(true, true, false) == ClientDebriefingMode::DisconnectOnly);
+    CHECK(ResolveClientDebriefingMode(true, false, false) == ClientDebriefingMode::MissionResult);
+    CHECK(ResolveClientDebriefingMode(false, true, false) == ClientDebriefingMode::MissionResult);
+    CHECK(ResolveClientDebriefingMode(false, false, false) == ClientDebriefingMode::MissionResult);
+    CHECK(ResolveClientDebriefingMode(false, false, true) == ClientDebriefingMode::DisconnectOnly);
 }

@@ -14,6 +14,21 @@ void RunInitScript();
 void CreatePath(RString path);
 void __cdecl CreateEditor(ControlsContainer* parent, bool multiplayer = false);
 
+enum class ClientDebriefingMode
+{
+    MissionResult,
+    DisconnectOnly
+};
+
+inline ClientDebriefingMode ResolveClientDebriefingMode(bool missionAborted, bool controlsPaused, bool sessionLost)
+{
+    if (sessionLost || missionAborted && controlsPaused)
+    {
+        return ClientDebriefingMode::DisconnectOnly;
+    }
+    return ClientDebriefingMode::MissionResult;
+}
+
 inline PackedColor ModAlpha(PackedColor color, float alpha)
 {
     int a = toInt(alpha * color.A8());
