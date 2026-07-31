@@ -1942,7 +1942,7 @@ void ProcessJoinGroups(AIGroup* from, AIGroup* to)
     bool allow = to->Leader()->IsGetInAllowed();
     AllowGetIn(to, allow);
 
-    PoseidonAssert(to->AssertValid());
+    AI_HEAVY_CHECK(to->AssertValid());
 }
 namespace Poseidon
 {
@@ -1952,8 +1952,8 @@ static void JoinGroups(AIGroup* from, AIGroup* to)
     AI_ERROR(from);
     AI_ERROR(to);
     AI_ERROR(from != to);
-    PoseidonAssert(from->AssertValid());
-    PoseidonAssert(to->AssertValid());
+    AI_HEAVY_CHECK(from->AssertValid());
+    AI_HEAVY_CHECK(to->AssertValid());
 
     ApplyEffects(from, from->GetCurrent()->_fsm->Var(0));
 
