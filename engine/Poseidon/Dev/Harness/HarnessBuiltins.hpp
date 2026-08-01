@@ -28,6 +28,11 @@ void RegisterSqf(HarnessServer& hs);
 /// `key` + `key_up` — inject SDL scancodes into the event queue. Any SDL app.
 void RegisterKeyInjection(HarnessServer& hs);
 
+/// `debug_cmd` — run a line through the DebugCommands registry, the same
+/// dispatch the dev console uses, and return its output. Lets a scripted
+/// client drive any registered dev command without keyboard input.
+void RegisterDebugCommand(HarnessServer& hs);
+
 /// `query` — answer `what=display` with active display IDD + a per-control
 /// dump (idc, type, visible, enabled, pos, text).  UI-focused; apps that
 /// need additional `what` keys (network, mission, ngs) dispatch them
