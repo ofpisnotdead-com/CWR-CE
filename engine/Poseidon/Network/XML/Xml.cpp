@@ -23,6 +23,7 @@
 #include <Poseidon/Foundation/Framework/Log.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 #include <Poseidon/Foundation/platform.hpp>
+#include <Poseidon/Network/HttpTestRewrite.hpp>
 #include <curl/curl.h>
 #include <mutex>
 #include <vector>
@@ -93,7 +94,8 @@ CurlDownloadStatus DownloadFileWithCurl(const char* url, const char* proxyServer
         return CurlDownloadStatus::Failed;
     }
 
-    curl_easy_setopt(curl, CURLOPT_URL, url);
+    const std::string effectiveUrl = Poseidon::ResolveHttpTestUrl(url);
+    curl_easy_setopt(curl, CURLOPT_URL, effectiveUrl.c_str());
     curl_easy_setopt(curl, CURLOPT_USERAGENT, AGENT_NAME);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);

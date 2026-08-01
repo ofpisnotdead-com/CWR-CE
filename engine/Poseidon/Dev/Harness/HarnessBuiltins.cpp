@@ -29,6 +29,7 @@ using namespace Poseidon;
 #include <Poseidon/Network/NetworkConfig.hpp>
 #include <Poseidon/Network/MasterServerServiceClient.hpp>
 #include <Poseidon/Network/MasterServerBrowser.hpp>
+#include <Poseidon/Network/HttpTestRewrite.hpp>
 #include <Poseidon/AI/AIUnit.hpp>
 #include <Poseidon/Core/ModId.hpp>
 #include <Poseidon/Core/ServerModResolve.hpp>
@@ -106,6 +107,24 @@ void RegisterSqf(HarnessServer& hs)
                            gs->BeginContext(&s_evalScope);
                            gs->Execute(code);
                            gs->EndContext();
+                           return HarnessProtocol::OkResponse();
+                       });
+}
+
+void RegisterHttpFixtures(HarnessServer& hs)
+{
+    hs.RegisterCommand({"http_fixture",
+                        "Map an exact HTTP URL to a loopback fixture URL",
+                        {{"url", "string", true}, {"target", "string", true}}},
+                       [](const std::string&, cJSON* root) -> std::string
+                       {
+                           const char* url = HarnessProtocol::GetString(root, "url");
+                           const char* target = HarnessProtocol::GetString(root, "target");
+                           if (!url || !url[0] || !target || !target[0])
+                               return HarnessProtocol::ErrorResponse("http_fixture requires url and target");
+                           if (!RegisterHttpTestRewrite(url, target))
+                               return HarnessProtocol::ErrorResponse(
+                                   "http_fixture requires an HTTP URL and loopback target");
                            return HarnessProtocol::OkResponse();
                        });
 }

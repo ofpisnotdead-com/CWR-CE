@@ -21,7 +21,11 @@ use std::path::{Component, Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
 use tokio::process::{Child, Command as ProcessCommand};
+use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 
 /// Parsed multi-instance test configuration from `test.toml`.
 #[derive(serde::Deserialize)]
@@ -58,8 +62,19 @@ pub struct MultiTestConfig {
     #[serde(default)]
     pub services: Vec<ServiceConfig>,
 
+    #[serde(default)]
+    pub http_fixtures: Vec<HttpFixtureConfig>,
+
     /// Instance definitions — started in array order
     pub instances: Vec<InstanceConfig>,
+}
+
+#[derive(Clone, serde::Deserialize)]
+pub struct HttpFixtureConfig {
+    pub url: String,
+    pub file: String,
+    #[serde(default)]
+    pub min_requests: usize,
 }
 
 const fn default_game_port() -> u16 {
@@ -483,6 +498,177 @@ impl RunningService {
         let _ = self.child.start_kill();
         let _ = tokio::time::timeout(timeout, self.child.wait()).await;
     }
+}
+
+struct HttpFixtureRoute {
+    source_url: String,
+    path: String,
+    body: Arc<Vec<u8>>,
+    min_requests: usize,
+    requests: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+struct RunningHttpFixtures {
+    rewrites: Vec<(String, String)>,
+    routes: Arc<Vec<HttpFixtureRoute>>,
+    shutdown: Option<oneshot::Sender<()>>,
+    task: JoinHandle<Result<()>>,
+}
+
+impl RunningHttpFixtures {
+    fn validate(&self) -> Result<()> {
+        use std::sync::atomic::Ordering;
+
+        for route in self.routes.iter() {
+            let requests = route.requests.load(Ordering::Relaxed);
+            if requests < route.min_requests {
+                anyhow::bail!(
+                    "HTTP fixture '{}' received {requests} request(s), expected at least {}",
+                    route.source_url,
+                    route.min_requests
+                );
+            }
+        }
+        Ok(())
+    }
+
+    async fn stop(mut self) {
+        if let Some(shutdown) = self.shutdown.take() {
+            let _ = shutdown.send(());
+        }
+        let _ = self.task.await;
+    }
+}
+
+async fn serve_http_fixture_connection(
+    mut stream: TcpStream,
+    routes: Arc<Vec<HttpFixtureRoute>>,
+    request_log: Arc<Mutex<File>>,
+) -> Result<()> {
+    use std::sync::atomic::Ordering;
+
+    let mut request = Vec::new();
+    let mut chunk = [0_u8; 1024];
+    while request.len() < 16 * 1024 {
+        let read = stream.read(&mut chunk).await?;
+        if read == 0 {
+            break;
+        }
+        request.extend_from_slice(&chunk[..read]);
+        if request.windows(4).any(|window| window == b"\r\n\r\n") {
+            break;
+        }
+    }
+
+    let request_text = String::from_utf8_lossy(&request);
+    let mut parts = request_text
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .split_whitespace();
+    let method = parts.next().unwrap_or_default();
+    let path = parts.next().unwrap_or_default();
+    let route = (method == "GET")
+        .then(|| routes.iter().find(|route| route.path == path))
+        .flatten();
+
+    if let Ok(mut log) = request_log.lock() {
+        let _ = writeln!(log, "{method} {path}");
+    }
+
+    let (status, body): (&str, &[u8]) = route.map_or(("404 Not Found", b"not found"), |route| {
+        route.requests.fetch_add(1, Ordering::Relaxed);
+        ("200 OK", route.body.as_slice())
+    });
+    let header = format!(
+        "HTTP/1.1 {status}\r\nContent-Length: {}\r\nContent-Type: application/octet-stream\r\nConnection: close\r\n\r\n",
+        body.len()
+    );
+    stream.write_all(header.as_bytes()).await?;
+    stream.write_all(body).await?;
+    stream.shutdown().await?;
+    Ok(())
+}
+
+async fn start_http_fixtures(
+    fixtures: &[HttpFixtureConfig],
+    test_dir: &Path,
+    output_dir: &Path,
+) -> Result<Option<RunningHttpFixtures>> {
+    use std::sync::atomic::AtomicUsize;
+
+    if fixtures.is_empty() {
+        return Ok(None);
+    }
+
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .context("failed to start HTTP fixture server")?;
+    let port = listener.local_addr()?.port();
+    let mut source_urls = HashSet::new();
+    let mut routes = Vec::with_capacity(fixtures.len());
+    let mut rewrites = Vec::with_capacity(fixtures.len());
+    for (index, fixture) in fixtures.iter().enumerate() {
+        let url = reqwest::Url::parse(&fixture.url)
+            .with_context(|| format!("invalid HTTP fixture URL '{}'", fixture.url))?;
+        if !matches!(url.scheme(), "http" | "https") {
+            anyhow::bail!("HTTP fixture URL '{}' must use http or https", fixture.url);
+        }
+        if !source_urls.insert(fixture.url.clone()) {
+            anyhow::bail!("duplicate HTTP fixture URL '{}'", fixture.url);
+        }
+
+        let relative = checked_relative_file_path(&fixture.file)?;
+        let file = test_dir.join(relative);
+        let body = std::fs::read(&file)
+            .with_context(|| format!("failed to read HTTP fixture {}", file.display()))?;
+        let path = format!("/__trident_http_fixture/{index}");
+        let target = format!("http://127.0.0.1:{port}{path}");
+        rewrites.push((fixture.url.clone(), target));
+        routes.push(HttpFixtureRoute {
+            source_url: fixture.url.clone(),
+            path,
+            body: Arc::new(body),
+            min_requests: fixture.min_requests,
+            requests: Arc::new(AtomicUsize::new(0)),
+        });
+    }
+
+    let service_output = output_dir.join("services/http-fixtures");
+    std::fs::create_dir_all(&service_output)
+        .with_context(|| format!("failed to create {}", service_output.display()))?;
+    let request_log = Arc::new(Mutex::new(File::create(
+        service_output.join("requests.log"),
+    )?));
+    let routes = Arc::new(routes);
+    let server_routes = Arc::clone(&routes);
+    let server_log = Arc::clone(&request_log);
+    let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
+    let task = tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                _ = &mut shutdown_rx => break,
+                accepted = listener.accept() => {
+                    let (stream, _) = accepted?;
+                    let routes = Arc::clone(&server_routes);
+                    let request_log = Arc::clone(&server_log);
+                    tokio::spawn(async move {
+                        if let Err(error) = serve_http_fixture_connection(stream, routes, request_log).await {
+                            tracing::warn!("HTTP fixture request failed: {error:#}");
+                        }
+                    });
+                }
+            }
+        }
+        Ok(())
+    });
+
+    Ok(Some(RunningHttpFixtures {
+        rewrites,
+        routes,
+        shutdown: Some(shutdown_tx),
+        task,
+    }))
 }
 
 fn service_url_from_listen(listen: &str) -> String {
@@ -1928,6 +2114,21 @@ pub async fn run_multi_test(
     replacements.insert("ports.game".to_string(), game_port.to_string());
     replacements.insert("game.port".to_string(), game_port.to_string());
 
+    let http_fixtures =
+        match start_http_fixtures(&config.http_fixtures, test_dir, &test_output_dir).await {
+            Ok(fixtures) => fixtures,
+            Err(e) => {
+                return Ok(ScenarioResult {
+                    passed: false,
+                    message: format!(
+                        "[http-fixture] {e:#} ({:.1}s)",
+                        start.elapsed().as_secs_f64()
+                    ),
+                    duration: start.elapsed(),
+                });
+            }
+        };
+
     let mut services = match start_services(
         name,
         &config.services,
@@ -2161,6 +2362,21 @@ pub async fn run_multi_test(
         .await
         {
             Ok(mut game) => {
+                if let Some(fixtures) = &http_fixtures {
+                    for (url, target) in &fixtures.rewrites {
+                        if let Err(error) = game.client().set_http_fixture(url, target).await {
+                            failed_instance = Some((
+                                inst.name.clone(),
+                                format!("failed to configure HTTP fixture: {error:#}"),
+                            ));
+                            break;
+                        }
+                    }
+                }
+                if failed_instance.is_some() {
+                    instances.push((inst.name.clone(), game));
+                    break;
+                }
                 // A dedicated server has no display, so it emits no `ready` event —
                 // a successful harness connection already means it finished init.
                 if !inst.is_server() {
@@ -2272,6 +2488,14 @@ pub async fn run_multi_test(
     for service in services.iter_mut().rev() {
         service.stop(timeout).await;
     }
+    if let Some(fixtures) = http_fixtures {
+        if failed_instance.is_none() {
+            if let Err(error) = fixtures.validate() {
+                failed_instance = Some(("http-fixture".to_string(), error.to_string()));
+            }
+        }
+        fixtures.stop().await;
+    }
 
     let elapsed = start.elapsed();
 
@@ -2351,6 +2575,50 @@ type = "server"
 
         assert_eq!(config.data_dir.as_deref(), Some("packages/Demo"));
         assert_eq!(config.required_env, ["CWR_MODS_SOURCE_DIR"]);
+    }
+
+    #[tokio::test]
+    async fn http_fixture_maps_exact_url_to_local_file_and_counts_requests() {
+        let test_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        std::fs::write(test_dir.path().join("squad.xml"), b"<squad />").unwrap();
+        let fixtures = vec![HttpFixtureConfig {
+            url: "https://squad.test/squad.xml".to_string(),
+            file: "squad.xml".to_string(),
+            min_requests: 1,
+        }];
+
+        let running = start_http_fixtures(&fixtures, test_dir.path(), output_dir.path())
+            .await
+            .unwrap()
+            .unwrap();
+        let target = &running.rewrites[0].1;
+        let response = reqwest::get(target.as_str()).await.unwrap();
+
+        assert_eq!(response.bytes().await.unwrap().as_ref(), b"<squad />");
+        assert!(running.validate().is_ok());
+        running.stop().await;
+    }
+
+    #[tokio::test]
+    async fn http_fixture_reports_missing_required_request() {
+        let test_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        std::fs::write(test_dir.path().join("logo.paa"), b"fixture").unwrap();
+        let fixtures = vec![HttpFixtureConfig {
+            url: "https://squad.test/logo.paa".to_string(),
+            file: "logo.paa".to_string(),
+            min_requests: 1,
+        }];
+
+        let running = start_http_fixtures(&fixtures, test_dir.path(), output_dir.path())
+            .await
+            .unwrap()
+            .unwrap();
+
+        let error = running.validate().unwrap_err();
+        assert!(error.to_string().contains("received 0 request(s)"));
+        running.stop().await;
     }
 
     #[test]

@@ -208,6 +208,23 @@ impl HarnessClient {
         .await
     }
 
+    pub async fn set_http_fixture(&mut self, url: &str, target: &str) -> Result<()> {
+        let response = self
+            .send(&Command::HttpFixture {
+                url: url.to_string(),
+                target: target.to_string(),
+            })
+            .await?;
+        if response.ok {
+            Ok(())
+        } else {
+            anyhow::bail!(
+                "http_fixture failed: {}",
+                response.error.as_deref().unwrap_or("unknown error")
+            );
+        }
+    }
+
     // ── Convenience methods ────────────────────────────────────────────────
 
     /// Wait for the "ready" event (first display shown after launch).

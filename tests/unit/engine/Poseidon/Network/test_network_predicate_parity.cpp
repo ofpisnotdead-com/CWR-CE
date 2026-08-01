@@ -2,10 +2,35 @@
 #include <catch2/catch_message.hpp>
 
 #include <Poseidon/Foundation/platform.hpp>
+#include <Poseidon/Network/HttpTestRewrite.hpp>
 #include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <Poseidon/Network/NetworkMissionTransfer.hpp>
 #include <Poseidon/Network/NetworkPlayerRoleAssignment.hpp>
 #include <Poseidon/Network/NetworkServerAuth.hpp>
+
+TEST_CASE("HTTP test rewrites match exact URLs", "[network][http]")
+{
+    const std::vector<Poseidon::HttpTestRewrite> rewrites = {
+        {"https://squad.test/squad.xml?variant=full", "http://127.0.0.1:43127/__trident_http_fixture/0"},
+    };
+
+    REQUIRE(Poseidon::ResolveHttpTestUrl("https://squad.test/squad.xml?variant=full", rewrites) ==
+            "http://127.0.0.1:43127/__trident_http_fixture/0");
+    REQUIRE(Poseidon::ResolveHttpTestUrl("https://squad.test/squad.xml", rewrites) == "https://squad.test/squad.xml");
+}
+
+TEST_CASE("HTTP test rewrites require HTTP sources and loopback targets", "[network][http]")
+{
+    REQUIRE(Poseidon::IsHttpTestRewriteValid("https://squad.test/a", "http://127.0.0.1:1234/a"));
+    REQUIRE_FALSE(Poseidon::IsHttpTestRewriteValid("https://squad.test/a", "https://example.com/a"));
+    REQUIRE_FALSE(Poseidon::IsHttpTestRewriteValid("squad.test/a", "http://127.0.0.1:1234/a"));
+}
+
+TEST_CASE("HTTP test rewrites register process-local mappings", "[network][http]")
+{
+    REQUIRE(Poseidon::RegisterHttpTestRewrite("https://fixtures.test/value.txt", "http://127.0.0.1:43127/value"));
+    REQUIRE(Poseidon::ResolveHttpTestUrl("https://fixtures.test/value.txt") == "http://127.0.0.1:43127/value");
+}
 
 // Behaviour-preservation tests for the server-side network predicates that were
 // extracted out of the legacy inline command / vote / role logic. Each case

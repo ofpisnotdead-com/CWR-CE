@@ -562,6 +562,7 @@ static std::unique_ptr<HarnessServer> CreateGameHarness()
 
     HarnessBuiltins::RegisterScreenshot(*hs);
     HarnessBuiltins::RegisterSqf(*hs);
+    HarnessBuiltins::RegisterHttpFixtures(*hs);
     // Multiplayer PTT tests (triHoldKey / triReleaseKey) drive VoN
     // transmission via these commands.
     HarnessBuiltins::RegisterKeyInjection(*hs);

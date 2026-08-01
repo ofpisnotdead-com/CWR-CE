@@ -82,6 +82,14 @@
       },
       "response": { "ok": "bool" }
     },
+    "http_fixture": {
+      "description": "Map an exact HTTP URL to a loopback fixture URL",
+      "params": {
+        "url": { "type": "string", "required": true },
+        "target": { "type": "string", "required": true }
+      },
+      "response": { "ok": "bool" }
+    },
     "exit": {
       "description": "Request clean game shutdown",
       "params": {},
