@@ -1,6 +1,7 @@
 #include <Poseidon/Dev/Diag/DataDump.hpp>
 
 #include <Poseidon/AI/EntityAIType.hpp>
+#include <Poseidon/Asset/Addon/AddonSystem.hpp>
 #include <Poseidon/Dev/Debug/DebugCommands.hpp>
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <Poseidon/Foundation/Framework/Log.hpp>
@@ -531,6 +532,66 @@ bool DumpConfig(const ConfigOptions& opt, std::string& outPath, std::string& err
     return true;
 }
 
+namespace
+{
+void CollectAddon(const AddonInfo& info, void* context)
+{
+    auto* rows = static_cast<std::vector<std::pair<std::string, std::string>>*>(context);
+    rows->emplace_back(Str(info.GetName()), Str(info.GetPrefix()));
+}
+} // namespace
+
+bool DumpAddons(std::string& outPath, std::string& error)
+{
+    std::ofstream os;
+    if (!OpenDump("addons", os, outPath, error))
+        return false;
+
+    const AutoArray<AddonMergeRecord>& order = AddonSystem::GetMergeOrder();
+    int dropped = 0;
+    for (int i = 0; i < order.Size(); i++)
+        if (!order[i].merged)
+            dropped++;
+
+    os << "=== config merge order (" << order.Size() - dropped << " merged) ===\n"
+       << "A topological sort over CfgPatches >> requiredAddons, with preloaded\n"
+       << "addons (CfgAddons >> PreloadAddons) emitted first within each wave.\n"
+       << "Later entries win scalar collisions, so this is config precedence.\n\n";
+
+    for (int i = 0; i < order.Size(); i++)
+    {
+        if (!order[i].merged)
+            continue;
+        os << "[" << i << "] " << Str(order[i].name) << (order[i].preloaded ? "  (preloaded)" : "") << "\n";
+    }
+
+    if (dropped)
+    {
+        os << "\n" << dropped << " addon(s) NEVER MERGED -- the dependency sort hit a cycle:\n";
+        for (int i = 0; i < order.Size(); i++)
+            if (!order[i].merged)
+                os << "  " << Str(order[i].name) << "\n";
+        os << "Their config is absent from Pars for the whole session.\n";
+    }
+
+    std::vector<std::pair<std::string, std::string>> registry;
+    AddonSystem::ForEachAddon(CollectAddon, &registry);
+    std::sort(registry.begin(), registry.end());
+
+    os << "\n=== addon registry (" << registry.size() << " entries) ===\n"
+       << "Addon name to the bank prefix it resolves to. Registration is\n"
+       << "first-wins: a later addon reusing a CfgPatches class name keeps the\n"
+       << "earlier prefix here while still merging its own config into Pars. A\n"
+       << "name listed twice above but once here is that conflict; the log also\n"
+       << "carries a \"Conflicting addon\" warning for each.\n\n";
+    for (const auto& row : registry)
+        os << "  " << row.first << "  ->  " << row.second << "\n";
+    os.close();
+
+    LOG_INFO(Core, "[datadump] addons: {} merged, {} dropped, {} registered -> {}", order.Size() - dropped, dropped,
+             registry.size(), outPath);
+    return true;
+}
 
 bool DumpTypes(std::string& outPath, std::string& error)
 {
@@ -695,6 +756,12 @@ void InvokeConfig(std::string_view args, std::string& out)
     Report(DumpConfig(opt, path, error), path, error, out);
 }
 
+void InvokeAddons(std::string_view, std::string& out)
+{
+    std::string path, error;
+    Report(DumpAddons(path, error), path, error, out);
+}
+
 void InvokeTypes(std::string_view, std::string& out)
 {
     std::string path, error;
@@ -725,6 +792,8 @@ void RegisterCommands()
                                  "Dump a config tree: dumpconfig [pars|res|remaster|mission|campaign] "
                                  "[Class.Sub] [depth]. Depth 0 gives a top-level summary.",
                                  nullptr, InvokeConfig});
+        DebugCommands::Register({"dumpaddons", "Dump addon merge order (and any addon dropped by a dependency cycle).",
+                                 nullptr, InvokeAddons});
         DebugCommands::Register(
             {"dumptypes", "Dump the instantiated type banks and loaded shapes.", nullptr, InvokeTypes});
         DebugCommands::Register({"dumpslots",

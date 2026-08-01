@@ -29,6 +29,7 @@ namespace Poseidon
 
 AddonSystem::AddonInfoMap AddonSystem::s_addonRegistry;
 AutoArray<SRef<ParamFile>> AddonSystem::s_addonConfigs;
+AutoArray<AddonMergeRecord> AddonSystem::s_mergeOrder;
 
 namespace
 {
@@ -128,6 +129,17 @@ void AddonSystem::MarkAllAddonsLockable()
         MarkAddonLockableCallback(*it, &s_addonRegistry, nullptr);
 }
 
+void AddonSystem::ForEachAddon(void (*fn)(const AddonInfo&, void*), void* context)
+{
+    for (AddonInfoMap::Iterator it(s_addonRegistry); it; ++it)
+        fn(*it, context);
+}
+
+const AutoArray<AddonMergeRecord>& AddonSystem::GetMergeOrder()
+{
+    return s_mergeOrder;
+}
+
 RString AddonSystem::CheckAddonName(const ParamEntry& addon)
 {
     const ParamEntry* patches = addon.FindEntry("CfgPatches");
@@ -161,8 +173,11 @@ bool AddonSystem::CheckVersion(const RString& prefix, const ParamEntry& addon)
         }
         const AddonInfo& info = s_addonRegistry[patch.GetName()];
         if (s_addonRegistry.NotNull(info))
-            RptF("Conflicting addon %s in '%s', previous definition in '%s'", (const char*)patch.GetName(),
-                 (const char*)prefix, (const char*)info.GetPrefix());
+            // Registration is first-wins, so this addon's config still merges but
+            // the name keeps resolving to the earlier bank. RptF compiles out, so
+            // the clash used to be silent in every build.
+            LOG_WARN(Config, "Conflicting addon '{}' in '{}', previous definition in '{}'",
+                     (const char*)patch.GetName(), (const char*)prefix, (const char*)info.GetPrefix());
         else
             s_addonRegistry.Add(AddonInfo(patch.GetName(), prefix));
     }
@@ -368,11 +383,25 @@ void AddonSystem::ParseAllAddonConfigs()
         }
     }
 
+    s_mergeOrder.Clear();
     for (int i = 0; i < resolved.Size(); i++)
     {
-        Log("Parsing addon config '%s' %s", (const char*)GetAddonName(*resolved[i].addon),
-            resolved[i].preloaded ? "(preloaded)" : "");
+        RString name = GetAddonName(*resolved[i].addon);
+        // Log() compiles out under NDEBUG, so the merge order -- which decides
+        // who wins a config collision -- was invisible in every shipping build.
+        LOG_DEBUG(Config, "Merging addon config [{}] '{}'{}", i, (const char*)name,
+                  resolved[i].preloaded ? " (preloaded)" : "");
+        s_mergeOrder.Add({name, resolved[i].preloaded, true});
         Pars.Update(*resolved[i].addon);
+    }
+
+    // The cycle above reports only the addon it stopped on; name the rest too,
+    // since their config is silently missing from Pars for the whole session.
+    for (int i = 0; i < dependencies.Size(); i++)
+    {
+        RString name = GetAddonName(*dependencies[i].addon);
+        ErrorMessage("Addon '%s' was never merged: unresolved dependency cycle", (const char*)name);
+        s_mergeOrder.Add({name, dependencies[i].preloaded, false});
     }
 
     Pars.SetFile(&Pars);

@@ -53,6 +53,7 @@ struct ConfigOptions
 
 bool DumpBanks(std::string& outPath, std::string& error);
 bool DumpConfig(const ConfigOptions& opt, std::string& outPath, std::string& error);
+bool DumpAddons(std::string& outPath, std::string& error);
 bool DumpTypes(std::string& outPath, std::string& error);
 //! classFilter empty dumps every CfgVehicles type that has weapons or hit points.
 bool DumpSlots(std::string_view classFilter, std::string& outPath, std::string& error);
