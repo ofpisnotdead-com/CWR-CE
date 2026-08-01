@@ -20,6 +20,7 @@ using namespace Poseidon;
 #include <Poseidon/Input/ControllerUiScene.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/World/World.hpp>
+#include <Poseidon/World/Entities/Weapons/Weapons.hpp>
 
 #include <cstdint>
 #include <string>
@@ -108,6 +109,25 @@ GameValue TriGetShadowMapCacheTest(const GameState* /*state*/)
     if (!GEngine)
         return GameValue("0");
     return GameValue(GEngine->ShadowMapCacheSelfTest() ? "1" : "0");
+}
+
+/// triGetHandItemClass -> class name of the weapon the hand proxies draw for
+/// the player, "" when the player carries nothing in the binocular slot.
+/// Resolves through the same lookup the proxies use, against live config.
+GameValue TriGetHandItemClass(const GameState* /*state*/)
+{
+    const EntityAI* player = GWorld ? GWorld->PlayerOn() : nullptr;
+    if (!player)
+    {
+        return GameValue("");
+    }
+    RefArray<WeaponType> weapons;
+    for (int i = 0; i < player->NWeaponSystems(); i++)
+    {
+        weapons.Add(const_cast<WeaponType*>(player->GetWeaponSystem(i)));
+    }
+    const WeaponType* item = Poseidon::FindBinocularWeapon(weapons);
+    return GameValue(item ? RString(item->GetName()) : RString(""));
 }
 
 GameValue TriGetProxyVertCount(const GameState* /*state*/)
@@ -528,6 +548,7 @@ INIT_MODULE(GameStateExtTestGetters, 3)
     GGameState.NewNularOp(GameNular(GameScalar, "triGetShadowFrozenCasters", TriGetShadowFrozenCasters));
     GGameState.NewNularOp(GameNular(GameString, "triGetShadowMapCacheTest", TriGetShadowMapCacheTest));
     GGameState.NewNularOp(GameNular(GameScalar, "triGetProxyVertCount", TriGetProxyVertCount));
+    GGameState.NewNularOp(GameNular(GameString, "triGetHandItemClass", TriGetHandItemClass));
 
     // Audio
     GGameState.NewNularOp(GameNular(GameScalar, "triGetAudioCacheEntries", TriGetAudioCacheEntries));

@@ -60,15 +60,17 @@ TEST_CASE("WeaponType::IsBinocular centralizes canonical binocular detection", "
     REQUIRE_FALSE(binocularWithoutSlot.IsBinocular());
 }
 
-TEST_CASE("FindBinocularWeapon skips inherited binocular-slot equipment", "[Infantry][soldierOld][binocular]")
+TEST_CASE("FindBinocularWeapon prefers the Binocular over other slot items", "[Infantry][soldierOld][binocular]")
 {
     ParamFile pf = ParseConfig("class Binocular {};\n"
                                "class NVGoggles {};\n"
-                               "class Phone {};\n");
+                               "class Phone {};\n"
+                               "class M16 {};\n");
 
     Ref<WeaponType> nvg = MakeWeaponRef(pf >> "NVGoggles", MaskSlotBinocular);
     Ref<WeaponType> phone = MakeWeaponRef(pf >> "Phone", MaskSlotBinocular);
     Ref<WeaponType> binocular = MakeWeaponRef(pf >> "Binocular", MaskSlotBinocular);
+    Ref<WeaponType> rifle = MakeWeaponRef(pf >> "M16", MaskSlotPrimary);
 
     RefArray<WeaponType> weapons;
     weapons.Add(nvg);
@@ -77,11 +79,16 @@ TEST_CASE("FindBinocularWeapon skips inherited binocular-slot equipment", "[Infa
 
     REQUIRE(FindBinocularWeapon(weapons) == binocular);
 
-    RefArray<WeaponType> nonBinocularWeapons;
-    nonBinocularWeapons.Add(nvg);
-    nonBinocularWeapons.Add(phone);
+    RefArray<WeaponType> phoneOnly;
+    phoneOnly.Add(rifle);
+    phoneOnly.Add(phone);
 
-    REQUIRE(FindBinocularWeapon(nonBinocularWeapons) == nullptr);
+    REQUIRE(FindBinocularWeapon(phoneOnly) == phone);
+
+    RefArray<WeaponType> noSlotItems;
+    noSlotItems.Add(rifle);
+
+    REQUIRE(FindBinocularWeapon(noSlotItems) == nullptr);
 }
 
 TEST_CASE("stealth stance exposure tolerates soldiers without a group", "[Infantry][soldierOld]")
