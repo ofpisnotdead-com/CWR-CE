@@ -2,6 +2,7 @@
 using namespace Poseidon;
 #include <Poseidon/Dev/Harness/HarnessServer.hpp>
 #include <Poseidon/Dev/Harness/HarnessProtocol.hpp>
+#include <Poseidon/Dev/Debug/DebugCommands.hpp>
 
 #include <Poseidon/Graphics/Core/Engine.hpp>
 #include <Poseidon/World/World.hpp>
@@ -831,6 +832,27 @@ std::string AnswerServiceQuery(const char* what, cJSON* root)
         return AnswerDownloadQuery(root);
     }
     return {};
+}
+
+void RegisterDebugCommand(HarnessServer& hs)
+{
+    hs.RegisterCommand({"debug_cmd",
+                        "Run a dev-console command line through the DebugCommands registry and return its output.",
+                        {{"line", "string", true}}},
+                       [](const std::string&, cJSON* root) -> std::string
+                       {
+                           const char* line = HarnessProtocol::GetString(root, "line");
+                           if (!line || !*line)
+                               return HarnessProtocol::ErrorResponse("debug_cmd requires `line`");
+
+                           std::string output;
+                           if (!Dev::DebugCommands::Run(line, output))
+                               return HarnessProtocol::ErrorResponse(output.c_str());
+
+                           cJSON* resp = cJSON_CreateObject();
+                           cJSON_AddStringToObject(resp, "output", output.c_str());
+                           return HarnessProtocol::JsonResponse(resp);
+                       });
 }
 
 void RegisterKeyInjection(HarnessServer& hs)

@@ -104,6 +104,7 @@ __attribute__((used)) static void (*_forceLinkGameStateExtTest)() = &InitModuleG
 #include <Poseidon/Core/resincl.hpp>
 #include <Poseidon/Dev/Harness/HarnessServer.hpp>
 #include <Poseidon/Dev/Harness/HarnessBuiltins.hpp>
+#include <Poseidon/Dev/Diag/DataDump.hpp>
 #include <Poseidon/Dev/Debug/DebugOverlay.hpp>
 #include <Poseidon/Dev/Harness/HarnessPlayerTracker.hpp>
 #include <Poseidon/Dev/Harness/HarnessMissionStateTracker.hpp>
@@ -566,6 +567,8 @@ static std::unique_ptr<HarnessServer> CreateGameHarness()
     // Multiplayer PTT tests (triHoldKey / triReleaseKey) drive VoN
     // transmission via these commands.
     HarnessBuiltins::RegisterKeyInjection(*hs);
+    HarnessBuiltins::RegisterDebugCommand(*hs);
+    Dev::DataDump::RegisterCommands();
 
     hs->RegisterCommand({"query",
                          "Query game state (what: players, mission, ngs, world, master_server_server_detail, "
