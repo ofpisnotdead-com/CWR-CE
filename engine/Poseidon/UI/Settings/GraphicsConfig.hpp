@@ -83,12 +83,15 @@ public:
 
 	// Schema version of the persisted file.  Load resets this to 0 first, so a
 	// file written before versioning reads back as 0 and Migrate can act on it.
-	static constexpr int kVersion = 1;
+	static constexpr int kVersion = 2;
 	int       version          = kVersion;
 
 	// Bring a loaded config up to kVersion.  Returns true when the caller needs
-	// to persist the result.
-	bool Migrate();
+	// to persist the result.  `refreshHz` is 0 when it cannot be read.
+	bool Migrate(int refreshHz);
+
+	// Rounds up to an allowed value, so the cap never sits below the monitor.
+	static int FpsCapForRefreshRate(int refreshHz);
 
 	// Reset every field to factory defaults.
 	void LoadDefaults();

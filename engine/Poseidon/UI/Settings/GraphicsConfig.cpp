@@ -84,16 +84,34 @@ void GraphicsConfig::LoadDefaults()
     *this = GraphicsConfig{};
 }
 
-bool GraphicsConfig::Migrate()
+int GraphicsConfig::FpsCapForRefreshRate(int refreshHz)
+{
+    // Above any common refresh rate: with no display to pace to, this only has
+    // to stop runaway submission.
+    constexpr int kUnknownRefreshCap = 144;
+    constexpr std::array kAllowed{30, 60, 90, 120, 144, 240};
+
+    if (refreshHz <= 0)
+        return kUnknownRefreshCap;
+    for (int allowed : kAllowed)
+        if (allowed >= refreshHz)
+            return allowed;
+    return kAllowed.back();
+}
+
+bool GraphicsConfig::Migrate(int refreshHz)
 {
     if (version >= kVersion)
         return false;
 
-    // Only a file older than the version stamp reaches here, and its gamma is
-    // whatever first boot wrote.  1.0 is that stamped default and disables
-    // correction entirely; any other value was chosen, so it stays.
-    if (gamma == 1.0f)
+    // 1.0 is the pre-v1 stamped default; any other value was chosen and stays.
+    if (version < 1 && gamma == 1.0f)
         gamma = 1.2f;
+
+    // A cap of 0 below v2 is indistinguishable from the old default, so it is
+    // taken as never set.  From v2 on it is the user's Unlimited and survives.
+    if (fpsCap == 0)
+        fpsCap = FpsCapForRefreshRate(refreshHz);
 
     version = kVersion;
     return true;

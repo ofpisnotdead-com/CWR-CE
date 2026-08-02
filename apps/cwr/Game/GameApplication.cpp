@@ -368,24 +368,26 @@ std::string GraphicsConfigPath()
 void LoadAndApplyGraphicsConfig()
 {
     const std::string path = GraphicsConfigPath();
+    const int refreshHz = GEngine ? GEngine->RefreshRate() : 0;
     GraphicsConfig cfg;
     if (!cfg.Load(path))
     {
-        // First boot: pick a tier from system RAM and stamp the
-        // four tier rows from that preset's bundle.  Per-user
-        // knobs (vsync / fpsCap / brightness / gamma) keep their
-        // class-default values.
+        // First boot autodetects from hardware.  vsync / brightness / gamma
+        // keep their class-default values.
         cfg.LoadDefaults();
         const int ramMB = SDL_GetSystemRAM();
         cfg.qualityPreset = GraphicsConfig::PickPresetFromRam(ramMB);
         cfg.ApplyPresetToTiers(cfg.qualityPreset);
+        cfg.fpsCap = GraphicsConfig::FpsCapForRefreshRate(refreshHz);
         cfg.Save(path);
-        LOG_INFO(Graphics, "LoadGraphicsConfig: autodetected preset={} (RAM={} MB), wrote '{}'", (int)cfg.qualityPreset,
-                 ramMB, path);
+        LOG_INFO(Graphics,
+                 "LoadGraphicsConfig: autodetected preset={} (RAM={} MB) fpsCap={} (display {} Hz), wrote '{}'",
+                 (int)cfg.qualityPreset, ramMB, cfg.fpsCap, refreshHz, path);
     }
 
-    if (cfg.Migrate() && cfg.Save(path))
-        LOG_INFO(Graphics, "LoadGraphicsConfig: migrated '{}' to version {}", path, GraphicsConfig::kVersion);
+    if (cfg.Migrate(refreshHz) && cfg.Save(path))
+        LOG_INFO(Graphics, "LoadGraphicsConfig: migrated '{}' to version {} (fpsCap={}, display {} Hz)", path,
+                 GraphicsConfig::kVersion, cfg.fpsCap, refreshHz);
 
     LiveGraphicsEnv env;
     if (cfg.Normalize(env))

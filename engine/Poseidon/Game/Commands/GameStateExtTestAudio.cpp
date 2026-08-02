@@ -57,6 +57,7 @@ namespace Poseidon
 } // namespace Poseidon
 
 using namespace Poseidon::Dev;
+#include <Poseidon/Core/Game/GameLoop.hpp>
 #include <Poseidon/Dev/Debug/DebugCheats.hpp>
 #include <Poseidon/Dev/Debug/DebugCommands.hpp>
 #include <Poseidon/UI/Settings/AspectRatio.hpp>
@@ -448,6 +449,12 @@ GameValue TriGetSwapInterval(const GameState* /*state*/)
     if (!GEngine)
         return GameValue((float)1);
     return GameValue((float)GEngine->GetSwapInterval());
+}
+
+/// triGetFpsCap -> int (the cap RenderFrame paces to, 0 when unlimited).
+GameValue TriGetFpsCap(const GameState* /*state*/)
+{
+    return GameValue((float)Poseidon::gUserFpsCap);
 }
 
 /// triGetObjectLodBias -> float (Scene's current LOD bias).
@@ -3054,6 +3061,7 @@ INIT_MODULE(GameStateExtTest, 3)
     GGameState.NewNularOp(GameNular(GameString, "triListMonitors", TriListMonitors));
     // Graphics screen probes
     GGameState.NewNularOp(GameNular(GameScalar, "triGetSwapInterval", TriGetSwapInterval));
+    GGameState.NewNularOp(GameNular(GameScalar, "triGetFpsCap", TriGetFpsCap));
     GGameState.NewNularOp(GameNular(GameScalar, "triGetObjectLodBias", TriGetObjectLodBias));
     GGameState.NewNularOp(GameNular(GameScalar, "triGetTerrainGrid", TriGetTerrainGrid));
     GGameState.NewNularOp(GameNular(GameScalar, "triGetViewDistance", TriGetViewDistance));
