@@ -771,6 +771,7 @@ IndicesCreateAIUnit::IndicesCreateAIUnit()
     subgroup = -1;
     id = -1;
     name = -1;
+    playerId = -1;
     face = -1;
     glasses = -1;
     speaker = -1;
@@ -791,6 +792,7 @@ void IndicesCreateAIUnit::Scan(NetworkMessageFormatBase* format)
     SCAN(subgroup)
     SCAN(id)
     SCAN(name)
+    SCAN(playerId)
     SCAN(face)
     SCAN(glasses)
     SCAN(speaker)
@@ -918,6 +920,7 @@ NetworkMessageFormat& AIUnit::CreateFormat(NetworkMessageClass cls, NetworkMessa
             format.Add("subgroup", NDTRef, NCTNone, DEFVALUENULL, DOC_MSG("Superior subgroup"));
             format.Add("id", NDTInteger, NCTSmallUnsigned, DEFVALUE(int, 0), DOC_MSG("ID in group"));
             format.Add("name", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Full name"));
+            format.Add("playerId", NDTInteger, NCTNone, DEFVALUE(int, 1), DOC_MSG("Network player ID"));
             format.Add("face", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Face"));
             format.Add("glasses", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Glasses type"));
             format.Add("speaker", NDTString, NCTNone, DEFVALUE(RString, ""), DOC_MSG("Speaker"));
@@ -1101,6 +1104,8 @@ TMError AIUnit::TransferMsg(NetworkMessageContext& ctx)
                     ITRANSF(id)
                 }
                 AIUnitInfo& info = GetPerson()->GetInfo();
+                int playerId = GetPerson()->GetRemotePlayer();
+                TMCHECK(ctx.IdxTransfer(indices->playerId, playerId))
                 TMCHECK(ctx.IdxTransfer(indices->name, info._name))
                 TMCHECK(ctx.IdxTransfer(indices->face, info._face))
                 TMCHECK(ctx.IdxTransfer(indices->glasses, info._glasses))
@@ -1132,7 +1137,7 @@ TMError AIUnit::TransferMsg(NetworkMessageContext& ctx)
                         info._squadPicture = GlobLoadTexture(picture);
                     }
 
-                    GetPerson()->SetFace(info._face, info._name);
+                    GetPerson()->SetFace(info._face, PlayerIdentityKey{info._name, playerId});
                     GetPerson()->SetGlasses(info._glasses);
                     SetSpeaker(info._speaker, info._pitch);
                 }

@@ -8,6 +8,12 @@ namespace Poseidon
 {
 class Building;
 
+struct PlayerIdentityKey
+{
+	RString name;
+	int playerId;
+};
+
 // Underlying type is int (not an enum class) so UBSan allows any config-driven value, not just the sentinel.
 enum ManVehAction : int
 {
@@ -88,6 +94,7 @@ class Person: public VehicleSupply
 	virtual void SetUnitPosition(UnitPosition status);
 
 	virtual void SetFace(RString name, RString player = "");
+	virtual void SetFace(RString name, const PlayerIdentityKey &player);
 	virtual void SetGlasses(RString name);
 
 	virtual void ApplyAnimation( int level, RStringB move, float time ) {}

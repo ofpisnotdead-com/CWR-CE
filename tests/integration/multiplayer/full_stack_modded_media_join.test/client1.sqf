@@ -17,8 +17,7 @@ triScreenshot "client1_join_requirements"
 triClick 1
 triAssertEq [(triDisplay), 74]
 triClick 125
-triAssertIncludes [(triVisibleTexts), "Complete"]
-triAssertIncludes [(triVisibleTexts), "Continue"]
+triAssertEq [(triControlText 125), "Continue"]
 triScreenshot "client1_download_complete"
 
 triClick 125

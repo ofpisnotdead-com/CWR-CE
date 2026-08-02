@@ -393,18 +393,6 @@ TEST_CASE("Transferred custom asset paths are confined to expected temp namespac
     REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/face.paa")));
     REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/42/sound/radio.ogg")));
     REQUIRE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/squads/SQTAG/logo.paa")));
-    REQUIRE(Poseidon::ClassifyNetworkPlayerUploadRelativePath(RString("face.jpg")) ==
-            Poseidon::NetworkPlayerUploadKind::Face);
-    REQUIRE(Poseidon::ClassifyNetworkPlayerUploadRelativePath(RString("face.paa")) ==
-            Poseidon::NetworkPlayerUploadKind::Face);
-    REQUIRE(Poseidon::ClassifyNetworkPlayerUploadRelativePath(RString("sound/radio.ogg")) ==
-            Poseidon::NetworkPlayerUploadKind::Sound);
-    REQUIRE(Poseidon::ClassifyNetworkPlayerUploadRelativePath(RString("sound\\radio.ogg")) ==
-            Poseidon::NetworkPlayerUploadKind::Sound);
-    REQUIRE(Poseidon::ClassifyNetworkPlayerUploadRelativePath(RString()) == Poseidon::NetworkPlayerUploadKind::Other);
-    REQUIRE(Poseidon::ClassifyNetworkPlayerUploadRelativePath(RString("radio.ogg")) ==
-            Poseidon::NetworkPlayerUploadKind::Other);
-
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/face.jpg")));
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/sound/radio.ogg")));
     REQUIRE_FALSE(Poseidon::IsSafeNetworkTransferredAssetPath(RString("tmp/players/Alice/face.gif")));
@@ -462,14 +450,6 @@ TEST_CASE("Server player upload paths require safe player names and exact temp p
                                                              42) == playerDir + RString("face.jpg"));
     REQUIRE(Poseidon::NormalizeNetworkServerPlayerUploadPath(RString("/tmp/cwr/Tmp1985/players/42/sound/ack.ogg"), tmp,
                                                              42) == playerDir + RString("sound/ack.ogg"));
-    REQUIRE(
-        Poseidon::ClassifyNetworkServerPlayerUploadPath(
-            Poseidon::NormalizeNetworkServerPlayerUploadPath(RString("/tmp/cwr/Tmp1985/players/42/face.jpg"), tmp, 42),
-            tmp, 42) == Poseidon::NetworkPlayerUploadKind::Face);
-    REQUIRE(Poseidon::ClassifyNetworkServerPlayerUploadPath(
-                Poseidon::NormalizeNetworkServerPlayerUploadPath(RString("/tmp/cwr/Tmp1985/players/42/sound/ack.ogg"),
-                                                                 tmp, 42),
-                tmp, 42) == Poseidon::NetworkPlayerUploadKind::Sound);
     REQUIRE(Poseidon::NormalizeNetworkServerPlayerUploadPath(playerDir + RString("face.jpg"), tmp, 42) ==
             playerDir + RString("face.jpg"));
     REQUIRE_FALSE(Poseidon::IsSafeNetworkServerPlayerUploadPath(RString("server-tmp/players/Alice/face.jpg"), tmp, 42));

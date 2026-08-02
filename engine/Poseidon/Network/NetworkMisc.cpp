@@ -46,7 +46,6 @@ using namespace Poseidon;
 
 #include <Poseidon/Game/UiActions.hpp>
 
-#include <Poseidon/Foundation/Algorithms/Crc.hpp>
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_keyboard.h>
 #include <SDL3/SDL_scancode.h>
@@ -982,23 +981,6 @@ bool NetworkComponent::HasReceivedFileSegment(const RString& path, int segment) 
     return false;
 }
 
-static bool IsNetworkPlayerCustomTransferPath(const RString& path)
-{
-    const char* data = path;
-    if (!data)
-    {
-        return false;
-    }
-
-    const char playerPrefix[] = "tmp/players/";
-    const int playerPrefixLen = static_cast<int>(sizeof(playerPrefix) - 1);
-    if (strncmp(data, playerPrefix, playerPrefixLen) != 0)
-    {
-        return false;
-    }
-    return Poseidon::IsSafeNetworkTransferredAssetPath(path);
-}
-
 void NetworkComponent::TransferFile(int to, RString dest, RString source, NetMsgFlags flags)
 {
     const std::vector<char> data = Poseidon::ReadFileUtf8(source);
@@ -1011,46 +993,6 @@ void NetworkComponent::TransferFile(int to, RString dest, RString source, NetMsg
     {
         LOG_WARN(Network, "[TransferFile] failed to read '{}'", (const char*)source);
         return;
-    }
-
-    if (IsNetworkPlayerCustomTransferPath(dest))
-    {
-        Poseidon::Foundation::CRCCalculator calculator;
-        const uint32_t contentCrc = calculator.CRC(data.data(), static_cast<int>(data.size()));
-        char recipientPrefix[32];
-        snprintf(recipientPrefix, sizeof(recipientPrefix), "%d:", to);
-        // Valid transferred-asset paths contain no ':', so the trailing separator makes route matching exact.
-        const RString transferRoute = RString(recipientPrefix) + dest + RString(":");
-        char signatureSuffix[64];
-        snprintf(signatureSuffix, sizeof(signatureSuffix), "%zu:%08x", data.size(), contentCrc);
-        const RString transferKey = transferRoute + RString(signatureSuffix);
-        bool knownRoute = false;
-        for (int i = 0; i < _sentCustomFileTransfers.Size(); ++i)
-        {
-            RString& previousTransfer = _sentCustomFileTransfers[i];
-            if (strncmp((const char*)previousTransfer, (const char*)transferRoute, transferRoute.GetLength()) != 0)
-            {
-                continue;
-            }
-            if (previousTransfer == transferKey)
-            {
-                LOG_DEBUG(Network, "[NMTTransferFile] duplicate custom relay skipped to {} dst='{}' bytes={}", to,
-                          (const char*)dest, data.size());
-                return;
-            }
-            previousTransfer = transferKey;
-            knownRoute = true;
-            break;
-        }
-        if (!knownRoute)
-        {
-            // Eviction can only cause an extra relay when an old route reappears; it cannot suppress new content.
-            if (_sentCustomFileTransfers.Size() >= 1024)
-            {
-                _sentCustomFileTransfers.Delete(0);
-            }
-            _sentCustomFileTransfers.Add(transferKey);
-        }
     }
 
     const DWORD start = GlobalTickCount();
@@ -1082,11 +1024,11 @@ void NetworkComponent::TransferFace(int to, int player)
     {
         if (notBotClient)
         {
-            TransferFile(to, relativeDst, src, NMFGuaranteed | NMFHighPriority);
+            TransferFile(to, relativeDst, src, NMFGuaranteed);
         }
         else
         {
-            CreatePath(dstDir);
+            Poseidon::CreateDirectoryUtf8(dstDir);
             Poseidon::CopyFileUtf8(src, dst, false);
         }
     }
@@ -1099,11 +1041,11 @@ void NetworkComponent::TransferFace(int to, int player)
         {
             if (notBotClient)
             {
-                TransferFile(to, relativeDst, src, NMFGuaranteed | NMFHighPriority);
+                TransferFile(to, relativeDst, src, NMFGuaranteed);
             }
             else
             {
-                CreatePath(dstDir);
+                Poseidon::CreateDirectoryUtf8(dstDir);
                 Poseidon::CopyFileUtf8(src, dst, false);
             }
         }
@@ -1138,11 +1080,11 @@ void NetworkComponent::TransferCustomRadio(int to, int player)
         }
         if (notBotClient)
         {
-            TransferFile(to, relativeDst, src, NMFGuaranteed | NMFHighPriority);
+            TransferFile(to, relativeDst, src, NMFGuaranteed);
         }
         else
         {
-            CreatePath(dstDir);
+            Poseidon::CreateDirectoryUtf8(dstDir);
             Poseidon::CopyFileUtf8(src, dst, false);
         }
     }

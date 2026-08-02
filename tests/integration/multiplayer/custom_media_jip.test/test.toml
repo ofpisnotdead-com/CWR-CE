@@ -3,7 +3,7 @@ data_dir = "packages/Demo"
 game_port = 0
 timeout = 90
 
-tags = ["headful", "network"]
+tags = ["network"]
 
 [[instances]]
 extra_args = ["--no-strict", "--log-format", "jsonl"]

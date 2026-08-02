@@ -2,7 +2,7 @@ data_dir = "packages/Demo"
 game_port = 0
 timeout = 120
 
-tags = ["headful", "network"]
+tags = ["network"]
 
 [[instances]]
 extra_args = [

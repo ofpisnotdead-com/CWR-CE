@@ -632,7 +632,9 @@ class Man: public Person
 	float GetCombatHeight() const override {return 0;}
 	int GetFaceAnimation() const {return _head.GetFaceAnimation();}
 	void SetFaceAnimation(int phase) {_head.SetFaceAnimation(phase);}
+	RString GetFaceTextureName() const {return _head.GetFaceTextureName();}
 	void SetFace(RString name, RString player = "") override;
+	void SetFace(RString name, const PlayerIdentityKey &player) override;
 	void SetGlasses(RString name) override;
 	void SetMimic(RStringB name) {_head.SetForceMimic(name);}
 

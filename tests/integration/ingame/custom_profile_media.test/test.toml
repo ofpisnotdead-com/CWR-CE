@@ -1,0 +1,13 @@
+mission = "tests/integration/missions/jip_basic.Demo"
+data_dir = "packages/Demo"
+timeout = 60
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "local", "--log-format", "jsonl"]
+name = "local"
+type = "client"
+copy_files = [
+  { source = "UserInfo.cfg", target = "Users/local/UserInfo.cfg" },
+  { source = "face.paa", target = "Users/local/face.paa" },
+  { source = "Sound/tri_profile_ping.wav", target = "Users/local/Sound/tri_profile_ping.wav" },
+]

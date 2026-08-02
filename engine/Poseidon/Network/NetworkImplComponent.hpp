@@ -131,7 +131,6 @@ class NetworkComponent : public INetworkComponent
 
     // files currently receiving
     AutoArray<ReceivingFile> _files;
-    AutoArray<RString> _sentCustomFileTransfers;
 
 #if _ENABLE_CHEATS
     // Statistics about messages by types

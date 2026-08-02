@@ -127,3 +127,18 @@ TEST_CASE("Copied network unit info preserves player id before custom face assig
     REQUIRE(setFace != std::string::npos);
     CHECK(remotePlayer < setFace);
 }
+
+TEST_CASE("Created network units assign custom faces with the transferred player id", "[Network][CustomFace]")
+{
+    const std::filesystem::path source =
+        std::filesystem::path(TESTS_ROOT_DIR).parent_path() / "engine" / "Poseidon" / "AI" / "AIUnit.cpp";
+    const std::string body = ExtractFunctionBody(ReadTextFile(source), "TMError AIUnit::TransferMsg");
+    const size_t createCase = body.find("case NMCCreate:");
+    REQUIRE(createCase != std::string::npos);
+    const size_t transferPlayerId = body.find("IdxTransfer(indices->playerId, playerId)", createCase);
+    const size_t setFace = body.find("SetFace(info._face, PlayerIdentityKey{info._name, playerId})", createCase);
+
+    REQUIRE(transferPlayerId != std::string::npos);
+    REQUIRE(setFace != std::string::npos);
+    CHECK(transferPlayerId < setFace);
+}

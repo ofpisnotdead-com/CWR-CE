@@ -12,13 +12,6 @@
 namespace Poseidon
 {
 
-enum class NetworkPlayerUploadKind
-{
-    Other,
-    Face,
-    Sound,
-};
-
 constexpr size_t NetworkSquadFileMaxSize = 1024 * 1024;
 
 inline bool IsNetworkSquadFileSizeAllowed(size_t size)
@@ -429,35 +422,6 @@ inline RString BuildNetworkCustomRadioMenuText(const RString& soundName, Codepag
 inline RString BuildNetworkCustomRadioMenuText(const RString& soundName)
 {
     return BuildNetworkCustomRadioMenuText(soundName, Codepage::CP1252);
-}
-
-inline NetworkPlayerUploadKind ClassifyNetworkPlayerUploadRelativePath(const RString& relativePath)
-{
-    const char* data = relativePath;
-    if (!data || data[0] == 0)
-    {
-        return NetworkPlayerUploadKind::Other;
-    }
-    if (stricmp(data, "face.jpg") == 0 || stricmp(data, "face.paa") == 0)
-    {
-        return NetworkPlayerUploadKind::Face;
-    }
-    if (strnicmp(data, "sound/", 6) == 0 || strnicmp(data, "sound\\", 6) == 0)
-    {
-        return NetworkPlayerUploadKind::Sound;
-    }
-    return NetworkPlayerUploadKind::Other;
-}
-
-inline NetworkPlayerUploadKind ClassifyNetworkServerPlayerUploadPath(const RString& normalizedUploadPath,
-                                                                     const RString& serverTmpDir, int playerId)
-{
-    const RString prefix = BuildNetworkServerPlayerUploadDir(serverTmpDir, playerId);
-    if (prefix.GetLength() == 0 || strnicmp(normalizedUploadPath, prefix, prefix.GetLength()) != 0)
-    {
-        return NetworkPlayerUploadKind::Other;
-    }
-    return ClassifyNetworkPlayerUploadRelativePath(normalizedUploadPath.Substring(prefix.GetLength(), INT_MAX));
 }
 
 inline RString BuildNetworkTransferredAssetProbeTmpPath(const RString& kind, const RString& owner, const RString& name)

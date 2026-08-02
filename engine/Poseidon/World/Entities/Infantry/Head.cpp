@@ -5,6 +5,7 @@
 #include <Poseidon/Core/Global.hpp>
 #include <Random/randomGen.hpp>
 #include <Poseidon/IO/ParamFileExt.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
 #include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <Poseidon/Audio/IAudioSystem.hpp>
@@ -628,7 +629,7 @@ void Head::SetFace(const HeadType& type, bool women, LODShape* lShape, RString n
         {
             RString relativeFace = Poseidon::BuildNetworkPlayerAssetTmpPath(player, RString("face.paa"));
             RString face = relativeFace.GetLength() > 0 ? Poseidon::GetUserDirectory() + relativeFace : RString();
-            if (face.GetLength() > 0 && QIFStream::FileExists(face))
+            if (face.GetLength() > 0 && Poseidon::FileExistsUtf8(face))
             {
                 Ref<Texture> text = GlobLoadTexture(face);
                 if (text)
@@ -640,7 +641,7 @@ void Head::SetFace(const HeadType& type, bool women, LODShape* lShape, RString n
             {
                 relativeFace = Poseidon::BuildNetworkPlayerAssetTmpPath(player, RString("face.jpg"));
                 face = relativeFace.GetLength() > 0 ? Poseidon::GetUserDirectory() + relativeFace : RString();
-                if (face.GetLength() > 0 && QIFStream::FileExists(face))
+                if (face.GetLength() > 0 && Poseidon::FileExistsUtf8(face))
                 {
                     Ref<Texture> text = GlobLoadTexture(face);
                     if (text)
@@ -653,7 +654,7 @@ void Head::SetFace(const HeadType& type, bool women, LODShape* lShape, RString n
         else
         {
             RString face = Poseidon::GetUserDirectory() + RString("face.paa");
-            if (QIFStream::FileExists(face))
+            if (Poseidon::FileExistsUtf8(face))
             {
                 Ref<Texture> text = GlobLoadTexture(face);
                 if (text)
@@ -664,7 +665,7 @@ void Head::SetFace(const HeadType& type, bool women, LODShape* lShape, RString n
             else
             {
                 face = Poseidon::GetUserDirectory() + RString("face.jpg");
-                if (QIFStream::FileExists(face))
+                if (Poseidon::FileExistsUtf8(face))
                 {
                     Ref<Texture> text = GlobLoadTexture(face);
                     if (text)
@@ -699,6 +700,11 @@ void Head::SetFace(const HeadType& type, bool women, LODShape* lShape, RString n
     {
         lShape->RegisterTexture(_textureWounded, type._personality);
     }
+}
+
+RString Head::GetFaceTextureName() const
+{
+    return _texture ? RString(_texture->GetName()) : RString();
 }
 
 void Head::SetGlasses(const HeadType& type, LODShape* lShape, RString name)

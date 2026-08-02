@@ -104,6 +104,11 @@ bool Person::QIsManual() const
 
 void Person::SetFace(RString name, RString player) {}
 
+void Person::SetFace(RString name, const PlayerIdentityKey& player)
+{
+    SetFace(name, player.name);
+}
+
 float Person::GetLegPhase() const
 {
     return 0;
