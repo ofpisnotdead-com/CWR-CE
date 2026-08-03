@@ -468,7 +468,7 @@ void EngineGL33::UpdateShadowMapLitState()
     FlushPSConstants();
 }
 
-void EngineGL33::SetTerrainHeightmap(const float* heights, int width, int height, float invGrid)
+void EngineGL33::SetTerrainHeightmap(const float* heights, int width, int height, float invGrid, float invLandGrid)
 {
     if (!heights || width <= 0 || height <= 0)
     {
@@ -490,6 +490,10 @@ void EngineGL33::SetTerrainHeightmap(const float* heights, int width, int height
 
     // .yzw (camX/camZ/camY) are filled per frame in UploadFrameConstants
     s_vsShadow[VSConst::SlotHmParams0 * 4 + 0] = invGrid;
+    s_vsShadow[VSConst::SlotLandGrid * 4 + 0] = invLandGrid;
+    s_vsShadow[VSConst::SlotLandGrid * 4 + 1] = invLandGrid > 0 ? invGrid / invLandGrid : 0;
+    s_vsShadow[VSConst::SlotLandGrid * 4 + 2] = 0;
+    s_vsShadow[VSConst::SlotLandGrid * 4 + 3] = 0;
 }
 
 bool EngineGL33::LandClipInVS() const
@@ -498,10 +502,10 @@ bool EngineGL33::LandClipInVS() const
     return _heightMapTex != 0;
 }
 
-void EngineGL33::SetLandClipParams(float enable, Vector3Par boundingCenter)
+void EngineGL33::SetLandClipParams(float mode, Vector3Par boundingCenter)
 {
-    float v[4] = {0.0f, 0.0f, 0.0f, enable};
-    if (enable > 0.5f)
+    float v[4] = {0.0f, 0.0f, 0.0f, mode};
+    if (mode > 0.5f)
     {
         v[0] = boundingCenter.X();
         v[1] = boundingCenter.Y();

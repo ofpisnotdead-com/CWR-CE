@@ -134,13 +134,14 @@ enum : int
     SlotSunEn = 20,
     SlotVpScale = 21,
     SlotHmParams0 = 22, // terrain heightmap: {invGrid, camX, camZ, camY}
-    SlotHmParams1 = 23, // land clip: {boundingCenter.xyz, enable}
+    SlotHmParams1 = 23, // land clip: {boundingCenter.xyz, mode}
     SlotTexMat0 = 24, // 4 vec4s
     SlotTexMat1 = 28, // 4 vec4s
     SlotTexCtrl = 32,
     SlotMatDiffuseRaw = 33, // raw material diffuse, for local-light modulation
     SlotMatAmbientRaw = 34, // raw material ambient, for local-light modulation
-    // c35-c65 reserved
+    SlotLandGrid = 35, // land grid: {invLandGrid, heightmap texels per land square, 0, 0}
+    // c36-c65 reserved
     SlotLightVP = 66,      // 4 vec4s: light view-projection for shadow-map sampling
 };
 
@@ -160,7 +161,8 @@ static_assert(SlotTexMat1 >= SlotTexMat0 + 4, "SlotTexMat1 overlaps SlotTexMat0"
 static_assert(SlotTexCtrl >= SlotTexMat1 + 4, "SlotTexCtrl overlaps SlotTexMat1");
 static_assert(SlotMatDiffuseRaw >= SlotTexCtrl + 1, "SlotMatDiffuseRaw overlaps SlotTexCtrl");
 static_assert(SlotMatAmbientRaw >= SlotMatDiffuseRaw + 1, "SlotMatAmbientRaw overlaps SlotMatDiffuseRaw");
-static_assert(SlotLightVP >= SlotMatAmbientRaw + 1, "SlotLightVP overlaps material raw slots");
+static_assert(SlotLandGrid >= SlotMatAmbientRaw + 1, "SlotLandGrid overlaps SlotMatAmbientRaw");
+static_assert(SlotLightVP >= SlotLandGrid + 1, "SlotLightVP overlaps SlotLandGrid");
 }; // namespace VSConst
 
 struct TriQueue
@@ -613,7 +615,7 @@ class EngineGL33 : public Engine
     void InitDraw(bool clear = false, PackedColor color = PackedColor(0)) override;
     void FinishDraw() override;
     void NextFrame() override;
-    void SetTerrainHeightmap(const float* heights, int width, int height, float invGrid) override;
+    void SetTerrainHeightmap(const float* heights, int width, int height, float invGrid, float invLandGrid) override;
     void PrepareTerrain(const TerrainSetup& setup) override;
     void DrawTerrain(const GroundSegment* segments, size_t count, const TLMaterial& mat) override;
     void DrawWater(const GroundSegment* segments, size_t count, const TLMaterial& mat, Texture* surfaceTex,
@@ -623,7 +625,7 @@ class EngineGL33 : public Engine
     void FreeTerrainInstanced();
     void CreateTerrainBatches(struct TerrainInstancedGL33& t, int nTextures, const TerrainTexture* textures);
     bool LandClipInVS() const override;
-    void SetLandClipParams(float enable, Vector3Par boundingCenter) override;
+    void SetLandClipParams(float mode, Vector3Par boundingCenter) override;
     void DrawTestPattern(const char* name) override;
 
     void Pause() override;

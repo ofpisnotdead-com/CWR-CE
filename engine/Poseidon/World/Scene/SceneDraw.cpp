@@ -1712,9 +1712,10 @@ void Scene::DrawObjectsAndShadowsPass1()
             int runEnd = i + 1;
             const int headSpecial = sShape->Special() | oi->object->GetObjSpecial();
             const render::LegacySpec headSpec = render::SplitLegacy(headSpecial);
-            const bool landClip = (sShape->GetOrHints() & ClipLandMask) != 0;
-            const bool landClipBatch = landClip && GEngine->LandClipInVS() && sShape->HasDeformingLandClip();
-            const bool cheapPass = (!landClip || landClipBatch) && oi->object->Static() && sShape->NProxies() == 0 &&
+            const bool cpuDeform = oi->object->IsAnimated(oi->drawLOD);
+            const bool vsDeform =
+                GEngine->LandClipInVS() && oi->object->GetLandClipMode(oi->drawLOD) != Object::LandClipNone;
+            const bool cheapPass = (!cpuDeform || vsDeform) && oi->object->Static() && sShape->NProxies() == 0 &&
                                    !render::Has(headSpec.routing, render::Routing::OnSurface) &&
                                    !render::Has(headSpec.routing, render::Routing::IsColored) &&
                                    oi->object != GWorld->CameraOn();
