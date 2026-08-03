@@ -1555,6 +1555,115 @@ GameValue TriPlayerFace(const GameState* /*state*/)
     return GameValue((const char*)player->GetInfo()._face);
 }
 
+static RString PlayerSquadStatus(Person* player, GameValuePar arg)
+{
+    const GameArrayType& values = arg;
+    if (values.Size() != 2 || values[0].GetType() != GameString || values[1].GetType() != GameString)
+        return RString("FAIL:expected_title_picture");
+    if (!player)
+        return RString("FAIL:no_player");
+
+    const AIUnitInfo& info = player->GetInfo();
+    const RString expectedTitle = static_cast<GameStringType>(values[0]);
+    const RString expectedPicture = static_cast<GameStringType>(values[1]);
+    if (info._squadTitle != expectedTitle)
+        return RString("FAIL:title");
+    if (expectedPicture.GetLength() == 0)
+        return RString("OK");
+    if (!info._squadPicture)
+        return RString("FAIL:picture_missing");
+    const char* pictureName = info._squadPicture->GetName();
+    const char* slash = strrchr(pictureName, '/');
+    const char* backslash = strrchr(pictureName, '\\');
+    if (backslash && (!slash || backslash > slash))
+        slash = backslash;
+    if (RString(slash ? slash + 1 : pictureName) != expectedPicture)
+        return RString("FAIL:picture");
+    return RString("OK");
+}
+
+GameValue TriAssertPlayerSquad(const GameState* /*state*/, GameValuePar arg)
+{
+    return GameValue(PlayerSquadStatus(GWorld ? GWorld->GetRealPlayer() : nullptr, arg));
+}
+
+GameValue TriAssertRemotePlayerSquad(const GameState* /*state*/, GameValuePar arg)
+{
+    if (!GWorld)
+        return GameValue("FAIL:no_world");
+
+    Person* localPlayer = GWorld->GetRealPlayer();
+    auto statusFor = [localPlayer, &arg](Person* person) -> RString
+    {
+        if (!person || person == localPlayer)
+            return RString();
+        return PlayerSquadStatus(person, arg);
+    };
+    const int vehicleCount = GWorld->NVehicles();
+    for (int i = 0; i < vehicleCount; ++i)
+    {
+        Entity* vehicle = GWorld->GetVehicle(i);
+        Person* person = dyn_cast<Person>(vehicle);
+        if (!person)
+        {
+            Transport* transport = dyn_cast<Transport>(vehicle);
+            person = transport ? transport->Driver() : nullptr;
+        }
+        const RString status = statusFor(person);
+        if (status.GetLength() == 0)
+            continue;
+        if (status == RString("OK"))
+            return GameValue("OK");
+        char buffer[192];
+        snprintf(buffer, sizeof(buffer), "FAIL:remote=%d:name=%s:%s", person->GetRemotePlayer(),
+                 (const char*)person->GetInfo()._name, (const char*)status);
+        return GameValue(buffer);
+    }
+    return GameValue("FAIL:no_remote_player");
+}
+
+GameValue TriAssertRegionHasColor(const GameState* /*state*/, GameValuePar arg)
+{
+    if (!GEngine)
+        return GameValue("FAIL:no_engine");
+    if (arg.GetType() != GameArray)
+        return GameValue("FAIL:expected_array");
+    const GameArrayType& values = arg;
+    if (values.Size() != 8)
+        return GameValue("FAIL:expected_rect_rgb_tolerance");
+
+    const float u0 = static_cast<GameScalarType>(values[0]);
+    const float v0 = static_cast<GameScalarType>(values[1]);
+    const float u1 = static_cast<GameScalarType>(values[2]);
+    const float v1 = static_cast<GameScalarType>(values[3]);
+    const int expected[3] = {static_cast<int>(static_cast<GameScalarType>(values[4])),
+                             static_cast<int>(static_cast<GameScalarType>(values[5])),
+                             static_cast<int>(static_cast<GameScalarType>(values[6]))};
+    const int tolerance = static_cast<int>(static_cast<GameScalarType>(values[7]));
+    if (u0 < 0 || v0 < 0 || u1 > 1 || v1 > 1 || u0 > u1 || v0 > v1 || tolerance < 0)
+        return GameValue("FAIL:out_of_range");
+
+    const int x0 = static_cast<int>(u0 * (GEngine->Width() - 1));
+    const int y0 = static_cast<int>(v0 * (GEngine->Height() - 1));
+    const int x1 = static_cast<int>(u1 * (GEngine->Width() - 1));
+    const int y1 = static_cast<int>(v1 * (GEngine->Height() - 1));
+    constexpr int sampleStride = 16;
+    for (int y = y0; y <= y1; y += sampleStride)
+    {
+        for (int x = x0; x <= x1; x += sampleStride)
+        {
+            uint8_t rgb[3] = {};
+            if (!GEngine->SamplePixel(x, y, rgb))
+                return GameValue("FAIL:not_supported");
+            if (abs(static_cast<int>(rgb[0]) - expected[0]) <= tolerance &&
+                abs(static_cast<int>(rgb[1]) - expected[1]) <= tolerance &&
+                abs(static_cast<int>(rgb[2]) - expected[2]) <= tolerance)
+                return GameValue("OK");
+        }
+    }
+    return GameValue("FAIL:color_not_found");
+}
+
 /// triSetPlayerPref <name> — write the persisted last-used profile name (the
 /// PlayerName pref). A sequence phase uses this to leave a stale pref for the
 /// next boot. Returns "OK".
@@ -2933,6 +3042,10 @@ INIT_MODULE(GameStateExtTest, 3)
     GGameState.NewNularOp(GameNular(GameString, "triPlayerVehicle", TriPlayerVehicle));
     GGameState.NewNularOp(GameNular(GameString, "triPlayerName", TriPlayerName));
     GGameState.NewNularOp(GameNular(GameString, "triPlayerFace", TriPlayerFace));
+    GGameState.NewFunction(GameFunction(GameString, "triAssertPlayerSquad", TriAssertPlayerSquad, GameArray));
+    GGameState.NewFunction(
+        GameFunction(GameString, "triAssertRemotePlayerSquad", TriAssertRemotePlayerSquad, GameArray));
+    GGameState.NewFunction(GameFunction(GameString, "triAssertRegionHasColor", TriAssertRegionHasColor, GameArray));
     GGameState.NewFunction(GameFunction(GameString, "triSetPlayerPref", TriSetPlayerPref, GameString));
     GGameState.NewFunction(GameFunction(GameString, "triAssertProfileMissing", TriAssertProfileMissing, GameString));
     GGameState.NewFunction(GameFunction(GameString, "triDamagePlayerVehicle", TriDamagePlayerVehicle, GameScalar));

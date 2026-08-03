@@ -2,6 +2,7 @@
 #include <Poseidon/UI/Controls/UIControls.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Graphics/Core/Engine.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <Poseidon/World/World.hpp>
 #include <Poseidon/UI/Locale/Stringtable/CodepageTranscode.hpp>
 #include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
@@ -230,8 +231,12 @@ void C3DStatic::SetText(RString text)
     _text = visibleText;
     if (type == ST_PICTURE)
     {
-        text = Poseidon::FindPicture(text);
-        text.Lower();
+        const std::filesystem::path path = Poseidon::FilesystemPathFromUtf8(text.Data());
+        if (!path.is_absolute() || !Poseidon::FileExistsUtf8(text))
+        {
+            text = Poseidon::FindPicture(text);
+            text.Lower();
+        }
         _texture = GlobLoadTexture(text);
         if (_texture)
         {

@@ -645,6 +645,14 @@ TEST_CASE("Squad logo paths reject unsafe XML path components", "[network][squad
             RString("squads/CWR/synthetic_grid.paa"));
     REQUIRE(Poseidon::BuildNetworkSquadPictureTmpPath(RString("CWR"), RString("synthetic_grid.paa")) ==
             RString("tmp/squads/CWR/synthetic_grid.paa"));
+    REQUIRE(Poseidon::FindNetworkSquadPicturePath(
+                RString("/profiles/client/"), RString("CWR"), RString("synthetic_grid.paa"), [](const RString& path)
+                { return path == RString("/profiles/client/tmp/squads/CWR/synthetic_grid.paa"); }) ==
+            RString("/profiles/client/tmp/squads/CWR/synthetic_grid.paa"));
+    REQUIRE(Poseidon::BuildNetworkSquadPictureTmpPath(RString("\xC4\x8D"
+                                                              "esk\xC3\xBD"),
+                                                      RString("znak.paa")) == RString("tmp/squads/\xC4\x8D"
+                                                                                      "esk\xC3\xBD/znak.paa"));
     REQUIRE(Poseidon::BuildNetworkServerSquadPictureUploadPath(RString("server-tmp"), RString("CWR"),
                                                                RString("synthetic_grid.paa")) ==
             RString("server-tmp/squads/CWR/synthetic_grid.paa"));

@@ -480,7 +480,9 @@ bool CheckSquadObject::DoProcessXML()
 
         _logoFile =
             Poseidon::BuildNetworkServerSquadPictureUploadPath(GetServerTmpDir(), _squad->nick, _squad->picture);
-        CreatePath(_logoFile);
+        const std::filesystem::path logoPath = Poseidon::FilesystemPathFromUtf8(_logoFile.Data());
+        const std::string logoDir = Poseidon::FilesystemPathToUtf8(logoPath.parent_path());
+        Poseidon::CreateDirectoryUtf8(logoDir.c_str());
     }
     else
     {

@@ -338,6 +338,29 @@ static void ExecuteNamedRemoteExec(GameState* gstate, RString name, GameValuePar
     gstate->EndContext();
 }
 
+void NetworkClient::ApplySquadIdentity(int player, Person* person)
+{
+    const PlayerIdentity* identity = FindIdentity(player);
+    if (!identity || !person)
+        return;
+
+    AIUnitInfo& info = person->GetInfo();
+    info._squadTitle = RString();
+    info._squadPicture = nullptr;
+    if (identity->squad)
+    {
+        info._squadTitle = identity->squad->title;
+        if (identity->squad->picture.GetLength() > 0)
+        {
+            const RString picture = Poseidon::FindNetworkSquadPicturePath(
+                Poseidon::GetUserDirectory(), identity->squad->nick, identity->squad->picture,
+                [](const RString& path) { return Poseidon::FileExistsUtf8(path); });
+            if (picture.GetLength() > 0)
+                info._squadPicture = GlobLoadTexture(picture);
+        }
+    }
+}
+
 bool NetworkClient::TryApplySelectPlayer(const SelectPlayerMessage& pl, bool allowPending)
 {
     NET_ERROR(pl.player == _player);
@@ -936,6 +959,14 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             int index = _squads.Add(new SquadIdentity());
             SquadIdentity* squad = _squads[index];
             squad->TransferMsg(ctx);
+            for (int i = 0; i < _identities.Size(); i++)
+            {
+                PlayerIdentity& identity = _identities[i];
+                if (identity.squadId == squad->id)
+                {
+                    identity.squad = squad;
+                }
+            }
         }
         break;
         case NMTMissionHeader:
@@ -1905,6 +1936,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 saturateMax(info._experience, info._initExperience);
                 copy._to->SetRemotePlayer(copy._from->GetRemotePlayer());
                 copy._to->SetInfo(info);
+                ApplySquadIdentity(copy._to->GetRemotePlayer(), copy._to);
                 copy._to->SetFace(info._face, info._name);
                 copy._to->SetGlasses(info._glasses);
                 FlushTransferredNetworkFaceRefreshes();
@@ -2212,6 +2244,8 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                         CreateLocalObject(_clientInfo);
 
                         _state = NGSPlay;
+                        if (_jip)
+                            ApplySquadIdentity(_player, GWorld ? GWorld->GetRealPlayer() : nullptr);
 
                         // Run client-side init scripts for JIP players
                         if (_jip)
@@ -2398,7 +2432,11 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                          NetworkMessageTypeNames[type]);
                     break;
                 }
+                Person* person = dynamic_cast<Person*>(object);
+                const int previousPlayer = person ? person->GetRemotePlayer() : AI_PLAYER;
                 object->TransferMsg(ctx);
+                if (person && person->GetRemotePlayer() != previousPlayer)
+                    ApplySquadIdentity(person->GetRemotePlayer(), person);
                 if (DiagLevel >= 4)
                 {
                     DiagLogF("Client: object %d:%d updated", id.creator, id.id);

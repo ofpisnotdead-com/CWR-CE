@@ -144,6 +144,17 @@ RString FindNetworkSquadPictureTmpPath(const RString& squadNick, const RString& 
     return path;
 }
 
+template <class FileExistsFn>
+RString FindNetworkSquadPicturePath(const RString& userDir, const RString& squadNick, const RString& picture,
+                                    FileExistsFn&& fileExists)
+{
+    const RString relative = BuildNetworkSquadPictureTmpPath(squadNick, picture);
+    if (relative.GetLength() == 0)
+        return RString();
+    const RString path = userDir + relative;
+    return fileExists(path) ? path : RString();
+}
+
 inline bool IsNetworkPlayerFaceAssetName(const RString& assetName)
 {
     return stricmp(assetName, "face.paa") == 0 || stricmp(assetName, "face.jpg") == 0;

@@ -404,6 +404,7 @@ class NetworkClient : public NetworkComponent
     // Respawn unit by info given by item of respawn queue
     void DoRespawn(RespawnQueueItem& item);
 
+    void ApplySquadIdentity(int player, Person* person);
     bool TryApplySelectPlayer(const SelectPlayerMessage& message, bool allowPending);
     void TryApplyPendingSelectPlayer(NetworkId id);
     bool TryApplyChangeOwner(const ChangeOwnerMessage& message, bool allowPending);
