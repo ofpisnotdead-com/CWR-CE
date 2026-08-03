@@ -243,6 +243,16 @@ bool Object::IsAnimatedShadow(int level) const
     return false;
 }
 
+bool Object::DeformsSharedShape(int level) const
+{
+    Shape* shape = _shape->Level(level);
+    if (!shape || shape->NFaces() <= 0)
+    {
+        return false;
+    }
+    return _isDestroyed && _destroyPhase > 0 && GetDestructType() != DestructTree;
+}
+
 bool Object::HasLandClip(int level) const
 {
     Shape* shape = _shape->Level(level);

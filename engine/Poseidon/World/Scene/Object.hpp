@@ -307,6 +307,10 @@ public:
 	virtual bool IsAnimated( int level ) const; // appearence changed with Animate
 	virtual bool IsAnimatedShadow( int level ) const; // shadow changed with Animate
 
+	// True when Animate() rewrites the vertices of the shape shared by every object of this type.
+	// Only one such object can occupy the shared vertex buffer at a time, so these must be drawn one by one.
+	virtual bool DeformsSharedShape( int level ) const;
+
 	// True when this LOD level's geometry is snapped to the landscape surface.
 	virtual bool HasLandClip( int level ) const;
 
