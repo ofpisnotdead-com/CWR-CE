@@ -1,5 +1,6 @@
 #include <Poseidon/Foundation/Common/PlayerPrefs.hpp>
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
+#include <Poseidon/Foundation/Framework/Log.hpp>
 #include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <cstdlib>
 #include <fstream>
@@ -37,9 +38,13 @@ std::unordered_map<std::string, std::string> loadPrefs(const char* appName)
 
 void savePrefs(const char* appName, const std::unordered_map<std::string, std::string>& prefs)
 {
-    std::ofstream file(Poseidon::FilesystemPathFromUtf8(prefsFilePath(appName)));
+    const std::string path = prefsFilePath(appName);
+    std::ofstream file(Poseidon::FilesystemPathFromUtf8(path));
     if (!file.is_open())
+    {
+        LOG_ERROR(Core, "Failed to open prefs file for writing: '{}'", path);
         return;
+    }
 
     for (auto& [key, value] : prefs)
     {

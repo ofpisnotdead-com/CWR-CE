@@ -178,6 +178,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     UI/Locale/test_supported_languages.cpp
     Core/test_engine_config.cpp
     Core/test_application_exit.cpp
+    Core/test_app_name_filesystem_safety.cpp
     Core/test_window_close.cpp
     Core/test_user_config.cpp
     Core/test_user_config_serialization.cpp

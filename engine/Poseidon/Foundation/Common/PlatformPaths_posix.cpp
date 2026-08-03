@@ -1,5 +1,8 @@
 #include <Poseidon/Foundation/Common/PlatformPaths.hpp>
+#include <Poseidon/Foundation/Framework/Log.hpp>
 #include <cstdlib>
+#include <cerrno>
+#include <cstring>
 #include <sys/stat.h>
 #include <string>
 #include <unistd.h>
@@ -19,7 +22,10 @@ void ensureDirectory(const std::string& path)
             mkdir(partial.c_str(), 0755);
         }
     }
-    mkdir(path.c_str(), 0755);
+    if (mkdir(path.c_str(), 0755) != 0 && errno != EEXIST)
+    {
+        LOG_ERROR(Core, "Failed to create user directory '{}': {}", path, std::strerror(errno));
+    }
 }
 
 std::string getXdgDir(const char* envVar, const char* defaultSuffix, const char* appName)

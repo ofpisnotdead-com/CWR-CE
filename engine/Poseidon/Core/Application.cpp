@@ -11,8 +11,10 @@
 
 #endif
 
-// Application name — default for all apps, can be overridden per-app before engine init
-const char* AppName = "ARMA:CWA-RE-CE";
+// Application name — default for all apps, can be overridden per-app before engine init.
+// Also used as a filesystem path component (PlayerPrefs' config directory), so it must
+// not contain characters reserved by a target filesystem.
+const char* AppName = "CWR";
 
 namespace Poseidon
 {
