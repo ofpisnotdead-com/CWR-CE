@@ -544,7 +544,11 @@ float hmAt(ivec2 t) {
 void main() {
     ivec2 worldCell = iSegOrigin + ivec2(segVert.xy);
     ivec2 cs = textureSize(cellInfo, 0);
-    uvec2 ci = texelFetch(cellInfo, clamp(worldCell, ivec2(0), cs - ivec2(1)), 0).rg;
+    if (any(lessThan(worldCell, ivec2(0))) || any(greaterThanEqual(worldCell, cs))) {
+        gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+        return;
+    }
+    uvec2 ci = texelFetch(cellInfo, worldCell, 0).rg;
     uint flags = ci.y;
     if ((flags & 1u) == 0u || int((flags >> 2) & 0x3Fu) != drawBatch) {
         gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
