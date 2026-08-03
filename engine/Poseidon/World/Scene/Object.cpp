@@ -397,6 +397,17 @@ class LandClipScope
 bool LandClipScope::_active = false;
 } // namespace
 
+bool Object::RenderHandlesLandClip()
+{
+    return LandClipScope::SkipCpuLandClip();
+}
+
+Object::LandClipMode Object::GetLandClipMode(int level) const
+{
+    Shape* shape = _shape->LevelOpaque(level);
+    return shape && shape->HasDeformingLandClip() ? LandClipVertex : LandClipNone;
+}
+
 void Object::ApplyLandClip(int level)
 {
     if (LandClipScope::SkipCpuLandClip())
@@ -1007,10 +1018,9 @@ void Object::Draw(int forceLOD, ClipFlags clipFlags, const FrameBase& pos)
         sShape->PrepareTextures(z2, special);
         // perform actual drawing
 
-        if (GEngine->LandClipInVS() && (sShape->GetOrHints() & ClipLandMask) != 0)
+        if (GEngine->LandClipInVS())
         {
-            float enable = sShape->HasDeformingLandClip() ? 1.0f : 0.0f;
-            GEngine->SetLandClipParams(enable, _shape->BoundingCenter());
+            GEngine->SetLandClipParams(float(GetLandClipMode(forceLOD)), _shape->BoundingCenter());
         }
 
         // if neccessary, split it

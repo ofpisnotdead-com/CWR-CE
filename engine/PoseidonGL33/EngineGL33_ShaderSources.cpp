@@ -27,13 +27,14 @@ layout(std140) uniform VSConstants {
     vec4 sunEn;         // c20: {enabled, 0, 0, 0}
     vec4 vpScale;       // c21: {2/width, 2/height, 0, 0} — VSScreen only, declared here for layout parity
     vec4 hmParams0;     // c22: terrain heightmap {invGrid, camX, camZ, camY}
-    vec4 hmParams1;     // c23: land clip {boundingCenter.xyz, enable}
+    vec4 hmParams1;     // c23: land clip {boundingCenter.xyz, mode}
     mat4 texMat0;       // c24-c27
     mat4 texMat1;       // c28-c31
     vec4 texCtrl;       // c32: {genTex0, genTex1, 0, 0}
     vec4 matDiffuseRaw; // c33: raw material diffuse, for local lights
     vec4 matAmbientRaw; // c34: raw material ambient, for local lights
-    vec4 _padLights[31];// c35-c65: reserved
+    vec4 landGrid;      // c35: land grid {invLandGrid, heightmap texels per land square, 0, 0}
+    vec4 _padLights[30];// c36-c65: reserved
     mat4 lightVP;       // c66-c69: shadow-map light view-projection (sampled per fragment)
 };
 )";
@@ -349,30 +350,51 @@ layout(location = 3) in uint landClip;
 
 //#include <vs_varyings_out>
 
-// Terrain height (.x, absolute) and world-space slope (.yz = dY/dx, dY/dz) at absolute
-// world XZ, matching Landscape::SurfaceY (two-triangle interpolation of the height grid).
-vec3 landClipSurface(vec2 absXZ) {
-    float invGrid = hmParams0.x;
-    vec2 rel = absXZ * invGrid;
+// The four corners of one heightmap square, stride texels apart, in Landscape::SurfaceY's
+// order: {y00, y01, y10, y11}, first digit stepping along Z and second along X.
+vec4 heightCorners(ivec2 base, int stride) {
     ivec2 sz = textureSize(heightMap, 0);
-    ivec2 base = ivec2(floor(rel));
-    ivec2 i0 = clamp(base,            ivec2(0), sz - 1);
-    ivec2 i1 = clamp(base + ivec2(1), ivec2(0), sz - 1);
-    vec2 f = rel - vec2(base);
-    float y00 = texelFetch(heightMap, ivec2(i0.x, i0.y), 0).r;
-    float y01 = texelFetch(heightMap, ivec2(i1.x, i0.y), 0).r;
-    float y10 = texelFetch(heightMap, ivec2(i0.x, i1.y), 0).r;
-    float y11 = texelFetch(heightMap, ivec2(i1.x, i1.y), 0).r;
+    ivec2 i0 = clamp(base,                 ivec2(0), sz - 1);
+    ivec2 i1 = clamp(base + ivec2(stride), ivec2(0), sz - 1);
+    return vec4(texelFetch(heightMap, ivec2(i0.x, i0.y), 0).r,
+                texelFetch(heightMap, ivec2(i1.x, i0.y), 0).r,
+                texelFetch(heightMap, ivec2(i0.x, i1.y), 0).r,
+                texelFetch(heightMap, ivec2(i1.x, i1.y), 0).r);
+}
+
+// Height (.x) and world-space slope (.yz = dY/dx, dY/dz) at fractional position f inside a
+// square, matching Landscape::SurfaceY's two-triangle interpolation. f outside 0..1 extends
+// the containing triangle's plane beyond the square.
+vec3 surfaceFromCorners(vec4 c, vec2 f, float invGrid) {
     float h;
     vec2 grad;
     if (f.x <= 1.0 - f.y) {
-        h = y00 + (y10 - y00) * f.y + (y01 - y00) * f.x;
-        grad = vec2(y01 - y00, y10 - y00);
+        h = c.x + (c.z - c.x) * f.y + (c.y - c.x) * f.x;
+        grad = vec2(c.y - c.x, c.z - c.x);
     } else {
-        h = y10 + (y01 - y11) - (y10 - y11) * f.x - (y01 - y11) * f.y;
-        grad = vec2(y11 - y10, y11 - y01);
+        h = c.z + (c.y - c.w) - (c.z - c.w) * f.x - (c.y - c.w) * f.y;
+        grad = vec2(c.w - c.z, c.w - c.y);
     }
     return vec3(h, grad * invGrid);
+}
+
+vec3 landClipSurface(vec2 absXZ) {
+    vec2 rel = absXZ * hmParams0.x;
+    vec2 base = floor(rel);
+    return surfaceFromCorners(heightCorners(ivec2(base), 1), rel - base, hmParams0.x);
+}
+
+// Matches ForestPlain::Animate: one plane spanning the land square the object's origin falls
+// in, extended past that square's edges rather than following the neighbouring terrain.
+vec3 landPlaneSurface(vec2 absXZ, vec2 objAbsXZ) {
+    float invLandGrid = landGrid.x;
+    int stride = int(landGrid.y);
+    vec2 sq = floor(objAbsXZ * invLandGrid);
+    return surfaceFromCorners(heightCorners(ivec2(sq) * stride, stride), absXZ * invLandGrid - sq, invLandGrid);
+}
+
+vec3 landClipNormal(vec3 n, vec3 surf) {
+    return normalize(vec3(n.x - surf.y * n.y, n.y, n.z - surf.z * n.y));
 }
 
 //#include <fn_sun_light>
@@ -383,8 +405,16 @@ vec3 landClipSurface(vec2 absXZ) {
 void main() {
     vec4 worldPos    = worldArr[gl_InstanceID] * vec4(pos, 1.0);
     vec3 worldNormal = normalize(mat3(worldArr[gl_InstanceID]) * normal);
-    // Land clip: snap terrain-following vertices onto the heightmap (matches Object::ApplyLandClip).
-    if (hmParams1.w > 0.5 && landClip != 0u && hmParams0.x > 0.0) {
+    // Reproduce the object's CPU land clip (Object::ApplyLandClip / ForestPlain::Animate) so
+    // instances of one shape can share a static vertex buffer.
+    int lcMode = int(hmParams1.w + 0.5);
+    if (lcMode == 2 && landGrid.y > 0.0) {
+        // ForestPlain replaces Y outright and moves every vertex, flagged or not.
+        vec2 objAbsXZ = worldArr[gl_InstanceID][3].xz + hmParams0.yz;
+        vec3 surf = landPlaneSurface(worldPos.xz + hmParams0.yz, objAbsXZ);
+        worldPos.y = surf.x + pos.y + hmParams1.y - hmParams0.w;
+        worldNormal = landClipNormal(worldNormal, surf);
+    } else if (lcMode == 1 && landClip != 0u && hmParams0.x > 0.0) {
         vec3 surf = landClipSurface(worldPos.xz + hmParams0.yz);
         if (landClip == 2u) {
             worldPos.y = surf.x - hmParams0.w; // ClipLandOn: pin onto surface
@@ -395,9 +425,7 @@ void main() {
             vec2 anchorXZ = (worldArr[gl_InstanceID] * vec4(-hmParams1.xyz, 1.0)).xz + hmParams0.yz;
             worldPos.y = worldPos.y + surf.x - landClipSurface(anchorXZ).x;
         }
-        worldNormal = normalize(vec3(worldNormal.x - surf.y * worldNormal.y,
-                                     worldNormal.y,
-                                     worldNormal.z - surf.z * worldNormal.y));
+        worldNormal = landClipNormal(worldNormal, surf);
     }
     vec4 viewPos     = view * worldPos;
     gl_Position      = proj * viewPos;

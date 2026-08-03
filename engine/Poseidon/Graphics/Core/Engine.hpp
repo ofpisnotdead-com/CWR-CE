@@ -360,7 +360,9 @@ class Engine : public IGraphicsEngine
     virtual void SetShadowMapSunFactor(float /*factor01*/) {}
 
     // Upload the terrain height grid as a GPU texture. Default no-op for headless backends.
-    virtual void SetTerrainHeightmap(const float* /*heights*/, int /*width*/, int /*height*/, float /*invGrid*/) {}
+    virtual void SetTerrainHeightmap(const float* /*heights*/, int /*width*/, int /*height*/, float /*invGrid*/, float /*invLandGrid*/)
+    {
+    }
 
     // One visible 8x8 land segment to draw
     struct GroundSegment
@@ -403,9 +405,10 @@ class Engine : public IGraphicsEngine
     // True when the backend snaps land-clipped geometry to the terrain in the vertex
     // shader; when so, the render path skips the CPU land-clip deform. Default off.
     virtual bool LandClipInVS() const { return false; }
-    // Land-clip params for the next draw: enable (1 = VS conforms) and the shape's model-space
-    // bounding centre (the VS samples the terrain there as the ClipLandKeep reference).
-    virtual void SetLandClipParams(float /*enable*/, Vector3Par /*boundingCenter*/) {}
+    // Land-clip params for the next draw: the deform mode (Object::LandClipMode) and the
+    // shape's model-space bounding centre, which mode 1 samples the terrain at as the
+    // ClipLandKeep reference and mode 2 uses as the model-space height origin.
+    virtual void SetLandClipParams(float /*mode*/, Vector3Par /*boundingCenter*/) {}
 
   private:
     Engine(const Engine& src); // no copy

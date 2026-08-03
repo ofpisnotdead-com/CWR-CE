@@ -2071,7 +2071,7 @@ void Landscape::FlushHeightmapToRenderer()
     {
         return;
     }
-    _engine->SetTerrainHeightmap(static_cast<const float*>(_data.RawData()), w, h, _invTerrainGrid);
+    _engine->SetTerrainHeightmap(static_cast<const float*>(_data.RawData()), w, h, _invTerrainGrid, _invLandGrid);
     _heightmapDirty = false;
     g_instSetupValid = false;
 }
