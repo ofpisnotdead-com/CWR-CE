@@ -94,6 +94,7 @@ void ApplyGraphicsConfigToEngine(const GraphicsConfig& cfg)
         GEngine->SetAlphaToCoverage(cfg.alphaToCoverage);
         GEngine->SetRenderScale(cfg.renderScale);
         GEngine->SetMsaaSamples(cfg.msaaSamples);
+        GEngine->SetMultitexturing(cfg.multitexturing);
     }
     gUserFpsCap = cfg.fpsCap;
 }

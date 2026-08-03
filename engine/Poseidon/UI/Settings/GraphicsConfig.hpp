@@ -19,7 +19,9 @@
 //
 //   Per-user knobs      — independent of preset, keep value across
 //                         preset changes:
-//                           vsync, fpsCap, brightness, gamma
+//                           msaaSamples, renderScale, alphaToCoverage,
+//                           multitexturing, vsync, fpsCap, brightness,
+//                           gamma
 //
 // Autodetect on first boot: GraphicsConfig::PickPresetFromRam()
 // returns a tier from SDL_GetSystemRAM(); ApplyPresetToTiers fills the
@@ -75,9 +77,9 @@ public:
 	float     renderScale      = 1.0f;          // SSAA: render at scale x window and downsample.
 	                                             // 1.0 = off; up to 2.0.  The only general cure for
 	                                             // sub-pixel OPAQUE geometry sparkle (fence bars)
-	int       msaaSamples      = 0;             // MSAA on the frame target: 0 (off) / 2 / 4 / 8.
-	                                             // Default off — AA is being tuned via the dev panel
-	                                             // Render tab before a shipped default is picked
+	int       msaaSamples      = 0;             // MSAA on the frame target: 0 (off) / 2 / 4 / 8
+	bool      multitexturing   = true;          // Detail-texture / specular second stage on terrain and
+	                                             // objects.  Off drops those draws to the base texture
 	float     brightness       = 1.6f;          // 0.4..1.8
 	float     gamma            = 1.2f;          // 0.5..2.3
 

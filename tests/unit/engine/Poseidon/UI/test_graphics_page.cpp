@@ -82,3 +82,72 @@ TEST_CASE("GraphicsPage fps-cap index mapping falls back to unlimited for unknow
     CHECK(GraphicsPage::FpsCapValueToIndex(240) == 6);
     CHECK(GraphicsPage::FpsCapValueToIndex(165) == 0);
 }
+
+TEST_CASE("GraphicsPage MSAA index mapping falls back to off for unknown counts", "[UI][GraphicsPage]")
+{
+    CHECK(GraphicsPage::MsaaSamplesToIndex(0) == 0);
+    CHECK(GraphicsPage::MsaaSamplesToIndex(2) == 1);
+    CHECK(GraphicsPage::MsaaSamplesToIndex(4) == 2);
+    CHECK(GraphicsPage::MsaaSamplesToIndex(8) == 3);
+    CHECK(GraphicsPage::MsaaSamplesToIndex(16) == 0);
+
+    for (int i = 0; i < 4; ++i)
+        CHECK(GraphicsPage::MsaaSamplesToIndex(GraphicsPage::MsaaIndexToSamples(i)) == i);
+    CHECK(GraphicsPage::MsaaIndexToSamples(4) == 0);
+    CHECK(GraphicsPage::MsaaIndexToSamples(-1) == 0);
+}
+
+TEST_CASE("GraphicsPage render-scale index mapping picks the nearest step", "[UI][GraphicsPage]")
+{
+    CHECK(GraphicsPage::RenderScaleToIndex(1.0f) == 0);
+    CHECK(GraphicsPage::RenderScaleToIndex(1.25f) == 1);
+    CHECK(GraphicsPage::RenderScaleToIndex(1.5f) == 2);
+    CHECK(GraphicsPage::RenderScaleToIndex(1.75f) == 3);
+    CHECK(GraphicsPage::RenderScaleToIndex(2.0f) == 4);
+
+    CHECK(GraphicsPage::RenderScaleToIndex(1.6f) == 2);
+    CHECK(GraphicsPage::RenderScaleToIndex(1.05f) == 0);
+
+    for (int i = 0; i < 5; ++i)
+        CHECK(GraphicsPage::RenderScaleToIndex(GraphicsPage::RenderScaleIndexToValue(i)) == i);
+    CHECK(GraphicsPage::RenderScaleIndexToValue(5) == Catch::Approx(1.0f));
+    CHECK(GraphicsPage::RenderScaleIndexToValue(-1) == Catch::Approx(1.0f));
+}
+
+TEST_CASE("GraphicsPage anti-aliasing rows round-trip through the provider", "[UI][GraphicsPage]")
+{
+    TestableGraphicsPage page;
+    auto& p = page.Provider();
+
+    CHECK(p.RowValue(10) == 0);
+    CHECK(p.RowValue(11) == 0);
+
+    p.SetRowValue(10, 2);
+    CHECK(p.RowValue(10) == 2);
+    p.SetRowValue(11, 4);
+    CHECK(p.RowValue(11) == 4);
+}
+
+TEST_CASE("GraphicsPage multitexturing row is a boolean defaulting to on", "[UI][GraphicsPage]")
+{
+    TestableGraphicsPage page;
+    auto& p = page.Provider();
+
+    CHECK(p.RowKind(12) == OptionsScrollList::KindBoolean);
+    CHECK(p.RowValue(12) == 1);
+
+    p.SetRowValue(12, 0);
+    CHECK(p.RowValue(12) == 0);
+    p.SetRowValue(12, 1);
+    CHECK(p.RowValue(12) == 1);
+}
+
+// A focusable divider would strand keyboard nav on a row with no value to change.
+TEST_CASE("GraphicsPage advanced divider is an unfocusable header", "[UI][GraphicsPage]")
+{
+    TestableGraphicsPage page;
+    auto& p = page.Provider();
+
+    CHECK(p.RowKind(9) == OptionsScrollList::KindHeader);
+    CHECK_FALSE(OptionsScrollList::CanRowReceiveFocus(p.RowKind(9)));
+}
