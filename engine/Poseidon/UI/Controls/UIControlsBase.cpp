@@ -746,6 +746,17 @@ IControl* ControlObjectContainer::GetFocused()
     return _controls[_indexFocused]._control;
 }
 
+bool ControlObjectContainer::WantsTextInput() const
+{
+    // GetFocused() falls back to `this` when nothing is focused, so check
+    // _indexFocused directly here to avoid recursing into this override.
+    if (_indexFocused < 0 || _indexFocused >= _controls.Size())
+    {
+        return false;
+    }
+    return _controls[_indexFocused]._control->WantsTextInput();
+}
+
 int ControlObjectContainer::GetFocusedIdc()
 {
     if (_indexFocused < 0)

@@ -293,6 +293,7 @@ public:
 
 	IControl *GetFocused() override;
 	bool OnSetFocus(bool up = true, bool def = false) override;
+	bool WantsTextInput() const override;
 	bool CanBeDefault() const override;
 
 	void OnLButtonDown(float x, float y) override;

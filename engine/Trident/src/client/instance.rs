@@ -549,18 +549,27 @@ mod tests {
 
     #[cfg(unix)]
     fn process_running(pid: u32) -> bool {
-        // Reads /proc/<pid>/stat and treats a missing file (reaped) or 'Z'
-        // (zombie) as no longer running; comm can contain ')' so split on the last.
-        match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
-            Ok(stat) => {
-                let state = stat
-                    .rsplit(')')
-                    .next()
-                    .and_then(|rest| rest.split_whitespace().next())
-                    .and_then(|token| token.chars().next());
-                state != Some('Z')
-            }
-            Err(_) => false,
+        // Linux exposes process state through /proc. Other Unix platforms,
+        // including macOS, need the portable ps fallback.
+        if let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) {
+            let state = stat
+                .rsplit(')')
+                .next()
+                .and_then(|rest| rest.split_whitespace().next())
+                .and_then(|token| token.chars().next());
+            return state != Some('Z');
         }
+
+        // Use the standard absolute path because other parallel tests
+        // temporarily replace PATH while exercising binary discovery.
+        let output = std::process::Command::new("/bin/ps")
+            .args(["-p", &pid.to_string(), "-o", "stat="])
+            .output()
+            .expect("run ps");
+        let state = String::from_utf8_lossy(&output.stdout)
+            .trim_start()
+            .chars()
+            .next();
+        output.status.success() && state.is_some() && state != Some('Z')
     }
 }

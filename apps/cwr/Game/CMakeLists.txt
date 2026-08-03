@@ -58,9 +58,13 @@ if(WIN32)
         legacy_stdio_definitions.lib
     )
 elseif(APPLE)
+    # Apple's linker has no GNU --start-group/--end-group equivalent (and
+    # doesn't need one — it resolves the same circular static-lib
+    # dependencies without help).
     target_link_libraries(PoseidonGame PRIVATE
         GameBase
         PoseidonGL33
+        PoseidonMTL
         Poseidon
         PoseidonOpenAL
         pthread
