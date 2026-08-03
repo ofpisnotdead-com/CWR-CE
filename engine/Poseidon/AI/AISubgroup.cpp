@@ -1054,20 +1054,25 @@ void AISubgroup::DeleteCommand(NetworkId id)
         Command* task = _stack[i]._task;
         if (task && task->GetNetworkId() == id)
         {
-            _stack.Delete(i);
             if (i == n - 1)
             {
-                if (GetCurrent())
+                for (int j = i - 1; j >= 0; j--)
                 {
-                    AISubgroupContext context(this);
-                    context._task = GetCurrent()->_task;
-                    context._fsm = GetCurrent()->_fsm;
-                    PopTask(&context, false);
+                    if (!_stack[j]._fsm)
+                    {
+                        _stack.Delete(j, 1);
+                    }
                 }
+
+                AISubgroupContext context(this);
+                context._task = GetCurrent()->_task;
+                context._fsm = GetCurrent()->_fsm;
+                PopTask(&context, false);
             }
             else
             {
                 RptF("Warning: Delete out of order");
+                _stack.Delete(i);
             }
             break;
         }
