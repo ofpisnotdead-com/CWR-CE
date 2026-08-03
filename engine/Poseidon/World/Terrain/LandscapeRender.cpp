@@ -1419,6 +1419,13 @@ void Landscape::DrawGroundInstanced(const LandBegEnd& bigRect, Scene& scene)
                 }
             }
 
+            // Parts reaching beyond the map are sea only, and their sampled heights are clamped edge values
+            if (x < 0 || z < 0 || x + LandSegmentSize > _landRange || z + LandSegmentSize > _landRange)
+            {
+                minY = std::min(minY, _seaLevelWave);
+                maxY = std::max(maxY, _seaLevelWave);
+            }
+
             VisibleSegment seg;
             seg.xBeg = x;
             seg.zBeg = z;
