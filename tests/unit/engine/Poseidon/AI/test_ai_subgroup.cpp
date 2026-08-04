@@ -22,6 +22,34 @@ std::filesystem::path SourcePath(const std::filesystem::path& path)
 {
     return std::filesystem::path(TESTS_ROOT_DIR).parent_path() / path;
 }
+
+class TestAISubgroup : public AISubgroup
+{
+  public:
+    TestAISubgroup() { SetLocal(false); }
+
+    void SeedRemoteCommandStackWithPlaceholder(NetworkId queuedId, NetworkId currentId)
+    {
+        _stack.Resize(3);
+        _stack[0]._task = CreateCommand(queuedId);
+        _stack[0]._fsm = CreateFSM(Command::NoCommand);
+        _stack[2]._task = CreateCommand(currentId);
+        _stack[2]._fsm = CreateFSM(Command::NoCommand);
+    }
+
+    NetworkId CurrentCommandId() const { return GetCurrent()->_task->GetNetworkId(); }
+
+    void OnTaskDeleted(int, Command&) override {}
+
+  private:
+    static Command* CreateCommand(NetworkId id)
+    {
+        Command* command = new Command();
+        command->SetNetworkId(id);
+        command->SetLocal(false);
+        return command;
+    }
+};
 } // namespace
 
 TEST_CASE("arcadeTemplate compiles", "[ai]")
@@ -89,4 +117,36 @@ TEST_CASE("remote command deletion resolves the subgroup task by network id", "[
     const std::string deleteCommandCase = client.substr(message, nextMessage - message);
     CHECK(deleteCommandCase.find("dc.subgrp->DeleteCommand(dc.object)") != std::string::npos);
     CHECK(deleteCommandCase.find("dynamic_cast<Command*>") == std::string::npos);
+}
+
+TEST_CASE("remote command deletion removes only the matched stack task", "[ai][network]")
+{
+    NetworkId queuedId(7, 11);
+    NetworkId currentId(7, 12);
+    TestAISubgroup subgroup;
+    subgroup.SeedRemoteCommandStackWithPlaceholder(queuedId, currentId);
+
+    SECTION("current command")
+    {
+        subgroup.DeleteCommand(currentId);
+
+        REQUIRE(subgroup.StackSize() == 1);
+        CHECK(subgroup.CurrentCommandId() == queuedId);
+    }
+
+    SECTION("queued command")
+    {
+        subgroup.DeleteCommand(queuedId);
+
+        REQUIRE(subgroup.StackSize() == 2);
+        CHECK(subgroup.CurrentCommandId() == currentId);
+    }
+
+    SECTION("unknown command")
+    {
+        subgroup.DeleteCommand(NetworkId(7, 13));
+
+        REQUIRE(subgroup.StackSize() == 3);
+        CHECK(subgroup.CurrentCommandId() == currentId);
+    }
 }
