@@ -433,7 +433,9 @@ void Man::DrawNVOptics()
         LODShapeWithShadow* oShape = muzzle->_opticsModel;
         if (oShape)
         {
-            int phase = toIntFloor(5.0f * GRandGen.RandomValue());
+            // Draw-path (per rendered frame): use the cosmetic FX stream, never the
+            // sim's GRandGen — sharing it would desync sim reproducibility. See GFxRandGen.
+            int phase = toIntFloor(5.0f * GFxRandGen.RandomValue());
             muzzle->_animFire.SetPhase(oShape, 0, phase);
             // 4:3 vignette — preserve 4:3 + pillarbox while bars are on, else stretch.
             const bool preserve4x3 = AspectRatio::ArePillarboxBarsEnabled();
