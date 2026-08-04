@@ -90,3 +90,16 @@ TEST_CASE("remote command deletion resolves the subgroup task by network id", "[
     CHECK(deleteCommandCase.find("dc.subgrp->DeleteCommand(dc.object)") != std::string::npos);
     CHECK(deleteCommandCase.find("dynamic_cast<Command*>") == std::string::npos);
 }
+
+TEST_CASE("attack estimation retains its commander", "[ai][attack]")
+{
+    const std::string source = ReadTextFile(SourcePath("engine/Poseidon/World/Detection/TargetFire.cpp"));
+    const size_t estimate = source.find("int EntityAI::EstimateAttack(");
+    REQUIRE(estimate != std::string::npos);
+    const size_t overload =
+        source.find("int EntityAI::EstimateAttack(const Vector3& hPos, float height) const", estimate);
+    REQUIRE(overload != std::string::npos);
+    const std::string function = source.substr(estimate, overload - estimate);
+
+    CHECK(function.find("Ref<AIUnit> unit = CommanderUnit();") != std::string::npos);
+}
