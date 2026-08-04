@@ -874,10 +874,13 @@ Vector3 Man::AnimatePoint(int level, int index) const
 
 bool Man::HasFlares(CameraType camType) const
 {
-    if (camType == CamGunner)
+    if (camType == CamGunner && _currentWeapon >= 0 && _currentWeapon < NMagazineSlots())
     {
         const MagazineSlot& slot = GetMagazineSlot(_currentWeapon);
-        return slot._muzzle->_opticsFlare;
+        if (slot._muzzle)
+        {
+            return slot._muzzle->_opticsFlare;
+        }
     }
     return base::HasFlares(camType);
 }
