@@ -465,7 +465,12 @@ bool AIGroup::CreateTargetList(bool initialize, bool report)
         {
             continue;
         }
-        if (!unit->IsUnit())
+        EntityAI* veh = unit->GetVehicle();
+        if (!veh)
+        {
+            continue;
+        }
+        if (!unit->IsUnit() && (veh->GetGroup() == this || veh->GunnerUnit() != unit))
         {
             continue;
         }

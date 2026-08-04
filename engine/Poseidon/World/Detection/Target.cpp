@@ -404,7 +404,7 @@ void TargetList::Manage(AIGroup* group)
             {
                 continue;
             }
-            if (!unit->IsUnit())
+            if (unit->IsInCargo())
             {
                 continue;
             }
