@@ -6,6 +6,9 @@
 #include <Poseidon/World/Entities/Weapons/Weapons.hpp>
 
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 
 using namespace Poseidon;
 
@@ -95,4 +98,25 @@ TEST_CASE("stealth stance exposure tolerates soldiers without a group", "[Infant
 {
     REQUIRE(Poseidon::SoldierStealthStanceExposure(nullptr, false, 0, 0) == 0.0f);
     REQUIRE(Poseidon::SoldierStealthStanceExposure(nullptr, true, 0, 0) == 0.0f);
+}
+
+TEST_CASE("Man flare lookup validates the selected weapon slot", "[Infantry][soldierOld]")
+{
+    const std::filesystem::path source =
+        std::filesystem::path(TESTS_ROOT_DIR).parent_path() / "engine/Poseidon/World/Entities/Infantry/SoldierOld.cpp";
+    std::ifstream input(source);
+    REQUIRE(input.is_open());
+
+    std::stringstream stream;
+    stream << input.rdbuf();
+    const std::string body = stream.str();
+    const std::size_t begin = body.find("bool Man::HasFlares");
+    REQUIRE(begin != std::string::npos);
+    const std::size_t end = body.find("Matrix4 Man::InsideCamera", begin);
+    REQUIRE(end != std::string::npos);
+
+    const std::string function = body.substr(begin, end - begin);
+    CHECK(function.find("_currentWeapon >= 0") != std::string::npos);
+    CHECK(function.find("_currentWeapon < NMagazineSlots()") != std::string::npos);
+    CHECK(function.find("if (slot._muzzle)") != std::string::npos);
 }
