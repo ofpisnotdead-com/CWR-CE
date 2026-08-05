@@ -89,3 +89,23 @@ TEST_CASE("EncodedMatrix3 negative Z sign preserved", "[network][encoded_matrix3
     REQUIRE(decoded.Direction().X() == Catch::Approx(0.0f).margin(kEncTol));
     REQUIRE(decoded.Direction().Y() == Catch::Approx(0.0f).margin(kEncTol));
 }
+
+TEST_CASE("EncodedMatrix3 negative sign preserved", "[network][encoded_matrix3]")
+{
+    // Exercise matrices that produce negative _21sign and _22sign values.
+    Matrix3 m;
+
+    m.SetRotationY(H_PI);
+    EncodedMatrix3 enc;
+    enc.Encode(m);
+
+    Matrix3 decoded;
+    enc.Decode(decoded);
+
+    REQUIRE(decoded.Direction().X() == Catch::Approx(m.Direction().X()).margin(kEncTol));
+    REQUIRE(decoded.Direction().Y() == Catch::Approx(m.Direction().Y()).margin(kEncTol));
+    REQUIRE(decoded.Direction().Z() == Catch::Approx(m.Direction().Z()).margin(kEncTol));
+    REQUIRE(decoded.DirectionUp().X() == Catch::Approx(m.DirectionUp().X()).margin(kEncTol));
+    REQUIRE(decoded.DirectionUp().Y() == Catch::Approx(m.DirectionUp().Y()).margin(kEncTol));
+    REQUIRE(decoded.DirectionUp().Z() == Catch::Approx(m.DirectionUp().Z()).margin(kEncTol));
+}
