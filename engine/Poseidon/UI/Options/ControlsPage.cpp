@@ -1,11 +1,11 @@
 #include <Poseidon/UI/Options/ControlsPage.hpp>
 
-#include <Poseidon/UI/Options/ConfirmPage.hpp>
 #include <Poseidon/UI/Options/GamepadPage.hpp>
 #include <Poseidon/UI/Options/GamepadTuningPage.hpp>
 #include <Poseidon/UI/Options/KbmPage.hpp>
 #include <Poseidon/UI/Options/MousePage.hpp>
 #include <Poseidon/UI/Options/OptionsShell.hpp>
+#include <Poseidon/UI/Options/PresetsPage.hpp>
 
 #include <Poseidon/Input/InputSubsystem.hpp>
 
@@ -44,22 +44,9 @@ bool ControlsPage::OnNav(OptionsShell& shell, int idc)
             shell.PushPage(std::make_unique<GamepadTuningPage>());
             return true;
 
-        case 1403: // Reset all to defaults — confirm first
-        {
-            auto onYes = []()
-            {
-                auto& sub = InputSubsystem::Instance();
-                for (int c = 0; c < ControlsCategoryCount; ++c)
-                    sub.ResetCategoryDefaults((ControlsCategory)c);
-                sub.SaveKeys();
-            };
-            shell.PushPage(std::make_unique<ConfirmPage>(
-                std::string((const char*)LocalizeString("STR_DISP_OPT_CONFIRM_RESET_TITLE")),
-                std::string((const char*)LocalizeString("STR_DISP_OPT_CONFIRM_RESET_BODY")), std::move(onYes),
-                std::string((const char*)LocalizeString("STR_DISP_OPT_CTL_RESET_ALL")),
-                std::string((const char*)LocalizeString("STR_DISP_OPT_CAP_CANCEL"))));
+        case 1403: // Presets
+            shell.PushPage(std::make_unique<PresetsPage>());
             return true;
-        }
     }
     return false;
 }
