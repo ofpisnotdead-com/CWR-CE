@@ -439,6 +439,7 @@ GameValue SideLogic(const GameState* state);
 GameValue SideResistance(const GameState* state);
 GameValue SideWest(const GameState* state);
 GameValue UsedVersion(const GameState* state);
+GameValue KeyPressing(const GameState *state);
 GameValue VoiceLanguage(const GameState* state);
 GameValue WorldName(const GameState* state);
 GameValue WorldSize(const GameState* state);
@@ -922,6 +923,7 @@ static const GameNular* GetExtNular(int& count)
         // todo: maybe this shouldn't be designed as a script command
         GameNular(GameNothing, "playerClearInjured", PlayerClearInjured),
         GameNular(GameScalar, "usedVersion", UsedVersion),
+        GameNular(GameString,"pressingKey",KeyPressing),
     };
     count = sizeof(ExtNular) / sizeof(*ExtNular);
     return ExtNular;
