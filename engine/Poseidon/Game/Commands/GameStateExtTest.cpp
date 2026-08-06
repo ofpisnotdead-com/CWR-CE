@@ -1115,6 +1115,23 @@ GameValue TriSelectListByData(const GameState* /*state*/, GameValuePar arg)
     return GameValue(false);
 }
 
+GameValue TriRemoveNestedControl(const GameState* /*state*/, GameValuePar arg)
+{
+    const int idc = static_cast<int>(static_cast<GameScalarType>(arg));
+    auto* display = GetActiveDisplayForSQF();
+    if (!display)
+        return GameValue(false);
+
+    const auto& objects = display->GetObjects();
+    for (int i = 0; i < objects.Size(); ++i)
+    {
+        auto* container = dynamic_cast<ControlObjectContainer*>(objects[i].operator->());
+        if (container && container->GetCtrl(idc))
+            return GameValue(container->RemoveControl(idc));
+    }
+    return GameValue(false);
+}
+
 static GameValue TriSendKeyImpl(int sc, int mods)
 {
     LOG_INFO(Core, "[tri] triSendKey scancode=0x{:x} mods=0x{:x}", sc, mods);

@@ -141,6 +141,7 @@ GameValue TriSelectList(const GameState*, GameValuePar);
 GameValue TriSelectListByData(const GameState*, GameValuePar);
 GameValue TriListSel(const GameState*, GameValuePar);
 GameValue TriAssertListSelAtLeast(const GameState*, GameValuePar);
+GameValue TriRemoveNestedControl(const GameState*, GameValuePar);
 GameValue TriSendKey(const GameState*, GameValuePar);
 GameValue TriSendKeyArr(const GameState*, GameValuePar);
 GameValue TriSendText(const GameState*, GameValuePar);
@@ -2987,6 +2988,7 @@ INIT_MODULE(GameStateExtTest, 3)
     GGameState.NewFunction(GameFunction(GameBool, "triSelectList", TriSelectList, GameArray));
     GGameState.NewFunction(GameFunction(GameBool, "triSelectListByData", TriSelectListByData, GameArray));
     GGameState.NewFunction(GameFunction(GameScalar, "triListSel", TriListSel, GameScalar));
+    GGameState.NewFunction(GameFunction(GameBool, "triRemoveNestedControl", TriRemoveNestedControl, GameScalar));
     GGameState.NewFunction(GameFunction(GameBool, "triSendKey", TriSendKey, GameScalar));
     GGameState.NewFunction(GameFunction(GameBool, "triSendKey", TriSendKeyArr, GameArray));
     GGameState.NewFunction(GameFunction(GameString, "triEndMission", TriEndMission, GameString));

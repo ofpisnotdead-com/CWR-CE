@@ -1,0 +1,3 @@
+tags = ["ui", "main-menu", "input"]
+timeout = 120
+script = "tests/integration/ui/main_menu/custom_arcade_tree_shortcuts.test.sqf"
