@@ -57,7 +57,8 @@ class Person: public VehicleSupply
 	virtual void KilledBy( EntityAI *owner );
 
 	bool QIsManual() const override;
-	void SetRemotePlayer(int player) {_remotePlayer = player;}
+	void SetRemotePlayer(int player);
+	void ApplyIdentity();
 	int GetRemotePlayer() const {return _remotePlayer;}
 	bool IsRemotePlayer() const {return !IsLocal() && _remotePlayer != 1;}
 	bool IsNetworkPlayer() const;

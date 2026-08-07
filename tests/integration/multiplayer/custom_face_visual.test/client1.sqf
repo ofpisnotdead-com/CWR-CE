@@ -1,9 +1,13 @@
 triAssertNgsClient 14
 triAssertMissionPlayable
 triAssertNetworkAssetExistsForRole ["playerFace", 1, "face.jpg"]
-triAssertEq [(triSetView [6719.005, 83.012, 5421.118, 0, 0, -1]), "OK"]
-triSimFrames 10
-triScreenshot "client1_custom_face"
-triAssertLt [(triGetPixelMaxChannel [0.43, 0.20]), 230]
-triAssertLt [(triGetPixelMaxChannel [0.45, 0.22]), 160]
+triAssertEq [(triSetRoleFaceView [1, 0.6]), "OK"]
+triSimFrames 2
+triAssertIncludes [(triRoleFaceTexture 1), "tmp/players/"]
+triAssertIncludes [(triRoleFaceTexture 1), "face.jpg"]
+triAssertEq [triPauseGame, "OK"]
+triAssertEq [(triSetRoleFaceView [1, 0.6]), "OK"]
+triWaitFrames 2
+triAssertEq [(triAssertRegionHasColor [0.42, 0.42, 0.58, 0.65, 205, 85, 85, 60]), "OK"]
 triClearView
+triAssertEq [triUnpauseGame, "OK"]

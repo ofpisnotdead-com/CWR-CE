@@ -998,15 +998,22 @@ static GameValue TriSetPersonFaceView(Person* player, float distance)
     if (!player)
         return GameValue("FAIL:no_player");
 
-    Vector3 forward = player->GetEyeDirection();
+    if (Man* man = dyn_cast<Man>(player))
+    {
+        if (stricmp(man->GetCurrentMove(), "EffectStandStill") != 0)
+            man->SwitchMove("EffectStandStill");
+        man->SetMimic("Default");
+    }
+
+    Vector3 forward = player->Direction();
     if (forward.SquareSize() < 1e-6f)
-        forward = player->Direction();
+        forward = player->GetEyeDirection();
     if (forward.SquareSize() < 1e-6f)
         return GameValue("FAIL:no_player_direction");
     forward = forward.Normalized();
 
     Man* man = dyn_cast<Man>(player);
-    const Vector3 target = man ? man->PositionModelToWorld(man->GetHeadCenter()) : player->CameraPosition();
+    const Vector3 target = man ? man->CalculateCameraPosition(man->Transform()) : player->CameraPosition();
     const Vector3 pos = target + forward * std::max(distance, 0.1f);
     const Vector3 dir = (target - pos).Normalized();
     World_SetTriViewOverride(pos, dir, VUp);
