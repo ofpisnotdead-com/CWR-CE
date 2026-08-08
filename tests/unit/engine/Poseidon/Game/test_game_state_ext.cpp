@@ -337,6 +337,7 @@ TEST_CASE("VBS-derived functions remain registered in GGameState", "[game][gameS
     REQUIRE(ContainsName(functions, "VBS_kills"));
     REQUIRE(ContainsName(functions, "VBS_killed"));
     REQUIRE(ContainsName(functions, "VBS_injuries"));
+    REQUIRE(ContainsName(functions, "getUnitLoadout"));
     REQUIRE(ContainsName(functions, "createGuardedPoint"));
     REQUIRE(ContainsName(functions, "deleteWaypoint"));
     REQUIRE(ContainsName(operators, "saveConfig"));
@@ -347,6 +348,7 @@ TEST_CASE("VBS-derived functions remain registered in GGameState", "[game][gameS
     REQUIRE(ContainsName(operators, "triggerAttachObject"));
     REQUIRE(ContainsName(operators, "triggerAttachVehicle"));
     REQUIRE(ContainsName(operators, "setEffectCondition"));
+    REQUIRE(ContainsName(operators, "setUnitLoadout"));
     REQUIRE(ContainsName(operators, "addWaypoint"));
 }
 
