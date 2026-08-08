@@ -2,6 +2,7 @@
 #include <Poseidon/UI/Options/OptionsShell.hpp>
 
 #include <Poseidon/Core/Global.hpp>
+#include <Poseidon/Graphics/Core/Engine.hpp>
 #include <Poseidon/UI/Settings/GraphicsApply.hpp>
 #include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
@@ -17,23 +18,46 @@ namespace Poseidon
 
 namespace
 {
+// labelEn / descEn render when the key is missing from the loaded data package.
 struct GraphicsRowText
 {
     const char* label;
     const char* desc;
+    const char* labelEn;
+    const char* descEn;
 };
 const GraphicsRowText kRows[] = {
-    {"STR_DISP_MAIN_OPT_GRAPHICS_QUALITY_PRESET", "STR_DISP_MAIN_OPT_GRAPHICS_QUALITY_PRESET_DESC"},
-    {"STR_DISP_MAIN_OPT_GRAPHICS_TERRAIN_DETAIL", "STR_DISP_MAIN_OPT_GRAPHICS_TERRAIN_DETAIL_DESC"},
-    {"STR_DISP_MAIN_OPT_GRAPHICS_OBJECT_LOD", "STR_DISP_MAIN_OPT_GRAPHICS_OBJECT_LOD_DESC"},
-    {"STR_DISP_MAIN_OPT_GRAPHICS_SHADOW_QUALITY", "STR_DISP_MAIN_OPT_GRAPHICS_SHADOW_QUALITY_DESC"},
-    {"STR_DISP_MAIN_OPT_GRAPHICS_PARTICLES", "STR_DISP_MAIN_OPT_GRAPHICS_PARTICLES_DESC"},
-    {"STR_DISP_MAIN_OPT_GRAPHICS_VSYNC", "STR_DISP_MAIN_OPT_GRAPHICS_VSYNC_DESC"},
-    {"STR_DISP_MAIN_OPT_GRAPHICS_FPS_CAP", "STR_DISP_MAIN_OPT_GRAPHICS_FPS_CAP_DESC"},
-    {"STR_DISP_MAIN_OPT_GRAPHICS_BRIGHTNESS", "STR_DISP_MAIN_OPT_GRAPHICS_BRIGHTNESS_DESC"},
-    {"STR_DISP_MAIN_OPT_GRAPHICS_GAMMA", "STR_DISP_MAIN_OPT_GRAPHICS_GAMMA_DESC"},
+    {"STR_DISP_MAIN_OPT_GRAPHICS_QUALITY_PRESET", "STR_DISP_MAIN_OPT_GRAPHICS_QUALITY_PRESET_DESC", "Quality Preset",
+     "Sets the four quality tiers below to a known bundle. Touching any tier row drops the preset to Custom."},
+    {"STR_DISP_MAIN_OPT_GRAPHICS_TERRAIN_DETAIL", "STR_DISP_MAIN_OPT_GRAPHICS_TERRAIN_DETAIL_DESC", "Terrain Detail",
+     "Terrain mesh density. Lower means a coarser ground silhouette but cheaper rendering."},
+    {"STR_DISP_MAIN_OPT_GRAPHICS_OBJECT_LOD", "STR_DISP_MAIN_OPT_GRAPHICS_OBJECT_LOD_DESC", "Object LOD",
+     "Bias for entity LOD selection. Higher means finer geometry at the same distance."},
+    {"STR_DISP_MAIN_OPT_GRAPHICS_SHADOW_QUALITY", "STR_DISP_MAIN_OPT_GRAPHICS_SHADOW_QUALITY_DESC", "Shadow Quality",
+     "Whether dynamic objects and vehicles cast shadows."},
+    {"STR_DISP_MAIN_OPT_GRAPHICS_PARTICLES", "STR_DISP_MAIN_OPT_GRAPHICS_PARTICLES_DESC", "Particles & Volumetrics",
+     "Cloudlets smoke dust and muzzle flashes."},
+    {"STR_DISP_MAIN_OPT_GRAPHICS_VSYNC", "STR_DISP_MAIN_OPT_GRAPHICS_VSYNC_DESC", "VSync",
+     "Synchronise frame presentation to the monitor refresh. Adaptive falls back to On when the GPU cannot keep up."},
+    {"STR_DISP_MAIN_OPT_GRAPHICS_FPS_CAP", "STR_DISP_MAIN_OPT_GRAPHICS_FPS_CAP_DESC", "FPS Cap",
+     "Limits how fast frames are drawn. Native follows your monitor's refresh rate. Unlimited keeps a 300 FPS "
+     "ceiling."},
+    {"STR_DISP_MAIN_OPT_GRAPHICS_BRIGHTNESS", "STR_DISP_MAIN_OPT_GRAPHICS_BRIGHTNESS_DESC", "Brightness",
+     "Uniform multiplier in the post pass."},
+    {"STR_DISP_MAIN_OPT_GRAPHICS_GAMMA", "STR_DISP_MAIN_OPT_GRAPHICS_GAMMA_DESC", "Gamma", "Display LUT gamma curve."},
+    {"STR_DISP_MAIN_OPT_GRAPHICS_ADVANCED", "", "Advanced", ""},
+    {"STR_DISP_MAIN_OPT_GRAPHICS_ANTIALIASING", "STR_DISP_MAIN_OPT_GRAPHICS_ANTIALIASING_DESC", "Anti-aliasing",
+     "Multisample anti-aliasing on the frame target. Higher sample counts smooth polygon edges at a GPU cost."},
+    {"STR_DISP_MAIN_OPT_GRAPHICS_SUPERSAMPLING", "STR_DISP_MAIN_OPT_GRAPHICS_SUPERSAMPLING_DESC", "Supersampling",
+     "Renders the whole frame above window resolution and downsamples it. The strongest cure for sub-pixel shimmer "
+     "and the most expensive."},
+    {"STR_DISP_MAIN_OPT_GRAPHICS_MULTITEXTURING", "STR_DISP_MAIN_OPT_GRAPHICS_MULTITEXTURING_DESC", "Multitexturing",
+     "Detail and specular texture stages on terrain and objects. Off falls back to the base texture like the "
+     "original compatibility switch."},
 };
 constexpr int kFpsCapValues[] = {0, 30, 60, 90, 120, 144, 240};
+constexpr int kMsaaValues[] = {0, 2, 4, 8};
+constexpr float kRenderScaleValues[] = {1.0f, 1.25f, 1.5f, 1.75f, 2.0f};
 
 // Brightness 0.4 .. 1.8 → slider 0..100; Gamma 0.5 .. 2.3 → slider 0..100.
 int FloatToSlider(float v, float lo, float hi)
@@ -107,6 +131,44 @@ int GraphicsPage::FpsCapValueToIndex(int fps)
     return FpsValueToIndex(fps);
 }
 
+int GraphicsPage::MsaaSamplesToIndex(int samples)
+{
+    for (int i = 0; i < (int)(sizeof(kMsaaValues) / sizeof(int)); ++i)
+        if (kMsaaValues[i] == samples)
+            return i;
+    return 0;
+}
+
+int GraphicsPage::MsaaIndexToSamples(int index)
+{
+    if (index < 0 || index >= (int)(sizeof(kMsaaValues) / sizeof(int)))
+        return 0;
+    return kMsaaValues[index];
+}
+
+int GraphicsPage::RenderScaleToIndex(float scale)
+{
+    int best = 0;
+    float bestDiff = std::fabs(scale - kRenderScaleValues[0]);
+    for (int i = 1; i < (int)(sizeof(kRenderScaleValues) / sizeof(float)); ++i)
+    {
+        const float diff = std::fabs(scale - kRenderScaleValues[i]);
+        if (diff < bestDiff)
+        {
+            best = i;
+            bestDiff = diff;
+        }
+    }
+    return best;
+}
+
+float GraphicsPage::RenderScaleIndexToValue(int index)
+{
+    if (index < 0 || index >= (int)(sizeof(kRenderScaleValues) / sizeof(float)))
+        return 1.0f;
+    return kRenderScaleValues[index];
+}
+
 const char* GraphicsPage::CloseLabel()
 {
     return LocalizeString("STR_DISP_CLOSE");
@@ -120,16 +182,16 @@ const char* GraphicsPage::CloseDescription()
 const char* GraphicsPage::GraphicsProvider::RowLabel(int row) const
 {
     static_assert(sizeof(kRows) / sizeof(kRows[0]) == kRowCount, "GraphicsPage row table out of sync with kRowCount");
-    if (row >= 0 && row < kRowCount)
-        return LocalizeString(kRows[row].label);
-    return "";
+    if (row < 0 || row >= kRowCount)
+        return "";
+    return LocalizeStringWithFallback(kRows[row].label, kRows[row].labelEn);
 }
 
 const char* GraphicsPage::GraphicsProvider::RowDescription(int row) const
 {
-    if (row >= 0 && row < kRowCount)
-        return LocalizeString(kRows[row].desc);
-    return "";
+    if (row < 0 || row >= kRowCount)
+        return "";
+    return LocalizeStringWithFallback(kRows[row].desc, kRows[row].descEn);
 }
 
 OptionsScrollList::RowDef GraphicsPage::GraphicsProvider::RowFor(int row) const
@@ -154,8 +216,25 @@ OptionsScrollList::RowDef GraphicsPage::GraphicsProvider::RowFor(int row) const
             return {572, nullptr, -1}; // slider
         case kRowGamma:
             return {582, nullptr, -1}; // slider
+        case kRowAdvanced:
+            return {592, nullptr, 0};
+        case kRowAntiAliasing:
+            return {602, m_page->m_msaaCStrs.data(), 4};
+        case kRowSupersampling:
+            return {612, m_page->m_renderScaleCStrs.data(), 5};
+        case kRowMultitexturing:
+            return {622, m_page->m_offOnCStrs.data(), 2};
     }
     return {-1, nullptr, 0};
+}
+
+OptionsScrollList::Kind GraphicsPage::GraphicsProvider::RowKind(int row) const
+{
+    if (row == kRowAdvanced)
+        return OptionsScrollList::KindHeader;
+    if (row == kRowMultitexturing)
+        return OptionsScrollList::KindBoolean;
+    return OptionsScrollList::Provider::RowKind(row);
 }
 
 int GraphicsPage::GraphicsProvider::RowValue(int row) const
@@ -192,6 +271,12 @@ int GraphicsPage::GraphicsProvider::RowValue(int row) const
                     return 2;
             }
         }
+        case kRowAntiAliasing:
+            return GraphicsPage::MsaaSamplesToIndex(c.msaaSamples);
+        case kRowSupersampling:
+            return GraphicsPage::RenderScaleToIndex(c.renderScale);
+        case kRowMultitexturing:
+            return c.multitexturing ? 1 : 0;
         case kRowVsync:
             return (int)c.vsync;
         case kRowFpsCap:
@@ -276,6 +361,15 @@ void GraphicsPage::GraphicsProvider::SetRowValue(int row, int v)
                     break;
             }
             break;
+        case kRowAntiAliasing:
+            c.msaaSamples = GraphicsPage::MsaaIndexToSamples(v);
+            break;
+        case kRowSupersampling:
+            c.renderScale = GraphicsPage::RenderScaleIndexToValue(v);
+            break;
+        case kRowMultitexturing:
+            c.multitexturing = v != 0;
+            break;
         case kRowVsync:
             if (v >= 0 && v <= 2)
                 c.vsync = static_cast<GraphicsConfig::VsyncMode>(v);
@@ -356,6 +450,26 @@ void GraphicsPage::RefreshLocalizedChoices()
     for (size_t i = 0; i < m_particlesLabels.size(); ++i)
         m_particlesCStrs[i] = m_particlesLabels[i].c_str();
 
+    m_msaaLabels[0] = LocalizeString("STR_DISP_MAIN_OPT_VALUE_OFF");
+    m_msaaLabels[1] = "2x";
+    m_msaaLabels[2] = "4x";
+    m_msaaLabels[3] = "8x";
+    for (size_t i = 0; i < m_msaaLabels.size(); ++i)
+        m_msaaCStrs[i] = m_msaaLabels[i].c_str();
+
+    m_renderScaleLabels[0] = LocalizeString("STR_DISP_MAIN_OPT_VALUE_OFF");
+    m_renderScaleLabels[1] = "125%";
+    m_renderScaleLabels[2] = "150%";
+    m_renderScaleLabels[3] = "175%";
+    m_renderScaleLabels[4] = "200%";
+    for (size_t i = 0; i < m_renderScaleLabels.size(); ++i)
+        m_renderScaleCStrs[i] = m_renderScaleLabels[i].c_str();
+
+    m_offOnLabels[0] = LocalizeString("STR_DISP_MAIN_OPT_VALUE_OFF");
+    m_offOnLabels[1] = LocalizeString("STR_DISP_MAIN_OPT_VALUE_ON");
+    for (size_t i = 0; i < m_offOnLabels.size(); ++i)
+        m_offOnCStrs[i] = m_offOnLabels[i].c_str();
+
     m_vsyncLabels[0] = LocalizeString("STR_DISP_MAIN_OPT_VALUE_OFF");
     m_vsyncLabels[1] = LocalizeString("STR_DISP_MAIN_OPT_VALUE_ON");
     m_vsyncLabels[2] = LocalizeString("STR_DISP_MAIN_OPT_VALUE_ADAPTIVE");
@@ -381,6 +495,11 @@ void GraphicsPage::Unmount(OptionsShell& shell)
     // committed since the user explicitly visited the screen.
     if (!m_cfg.Save(GraphicsCfgPath()))
         LOG_WARN(Graphics, "GraphicsPage::Unmount: failed to write graphics.cfg");
+
+    // Multitexturing also lives in the per-profile user params that
+    // Engine::LoadConfig replays on a profile switch; both stores must agree.
+    if (GEngine)
+        GEngine->SaveConfig();
 
     ScrollListPage::Unmount(shell);
 }

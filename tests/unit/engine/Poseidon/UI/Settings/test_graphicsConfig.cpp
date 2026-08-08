@@ -199,6 +199,10 @@ TEST_CASE("GraphicsConfig: Save then Load round-trips every field", "[Settings][
     src.particlesQuality = GraphicsConfig::TierLow;
     src.vsync = GraphicsConfig::VsyncAdaptive;
     src.fpsCap = 144;
+    src.msaaSamples = 4;
+    src.renderScale = 1.5f;
+    src.alphaToCoverage = false;
+    src.multitexturing = false;
     src.brightness = 1.2f;
     src.gamma = 0.9f;
     REQUIRE(src.Save(path));
@@ -212,6 +216,10 @@ TEST_CASE("GraphicsConfig: Save then Load round-trips every field", "[Settings][
     CHECK(dst.particlesQuality == src.particlesQuality);
     CHECK(dst.vsync == src.vsync);
     CHECK(dst.fpsCap == src.fpsCap);
+    CHECK(dst.msaaSamples == src.msaaSamples);
+    CHECK(dst.renderScale == src.renderScale);
+    CHECK(dst.alphaToCoverage == src.alphaToCoverage);
+    CHECK(dst.multitexturing == src.multitexturing);
     CHECK(dst.brightness == src.brightness);
     CHECK(dst.gamma == src.gamma);
 }

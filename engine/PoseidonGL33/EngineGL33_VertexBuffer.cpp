@@ -530,12 +530,21 @@ void EngineGL33::CaptureScreenshotIfPending()
     RString path = _pendingScreenshotPath;
     _pendingScreenshotPath = "";
 
-    // With SSAA the final image lives in the default framebuffer after the
-    // resolve (BackToFront resolves before calling this); read window-sized.
-    GLint viewport[4];
-    glGetIntegerv(GL_VIEWPORT, viewport);
-    const int w = viewport[2];
-    const int h = viewport[3];
+    // glReadPixels rejects a multisampled read buffer, so the scaled frame
+    // target is never the source.  BackToFront resolves into the default
+    // framebuffer and draws gamma + overlay on top before calling this, and
+    // resolving a second time would overwrite that composite; only a mid-frame
+    // flush still has the scaled target bound.
+    GLint drawFbo = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawFbo);
+    const bool onScaledTarget = SSAAActive() && drawFbo != 0;
+    if (onScaledTarget)
+        ResolveSSAAToDefault();
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+
+    int w = _w, h = _h;
+    if (_sdlWindow)
+        SDL_GetWindowSizeInPixels(_sdlWindow, &w, &h);
     if (w <= 0 || h <= 0)
         return;
 
@@ -557,6 +566,10 @@ void EngineGL33::CaptureScreenshotIfPending()
         }
     }
     ScreenshotWriter::WriteRGB(path, w, h, rgb.data());
+
+    // Hand the scaled target back so the rest of the frame keeps drawing into it.
+    if (onScaledTarget)
+        BindFrameRenderTarget();
 }
 
 void EngineGL33::BackToFront()
