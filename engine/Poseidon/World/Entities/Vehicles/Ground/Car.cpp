@@ -519,6 +519,12 @@ void Car::Animate(int level)
 
     DammageAnimation(level);
 
+    // NOTE: deliberately CPU-only (no skinTarget passed to Apply). The Car/Scud
+    // shape mixes this skeletal scud animation with CPU direct-selection vertex
+    // animation (wheels, driving wheel, turret, damage — the *.Apply calls
+    // above). GPU skinning uploads a static bind-pose VBO and skins only from the
+    // bone palette, which would freeze those non-skeletal deformations. Its
+    // skeleton is therefore Prepared with gpuSkin=false, and Skin() stays empty.
     if (_scudState >= 1 && _scudState < 2 && Type()->_scudLaunch)
     {
         float time = _scudState - 1;

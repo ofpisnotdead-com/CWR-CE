@@ -252,6 +252,13 @@ class Object: public NetworkObject, public FrameBase, public IAnimator
 	// quick link to object shadow
 	SRef<ShadowIndex> _shadow;
 
+	// Retained per-frame GPU-skinning bone palette (model-space bone matrices),
+	// built during Animate and consumed by the skinned view-LOD draw via
+	// GetBonePalette. Shared by every skinned animator (infantry and skeletal
+	// vehicles/props). Empty while GPU skinning is off, so the default CPU path
+	// pays nothing.
+	AutoArray<Matrix4> _bonePalette;
+
 	public:
 
 	Object(LODShapeWithShadow *shape, int id);
@@ -501,6 +508,18 @@ class Object: public NetworkObject, public FrameBase, public IAnimator
 		int spec, int material, int from, int to
 	) const override;
 	bool GetAnimated(const Shape &src) const override;
+	// GPU-skinning: return the palette retained this frame by Animate. Empty when
+	// GPU skinning is off or there is no active animation this frame — the skinned
+	// draw then falls back to the static bind pose. See RetainBonePalette.
+	void GetBonePalette(const Matrix4 *&mats, int &count) const override
+	{
+		mats = _bonePalette.Data();
+		count = _bonePalette.Size();
+	}
+	// Copy this frame's bone matrices into the retained palette so the skinned
+	// draw can upload them. Reallocates only on a bone-count change (constant per
+	// skeleton), avoiding per-frame heap churn.
+	void RetainBonePalette(const Matrix4 *mats, int count);
 
 	// Get/Set object shape
 	__forceinline LODShapeWithShadow *GetShape() const {return _shape;}

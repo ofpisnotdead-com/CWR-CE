@@ -488,6 +488,14 @@ class Engine : public IGraphicsEngine
     virtual void BeginMeshTL(const Shape& sMesh, int spec, bool dynamic = false) {} // convert all mesh vertices
     virtual void EndMeshTL(const Shape& sMesh) {}                                   // forget mesh
     virtual void DrawSectionTL(const Shape& sMesh, int beg, int end) {}
+    // Upload the per-object bone palette for the next skinned mesh draw (model-
+    // space bone matrices).  The backend converts each Matrix4 into its own GPU
+    // matrix layout (as it does for the world matrix).  No-op without skinning.
+    virtual void UploadBonePalette(const Matrix4* mats, int count) {}
+    // Route the following mesh section draws through the GPU-skinning vertex
+    // shader (on) and back to the normal mesh shader (off).  Bracket one skinned
+    // shape's section draws.  No-op on backends without skinning.
+    virtual void SelectSkinnedMesh(bool on) {}
 
     virtual int HowLongIdle() { return 0; }
     virtual size_t GetDrawItemCount() const { return 0; }

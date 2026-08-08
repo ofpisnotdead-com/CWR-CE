@@ -509,6 +509,9 @@ class Man: public Person
 	Matrix4 _legTrans;
 	bool _headTransIdent,_gunTransIdent;
 
+	// GPU-skinning bone palette is retained on the shared Object base (via
+	// RetainBonePalette / GetBonePalette); Man::Animate fills it below.
+
 	Vector3 _aimingPositionWorld;
 	Vector3 _cameraPositionWorld;
 
