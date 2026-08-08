@@ -5,6 +5,7 @@ set(POSEIDON_BASE_TEST_SOURCES
     Algorithms/test_bsearch.cpp
     Algorithms/test_crc32.cpp
     Algorithms/test_qsort.cpp
+    Algorithms/test_radixsort.cpp
     Algorithms/test_spline.cpp
     Enums/test_enumNames.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/IO/Filesystem/test_dir_scanner.cpp

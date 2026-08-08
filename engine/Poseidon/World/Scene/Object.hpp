@@ -245,6 +245,11 @@ class Object: public NetworkObject, public FrameBase, public IAnimator
 	bool _isDestroyed:1; // object is already destructed
 	bool _static:1; // object is static (never changing position)
 
+	// Cached animated bbox for static terrain-conform objects (invalidated on Move); level -1 = invalid.
+	int _animBBoxLevel = -1;
+	Vector3 _animBBoxMin;
+	Vector3 _animBBoxMax;
+
 	SRef<DammageRegions> _dammage; // dammage information
 
 	// optimizes inserting/deleting from the list of objects drawn during Scene rendering
@@ -288,6 +293,12 @@ class Object: public NetworkObject, public FrameBase, public IAnimator
 	virtual void Animate( int level );
 	virtual void Deanimate( int level );
 
+protected:
+	// Snap ClipLand vertices onto the landscape surface, or restore them.
+	void ApplyLandClip( int level );
+	void RestoreLandClip( int level );
+public:
+
 	// Get min-max of object after animate. Default (generic) implementation may be slow when shape is complex.
 	virtual void AnimatedMinMax( int level, Vector3 *minMax );
 	// Get bounding sphere of object after animate. Default (generic) implementation may be slow when shape is complex.
@@ -295,6 +306,27 @@ class Object: public NetworkObject, public FrameBase, public IAnimator
 
 	virtual bool IsAnimated( int level ) const; // appearence changed with Animate
 	virtual bool IsAnimatedShadow( int level ) const; // shadow changed with Animate
+
+	// True when Animate() rewrites the vertices of the shape shared by every object of this type.
+	// Only one such object can occupy the shared vertex buffer at a time, so these must be drawn one by one.
+	virtual bool DeformsSharedShape( int level ) const;
+
+	// True when this LOD level's geometry is snapped to the landscape surface.
+	virtual bool HasLandClip( int level ) const;
+
+	// How Animate() snaps the shape onto the landscape.
+	enum LandClipMode
+	{
+		LandClipNone = 0,
+		// Object::ApplyLandClip, per-vertex ClipLandKeep/ClipLandOn.
+		LandClipVertex = 1,
+		// ForestPlain::Animate, whole object on one land square plane.
+		LandClipPlane = 2,
+	};
+	virtual LandClipMode GetLandClipMode( int level ) const;
+
+	// True while drawing an object whose land conform the render backend performs itself.
+	static bool RenderHandlesLandClip();
 
 	// Change object position. Used when object is already present in landscape.
 	virtual void Move(Matrix4Par transform);

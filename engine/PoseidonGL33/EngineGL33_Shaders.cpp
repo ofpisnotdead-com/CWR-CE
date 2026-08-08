@@ -1,6 +1,7 @@
 #include <Poseidon/Core/Application.hpp>
 #include <PoseidonGL33/EngineGL33.hpp>
 #include <PoseidonGL33/GL33BindCache.hpp>
+#include <PoseidonGL33/ShaderSources.hpp>
 #include <Poseidon/Core/Global.hpp>
 #include <Poseidon/World/Scene/Scene.hpp>
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
@@ -16,687 +17,10 @@
 #include <sstream>
 #include <map>
 #include <vector>
+#include <string_view>
+#include <cstring>
 
-// Screen-space vertex shader (pre-transformed TLVertex).
-// Attribute layout matches VAO: pos(vec3)@0, rhw(float)@1, color@2, specular@3, uv0@4, uv1@5
-static const char s_vsScreenGLSL[] = R"(#version 330 core
-// Shared VS UBO; vsScreen reads vpScale at slot 21 (offset 336 bytes).
-// The 21-slot prefix is laid out so the byte offsets match what
-// vsTransform reads; vsScreen ignores those fields, but std140
-// requires the layout to match the shared binding's contents.
-layout(std140) uniform VSConstants {
-    mat4 _pad_proj;     // slots 0..3 — VSTransform's projection
-    mat4 _pad_view;     // slots 4..7
-    mat4 _pad_world;    // slots 8..11
-    vec4 _pad_sunDir;   // slot 12
-    vec4 _pad_ambient;  // 13
-    vec4 _pad_diffuse;  // 14
-    vec4 _pad_emissive; // 15
-    vec4 _pad_fog;      // 16
-    vec4 _pad_camPos;   // 17
-    vec4 _pad_spec;     // 18
-    vec4 _pad_specEn;   // 19
-    vec4 _pad_sunEn;    // 20
-    vec4 vpScale;       // 21 — {2/width, 2/height, 0, 0}
-};
-
-layout(location = 0) in vec3 aPos;
-layout(location = 1) in float aRhw;
-layout(location = 2) in vec4 aColor;
-layout(location = 3) in vec4 aSpecular;
-layout(location = 4) in vec2 aUV0;
-layout(location = 5) in vec2 aUV1;
-
-out vec4 vColor;
-out vec4 vSpecColor;
-out vec2 vUV0;
-out vec2 vUV1;
-out float vFogTC;
-out vec3 vWorldRel;
-
-void main() {
-    float w = 1.0 / aRhw;
-    gl_Position.x = (aPos.x * vpScale.x - 1.0) * w;
-    gl_Position.y = (1.0 - aPos.y * vpScale.y) * w;
-    gl_Position.z = aPos.z * w;
-    gl_Position.w = w;
-    vColor = aColor;
-    vSpecColor = aSpecular;
-    vUV0 = aUV0;
-    vUV1 = aUV1;
-    vFogTC = aSpecular.a;
-    vWorldRel = vec3(0.0); // screen draws are never shadow-mapped
-}
-)";
-
-// 3D mesh vertex shader with lighting, fog, and texture generation.
-// Separate Proj/View/World transform.
-static const char s_vsTransformGLSL[] = R"(#version 330 core
-layout(std140) uniform VSConstants {
-    mat4 proj;          // c0-c3
-    mat4 view;          // c4-c7
-    mat4 world;         // c8-c11
-    vec4 sunDir;        // c12
-    vec4 ambient;       // c13
-    vec4 diffuse;       // c14
-    vec4 emissive;      // c15
-    vec4 fogParam;      // c16: {start, invRange, enabled, 0}
-    vec4 camPos;        // c17
-    vec4 specular;      // c18: rgb + power(w)
-    vec4 specEn;        // c19: {enabled, 0, 0, 0}
-    vec4 sunEn;         // c20: {enabled, 0, 0, 0}
-    vec4 vpScale;       // c21: {2/width, 2/height, 0, 0} — VSScreen only, declared here for layout parity
-    vec4 _pad22;
-    vec4 _pad23;
-    mat4 texMat0;       // c24-c27
-    mat4 texMat1;       // c28-c31
-    vec4 texCtrl;       // c32: {genTex0, genTex1, 0, 0}
-    vec4 lightCount;        // c33: x = active local light count
-    vec4 lightPos[8];       // c34-c41: xyz world pos, w = startAtten
-    vec4 lightDiffuse[8];   // c42-c49: diffuse * nightEffect
-    vec4 lightAmbient[8];   // c50-c57: ambient * nightEffect
-    vec4 localLightDir[8];  // c58-c65: xyz beam dir (world), w = isSpot
-    mat4 lightVP;           // c66-c69: shadow-map light view-projection (sampled per fragment)
-};
-
-// Per-instance world matrices (perf effort 08). Plain glDrawElements has
-// gl_InstanceID == 0, so slot 0 carries the classic single world matrix
-// and non-instanced draws are unchanged.
-layout(std140) uniform WorldInstances {
-    mat4 worldArr[256];
-};
-
-layout(location = 0) in vec3 pos;
-layout(location = 1) in vec3 normal;
-layout(location = 2) in vec2 uv;
-
-out vec4 vColor;
-out vec4 vSpecColor;
-out vec2 vUV0;
-out vec2 vUV1;
-out float vFogTC;
-out vec3 vWorldRel;
-
-void main() {
-    vec4 worldPos    = worldArr[gl_InstanceID] * vec4(pos, 1.0);
-    vec3 worldNormal = normalize(mat3(worldArr[gl_InstanceID]) * normal);
-    vec4 viewPos     = view * worldPos;
-    gl_Position      = proj * viewPos;
-    vWorldRel        = worldPos.xyz; // camera-relative world pos for cascade shadow lookup
-
-    float NdotL = max(0.0, dot(worldNormal, -sunDir.xyz));
-    vec4 litColor;
-    litColor.rgb = emissive.rgb + ambient.rgb * sunEn.x + diffuse.rgb * NdotL * sunEn.x;
-    litColor.a   = emissive.a   + ambient.a   * sunEn.x + diffuse.a   * NdotL * sunEn.x;
-
-    // Local lights (street lamps, vehicle headlights) — per-vertex contribution
-    // mirroring the legacy LightPoint::Apply / LightReflector::Apply.  toLight =
-    // lightPos - vertex (world space); diffuse uses the outward-normal convention
-    // of the sun term above.  Quadratic falloff past startAtten, cut off at 100x.
-    // Spotlights (localLightDir.w > 0.5) additionally gate by a cone factor: full
-    // inside cos 8deg, zero outside cos 12deg, linear in cos^2 between.
-    const float MIN_INSIDE2 = 0.95677279; // (cos 12deg)^2
-    const float MAX_INSIDE2 = 0.98063081; // (cos 8deg)^2
-    int nLights = int(lightCount.x);
-    for (int i = 0; i < nLights; i++)
-    {
-        vec3 toLight = lightPos[i].xyz - worldPos.xyz;
-        float size2 = dot(toLight, toLight);
-        float startAtten2 = lightPos[i].w * lightPos[i].w;
-        float endAtten2 = startAtten2 * 100.0;
-        if (size2 >= endAtten2)
-            continue;
-
-        float cone = 1.0;
-        if (localLightDir[i].w > 0.5)
-        {
-            // inside = (vertex - light) . beamDir; cos^2(angleFromAxis) = inside^2/size2
-            float inside = -dot(toLight, localLightDir[i].xyz);
-            if (inside <= 0.0)
-                continue;
-            float cos2 = (inside * inside) / size2;
-            if (cos2 < MIN_INSIDE2)
-                continue;
-            cone = clamp((cos2 - MIN_INSIDE2) / (MAX_INSIDE2 - MIN_INSIDE2), 0.0, 1.0);
-        }
-
-        float atten = (size2 >= startAtten2) ? (startAtten2 / size2) : 1.0;
-        float cosFi = dot(toLight, worldNormal);
-        vec3 contrib;
-        if (cosFi > 0.0)
-        {
-            cosFi *= inversesqrt(size2);
-            contrib = (lightDiffuse[i].rgb * cosFi + lightAmbient[i].rgb) * (atten * cone);
-        }
-        else
-        {
-            contrib = lightAmbient[i].rgb * atten;
-        }
-        litColor.rgb += contrib;
-    }
-
-    vColor = clamp(litColor, 0.0, 1.0);
-
-    vec3 spec = vec3(0.0);
-    if (specEn.x > 0.5 && sunEn.x > 0.0) {
-        vec3 viewDir = normalize(camPos.xyz - worldPos.xyz);
-        vec3 halfVec = normalize(-sunDir.xyz + viewDir);
-        float NdotH = max(0.0, dot(worldNormal, halfVec));
-        float specPow = max(1.0, specular.w);
-        spec = specular.rgb * pow(NdotH, specPow) * sunEn.x;
-    }
-    vSpecColor = vec4(clamp(spec, 0.0, 1.0), 0.0);
-
-    float dist = length(worldPos.xyz - camPos.xyz);
-    float fogFactor = clamp(1.0 - (dist - fogParam.x) * fogParam.y, 0.0, 1.0);
-    vFogTC = (fogParam.z > 0.5) ? fogFactor : 1.0;
-
-    vUV0 = (texCtrl.x > 0.5) ? (texMat0 * vec4(uv, 0, 1)).xy : uv;
-    vUV1 = (texCtrl.y > 0.5) ? (texMat1 * vec4(uv, 0, 1)).xy : uv;
-}
-)";
-
-// PSNormal — diffuse * texture + specular + fog + night vision
-static const char s_psNormalGLSL[] = R"(#version 330 core
-layout(std140) uniform PSConstants {
-    vec4 fogColor;    // c0
-    vec4 alphaRef;    // c1: {ref, enabled, alphaToCoverage, flatDebug}
-    vec4 shadowCtl;   // c2: {enable, bias, darkness, texelSize}
-    vec4 constColor; // c3: per-object IsColored tint (white = no-op)
-    vec4 _pad4;
-    vec4 _pad5;
-    vec4 _pad6;
-    vec4 rgbEyeCoef;  // c7
-    mat4 cascadeVP[4]; // c8-c23: per-cascade light view-projection
-    vec4 cascadeSplits;// c24: per-tier select distance (omni: radius; frustum: far eye-depth)
-    vec4 cascadeCtl;   // c25: {count, fadeRange, biasBase, omniCount}
-    vec4 camFwd;       // c26: camera forward (eye-depth = dot(vWorldRel, camFwd))
-};
-
-uniform sampler2D tex0;
-
-in vec4 vColor;
-in vec4 vSpecColor;
-in vec2 vUV0;
-in vec2 vUV1;
-in float vFogTC;
-
-uniform sampler2DArray shadowMap; // unit 2 — cascade depth-map array (unused unless shadowCtl.x>0.5)
-in vec3 vWorldRel;
-
-out vec4 fragColor;
-
-void main() {
-    // No gl_FragDepth — opaque draws use DepthMode::Normal (stencil
-    // ALWAYS+REPLACE 0).  Even if early-Z fires the stencil write
-    // before discard, REPLACE 0 to a stencil already 0 (cleared at
-    // frame start, never written non-zero outside the shadow
-    // accumulator pass) is idempotent.  Removing the late-test forcing
-    // lets early-Z and hierarchical-Z work — meaningful perf win on
-    // opaque-heavy scenes.
-    vec4 r0 = vColor * texture(tex0, vUV0);
-    r0 *= constColor; // per-object IsColored tint (opacity + fade); white = no-op
-    r0.rgb += vSpecColor.rgb;
-
-    if (shadowCtl.x > 0.5) {
-        // Tiered shadow maps: the first omniCount tiers are camera-centred spheres
-        // (selected by 3D distance, so a caster in ANY direction around the player —
-        // including behind the camera — casts into view); the rest are frustum
-        // slices reaching the far view distance (selected by eye-depth). Pick the
-        // tightest matching tier, then advance to the first tier whose projection is
-        // in bounds (coverage fallthrough, so a too-tight near tier never drops the
-        // shadow). 3x3-PCF the layer, cross-fade to the next tier over a band, fade
-        // at the far edge, and dim by the fog factor so distant shadows aren't harsh.
-        // cascadeCtl = {count, fadeRange, biasBase, omniCount}; cascadeSplits =
-        // per-tier select distance (omni: sphere radius; frustum: far eye-depth).
-        int nC = int(cascadeCtl.x);
-        int omniN = int(cascadeCtl.w);
-        float eyeDepth = dot(vWorldRel, camFwd.xyz);
-        float dist3D = length(vWorldRel);
-        int ci = nC;
-        for (int i = 0; i < 4; ++i) {
-            if (i >= nC) break;
-            float metric = (i < omniN) ? dist3D : eyeDepth;
-            if (metric <= cascadeSplits[i]) { ci = i; break; }
-        }
-        if (ci < nC) {
-            float ts = shadowCtl.w;
-            float prevEdge = (ci > 0) ? cascadeSplits[ci - 1] : 0.0;
-            float ciMetric = (ci < omniN) ? dist3D : eyeDepth;
-            float band = (cascadeSplits[ci] - prevEdge) * 0.15;
-            float bw = (ci + 1 < nC) ? clamp((ciMetric - (cascadeSplits[ci] - band)) / max(band, 0.001), 0.0, 1.0) : 0.0;
-            float litSum = 0.0;
-            float wSum = 0.0;
-            for (int p = 0; p < 4; ++p) {
-                int c = ci + p;
-                if (c >= nC) break;
-                // p0 = primary, p1 = blend partner; while nothing has covered yet a
-                // later p force-samples the next looser tier (coverage fallthrough).
-                float w = (p == 0) ? (1.0 - bw) : ((wSum <= 0.0) ? 1.0 : ((p == 1) ? bw : 0.0));
-                if (w <= 0.0) continue;
-                vec4 cp = cascadeVP[c] * vec4(vWorldRel, 1.0);
-                vec3 sc = cp.xyz / cp.w;
-                vec2 suv = sc.xy * 0.5 + 0.5;
-                if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && sc.z > 0.0 && sc.z < 1.0) {
-                    float bias = cascadeCtl.z * float(c + 1) * float(c + 1);
-                    float lit = 0.0;
-                    for (int dy = -1; dy <= 1; ++dy)
-                        for (int dx = -1; dx <= 1; ++dx)
-                            lit += (sc.z - bias > texture(shadowMap, vec3(suv + vec2(float(dx), float(dy)) * ts, float(c))).r) ? 0.0 : 1.0;
-                    litSum += w * (lit / 9.0);
-                    wSum += w;
-                }
-            }
-            if (wSum > 0.0) {
-                float lit = litSum / wSum;
-                float lastSplit = cascadeSplits[nC - 1];
-                float fade = clamp((lastSplit - eyeDepth) / max(cascadeCtl.y, 0.001), 0.0, 1.0);
-                float strength = (1.0 - lit) * fade * clamp(vFogTC, 0.0, 1.0); // dimmer in fog / far
-                r0.rgb *= mix(1.0, shadowCtl.z, strength);
-            }
-        }
-    }
-
-    if (alphaRef.z > 0.5) {
-        // Alpha-to-coverage: sharpen alpha around the cutout threshold so the
-        // MSAA resolve grades sub-pixel cutout features (fence wire, foliage)
-        // instead of the hard test keeping or killing the whole pixel.
-        float cov = clamp((r0.a - alphaRef.x) / max(fwidth(r0.a), 1e-4) + 0.5, 0.0, 1.0);
-        if (cov <= 0.0) discard;
-        r0.a = cov;
-    } else if (r0.a - alphaRef.x * alphaRef.y < 0.0) discard;
-
-    float luminance= clamp(dot(r0.rgb, rgbEyeCoef.rgb), 0.0, 1.0);
-    float nightBlend = clamp(luminance + rgbEyeCoef.a, 0.0, 1.0);
-    r0.rgb = mix(vec3(luminance), r0.rgb, nightBlend);
-
-    r0.rgb = mix(fogColor.rgb, r0.rgb, vFogTC);
-    fragColor = alphaRef.w > 0.5 ? vec4(1.0, 0.0, 0.0, 1.0) : r0;
-}
-)";
-
-// PSDetail — detail texturing (two texture samples, detail blend)
-static const char s_psDetailGLSL[] = R"(#version 330 core
-layout(std140) uniform PSConstants {
-    vec4 fogColor;
-    vec4 alphaRef;
-    vec4 shadowCtl;   // c2: {enable, bias, darkness, texelSize}
-    vec4 constColor; // c3: per-object IsColored tint (white = no-op)
-    vec4 _pad4;
-    vec4 _pad5;
-    vec4 _pad6;
-    vec4 rgbEyeCoef;
-    mat4 cascadeVP[4]; // c8-c23: per-cascade light view-projection
-    vec4 cascadeSplits;// c24: per-tier select distance (omni: radius; frustum: far eye-depth)
-    vec4 cascadeCtl;   // c25: {count, fadeRange, biasBase, omniCount}
-    vec4 camFwd;       // c26: camera forward (eye-depth = dot(vWorldRel, camFwd))
-};
-
-uniform sampler2D tex0;
-uniform sampler2D tex1;
-
-in vec4 vColor;
-in vec4 vSpecColor;
-in vec2 vUV0;
-in vec2 vUV1;
-in float vFogTC;
-
-uniform sampler2DArray shadowMap; // unit 2 — cascade depth-map array (unused unless shadowCtl.x>0.5)
-in vec3 vWorldRel;
-
-out vec4 fragColor;
-
-void main() {
-    // No gl_FragDepth — see PSNormal.
-    vec4 t0 = texture(tex0, vUV0);
-    vec4 t1 = texture(tex1, vUV1);
-    vec4 r0 = vColor * t0;
-    r0 *= constColor; // per-object IsColored tint (opacity + fade); white = no-op
-    r0.rgb *= t1.a * 2.0;
-    r0 += vSpecColor;
-
-    if (shadowCtl.x > 0.5) {
-        // Tiered shadow maps: the first omniCount tiers are camera-centred spheres
-        // (selected by 3D distance, so a caster in ANY direction around the player —
-        // including behind the camera — casts into view); the rest are frustum
-        // slices reaching the far view distance (selected by eye-depth). Pick the
-        // tightest matching tier, then advance to the first tier whose projection is
-        // in bounds (coverage fallthrough, so a too-tight near tier never drops the
-        // shadow). 3x3-PCF the layer, cross-fade to the next tier over a band, fade
-        // at the far edge, and dim by the fog factor so distant shadows aren't harsh.
-        // cascadeCtl = {count, fadeRange, biasBase, omniCount}; cascadeSplits =
-        // per-tier select distance (omni: sphere radius; frustum: far eye-depth).
-        int nC = int(cascadeCtl.x);
-        int omniN = int(cascadeCtl.w);
-        float eyeDepth = dot(vWorldRel, camFwd.xyz);
-        float dist3D = length(vWorldRel);
-        int ci = nC;
-        for (int i = 0; i < 4; ++i) {
-            if (i >= nC) break;
-            float metric = (i < omniN) ? dist3D : eyeDepth;
-            if (metric <= cascadeSplits[i]) { ci = i; break; }
-        }
-        if (ci < nC) {
-            float ts = shadowCtl.w;
-            float prevEdge = (ci > 0) ? cascadeSplits[ci - 1] : 0.0;
-            float ciMetric = (ci < omniN) ? dist3D : eyeDepth;
-            float band = (cascadeSplits[ci] - prevEdge) * 0.15;
-            float bw = (ci + 1 < nC) ? clamp((ciMetric - (cascadeSplits[ci] - band)) / max(band, 0.001), 0.0, 1.0) : 0.0;
-            float litSum = 0.0;
-            float wSum = 0.0;
-            for (int p = 0; p < 4; ++p) {
-                int c = ci + p;
-                if (c >= nC) break;
-                // p0 = primary, p1 = blend partner; while nothing has covered yet a
-                // later p force-samples the next looser tier (coverage fallthrough).
-                float w = (p == 0) ? (1.0 - bw) : ((wSum <= 0.0) ? 1.0 : ((p == 1) ? bw : 0.0));
-                if (w <= 0.0) continue;
-                vec4 cp = cascadeVP[c] * vec4(vWorldRel, 1.0);
-                vec3 sc = cp.xyz / cp.w;
-                vec2 suv = sc.xy * 0.5 + 0.5;
-                if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && sc.z > 0.0 && sc.z < 1.0) {
-                    float bias = cascadeCtl.z * float(c + 1) * float(c + 1);
-                    float lit = 0.0;
-                    for (int dy = -1; dy <= 1; ++dy)
-                        for (int dx = -1; dx <= 1; ++dx)
-                            lit += (sc.z - bias > texture(shadowMap, vec3(suv + vec2(float(dx), float(dy)) * ts, float(c))).r) ? 0.0 : 1.0;
-                    litSum += w * (lit / 9.0);
-                    wSum += w;
-                }
-            }
-            if (wSum > 0.0) {
-                float lit = litSum / wSum;
-                float lastSplit = cascadeSplits[nC - 1];
-                float fade = clamp((lastSplit - eyeDepth) / max(cascadeCtl.y, 0.001), 0.0, 1.0);
-                float strength = (1.0 - lit) * fade * clamp(vFogTC, 0.0, 1.0); // dimmer in fog / far
-                r0.rgb *= mix(1.0, shadowCtl.z, strength);
-            }
-        }
-    }
-
-    if (alphaRef.z > 0.5) {
-        // Alpha-to-coverage: sharpen alpha around the cutout threshold so the
-        // MSAA resolve grades sub-pixel cutout features (fence wire, foliage)
-        // instead of the hard test keeping or killing the whole pixel.
-        float cov = clamp((r0.a - alphaRef.x) / max(fwidth(r0.a), 1e-4) + 0.5, 0.0, 1.0);
-        if (cov <= 0.0) discard;
-        r0.a = cov;
-    } else if (r0.a - alphaRef.x * alphaRef.y < 0.0) discard;
-
-    float luminance = clamp(dot(r0.rgb, rgbEyeCoef.rgb), 0.0, 1.0);
-    float nightBlend = clamp(luminance + rgbEyeCoef.a, 0.0, 1.0);
-    r0.rgb = mix(vec3(luminance), r0.rgb, nightBlend);
-
-    r0.rgb = mix(fogColor.rgb, r0.rgb, vFogTC);
-    fragColor = alphaRef.w > 0.5 ? vec4(1.0, 0.0, 0.0, 1.0) : r0;
-}
-)";
-
-// PSGrass — grass blending with alpha from coefficients
-static const char s_psGrassGLSL[] = R"(#version 330 core
-layout(std140) uniform PSConstants {
-    vec4 fogColor;
-    vec4 alphaRef;
-    vec4 shadowCtl;   // c2: {enable, bias, darkness, texelSize}
-    vec4 constColor; // c3: per-object IsColored tint (white = no-op)
-    vec4 _pad4;
-    vec4 grassCoef1;
-    vec4 grassCoef2;
-    vec4 _pad7;
-    mat4 cascadeVP[4]; // c8-c23: per-cascade light view-projection
-    vec4 cascadeSplits;// c24: per-tier select distance (omni: radius; frustum: far eye-depth)
-    vec4 cascadeCtl;   // c25: {count, fadeRange, biasBase, omniCount}
-    vec4 camFwd;       // c26: camera forward (eye-depth = dot(vWorldRel, camFwd))
-};
-
-uniform sampler2D tex0;
-uniform sampler2D tex1;
-
-in vec4 vColor;
-in vec4 vSpecColor;
-in vec2 vUV0;
-in vec2 vUV1;
-in float vFogTC;
-
-uniform sampler2DArray shadowMap; // unit 2 — cascade depth-map array (unused unless shadowCtl.x>0.5)
-in vec3 vWorldRel;
-
-out vec4 fragColor;
-
-void main() {
-    // No gl_FragDepth — see PSNormal.
-    vec4 t0 = texture(tex0, vUV0);
-    vec4 t1 = texture(tex1, vUV1);
-
-    if (vFogTC < 0.0) discard;
-
-    vec4 r0;
-    r0.rgb = vColor.rgb * t0.rgb;
-    r0.a = clamp((grassCoef1.a * 2.0 - 1.0) + t1.a, 0.0, 1.0);
-    r0.rgb = clamp(r0.rgb * t1.rgb * 2.0, 0.0, 1.0);
-    if (shadowCtl.x > 0.5) {
-        // Tiered shadow maps: the first omniCount tiers are camera-centred spheres
-        // (selected by 3D distance, so a caster in ANY direction around the player —
-        // including behind the camera — casts into view); the rest are frustum
-        // slices reaching the far view distance (selected by eye-depth). Pick the
-        // tightest matching tier, then advance to the first tier whose projection is
-        // in bounds (coverage fallthrough, so a too-tight near tier never drops the
-        // shadow). 3x3-PCF the layer, cross-fade to the next tier over a band, fade
-        // at the far edge, and dim by the fog factor so distant shadows aren't harsh.
-        // cascadeCtl = {count, fadeRange, biasBase, omniCount}; cascadeSplits =
-        // per-tier select distance (omni: sphere radius; frustum: far eye-depth).
-        int nC = int(cascadeCtl.x);
-        int omniN = int(cascadeCtl.w);
-        float eyeDepth = dot(vWorldRel, camFwd.xyz);
-        float dist3D = length(vWorldRel);
-        int ci = nC;
-        for (int i = 0; i < 4; ++i) {
-            if (i >= nC) break;
-            float metric = (i < omniN) ? dist3D : eyeDepth;
-            if (metric <= cascadeSplits[i]) { ci = i; break; }
-        }
-        if (ci < nC) {
-            float ts = shadowCtl.w;
-            float prevEdge = (ci > 0) ? cascadeSplits[ci - 1] : 0.0;
-            float ciMetric = (ci < omniN) ? dist3D : eyeDepth;
-            float band = (cascadeSplits[ci] - prevEdge) * 0.15;
-            float bw = (ci + 1 < nC) ? clamp((ciMetric - (cascadeSplits[ci] - band)) / max(band, 0.001), 0.0, 1.0) : 0.0;
-            float litSum = 0.0;
-            float wSum = 0.0;
-            for (int p = 0; p < 4; ++p) {
-                int c = ci + p;
-                if (c >= nC) break;
-                // p0 = primary, p1 = blend partner; while nothing has covered yet a
-                // later p force-samples the next looser tier (coverage fallthrough).
-                float w = (p == 0) ? (1.0 - bw) : ((wSum <= 0.0) ? 1.0 : ((p == 1) ? bw : 0.0));
-                if (w <= 0.0) continue;
-                vec4 cp = cascadeVP[c] * vec4(vWorldRel, 1.0);
-                vec3 sc = cp.xyz / cp.w;
-                vec2 suv = sc.xy * 0.5 + 0.5;
-                if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && sc.z > 0.0 && sc.z < 1.0) {
-                    float bias = cascadeCtl.z * float(c + 1) * float(c + 1);
-                    float lit = 0.0;
-                    for (int dy = -1; dy <= 1; ++dy)
-                        for (int dx = -1; dx <= 1; ++dx)
-                            lit += (sc.z - bias > texture(shadowMap, vec3(suv + vec2(float(dx), float(dy)) * ts, float(c))).r) ? 0.0 : 1.0;
-                    litSum += w * (lit / 9.0);
-                    wSum += w;
-                }
-            }
-            if (wSum > 0.0) {
-                float lit = litSum / wSum;
-                float lastSplit = cascadeSplits[nC - 1];
-                float fade = clamp((lastSplit - eyeDepth) / max(cascadeCtl.y, 0.001), 0.0, 1.0);
-                float strength = (1.0 - lit) * fade * clamp(vFogTC, 0.0, 1.0); // dimmer in fog / far
-                r0.rgb *= mix(1.0, shadowCtl.z, strength);
-            }
-        }
-    }
-    r0.a = clamp(grassCoef2.a * r0.a * 2.0, 0.0, 1.0);
-
-    if (alphaRef.z > 0.5) {
-        // Alpha-to-coverage: sharpen alpha around the cutout threshold so the
-        // MSAA resolve grades sub-pixel cutout features (fence wire, foliage)
-        // instead of the hard test keeping or killing the whole pixel.
-        float cov = clamp((r0.a - alphaRef.x) / max(fwidth(r0.a), 1e-4) + 0.5, 0.0, 1.0);
-        if (cov <= 0.0) discard;
-        r0.a = cov;
-    } else if (r0.a - alphaRef.x * alphaRef.y < 0.0) discard;
-
-    r0.rgb = mix(fogColor.rgb, r0.rgb, vFogTC);
-    fragColor = alphaRef.w > 0.5 ? vec4(1.0, 0.0, 0.0, 1.0) : r0;
-}
-)";
-
-// PSWater — bump-mapped water with specular from light direction
-static const char s_psWaterGLSL[] = R"(#version 330 core
-layout(std140) uniform PSConstants {
-    vec4 fogColor;
-    vec4 alphaRef;    // c1: shared slot; water reads only .w (flatDebug)
-    vec4 shadowCtl;   // c2: {enable, bias, darkness, texelSize}
-    vec4 constColor;  // c3: per-object IsColored tint (unused by water)
-    vec4 lightDir;
-    vec4 grassCoef1;
-    vec4 grassCoef2;
-    vec4 rgbEyeCoef;
-};
-
-uniform sampler2D tex0;
-uniform sampler2D tex1;
-
-in vec4 vColor;
-in vec4 vSpecColor;
-in vec2 vUV0;
-in vec2 vUV1;
-in float vFogTC;
-
-uniform sampler2DArray shadowMap; // unit 2 — cascade depth-map array (unused unless shadowCtl.x>0.5)
-in vec3 vWorldRel;
-
-out vec4 fragColor;
-
-void main() {
-    vec4 t0 = texture(tex0, vUV0);
-    vec4 t1 = texture(tex1, vUV1);
-    vec3 bumpNormal = -(t1.xyz * 2.0 - 1.0);
-    float spec = clamp(dot(lightDir.xyz, bumpNormal), 0.0, 1.0);
-    vec4 r0 = vColor * t0;
-    r0.rgb += spec;
-    r0.rgb = mix(fogColor.rgb, r0.rgb, vFogTC);
-    fragColor = alphaRef.w > 0.5 ? vec4(1.0, 0.0, 0.0, 1.0) : r0;
-}
-)";
-
-// VSShadow — minimal transform for shadow draws.  No lighting, no specular,
-// no fog calculation.  Vertex colour is sourced directly from material.diffuse
-// (matches DX8 with-D3DRS_LIGHTING-FALSE behaviour for shadows).  vUV0 carries
-// the cutout texture coords so PSShadow can alpha-test through leaf gaps.
-static const char s_vsShadowGLSL[] = R"(#version 330 core
-layout(std140) uniform VSConstants {
-    mat4 proj;          // c0-c3
-    mat4 view;          // c4-c7
-    mat4 world;         // c8-c11
-    vec4 sunDir;        // c12
-    vec4 ambient;       // c13
-    vec4 diffuse;       // c14
-    vec4 emissive;      // c15
-    vec4 fogParam;      // c16
-    vec4 camPos;        // c17
-    vec4 specular;      // c18
-    vec4 specEn;        // c19
-    vec4 sunEn;         // c20
-    vec4 vpScale;       // c21 — VSScreen only, declared for layout parity
-    vec4 _pad22;
-    vec4 _pad23;
-    mat4 texMat0;       // c24-c27
-    mat4 texMat1;       // c28-c31
-    vec4 texCtrl;       // c32
-};
-
-// Per-instance world matrices (perf effort 08). Plain glDrawElements has
-// gl_InstanceID == 0, so slot 0 carries the classic single world matrix
-// and non-instanced draws are unchanged.
-layout(std140) uniform WorldInstances {
-    mat4 worldArr[256];
-};
-
-layout(location = 0) in vec3 pos;
-layout(location = 1) in vec3 normal;
-layout(location = 2) in vec2 uv;
-
-out vec4 vColor;
-out vec4 vSpecColor;
-out vec2 vUV0;
-out vec2 vUV1;
-out float vFogTC;
-out vec3 vWorldRel;
-
-void main() {
-    vec4 worldPos = worldArr[gl_InstanceID] * vec4(pos, 1.0);
-    gl_Position   = proj * view * worldPos;
-    vColor        = diffuse;        // unlit — direct from material.diffuse
-    vSpecColor    = vec4(0.0);
-    vUV0          = (texCtrl.x > 0.5) ? (texMat0 * vec4(uv, 0, 1)).xy : uv;
-    vUV1          = vUV0;
-    vFogTC        = 1.0;            // shadows ignore fog (DX8 D3DRS_FOGENABLE=FALSE)
-    vWorldRel     = vec3(0.0);     // shadow casters aren't shadow-mapped receivers
-}
-)";
-
-// PSShadow — alpha-cutout discard, output constant black + vColor.a,
-// for the per-poly shadow blend path.
-static const char s_psShadowGLSL[] = R"(#version 330 core
-layout(std140) uniform PSConstants {
-    vec4 fogColor;
-    vec4 alphaRef;      // {ref, enabled, 0, 0}
-    vec4 shadowCtl;   // c2: {enable, bias, darkness, texelSize}
-    vec4 constColor; // c3: per-object IsColored tint (white = no-op)
-    vec4 _pad4;
-    vec4 _pad5;
-    vec4 _pad6;
-    vec4 rgbEyeCoef;
-};
-
-uniform sampler2D tex0;
-
-in vec4 vColor;
-in vec2 vUV0;
-
-uniform sampler2DArray shadowMap; // unit 2 — cascade depth-map array (unused unless shadowCtl.x>0.5)
-in vec3 vWorldRel;
-
-out vec4 fragColor;
-
-void main() {
-    // Force late tests via gl_FragDepth — KEPT even with Phase 3's
-    // REPLACE 0xFF stencil.  Reason: REPLACE is idempotent across
-    // overlapping shadow casters, but NOT across alpha-cutout discard.
-    // If early-Z let stencil REPLACE 0xFF fire before the FS discard,
-    // foliage leaf gaps would phantom-stamp the stencil mask, and
-    // EndShadowPass's fullscreen darken would shadow those gaps.
-    // Forcing late tests via gl_FragDepth makes discard properly
-    // suppress the stencil write.
-    gl_FragDepth = gl_FragCoord.z;
-
-    float a = vColor.a * texture(tex0, vUV0).a;
-    if (a - alphaRef.x * alphaRef.y < 0.0) discard;
-
-    fragColor = vec4(0.0, 0.0, 0.0, a);
-}
-)";
-
-// PSFlat — vertex color passthrough (no texture)
-static const char s_psFlatGLSL[] = R"(#version 330 core
-in vec4 vColor;
-uniform sampler2DArray shadowMap; // unit 2 — cascade depth-map array (unused unless shadowCtl.x>0.5)
-in vec3 vWorldRel;
-
-out vec4 fragColor;
-
-void main() {
-    fragColor = vColor;
-}
-)";
+using namespace Poseidon::render::gl33;
 
 // Optional override directory for hot-reload.  Set via --shader-override-dir.
 // When set, CompileGLShader looks for `<dir>/<name>.glsl` and prefers its
@@ -728,14 +52,20 @@ static bool TryLoadShaderOverride(const char* name, std::string& out)
     return true;
 }
 
-static GLuint CompileGLShader(GLenum type, const char* source, const char* name)
+
+static GLuint CompileGLShader(GLenum type, const char* name)
 {
+    const char* source = ShaderSourceByName(name);
+
     std::string overrideSource;
     if (TryLoadShaderOverride(name, overrideSource))
         source = overrideSource.c_str();
 
+    std::string assembled = PreprocessShaderSource(source);
+    const char* finalSource = assembled.c_str();
+
     GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, nullptr);
+    glShaderSource(shader, 1, &finalSource, nullptr);
     glCompileShader(shader);
 
     GLint status = 0;
@@ -779,14 +109,44 @@ static GLuint s_vsUBO = 0;
 static GLuint s_worldUBO = 0;
 static GLuint s_psUBO = 0;
 
+// Cached copy of s_worldUBO slot 0, used to dedupe matrix uploads
+static float s_worldSlot0[16] = {};
+static bool s_worldSlot0Valid = false;
+
+// LightIndices UBO (binding 3): light indices packed as bytes (.x = 0..3, .y = 4..7) and a count in .z
+static GLuint s_lightIndicesUBO = 0;
+static uint32_t s_lightIndices[256 * 4] = {};
+
+static GLuint s_localLightsUBO = 0;
+// The LocalLights buffer holds every active light, so it must be at least as large as the
+// scene's active-light cap. Bytes index it, and it must fit the GL 3.3 guaranteed min UBO size.
+static constexpr int kMaxLocalLights = MaxActiveLights;
+static_assert(kMaxLocalLights <= 256, "light index packing uses one byte per index");
+static_assert((1 + 4 * kMaxLocalLights) * 16 <= 16384, "LocalLights UBO exceeds GL 3.3 minimum guaranteed size (16 KB)");
+static float s_localLights[(1 + 4 * kMaxLocalLights) * 4] = {};
+
 void EngineGL33::FlushVSConstants()
 {
     if (!s_vsUBO)
+    {
         return;
-    // glBindBufferBase is sticky — done once at UBO creation in
-    // InitVertexShaders.  Per-flush we only update buffer contents.
-    glBindBuffer(GL_UNIFORM_BUFFER, s_vsUBO);
+    }
+
+    // Skip flushes that would re-upload identical contents
+    static float s_vsUploaded[sizeof(s_vsShadow) / sizeof(float)] = {};
+    static GLuint s_vsUploadedUBO = 0;
+
+    if (s_vsUploadedUBO == s_vsUBO && memcmp(s_vsShadow, s_vsUploaded, sizeof(s_vsShadow)) == 0)
+    {
+        return;
+    }
+
+    GL33Bind::UniformBuffer(s_vsUBO);
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(s_vsShadow), s_vsShadow);
+
+    // Update the cached copy
+    memcpy(s_vsUploaded, s_vsShadow, sizeof(s_vsShadow));
+    s_vsUploadedUBO = s_vsUBO;
 }
 
 void EngineGL33::FlushPSConstants()
@@ -804,7 +164,7 @@ void EngineGL33::FlushPSConstants()
     static GLuint s_psUploadedUBO = 0;
     if (s_psEverUploaded && s_psUploadedUBO == s_psUBO && memcmp(s_psUploaded, s_psShadow, sizeof(s_psShadow)) == 0)
         return;
-    glBindBuffer(GL_UNIFORM_BUFFER, s_psUBO);
+    GL33Bind::UniformBuffer(s_psUBO);
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(s_psShadow), s_psShadow);
     memcpy(s_psUploaded, s_psShadow, sizeof(s_psShadow));
     s_psEverUploaded = true;
@@ -821,12 +181,16 @@ void EngineGL33::UploadPSConstant(int reg, const float* data)
 static GLuint s_vsScreenObj = 0;
 static GLuint s_vsTransformObj = 0;
 static GLuint s_vsShadowObj = 0;
+static GLuint s_vsTerrainObj = 0;
+static GLuint s_vsWaterInstObj = 0;
 
 void EngineGL33::InitVertexShaders()
 {
-    s_vsScreenObj = CompileGLShader(GL_VERTEX_SHADER, s_vsScreenGLSL, "vsScreen");
-    s_vsTransformObj = CompileGLShader(GL_VERTEX_SHADER, s_vsTransformGLSL, "vsTransform");
-    s_vsShadowObj = CompileGLShader(GL_VERTEX_SHADER, s_vsShadowGLSL, "vsShadow");
+    s_vsScreenObj = CompileGLShader(GL_VERTEX_SHADER, "vsScreen");
+    s_vsTransformObj = CompileGLShader(GL_VERTEX_SHADER, "vsTransform");
+    s_vsShadowObj = CompileGLShader(GL_VERTEX_SHADER, "vsShadow");
+    s_vsTerrainObj = CompileGLShader(GL_VERTEX_SHADER, "vsTerrain");
+    s_vsWaterInstObj = CompileGLShader(GL_VERTEX_SHADER, "vsWaterInst");
 
     // Bind the VS UBO to base 0 once; subsequent FlushVSConstants only
     // update buffer contents.
@@ -842,6 +206,20 @@ void EngineGL33::InitVertexShaders()
     glBindBuffer(GL_UNIFORM_BUFFER, s_worldUBO);
     glBufferData(GL_UNIFORM_BUFFER, 256 * 64, nullptr, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_UNIFORM_BUFFER, 2, s_worldUBO);
+    s_worldSlot0Valid = false;
+
+    // LightIndices array UBO (binding 3)
+    glGenBuffers(1, &s_lightIndicesUBO);
+    glBindBuffer(GL_UNIFORM_BUFFER, s_lightIndicesUBO);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(s_lightIndices), s_lightIndices, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 3, s_lightIndicesUBO);
+
+    // LocalLights array UBO (binding 4)
+    glGenBuffers(1, &s_localLightsUBO);
+    glBindBuffer(GL_UNIFORM_BUFFER, s_localLightsUBO);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(s_localLights), nullptr, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 4, s_localLightsUBO);
+
 
     _vertexShaderSel = VSNone;
 }
@@ -862,6 +240,16 @@ void EngineGL33::DeinitVertexShaders()
     {
         glDeleteShader(s_vsShadowObj);
         s_vsShadowObj = 0;
+    }
+    if (s_vsTerrainObj)
+    {
+        glDeleteShader(s_vsTerrainObj);
+        s_vsTerrainObj = 0;
+    }
+    if (s_vsWaterInstObj)
+    {
+        glDeleteShader(s_vsWaterInstObj);
+        s_vsWaterInstObj = 0;
     }
     if (s_vsUBO)
     {
@@ -938,6 +326,7 @@ FrameState EngineGL33::BuildFrameState(Camera* camera, LightSun* sun, int bias, 
     frame.sunDir[2] = dir.Z();
     frame.sunDir[3] = 0;
     frame.sunEnabled = sunEnabled;
+    frame.nightEffect = sun->NightEffect();
 
     return frame;
 }
@@ -950,6 +339,7 @@ PassState EngineGL33::BuildPassState(const FrameState& frame, PassId passId)
     switch (passId)
     {
         case PassId::Opaque:
+        case PassId::Terrain:
             ps.depthMode = DepthModeV4::Normal;
             ps.blendMode = BlendModeV4::Opaque;
             ps.fogMode = FogMode::Enabled;
@@ -1072,15 +462,61 @@ void EngineGL33::UpdateShadowMapLitState()
     FlushPSConstants();
 }
 
-void EngineGL33::UploadVSViewConstants(const FrameState& frame)
+void EngineGL33::SetTerrainHeightmap(const float* heights, int width, int height, float invGrid, float invLandGrid)
 {
-    memcpy(s_vsShadow + VSConst::SlotView * 4, &frame.view, 64);
-    memcpy(s_vsShadow + VSConst::SlotSunDir * 4, frame.sunDir, 16);
-    memcpy(s_vsShadow + VSConst::SlotCamPos * 4, frame.cameraPos, 12);
-    s_vsShadow[VSConst::SlotCamPos * 4 + 3] = 0;
-    float sunEn[4] = {frame.sunEnabled ? 1.0f : 0.0f, 0, 0, 0};
-    memcpy(s_vsShadow + VSConst::SlotSunEn * 4, sunEn, 16);
-    FlushVSConstants();
+    if (!heights || width <= 0 || height <= 0)
+    {
+        return;
+    }
+
+    if (_heightMapTex == 0)
+    {
+        glGenTextures(1, &_heightMapTex);
+    }
+
+    GL33Bind::Tex2D(kUploadUnit - GL_TEXTURE0, _heightMapTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, width, height, 0, GL_RED, GL_FLOAT, heights);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    GL33Bind::ActiveUnit(0);
+
+    // .yzw (camX/camZ/camY) are filled per frame in UploadFrameConstants
+    s_vsShadow[VSConst::SlotHmParams0 * 4 + 0] = invGrid;
+    s_vsShadow[VSConst::SlotLandGrid * 4 + 0] = invLandGrid;
+    s_vsShadow[VSConst::SlotLandGrid * 4 + 1] = invLandGrid > 0 ? invGrid / invLandGrid : 0;
+    s_vsShadow[VSConst::SlotLandGrid * 4 + 2] = 0;
+    s_vsShadow[VSConst::SlotLandGrid * 4 + 3] = 0;
+}
+
+bool EngineGL33::LandClipInVS() const
+{
+    // We need the heightmap to be loaded to do land clipping in the vertex shader.
+    return _heightMapTex != 0;
+}
+
+void EngineGL33::SetLandClipParams(float mode, Vector3Par boundingCenter)
+{
+    float v[4] = {0.0f, 0.0f, 0.0f, mode};
+    if (mode > 0.5f)
+    {
+        v[0] = boundingCenter.X();
+        v[1] = boundingCenter.Y();
+        v[2] = boundingCenter.Z();
+    }
+    float* dst = s_vsShadow + VSConst::SlotHmParams1 * 4;
+    if (memcmp(v, dst, sizeof(v)) == 0)
+    {
+        return;
+    }
+    memcpy(dst, v, sizeof(v));
+    if (!s_vsUBO)
+    {
+        return;
+    }
+    GL33Bind::UniformBuffer(s_vsUBO);
+    glBufferSubData(GL_UNIFORM_BUFFER, VSConst::SlotHmParams1 * 4 * sizeof(float), sizeof(v), v);
 }
 
 void EngineGL33::UploadWorldInstances(const float* matrices, int count)
@@ -1089,8 +525,11 @@ void EngineGL33::UploadWorldInstances(const float* matrices, int count)
         return;
     if (count > 256)
         count = 256;
-    glBindBuffer(GL_UNIFORM_BUFFER, s_worldUBO);
+    GL33Bind::UniformBuffer(s_worldUBO);
     glBufferSubData(GL_UNIFORM_BUFFER, 0, count * 64, matrices);
+    // Record slot 0 so the head's per-draw upload dedupes.
+    memcpy(s_worldSlot0, matrices, 64);
+    s_worldSlot0Valid = true;
 }
 
 void EngineGL33::UploadVSWorldMatrix(const float worldMatrix[16])
@@ -1100,7 +539,14 @@ void EngineGL33::UploadVSWorldMatrix(const float worldMatrix[16])
     // the VSConstants world member stays as std140 padding.
     if (s_worldUBO)
     {
-        glBindBuffer(GL_UNIFORM_BUFFER, s_worldUBO);
+        // Skip if slot 0 already holds this matrix.
+        if (s_worldSlot0Valid && memcmp(s_worldSlot0, worldMatrix, 64) == 0)
+        {
+            return;
+        }
+        memcpy(s_worldSlot0, worldMatrix, 64);
+        s_worldSlot0Valid = true;
+        GL33Bind::UniformBuffer(s_worldUBO);
         glBufferSubData(GL_UNIFORM_BUFFER, 0, 64, worldMatrix);
         return;
     }
@@ -1110,7 +556,7 @@ void EngineGL33::UploadVSWorldMatrix(const float worldMatrix[16])
     // writers (materials, lights, cascade VPs) still flush the full block.
     if (!s_vsUBO)
         return;
-    glBindBuffer(GL_UNIFORM_BUFFER, s_vsUBO);
+    GL33Bind::UniformBuffer(s_vsUBO);
     glBufferSubData(GL_UNIFORM_BUFFER, VSConst::SlotWorld * 4 * sizeof(float), 64, s_vsShadow + VSConst::SlotWorld * 4);
 }
 
@@ -1129,6 +575,11 @@ void EngineGL33::UploadVSMaterialConstants(const TLMaterial& mat, bool sunEnable
     memcpy(s_vsShadow + VSConst::SlotDiffuse * 4, diffuse, 16);
     memcpy(s_vsShadow + VSConst::SlotEmissive * 4, emissive, 16);
 
+    float matDiffuseRaw[4] = {mat.diffuse.R(), mat.diffuse.G(), mat.diffuse.B(), mat.diffuse.A()};
+    float matAmbientRaw[4] = {mat.ambient.R(), mat.ambient.G(), mat.ambient.B(), mat.ambient.A()};
+    memcpy(s_vsShadow + VSConst::SlotMatDiffuseRaw * 4, matDiffuseRaw, 16);
+    memcpy(s_vsShadow + VSConst::SlotMatAmbientRaw * 4, matAmbientRaw, 16);
+
     Color specCol = sun->Diffuse() * mat.specular;
     float spec[4] = {specCol.R(), specCol.G(), specCol.B(), static_cast<float>(mat.specularPower)};
     float specEn[4] = {mat.specularPower > 0 ? 1.0f : 0.0f, 0, 0, 0};
@@ -1139,64 +590,154 @@ void EngineGL33::UploadVSMaterialConstants(const TLMaterial& mat, bool sunEnable
 }
 
 // Upload the active local (point) lights for per-vertex night illumination.
-// Diffuse/ambient are pre-scaled by NightEffect so daytime contributes nothing.
 // Positions are stored camera-relative to match the VS world transform, which
 // subtracts the camera position (PrepareMeshTLImpl camera-relative rendering).
-void EngineGL33::UploadVSLights(const LightList& lights, const TLMaterial& mat, float nightEffect)
+void EngineGL33::BuildLocalLightMap(const LightList& aLights)
 {
-    const float* camPos = _frameState.cameraPos;
+    _localLightIndices.clear();
     int n = 0;
-    if (nightEffect > 0.0f)
+    for (int i = 0; i < aLights.Size() && n < kMaxLocalLights; i++)
     {
-        // Match the legacy ConvertLight: diffuse/ambient are scaled by NightEffect
-        // and modulated by the material, so the per-vertex contribution lands in
-        // the same space as the sun term (which also folds in mat.diffuse).
-        Color matDif = mat.diffuse * nightEffect;
-        Color matAmb = mat.ambient * nightEffect;
-        for (int i = 0; i < lights.Size() && n < VSConst::MaxLocalLights; i++)
+        Light* light = aLights[i];
+        if (!light)
         {
-            Light* light = lights[i];
-            if (!light)
-                continue;
-            LightDescription desc;
-            light->GetDescription(desc);
-            bool isSpot = desc.type == LTSpotLight;
-            if (desc.type != LTPoint && !isSpot)
-                continue; // point + spot lights; directional (sun) handled separately
-
-            float* p = s_vsShadow + (VSConst::SlotLightPos + n) * 4;
-            p[0] = desc.pos.X() - camPos[0];
-            p[1] = desc.pos.Y() - camPos[1];
-            p[2] = desc.pos.Z() - camPos[2];
-            p[3] = desc.startAtten;
-
-            float* dir = s_vsShadow + (VSConst::SlotLightDir + n) * 4;
-            Vector3 beam = desc.dir;
-            beam.Normalize();
-            dir[0] = beam.X();
-            dir[1] = beam.Y();
-            dir[2] = beam.Z();
-            dir[3] = isSpot ? 1.0f : 0.0f;
-
-            Color dif = desc.diffuse * matDif;
-            float* df = s_vsShadow + (VSConst::SlotLightDiffuse + n) * 4;
-            df[0] = dif.R();
-            df[1] = dif.G();
-            df[2] = dif.B();
-            df[3] = 0.0f;
-
-            Color amb = desc.ambient * matAmb;
-            float* am = s_vsShadow + (VSConst::SlotLightAmbient + n) * 4;
-            am[0] = amb.R();
-            am[1] = amb.G();
-            am[2] = amb.B();
-            am[3] = 0.0f;
-
-            n++;
+            continue;
         }
+        LightDescription desc;
+        light->GetDescription(desc);
+        if (desc.type != LTPoint && desc.type != LTSpotLight)
+        {
+            continue;
+        }
+        _localLightIndices[light] = n++;
     }
-    s_vsShadow[VSConst::SlotLightCount * 4] = static_cast<float>(n);
-    FlushVSConstants();
+}
+
+void EngineGL33::UploadLocalLights(const LightList& aLights)
+{
+    BuildLocalLightMap(aLights);
+
+    const float* camPos = _frameState.cameraPos;
+    for (int i = 0; i < aLights.Size(); i++)
+    {
+        Light* light = aLights[i];
+        if (!light)
+            continue;
+        auto it = _localLightIndices.find(light);
+        if (it == _localLightIndices.end())
+            continue;
+        const int n = it->second;
+
+        LightDescription desc;
+        light->GetDescription(desc);
+        const bool isSpot = desc.type == LTSpotLight;
+
+        float* p = s_localLights + (1 + n) * 4;
+        p[0] = desc.pos.X() - camPos[0];
+        p[1] = desc.pos.Y() - camPos[1];
+        p[2] = desc.pos.Z() - camPos[2];
+        p[3] = desc.startAtten;
+
+        float* df = s_localLights + (1 + kMaxLocalLights + n) * 4;
+        df[0] = desc.diffuse.R();
+        df[1] = desc.diffuse.G();
+        df[2] = desc.diffuse.B();
+        df[3] = 0.0f;
+
+        float* am = s_localLights + (1 + 2 * kMaxLocalLights + n) * 4;
+        am[0] = desc.ambient.R();
+        am[1] = desc.ambient.G();
+        am[2] = desc.ambient.B();
+        am[3] = 0.0f;
+
+        float* dir = s_localLights + (1 + 3 * kMaxLocalLights + n) * 4;
+        Vector3 beam = desc.dir;
+        beam.Normalize();
+        dir[0] = beam.X();
+        dir[1] = beam.Y();
+        dir[2] = beam.Z();
+        dir[3] = isSpot ? 1.0f : 0.0f;
+    }
+    s_localLights[0] = static_cast<float>(_localLightIndices.size());
+    if (!s_localLightsUBO)
+        return;
+    GL33Bind::UniformBuffer(s_localLightsUBO);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(s_localLights), s_localLights);
+}
+
+// Looks up the indices of the provided lights in the local light buffer,
+// returning the count of found lights and writing their indices to out[].
+int EngineGL33::ResolveLocalLightIndices(const LightList& lights, int* out) const
+{
+    int n = 0;
+    for (int i = 0; i < lights.Size() && n < VSConst::MaxLocalLights; i++)
+    {
+        Light* l = lights[i];
+        if (!l)
+            continue;
+        auto it = _localLightIndices.find(l);
+        if (it != _localLightIndices.end())
+            out[n++] = it->second;
+    }
+    return n;
+}
+
+// Pack up to 8 light indices into 4 uint32_t values, with the count in dst[2] and dst[3] unused.
+static void PackLightIndices(uint32_t dst[4], const int* indices, int count)
+{
+    uint32_t packed[2] = {0, 0};
+    for (int i = 0; i < count; i++)
+        packed[i >> 2] |= static_cast<uint32_t>(indices[i] & 0xFF) << (8 * (i & 3));
+    dst[0] = packed[0];
+    dst[1] = packed[1];
+    dst[2] = static_cast<uint32_t>(count);
+    dst[3] = 0;
+}
+
+// Set the current draw's local-light selection. Only used for non-instanced draws.
+void EngineGL33::SetLocalLightIndices(const int* indices, int count)
+{
+    if (count > VSConst::MaxLocalLights)
+        count = VSConst::MaxLocalLights;
+
+    uint32_t packed[4];
+    PackLightIndices(packed, indices, count);
+
+    // slot 0
+    uint32_t* dst = s_lightIndices;
+    if (dst[0] == packed[0] && dst[1] == packed[1] && dst[2] == packed[2])
+        return;
+
+    dst[0] = packed[0];
+    dst[1] = packed[1];
+    dst[2] = packed[2];
+
+    if (!s_lightIndicesUBO)
+        return;
+
+    GL33Bind::UniformBuffer(s_lightIndicesUBO);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, 16, dst);
+}
+
+
+void EngineGL33::PackInstanceLights(int slot, const LightList& lights)
+{
+    if (slot < 0 || slot >= 256)
+        return;
+    int idx[VSConst::MaxLocalLights];
+    int n = ResolveLocalLightIndices(lights, idx);
+    PackLightIndices(_instLightIdx + slot * 4, idx, n);
+}
+
+void EngineGL33::UploadInstanceLightIndices(int count)
+{
+    if (count <= 0 || !s_lightIndicesUBO)
+        return;
+    if (count > 256)
+        count = 256;
+    memcpy(s_lightIndices, _instLightIdx, count * 16);
+    GL33Bind::UniformBuffer(s_lightIndicesUBO);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, count * 16, s_lightIndices);
 }
 
 void EngineGL33::UploadVSTexGenConstants(TexGenMode mode)
@@ -1260,7 +801,7 @@ void EngineGL33::UploadFrameConstants(const FrameState& frame)
 
     memcpy(s_vsShadow + VSConst::SlotSunDir * 4, frame.sunDir, 16);
 
-    float sunEn[4] = {frame.sunEnabled ? 1.0f : 0.0f, 0, 0, 0};
+    float sunEn[4] = {frame.sunEnabled ? 1.0f : 0.0f, frame.nightEffect, 0, 0};
     memcpy(s_vsShadow + VSConst::SlotSunEn * 4, sunEn, 16);
 
     memcpy(s_vsShadow + VSConst::SlotFogParam * 4, frame.fogParams, 16);
@@ -1271,7 +812,16 @@ void EngineGL33::UploadFrameConstants(const FrameState& frame)
     float texCtrl[4] = {0, 0, 0, 0};
     memcpy(s_vsShadow + VSConst::SlotTexCtrl * 4, texCtrl, 16);
 
+    // Land clip reconstructs absolute world XZ (and Y) from the camera-relative worldPos.
+    s_vsShadow[VSConst::SlotHmParams0 * 4 + 1] = frame.cameraPos[0];
+    s_vsShadow[VSConst::SlotHmParams0 * 4 + 2] = frame.cameraPos[2];
+    s_vsShadow[VSConst::SlotHmParams0 * 4 + 3] = frame.cameraPos[1];
+
     FlushVSConstants();
+
+    if (_heightMapTex)
+        GL33Bind::Tex2D(3, _heightMapTex);
+    GL33Bind::ActiveUnit(0);
 
     UploadPSFogColor(Color(frame.fogColor[0], frame.fogColor[1], frame.fogColor[2], frame.fogColor[3]));
 }
@@ -1285,11 +835,6 @@ void EngineGL33::UploadPassConstants(const PassState& pass)
     ApplyBlendMode(static_cast<BlendMode>(pass.blendMode));
     ApplyDepthMode(static_cast<DepthMode>(pass.depthMode));
     SetShaderFogEnabled(pass.fogMode == FogMode::Enabled);
-}
-
-void EngineGL33::UploadObjectConstants(const DrawItem& item)
-{
-    UploadVSWorldMatrix(reinterpret_cast<const float*>(&item.worldMatrix));
 }
 
 // Compiled FS objects
@@ -1330,28 +875,6 @@ struct ShaderCacheEntry
 constexpr uint32_t kCacheMagic = 0x53484348; // 'SHCH'
 constexpr uint32_t kCacheVersion = 1;
 
-uint64_t HashShaderSources()
-{
-    uint64_t h = 0xcbf29ce484222325ull;
-    auto add = [&](const char* s)
-    {
-        while (*s)
-        {
-            h ^= static_cast<uint8_t>(*s++);
-            h *= 0x100000001b3ull;
-        }
-    };
-    add(s_vsScreenGLSL);
-    add(s_vsTransformGLSL);
-    add(s_vsShadowGLSL);
-    add(s_psNormalGLSL);
-    add(s_psDetailGLSL);
-    add(s_psGrassGLSL);
-    add(s_psWaterGLSL);
-    add(s_psFlatGLSL);
-    add(s_psShadowGLSL);
-    return h;
-}
 
 std::string ShaderCachePath()
 {
@@ -1481,13 +1004,13 @@ void EngineGL33::InitPixelShaders()
     struct PSCompileInfo
     {
         PixelShaderID id;
-        const char* source;
         const char* name;
     };
     PSCompileInfo psInfos[] = {
-        {PSNormal, s_psNormalGLSL, "psNormal"}, {PSDetail, s_psDetailGLSL, "psDetail"},
-        {PSGrass, s_psGrassGLSL, "psGrass"},    {PSWater, s_psWaterGLSL, "psWater"},
-        {PSFlat, s_psFlatGLSL, "psFlat"},       {PSShadow, s_psShadowGLSL, "psShadow"},
+        {PSTerrain, "psTerrain"},
+        {PSNormal, "psNormal"}, {PSDetail, "psDetail"},
+        {PSGrass, "psGrass"},   {PSWater, "psWater"},
+        {PSFlat, "psFlat"},     {PSShadow, "psShadow"},
     };
 
     // Try the binary cache first.  Only compile FS objects on miss — we
@@ -1509,7 +1032,7 @@ void EngineGL33::InitPixelShaders()
             return;
         fsCompiled = true;
         for (auto& info : psInfos)
-            s_fsObjects[info.id] = CompileGLShader(GL_FRAGMENT_SHADER, info.source, info.name);
+            s_fsObjects[info.id] = CompileGLShader(GL_FRAGMENT_SHADER, info.name);
     };
 
     auto bindProgramSamplersAndBlocks = [](GLuint prog)
@@ -1517,6 +1040,12 @@ void EngineGL33::InitPixelShaders()
         GLuint wiBlock = glGetUniformBlockIndex(prog, "WorldInstances");
         if (wiBlock != GL_INVALID_INDEX)
             glUniformBlockBinding(prog, wiBlock, 2);
+        GLuint llBlock = glGetUniformBlockIndex(prog, "LocalLights");
+        if (llBlock != GL_INVALID_INDEX)
+            glUniformBlockBinding(prog, llBlock, 4);
+        GLuint liBlock = glGetUniformBlockIndex(prog, "LightIndices");
+        if (liBlock != GL_INVALID_INDEX)
+            glUniformBlockBinding(prog, liBlock, 3);
         GLuint vsBlock = glGetUniformBlockIndex(prog, "VSConstants");
         GLuint psBlock = glGetUniformBlockIndex(prog, "PSConstants");
         if (vsBlock != GL_INVALID_INDEX)
@@ -1533,11 +1062,26 @@ void EngineGL33::InitPixelShaders()
         GLint locShadow = glGetUniformLocation(prog, "shadowMap");
         if (locShadow >= 0)
             glUniform1i(locShadow, 2); // shadow depth map on texture unit 2
+        GLint locHeight = glGetUniformLocation(prog, "heightMap");
+        if (locHeight >= 0)
+            glUniform1i(locHeight, 3); // terrain height map on texture unit 3
+        GLint locJitter = glGetUniformLocation(prog, "jitterMap");
+        if (locJitter >= 0)
+            glUniform1i(locJitter, 4); // terrain UV jitter map on texture unit 4
+        GLint locWrap = glGetUniformLocation(prog, "tex0Wrap");
+        if (locWrap >= 0)
+            glUniform1i(locWrap, 5); // terrain surface array again, repeat sampler
+        GLint locLightSet = glGetUniformLocation(prog, "lightSetTable");
+        if (locLightSet >= 0)
+            glUniform1i(locLightSet, 6); // terrain per-segment light-set buffer texture on unit 6
+        GLint locCellInfo = glGetUniformLocation(prog, "cellInfo");
+        if (locCellInfo >= 0)
+            glUniform1i(locCellInfo, 7); // per-cell layer/flags map on unit 7
         glUseProgram(0);
     };
 
     // Build combined programs: one per (vs x specular x mode x shader) = 2*2*2*5 = 40
-    GLuint vsObjs[NVertexShaders] = {s_vsScreenObj, s_vsTransformObj, s_vsShadowObj};
+    GLuint vsObjs[NVertexShaders] = {s_vsScreenObj, s_vsTransformObj, s_vsShadowObj, s_vsTerrainObj, s_vsWaterInstObj};
     for (int v = 0; v < NVertexShaders; v++)
     {
         if (!vsObjs[v])
@@ -1548,6 +1092,13 @@ void EngineGL33::InitPixelShaders()
             {
                 for (int i = 0; i < NPixelShaders; i++)
                 {
+                    // VSTerrain pairs only with PSTerrain and vice versa
+                    if ((v == VSTerrain) != (i == PSTerrain))
+                        continue;
+                    // VSWaterInst reuses PSDetail
+                    if (v == VSWaterInst && i != PSDetail)
+                        continue;
+
                     const uint32_t key = (static_cast<uint32_t>(v) << 24) | (static_cast<uint32_t>(s) << 16) |
                                          (static_cast<uint32_t>(m) << 8) | static_cast<uint32_t>(i);
                     GLuint prog = 0;
@@ -1608,29 +1159,6 @@ void EngineGL33::InitPixelShaders()
     }
 }
 
-static const char* s_vsGammaGLSL = R"(#version 330 core
-out vec2 vUV;
-void main()
-{
-    // Fullscreen triangle from gl_VertexID; no vertex buffer needed.
-    vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
-    vUV = p;
-    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
-}
-)";
-
-static const char* s_psGammaGLSL = R"(#version 330 core
-in vec2 vUV;
-uniform sampler2D frame;
-uniform float invGamma;
-out vec4 fragColor;
-void main()
-{
-    vec3 c = texture(frame, vUV).rgb;
-    fragColor = vec4(pow(c, vec3(invGamma)), 1.0);
-}
-)";
-
 void EngineGL33::DestroyGammaTarget()
 {
     if (_gammaTex)
@@ -1666,8 +1194,8 @@ void EngineGL33::ApplyGammaPass()
 
     if (!_gammaProgram)
     {
-        GLuint vs = CompileGLShader(GL_VERTEX_SHADER, s_vsGammaGLSL, "vsGamma");
-        GLuint fs = CompileGLShader(GL_FRAGMENT_SHADER, s_psGammaGLSL, "psGamma");
+        GLuint vs = CompileGLShader(GL_VERTEX_SHADER, "vsGamma");
+        GLuint fs = CompileGLShader(GL_FRAGMENT_SHADER, "psGamma");
         if (vs && fs)
             _gammaProgram = LinkGLProgram(vs, fs, "gamma");
         if (vs)
