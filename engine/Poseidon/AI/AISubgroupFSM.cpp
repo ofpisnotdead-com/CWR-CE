@@ -1623,9 +1623,17 @@ static AISubgroupFSM::StateInfo joinStates[] = {
 
 // Command GetIn FSM
 
+// Note: the unit's assignment is deliberately NOT asserted here. A GetIn
+// command outlives the assignment it was issued for - when the target vehicle
+// is destroyed, AIGroup::GetInVehicles() drops the assignment (a wreck fails
+// IsAbleToMove()) while the queued command still points at it - and a
+// player-led subgroup boards vehicles it was never assigned to at all. Both
+// cases are caught one step later by CheckGetInDone(); computing a position
+// for the command's target in the meantime is harmless.
 static Vector3 GetGetInPoint(AIUnit* unit, Transport* veh)
 {
-    AI_ERROR(veh == unit->VehicleAssigned());
+    AI_ERROR(unit);
+    AI_ERROR(veh);
     Vector3 pos = veh->GetUnitGetInPos(unit);
     pos[1] = GLandscape->RoadSurfaceYAboveWater(pos[0], pos[2]);
     return pos;
@@ -1635,7 +1643,8 @@ static Vector3 GetGetInPointFar(AIUnit* unit, Transport* veh)
 {
     Vector3 res;
 
-    AI_ERROR(veh == unit->VehicleAssigned());
+    AI_ERROR(unit);
+    AI_ERROR(veh);
 
     if (veh->IsStopped())
     {
