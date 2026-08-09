@@ -110,7 +110,7 @@ impl ServerDirectory {
             Dialect::Sqlite => "INTEGER",
         };
         // (column, type) — booleans are stored as 0/1 integers, like the rest of the schema.
-        let additions: [(&str, &str); 17] = [
+        let additions: [(&str, &str); 18] = [
             ("app_name", "TEXT"),
             ("version_tag", "TEXT"),
             ("time_left", int_type),
@@ -128,6 +128,7 @@ impl ServerDirectory {
             ("param1", "TEXT"),
             ("param2", "TEXT"),
             ("required_addons", "TEXT"),
+            ("mod_packages_json", "TEXT"),
         ];
         // Re-read in case the rename above changed the set.
         let columns = self.server_columns().await?;
@@ -135,7 +136,13 @@ impl ServerDirectory {
             if columns.iter().any(|c| c == name) {
                 continue;
             }
-            let default = if ty == "TEXT" { "''" } else { "0" };
+            let default = if name == "mod_packages_json" {
+                "'[]'"
+            } else if ty == "TEXT" {
+                "''"
+            } else {
+                "0"
+            };
             sqlx::raw_sql(&format!(
                 "ALTER TABLE servers ADD COLUMN {name} {ty} NOT NULL DEFAULT {default}"
             ))
@@ -204,10 +211,10 @@ impl ServerDirectory {
                 platform, last_seen_unix_ms, verification_state, last_observed_unix_ms, observed_reachable,
                 time_left, state_elapsed_seconds,
                 map_name, cadet, difficulty, jip, disabled_ai, respawn, respawn_delay, locked, dedicated,
-                description, param1, param2, required_addons
+                description, param1, param2, required_addons, mod_packages_json
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             ON CONFLICT(server_id) DO UPDATE SET
                 app_name = excluded.app_name,
@@ -241,7 +248,8 @@ impl ServerDirectory {
                 description = excluded.description,
                 param1 = excluded.param1,
                 param2 = excluded.param2,
-                required_addons = excluded.required_addons",
+                required_addons = excluded.required_addons,
+                mod_packages_json = excluded.mod_packages_json",
         ))
         .bind(&record.app_name)
         .bind(&record.server_id)
@@ -279,6 +287,7 @@ impl ServerDirectory {
         .bind(&record.param1)
         .bind(&record.param2)
         .bind(&record.required_addons)
+        .bind(serde_json::to_string(&record.mod_packages)?)
         .execute(&self.pool)
         .await?;
 
@@ -661,7 +670,7 @@ const SELECT_SERVER_COLUMNS: &str = "SELECT
     platform, last_seen_unix_ms, verification_state, last_observed_unix_ms, observed_reachable,
     time_left, state_elapsed_seconds,
     map_name, cadet, difficulty, jip, disabled_ai, respawn, respawn_delay, locked, dedicated,
-    description, param1, param2, required_addons
+    description, param1, param2, required_addons, mod_packages_json
 FROM servers";
 
 fn map_row(row: &AnyRow) -> Result<DirectoryServerRecord> {
@@ -702,6 +711,14 @@ fn map_row(row: &AnyRow) -> Result<DirectoryServerRecord> {
         param1: row.try_get(33)?,
         param2: row.try_get(34)?,
         required_addons: row.try_get(35)?,
+        mod_packages: {
+            let value = row.try_get::<String, _>(36)?;
+            if value.trim().is_empty() {
+                Vec::new()
+            } else {
+                serde_json::from_str(&value)?
+            }
+        },
         token: None,
     })
 }
@@ -785,6 +802,7 @@ CREATE TABLE IF NOT EXISTS servers (
     param1 TEXT NOT NULL DEFAULT '',
     param2 TEXT NOT NULL DEFAULT '',
     required_addons TEXT NOT NULL DEFAULT '',
+    mod_packages_json TEXT NOT NULL DEFAULT '[]',
     consecutive_failures INTEGER NOT NULL DEFAULT 0,
     token_hash TEXT
 );
@@ -851,6 +869,7 @@ CREATE TABLE IF NOT EXISTS servers (
     param1 TEXT NOT NULL DEFAULT '',
     param2 TEXT NOT NULL DEFAULT '',
     required_addons TEXT NOT NULL DEFAULT '',
+    mod_packages_json TEXT NOT NULL DEFAULT '[]',
     consecutive_failures BIGINT NOT NULL DEFAULT 0,
     token_hash TEXT
 );

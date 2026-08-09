@@ -1,6 +1,6 @@
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 use bytes::Bytes;
@@ -9,8 +9,9 @@ use object_store::aws::{AmazonS3, AmazonS3Builder};
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
 use object_store::signer::Signer;
-use object_store::{ObjectStore, WriteMultipart};
+use object_store::{ObjectStore, PutMode, PutOptions, UpdateVersion, WriteMultipart};
 use reqwest::Method;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::model::{ListModsQuery, ModCatalogEntry};
@@ -43,6 +44,18 @@ impl ArtifactUpload {
 
 const MOD_METADATA_FILE: &str = "mod.json";
 const MOD_ARTIFACT_EXT: &str = "pbo.zst";
+const CURRENT_FILE: &str = "current";
+
+#[derive(Deserialize, Serialize)]
+struct CurrentRevision {
+    #[serde(rename = "packageRevision")]
+    package_revision: u64,
+}
+
+struct CurrentState {
+    revision: u64,
+    update: Option<UpdateVersion>,
+}
 
 /// Inputs for publishing a packed mod to the workshop.
 pub struct PublishModInput {
@@ -73,17 +86,17 @@ pub struct ModUploadMeta {
     pub homepage_url: Option<String>,
 }
 
-/// Object-store-backed mod artifact store. Each mod lives under `<modId>/`: the publisher-
-/// compressed artifact (`<modId>.pbo.zst`, stored verbatim) plus a `mod.json` the catalog scan
-/// reads. Backed by the local filesystem
-/// for `cargo`-local dev and by S3 (MinIO) for deployment, so multiple stateless replicas
-/// share one artifact store. The query layer above is identical for both backends.
+/// Object-store-backed mod artifact store. Immutable artifacts and metadata live under
+/// `<modId>/revisions/<revision>/`, with a conditional `current` object selecting the catalog
+/// entry. The local filesystem backend serves development and S3 lets stateless replicas share
+/// one store.
 #[derive(Clone)]
 pub struct ModStore {
     store: Arc<dyn ObjectStore>,
     signer: Option<Arc<dyn Signer>>,
     prefix: Option<ObjectPath>,
     signed_url_ttl: Duration,
+    current_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 pub struct S3StoreConfig<'a> {
@@ -111,6 +124,7 @@ impl ModStore {
             signer: None,
             prefix: None,
             signed_url_ttl: Duration::from_secs(0),
+            current_lock: Arc::new(tokio::sync::Mutex::new(())),
         })
     }
 
@@ -148,6 +162,7 @@ impl ModStore {
             signer,
             prefix: normalize_prefix(config.prefix),
             signed_url_ttl: config.signed_url_ttl,
+            current_lock: Arc::new(tokio::sync::Mutex::new(())),
         })
     }
 
@@ -155,8 +170,22 @@ impl ModStore {
         ObjectPath::from(format!("{mod_id}/{mod_id}.{MOD_ARTIFACT_EXT}"))
     }
 
+    fn revision_artifact_path(mod_id: &str, revision: u64) -> ObjectPath {
+        ObjectPath::from(format!(
+            "{mod_id}/revisions/{revision}/{mod_id}.{MOD_ARTIFACT_EXT}"
+        ))
+    }
+
     fn metadata_path(mod_id: &str) -> ObjectPath {
         ObjectPath::from(format!("{mod_id}/{MOD_METADATA_FILE}"))
+    }
+
+    fn revision_metadata_path(mod_id: &str, revision: u64) -> ObjectPath {
+        ObjectPath::from(format!("{mod_id}/revisions/{revision}/{MOD_METADATA_FILE}"))
+    }
+
+    fn current_path(mod_id: &str) -> ObjectPath {
+        ObjectPath::from(format!("{mod_id}/{CURRENT_FILE}"))
     }
 
     fn store_path(&self, path: ObjectPath) -> ObjectPath {
@@ -182,9 +211,7 @@ impl ModStore {
         }
     }
 
-    /// Store an uploaded mod: the artifact plus a `mod.json` the catalog scan picks up.
-    /// `modId` is `slug(name)-version`, where `version` defaults to the first 8 hex of the
-    /// file's SHA-256 (the `name-hash8` convention).
+    /// Store the first immutable package revision under a stable slug identity.
     pub async fn publish_mod(&self, input: &PublishModInput) -> Result<ModCatalogEntry> {
         let slug = slugify(&input.name);
         if slug.is_empty() {
@@ -196,49 +223,173 @@ impl ModStore {
         if input.file.is_empty() {
             bail!("mod artifact is empty");
         }
+        if self.get_mod(&slug).await?.is_some() {
+            bail!("mod id '{slug}' already exists");
+        }
 
-        // The artifact arrives already compressed (`.pbo.zst`); store it verbatim.
+        let digest = Sha256::digest(&input.file);
+        let sha256 = hex(&digest);
         let version = match input.version.as_deref() {
             Some(value) => sanitize_version(value)
                 .ok_or_else(|| anyhow::anyhow!("invalid version '{value}'"))?,
             None => content_hash8(&input.file),
         };
-        let mod_id = format!("{slug}-{version}");
-
         let size_bytes = input.file.len() as u64;
-        self.store
-            .put(
-                &self.store_path(Self::artifact_path(&mod_id)),
-                Bytes::from(input.file.clone()).into(),
-            )
-            .await
-            .with_context(|| format!("writing artifact for {mod_id}"))?;
-
         let entry = ModCatalogEntry {
-            mod_id: mod_id.clone(),
+            mod_id: slug.clone(),
             app_name: input.app_name.clone(),
             actver: input.actver,
             version_tag: input.version_tag.clone(),
             compatible: false,
             name: input.name.clone(),
             version,
+            package_revision: 1,
+            sha256: Some(sha256),
+            published_unix_ms: Some(now_unix_millis()),
             folder_name: None,
             description: input.description.clone().unwrap_or_default(),
             authors: input.authors.clone(),
             homepage_url: input.homepage_url.clone(),
-            download_url: Some(format!("/v1/mods/{mod_id}/download")),
+            download_url: Some(format!("/v1/mods/{slug}/revisions/1/download")),
             size_bytes: Some(size_bytes),
         };
-        let json = serde_json::to_vec_pretty(&entry)?;
+        self.write_new_revision(&entry, Bytes::from(input.file.clone()))
+            .await?;
+        self.create_current(&slug, 1).await?;
+        Ok(entry)
+    }
+
+    async fn write_new_revision(&self, entry: &ModCatalogEntry, artifact: Bytes) -> Result<()> {
+        let artifact_path = self.store_path(Self::revision_artifact_path(
+            &entry.mod_id,
+            entry.package_revision,
+        ));
         self.store
-            .put(
-                &self.store_path(Self::metadata_path(&mod_id)),
+            .put_opts(&artifact_path, artifact.into(), PutMode::Create.into())
+            .await
+            .with_context(|| {
+                format!(
+                    "reserving revision {} for {}",
+                    entry.package_revision, entry.mod_id
+                )
+            })?;
+        let metadata_path = self.store_path(Self::revision_metadata_path(
+            &entry.mod_id,
+            entry.package_revision,
+        ));
+        let json = serde_json::to_vec_pretty(entry)?;
+        if let Err(error) = self
+            .store
+            .put_opts(
+                &metadata_path,
                 Bytes::from(json).into(),
+                PutMode::Create.into(),
             )
             .await
-            .with_context(|| format!("writing mod.json for {mod_id}"))?;
+        {
+            let _ = self.store.delete(&artifact_path).await;
+            return Err(error).with_context(|| {
+                format!(
+                    "writing revision {} metadata for {}",
+                    entry.package_revision, entry.mod_id
+                )
+            });
+        }
+        Ok(())
+    }
 
-        Ok(entry)
+    async fn create_current(&self, mod_id: &str, revision: u64) -> Result<()> {
+        let bytes = serde_json::to_vec(&CurrentRevision {
+            package_revision: revision,
+        })?;
+        self.store
+            .put_opts(
+                &self.store_path(Self::current_path(mod_id)),
+                Bytes::from(bytes).into(),
+                PutMode::Create.into(),
+            )
+            .await
+            .with_context(|| format!("creating current revision for {mod_id}"))?;
+        Ok(())
+    }
+
+    async fn set_current(
+        &self,
+        mod_id: &str,
+        revision: u64,
+        update: Option<UpdateVersion>,
+    ) -> Result<()> {
+        let mode = update.map_or(PutMode::Create, PutMode::Update);
+        let bytes = serde_json::to_vec(&CurrentRevision {
+            package_revision: revision,
+        })?;
+        let result = self
+            .store
+            .put_opts(
+                &self.store_path(Self::current_path(mod_id)),
+                Bytes::from(bytes).into(),
+                PutOptions {
+                    mode,
+                    ..Default::default()
+                },
+            )
+            .await;
+        if matches!(&result, Err(object_store::Error::NotImplemented)) {
+            let _guard = self.current_lock.lock().await;
+            if self
+                .current_state(mod_id)
+                .await?
+                .is_some_and(|state| state.revision >= revision)
+            {
+                return Ok(());
+            }
+            let bytes = serde_json::to_vec(&CurrentRevision {
+                package_revision: revision,
+            })?;
+            self.store
+                .put(
+                    &self.store_path(Self::current_path(mod_id)),
+                    Bytes::from(bytes).into(),
+                )
+                .await
+                .with_context(|| format!("advancing {mod_id} to revision {revision}"))?;
+        } else {
+            result.with_context(|| format!("advancing {mod_id} to revision {revision}"))?;
+        }
+        Ok(())
+    }
+
+    async fn current_state(&self, mod_id: &str) -> Result<Option<CurrentState>> {
+        let path = self.store_path(Self::current_path(mod_id));
+        match self.store.get(&path).await {
+            Ok(result) => {
+                let update = UpdateVersion {
+                    e_tag: result.meta.e_tag.clone(),
+                    version: result.meta.version.clone(),
+                };
+                let current: CurrentRevision = serde_json::from_slice(&result.bytes().await?)
+                    .with_context(|| format!("parsing current revision for {mod_id}"))?;
+                Ok(Some(CurrentState {
+                    revision: current.package_revision,
+                    update: Some(update),
+                }))
+            }
+            Err(object_store::Error::NotFound { .. }) => {
+                match self
+                    .store
+                    .head(&self.store_path(Self::metadata_path(mod_id)))
+                    .await
+                {
+                    Ok(_) => Ok(Some(CurrentState {
+                        revision: 1,
+                        update: None,
+                    })),
+                    Err(object_store::Error::NotFound { .. }) => Ok(None),
+                    Err(error) => Err(error.into()),
+                }
+            }
+            Err(error) => Err(error.into()),
+        }
     }
 
     /// Write a catalog entry's `mod.json` (used by dev seeding; writes no artifact, so the
@@ -274,9 +425,7 @@ impl ModStore {
         })
     }
 
-    /// Finalize a streamed upload into a published mod: complete the temp object, derive the
-    /// mod id (`slug(name)-version`, version defaulting to the content hash), move the temp
-    /// object into place, and write `mod.json`.
+    /// Finalize a streamed upload as revision 1 of a stable slug identity.
     pub async fn finalize_mod(
         &self,
         upload: ArtifactUpload,
@@ -307,6 +456,12 @@ impl ModStore {
             bail!("mod artifact is empty");
         }
 
+        if self.get_mod(&slug).await?.is_some() {
+            let _ = self.store.delete(&temp).await;
+            bail!("mod id '{slug}' already exists");
+        }
+
+        let digest = hasher.finalize();
         let version = match meta.version.as_deref() {
             Some(value) => match sanitize_version(value) {
                 Some(version) => version,
@@ -315,29 +470,26 @@ impl ModStore {
                     bail!("invalid version '{value}'");
                 }
             },
-            None => hasher
-                .finalize()
-                .iter()
-                .take(4)
-                .map(|b| format!("{b:02x}"))
-                .collect(),
+            None => digest.iter().take(4).map(|b| format!("{b:02x}")).collect(),
         };
-        let mod_id = format!("{slug}-{version}");
 
-        // Move the temp object into the mod's artifact path (server-side copy on S3).
+        let artifact_path = self.store_path(Self::revision_artifact_path(&slug, 1));
         self.store
-            .rename(&temp, &self.store_path(Self::artifact_path(&mod_id)))
+            .rename_if_not_exists(&temp, &artifact_path)
             .await
-            .with_context(|| format!("placing artifact for {mod_id}"))?;
+            .with_context(|| format!("placing revision 1 artifact for {slug}"))?;
 
         let entry = ModCatalogEntry {
-            mod_id: mod_id.clone(),
+            mod_id: slug.clone(),
             app_name: meta.app_name,
             actver: meta.actver,
             version_tag: meta.version_tag,
             compatible: false,
             name: meta.name,
             version,
+            package_revision: 1,
+            sha256: Some(hex(&digest)),
+            published_unix_ms: Some(now_unix_millis()),
             folder_name: meta
                 .folder_name
                 .map(|value| value.trim().to_string())
@@ -345,30 +497,160 @@ impl ModStore {
             description: meta.description.unwrap_or_default(),
             authors: meta.authors,
             homepage_url: meta.homepage_url,
-            download_url: Some(format!("/v1/mods/{mod_id}/download")),
+            download_url: Some(format!("/v1/mods/{slug}/revisions/1/download")),
             size_bytes: Some(size),
         };
         let json = serde_json::to_vec_pretty(&entry)?;
         self.store
-            .put(
-                &self.store_path(Self::metadata_path(&mod_id)),
+            .put_opts(
+                &self.store_path(Self::revision_metadata_path(&slug, 1)),
                 Bytes::from(json).into(),
+                PutMode::Create.into(),
             )
             .await
-            .with_context(|| format!("writing mod.json for {mod_id}"))?;
+            .with_context(|| format!("writing revision 1 metadata for {slug}"))?;
+        self.create_current(&slug, 1).await?;
+        Ok(entry)
+    }
+
+    pub async fn add_revision(
+        &self,
+        mod_id: &str,
+        bytes: Vec<u8>,
+        meta: ModUploadMeta,
+    ) -> Result<ModCatalogEntry> {
+        let mut upload = self.begin_upload().await?;
+        upload.write(&bytes);
+        self.finalize_revision(upload, mod_id, meta).await
+    }
+
+    pub async fn finalize_revision(
+        &self,
+        upload: ArtifactUpload,
+        mod_id: &str,
+        meta: ModUploadMeta,
+    ) -> Result<ModCatalogEntry> {
+        if !is_safe_segment(mod_id) {
+            bail!("invalid mod id '{mod_id}'");
+        }
+        let ArtifactUpload {
+            temp,
+            writer,
+            hasher,
+            size,
+        } = upload;
+        writer
+            .finish()
+            .await
+            .with_context(|| format!("finishing upload {temp}"))?;
+        if size == 0 {
+            let _ = self.store.delete(&temp).await;
+            bail!("mod artifact is empty");
+        }
+        let digest = hasher.finalize();
+        let sha256 = hex(&digest);
+        let Some(mut current) = self.current_state(mod_id).await? else {
+            let _ = self.store.delete(&temp).await;
+            bail!("mod id '{mod_id}' does not exist");
+        };
+        let latest = self
+            .get_revision(mod_id, current.revision)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("current revision for '{mod_id}' is missing"))?;
+        if latest.sha256.as_deref() == Some(sha256.as_str()) {
+            let _ = self.store.delete(&temp).await;
+            return Ok(latest);
+        }
+
+        let version = match meta.version.as_deref() {
+            Some(value) => sanitize_version(value)
+                .ok_or_else(|| anyhow::anyhow!("invalid version '{value}'"))?,
+            None => latest.version.clone(),
+        };
+        let mut revision = current.revision + 1;
+        loop {
+            let artifact_path = self.store_path(Self::revision_artifact_path(mod_id, revision));
+            match self.store.rename_if_not_exists(&temp, &artifact_path).await {
+                Ok(()) => break,
+                Err(object_store::Error::AlreadyExists { .. }) => revision += 1,
+                Err(error) => return Err(error.into()),
+            }
+        }
+
+        let entry = ModCatalogEntry {
+            mod_id: mod_id.to_string(),
+            app_name: meta.app_name.or(latest.app_name),
+            actver: meta.actver.or(latest.actver),
+            version_tag: meta.version_tag.or(latest.version_tag),
+            compatible: false,
+            name: if meta.name.trim().is_empty() {
+                latest.name
+            } else {
+                meta.name
+            },
+            version,
+            package_revision: revision,
+            sha256: Some(sha256),
+            published_unix_ms: Some(now_unix_millis()),
+            folder_name: meta.folder_name.or(latest.folder_name),
+            description: meta.description.unwrap_or(latest.description),
+            authors: if meta.authors.is_empty() {
+                latest.authors
+            } else {
+                meta.authors
+            },
+            homepage_url: meta.homepage_url.or(latest.homepage_url),
+            download_url: Some(format!("/v1/mods/{mod_id}/revisions/{revision}/download")),
+            size_bytes: Some(size),
+        };
+        let metadata_path = self.store_path(Self::revision_metadata_path(mod_id, revision));
+        self.store
+            .put_opts(
+                &metadata_path,
+                Bytes::from(serde_json::to_vec_pretty(&entry)?).into(),
+                PutMode::Create.into(),
+            )
+            .await
+            .with_context(|| format!("writing revision {revision} metadata for {mod_id}"))?;
+        if self
+            .set_current(mod_id, revision, current.update.take())
+            .await
+            .is_err()
+        {
+            let state = self
+                .current_state(mod_id)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("current revision for '{mod_id}' disappeared"))?;
+            if state.revision < revision {
+                self.set_current(mod_id, revision, state.update).await?;
+            }
+        }
         Ok(entry)
     }
 
     /// Stream a published mod's artifact: `(size_bytes, byte-stream)`, or `None` if absent.
     pub async fn artifact_stream(&self, mod_id: &str) -> Result<Option<(u64, ArtifactStream)>> {
+        let Some(current) = self.current_state(mod_id).await? else {
+            return Ok(None);
+        };
+        self.revision_stream(mod_id, current.revision).await
+    }
+
+    pub async fn revision_stream(
+        &self,
+        mod_id: &str,
+        revision: u64,
+    ) -> Result<Option<(u64, ArtifactStream)>> {
         if !is_safe_segment(mod_id) {
             return Ok(None);
         }
-        match self
-            .store
-            .get(&self.store_path(Self::artifact_path(mod_id)))
-            .await
-        {
+        let revision_path = self.store_path(Self::revision_artifact_path(mod_id, revision));
+        let path = if revision == 1 && self.store.head(&revision_path).await.is_err() {
+            self.store_path(Self::artifact_path(mod_id))
+        } else {
+            revision_path
+        };
+        match self.store.get(&path).await {
             Ok(result) => {
                 let size = result.meta.size as u64;
                 Ok(Some((size, result.into_stream())))
@@ -381,13 +663,29 @@ impl ModStore {
     /// Signed direct URL for a published mod's artifact, or `None` when the backend is not
     /// externally reachable/signable or the artifact is absent.
     pub async fn signed_artifact_url(&self, mod_id: &str) -> Result<Option<(u64, String)>> {
+        let Some(current) = self.current_state(mod_id).await? else {
+            return Ok(None);
+        };
+        self.signed_revision_url(mod_id, current.revision).await
+    }
+
+    pub async fn signed_revision_url(
+        &self,
+        mod_id: &str,
+        revision: u64,
+    ) -> Result<Option<(u64, String)>> {
         if !is_safe_segment(mod_id) {
             return Ok(None);
         }
         let Some(signer) = &self.signer else {
             return Ok(None);
         };
-        let path = self.store_path(Self::artifact_path(mod_id));
+        let revision_path = self.store_path(Self::revision_artifact_path(mod_id, revision));
+        let path = if revision == 1 && self.store.head(&revision_path).await.is_err() {
+            self.store_path(Self::artifact_path(mod_id))
+        } else {
+            revision_path
+        };
         let size = match self.store.head(&path).await {
             Ok(meta) => meta.size as u64,
             Err(object_store::Error::NotFound { .. }) => return Ok(None),
@@ -402,14 +700,23 @@ impl ModStore {
     /// Raw bytes of a published mod's artifact, or `None` if absent. Rejects ids that could
     /// escape the store prefix.
     pub async fn artifact_bytes(&self, mod_id: &str) -> Result<Option<Vec<u8>>> {
+        let Some(current) = self.current_state(mod_id).await? else {
+            return Ok(None);
+        };
+        self.revision_bytes(mod_id, current.revision).await
+    }
+
+    pub async fn revision_bytes(&self, mod_id: &str, revision: u64) -> Result<Option<Vec<u8>>> {
         if !is_safe_segment(mod_id) {
             return Ok(None);
         }
-        match self
-            .store
-            .get(&self.store_path(Self::artifact_path(mod_id)))
-            .await
-        {
+        let revision_path = self.store_path(Self::revision_artifact_path(mod_id, revision));
+        let path = if revision == 1 && self.store.head(&revision_path).await.is_err() {
+            self.store_path(Self::artifact_path(mod_id))
+        } else {
+            revision_path
+        };
+        match self.store.get(&path).await {
             Ok(result) => Ok(Some(result.bytes().await?.to_vec())),
             Err(object_store::Error::NotFound { .. }) => Ok(None),
             Err(error) => Err(error.into()),
@@ -422,28 +729,17 @@ impl ModStore {
         if !is_safe_segment(mod_id) {
             return Ok(false);
         }
-        // S3 DELETE is idempotent (it succeeds for a missing key), so existence can't be
-        // inferred from the delete result — probe the mod.json (the catalog marker) first.
-        match self
-            .store
-            .head(&self.store_path(Self::metadata_path(mod_id)))
-            .await
-        {
-            Ok(_) => {}
-            Err(object_store::Error::NotFound { .. }) => return Ok(false),
-            Err(error) => return Err(error.into()),
+        if self.current_state(mod_id).await?.is_none() {
+            return Ok(false);
         }
-        self.store
-            .delete(&self.store_path(Self::metadata_path(mod_id)))
-            .await?;
-        // Remove the artifact too; absent is fine (a metadata-only seed entry has none).
-        match self
-            .store
-            .delete(&self.store_path(Self::artifact_path(mod_id)))
-            .await
-        {
-            Ok(()) | Err(object_store::Error::NotFound { .. }) => {}
-            Err(error) => return Err(error.into()),
+        let prefix = self.store_path(ObjectPath::from(format!("{mod_id}/")));
+        let mut objects = self.store.list(Some(&prefix));
+        let mut paths = Vec::new();
+        while let Some(object) = objects.next().await {
+            paths.push(object?.location);
+        }
+        for path in paths {
+            self.store.delete(&path).await?;
         }
         Ok(true)
     }
@@ -458,6 +754,32 @@ impl ModStore {
         if !is_safe_segment(mod_id) {
             return Ok(None);
         }
+        let Some(current) = self.current_state(mod_id).await? else {
+            return Ok(None);
+        };
+        self.get_revision(mod_id, current.revision).await
+    }
+
+    pub async fn get_revision(
+        &self,
+        mod_id: &str,
+        revision: u64,
+    ) -> Result<Option<ModCatalogEntry>> {
+        if !is_safe_segment(mod_id) || revision == 0 {
+            return Ok(None);
+        }
+        let revision_path = self.store_path(Self::revision_metadata_path(mod_id, revision));
+        match self.store.get(&revision_path).await {
+            Ok(result) => {
+                let bytes = result.bytes().await?;
+                return Ok(Some(
+                    self.parse_metadata(mod_id, revision, &bytes, false).await?,
+                ));
+            }
+            Err(object_store::Error::NotFound { .. }) if revision == 1 => {}
+            Err(object_store::Error::NotFound { .. }) => return Ok(None),
+            Err(error) => return Err(error.into()),
+        }
         match self
             .store
             .get(&self.store_path(Self::metadata_path(mod_id)))
@@ -465,23 +787,37 @@ impl ModStore {
         {
             Ok(result) => {
                 let bytes = result.bytes().await?;
-                Ok(Some(self.parse_metadata(mod_id, &bytes).await?))
+                Ok(Some(self.parse_metadata(mod_id, 1, &bytes, true).await?))
             }
             Err(object_store::Error::NotFound { .. }) => Ok(None),
             Err(error) => Err(error.into()),
         }
     }
 
+    pub async fn list_revisions(&self, mod_id: &str) -> Result<Vec<ModCatalogEntry>> {
+        let Some(current) = self.current_state(mod_id).await? else {
+            return Ok(Vec::new());
+        };
+        let mut revisions = Vec::new();
+        for revision in (1..=current.revision).rev() {
+            if let Some(entry) = self.get_revision(mod_id, revision).await? {
+                revisions.push(entry);
+            }
+        }
+        Ok(revisions)
+    }
+
     async fn read_all(&self) -> Result<Vec<ModCatalogEntry>> {
-        // Collect every `<modId>/mod.json` object, then resolve each entry.
-        let mut mod_ids = Vec::new();
+        let mut mod_ids = std::collections::BTreeSet::new();
         let mut listing = self.store.list(self.list_prefix());
         while let Some(meta) = listing.next().await {
             let location = meta?.location;
-            if location.filename() == Some(MOD_METADATA_FILE) {
+            if location.filename() == Some(MOD_METADATA_FILE)
+                || location.filename() == Some(CURRENT_FILE)
+            {
                 let relative = self.strip_prefix(&location);
                 if let Some((mod_id, _)) = relative.split_once('/') {
-                    mod_ids.push(mod_id.to_string());
+                    mod_ids.insert(mod_id.to_string());
                 }
             }
         }
@@ -502,32 +838,58 @@ impl ModStore {
         Ok(mods)
     }
 
-    async fn parse_metadata(&self, dir_id: &str, bytes: &[u8]) -> Result<ModCatalogEntry> {
+    async fn parse_metadata(
+        &self,
+        dir_id: &str,
+        revision: u64,
+        bytes: &[u8],
+        legacy: bool,
+    ) -> Result<ModCatalogEntry> {
         let mut metadata: ModCatalogEntry = serde_json::from_slice(bytes)
             .with_context(|| format!("parsing mod.json for {dir_id}"))?;
 
         if metadata.mod_id.is_empty() {
             metadata.mod_id = dir_id.to_string();
         }
+        metadata.package_revision = revision;
 
-        // A mod.json written before these fields existed (or by hand) leaves them empty; fill
-        // them from the store so the catalog always advertises a real size and a download
-        // link rather than 0 bytes / no URL.
+        let artifact_path = if legacy {
+            Self::artifact_path(&metadata.mod_id)
+        } else {
+            Self::revision_artifact_path(&metadata.mod_id, revision)
+        };
         if metadata.size_bytes.unwrap_or(0) == 0 {
             if let Ok(head) = self
                 .store
-                .head(&self.store_path(Self::artifact_path(&metadata.mod_id)))
+                .head(&self.store_path(artifact_path.clone()))
                 .await
             {
                 metadata.size_bytes = Some(head.size as u64);
             }
         }
+        if metadata.sha256.is_none() {
+            if let Ok(result) = self.store.get(&self.store_path(artifact_path)).await {
+                metadata.sha256 = Some(hex(&Sha256::digest(&result.bytes().await?)));
+            }
+        }
         if metadata.download_url.is_none() {
-            metadata.download_url = Some(format!("/v1/mods/{}/download", metadata.mod_id));
+            metadata.download_url = Some(format!(
+                "/v1/mods/{}/revisions/{revision}/download",
+                metadata.mod_id
+            ));
         }
 
         Ok(metadata)
     }
+}
+
+fn now_unix_millis() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .try_into()
+        .unwrap_or(i64::MAX)
 }
 
 fn normalize_prefix(prefix: Option<&str>) -> Option<ObjectPath> {
@@ -677,7 +1039,7 @@ mod tests {
         assert_eq!(mods[0].size_bytes, Some(4096));
         assert_eq!(
             mods[0].download_url.as_deref(),
-            Some("/v1/mods/legacy-mod/download")
+            Some("/v1/mods/legacy-mod/revisions/1/download")
         );
     }
 
@@ -699,24 +1061,17 @@ mod tests {
             })
             .await
             .unwrap();
-        assert_eq!(entry.mod_id, "synthetic-core-pack-1.0");
+        assert_eq!(entry.mod_id, "synthetic-core-pack");
         assert_eq!(entry.app_name.as_deref(), Some("CWR"));
         assert_eq!(entry.actver, Some(302));
         assert_eq!(entry.version_tag.as_deref(), Some("rc1"));
 
-        let fetched = store
-            .get_mod("synthetic-core-pack-1.0")
-            .await
-            .unwrap()
-            .unwrap();
+        let fetched = store.get_mod("synthetic-core-pack").await.unwrap().unwrap();
         assert_eq!(fetched.name, "Synthetic Core Pack");
 
         // The artifact arrives already compressed; the service stores and serves it verbatim,
         // and size_bytes is exactly that uploaded (download) size.
-        let stored = store
-            .artifact_bytes("synthetic-core-pack-1.0")
-            .await
-            .unwrap();
+        let stored = store.artifact_bytes("synthetic-core-pack").await.unwrap();
         assert_eq!(stored.as_deref(), Some([1, 2, 3, 4, 5].as_slice()));
         assert_eq!(entry.size_bytes, Some(5));
 
@@ -741,13 +1096,9 @@ mod tests {
             .finalize_mod(upload, streamed_meta("Streamed Mod", "1.0"))
             .await
             .unwrap();
-        assert_eq!(entry.mod_id, "streamed-mod-1.0");
+        assert_eq!(entry.mod_id, "streamed-mod");
 
-        let stored = store
-            .artifact_bytes("streamed-mod-1.0")
-            .await
-            .unwrap()
-            .unwrap();
+        let stored = store.artifact_bytes("streamed-mod").await.unwrap().unwrap();
         assert_eq!(stored, payload);
         assert_eq!(entry.size_bytes, Some(payload.len() as u64));
     }
@@ -793,16 +1144,18 @@ mod tests {
             })
             .await
             .unwrap();
-        assert!(store.get_mod("temp-mod-1.0").await.unwrap().is_some());
+        assert!(store.get_mod("temp-mod").await.unwrap().is_some());
+        store
+            .add_revision("temp-mod", vec![8, 8, 8], super::ModUploadMeta::default())
+            .await
+            .unwrap();
 
         // Delete returns true (existed) and removes both the entry and the artifact.
-        assert!(store.delete_mod("temp-mod-1.0").await.unwrap());
-        assert!(store.get_mod("temp-mod-1.0").await.unwrap().is_none());
-        assert!(store
-            .artifact_bytes("temp-mod-1.0")
-            .await
-            .unwrap()
-            .is_none());
+        assert!(store.delete_mod("temp-mod").await.unwrap());
+        assert!(store.get_mod("temp-mod").await.unwrap().is_none());
+        assert!(store.artifact_bytes("temp-mod").await.unwrap().is_none());
+        assert!(store.revision_bytes("temp-mod", 1).await.unwrap().is_none());
+        assert!(store.revision_bytes("temp-mod", 2).await.unwrap().is_none());
         assert!(store
             .list_mods(&ListModsQuery::default())
             .await
@@ -810,8 +1163,158 @@ mod tests {
             .is_empty());
 
         // Deleting again, or a never-existing / unsafe id, returns false.
-        assert!(!store.delete_mod("temp-mod-1.0").await.unwrap());
+        assert!(!store.delete_mod("temp-mod").await.unwrap());
         assert!(!store.delete_mod("never-existed").await.unwrap());
         assert!(!store.delete_mod("../escape").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn stable_id_keeps_immutable_revision_history() {
+        let root = tempdir().unwrap();
+        let store = ModStore::local(root.path()).unwrap();
+        let first = store
+            .publish_mod(&super::PublishModInput {
+                name: "Stable Mod".to_string(),
+                app_name: Some("CWR".to_string()),
+                actver: Some(302),
+                version_tag: Some("rc1".to_string()),
+                version: Some("1.0".to_string()),
+                description: Some("first".to_string()),
+                authors: vec!["Author".to_string()],
+                homepage_url: Some("https://example.invalid/stable".to_string()),
+                file: vec![1, 2, 3],
+            })
+            .await
+            .unwrap();
+        assert_eq!(first.mod_id, "stable-mod");
+        assert_eq!(first.package_revision, 1);
+
+        let second = store
+            .add_revision("stable-mod", vec![4, 5, 6], super::ModUploadMeta::default())
+            .await
+            .unwrap();
+        assert_eq!(second.mod_id, "stable-mod");
+        assert_eq!(second.package_revision, 2);
+        assert_eq!(second.name, "Stable Mod");
+        assert_eq!(second.version, "1.0");
+        assert_eq!(second.description, "first");
+
+        let latest = store.get_mod("stable-mod").await.unwrap().unwrap();
+        assert_eq!(latest.package_revision, 2);
+        assert_eq!(
+            store
+                .revision_bytes("stable-mod", 1)
+                .await
+                .unwrap()
+                .unwrap(),
+            vec![1, 2, 3]
+        );
+        assert_eq!(
+            store
+                .revision_bytes("stable-mod", 2)
+                .await
+                .unwrap()
+                .unwrap(),
+            vec![4, 5, 6]
+        );
+        let history = store.list_revisions("stable-mod").await.unwrap();
+        assert_eq!(
+            history
+                .iter()
+                .map(|entry| entry.package_revision)
+                .collect::<Vec<_>>(),
+            vec![2, 1]
+        );
+
+        let restored = store
+            .add_revision("stable-mod", vec![1, 2, 3], super::ModUploadMeta::default())
+            .await
+            .unwrap();
+        assert_eq!(restored.package_revision, 3);
+        assert_eq!(
+            store
+                .get_mod("stable-mod")
+                .await
+                .unwrap()
+                .unwrap()
+                .package_revision,
+            3
+        );
+    }
+
+    #[tokio::test]
+    async fn identical_current_upload_is_idempotent() {
+        let root = tempdir().unwrap();
+        let store = ModStore::local(root.path()).unwrap();
+        store
+            .publish_mod(&super::PublishModInput {
+                name: "Idempotent Mod".to_string(),
+                app_name: None,
+                actver: None,
+                version_tag: None,
+                version: Some("1.0".to_string()),
+                description: None,
+                authors: Vec::new(),
+                homepage_url: None,
+                file: vec![7, 8, 9],
+            })
+            .await
+            .unwrap();
+
+        let repeated = store
+            .add_revision(
+                "idempotent-mod",
+                vec![7, 8, 9],
+                super::ModUploadMeta::default(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(repeated.package_revision, 1);
+        assert_eq!(
+            store.list_revisions("idempotent-mod").await.unwrap().len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn concurrent_updates_allocate_distinct_revisions_without_regressing_latest() {
+        let root = tempdir().unwrap();
+        let store = ModStore::local(root.path()).unwrap();
+        store
+            .publish_mod(&super::PublishModInput {
+                name: "Concurrent Mod".to_string(),
+                app_name: None,
+                actver: None,
+                version_tag: None,
+                version: Some("1.0".to_string()),
+                description: None,
+                authors: Vec::new(),
+                homepage_url: None,
+                file: vec![1],
+            })
+            .await
+            .unwrap();
+
+        let left = store.clone();
+        let right = store.clone();
+        let (left, right) = tokio::join!(
+            left.add_revision("concurrent-mod", vec![2], super::ModUploadMeta::default()),
+            right.add_revision("concurrent-mod", vec![3], super::ModUploadMeta::default())
+        );
+        let mut allocated = vec![
+            left.unwrap().package_revision,
+            right.unwrap().package_revision,
+        ];
+        allocated.sort_unstable();
+        assert_eq!(allocated, vec![2, 3]);
+        assert_eq!(
+            store
+                .get_mod("concurrent-mod")
+                .await
+                .unwrap()
+                .unwrap()
+                .package_revision,
+            3
+        );
     }
 }

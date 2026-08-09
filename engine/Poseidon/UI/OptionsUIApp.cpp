@@ -1300,6 +1300,8 @@ static AutoArray<ModRow> ScanModRows()
             r.folderName = sm.folderName.c_str();
             r.name = sm.name.c_str();
             r.version = sm.version.c_str();
+            r.packageRevision = sm.packageRevision;
+            r.sha256 = sm.sha256.c_str();
             r.sizeBytes = sm.sizeBytes;
             r.source = source;
             const bool isActive = active.count(LowerStr(sm.folderName)) > 0;
@@ -1432,35 +1434,44 @@ static std::string BareModId(const RString& modId)
     return id;
 }
 
-// Download tasks for every ticked-but-not-downloaded row that carries a URL.
-// Each task downloads the zstd-wrapped mod artifact next to its install dir then unpacks it
-// into <root>/<folderName> (so GetModInstallStatus sees it installed). Returns true if any.
-static bool BuildCheckedDownloadTasks(CModsList* list, const std::string& root, std::vector<DownloadTask>& tasks)
+static bool BuildCheckedDownloadTasks(CModsList* list, const std::string& root, std::vector<DownloadTask>& tasks,
+                                      std::vector<StagedModInstall>& installs, bool& hasUpdates)
 {
     const AutoArray<ModRow>& rows = list->GetRows();
     for (int i = 0; i < rows.Size(); i++)
     {
         const ModRow& r = rows[i];
-        if (!r.checked || r.state != ModRowState::Missing || r.downloadUrl.GetLength() == 0)
+        if (!r.checked || (r.state != ModRowState::Missing && r.freshness != ModRowFreshness::UpdateAvailable) ||
+            r.downloadUrl.GetLength() == 0)
             continue;
+        hasUpdates = hasUpdates || r.freshness == ModRowFreshness::UpdateAvailable;
         const std::string modId = BareModId(r.modId);
         const std::string folderName = (const char*)r.folderName;
         const std::string destDir = ModInstallDir(root, modId, folderName);
+        StagedModInstall install = MakeStagedModInstall(destDir, modId);
+        const std::string stagingDir = install.stagingDir;
         DownloadTask t;
         t.label = (const char*)r.name;
         t.url = (const char*)r.downloadUrl;
-        t.destPath = destDir + ".pbo.zst";
+        t.destPath = stagingDir + ".pbo.zst";
         t.expectedBytes = r.sizeBytes;
-        t.postStep = [destDir, modId, name = std::string((const char*)r.name),
+        t.postStep = [stagingDir, modId, name = std::string((const char*)r.name),
                       version = std::string((const char*)r.version), folderName,
-                      downloadUrl = std::string((const char*)r.downloadUrl),
-                      sizeBytes = r.sizeBytes](const DownloadTask& task, std::string& error) -> bool
+                      downloadUrl = std::string((const char*)r.downloadUrl), sizeBytes = r.sizeBytes,
+                      packageRevision = r.packageRevision,
+                      sha256 = std::string((const char*)r.sha256)](const DownloadTask& task, std::string& error) -> bool
         {
-            if (!ModArchive::Unpack(task.destPath.c_str(), destDir.c_str(), &error))
+            if (!VerifyModArtifact(task.destPath, sizeBytes, sha256, &error))
                 return false;
-            return WriteInstalledModManifest(destDir, modId, name, version, folderName, downloadUrl, sizeBytes, &error);
+            std::error_code ec;
+            std::filesystem::remove_all(stagingDir, ec);
+            if (!ModArchive::Unpack(task.destPath.c_str(), stagingDir.c_str(), &error))
+                return false;
+            return WriteInstalledModManifest(stagingDir, modId, name, version, folderName, downloadUrl, sizeBytes,
+                                             &error, packageRevision, sha256);
         };
         tasks.push_back(std::move(t));
+        installs.push_back(std::move(install));
     }
     return !tasks.empty();
 }
@@ -1473,25 +1484,19 @@ static RString LocalizedDownloadUnitNoun(const char* unitNoun, int count)
     return LocalizeString(plural ? "STR_DISP_MODS_NOUN_ADDONS" : "STR_DISP_MODS_NOUN_ADDON");
 }
 
-// After a successful download, flip the now-installed rows off Missing so
-// BuildModPath mounts them. Preserves ticks (SetRows copies the rows back).
-static void RefreshInstalledStates(CModsList* list, const std::string& root)
+static void MarkCheckedDownloadsReady(CModsList* list)
 {
     AutoArray<ModRow> rows = list->GetRows();
-    bool changed = false;
-    for (int i = 0; i < rows.Size(); i++)
+    for (int i = 0; i < rows.Size(); ++i)
     {
-        if (rows[i].state != ModRowState::Missing)
+        if (!rows[i].checked ||
+            (rows[i].state != ModRowState::Missing && rows[i].freshness != ModRowFreshness::UpdateAvailable))
             continue;
-        const ModInstallStatus st = GetModInstallStatus(root, BareModId(rows[i].modId), (const char*)rows[i].version);
-        if (st != ModInstallStatus::NotInstalled)
-        {
+        if (rows[i].state == ModRowState::Missing)
             rows[i].state = ModRowState::Downloaded;
-            changed = true;
-        }
+        rows[i].freshness = ModRowFreshness::Current;
     }
-    if (changed)
-        list->SetRows(rows);
+    list->SetRows(rows);
 }
 
 void DisplayMods::OnButtonClicked(int idc)
@@ -1521,10 +1526,14 @@ void DisplayMods::OnButtonClicked(int idc)
         // download dialog; OnChildDestroyed(IDD_MODS_DOWNLOAD, IDC_OK) re-mounts
         // once it reports success.
         std::vector<DownloadTask> tasks;
-        if (BuildCheckedDownloadTasks(list, WorkshopModsRoot(), tasks))
+        bool hasUpdates = false;
+        DiscardStagedModInstalls(_stagedInstalls);
+        if (BuildCheckedDownloadTasks(list, WorkshopModsRoot(), tasks, _stagedInstalls, hasUpdates))
         {
             std::string proxy = (const char*)GetNetworkProxy();
-            CreateChild(new DisplayModDownload(this, std::move(tasks), MakeMasterServerTransport(proxy)));
+            CreateChild(
+                new DisplayModDownload(this, std::move(tasks), MakeMasterServerTransport(proxy), "addon", {},
+                                       hasUpdates ? "STR_DISP_MODS_UPDATE_PROMPT" : "STR_DISP_MODS_DOWNLOAD_PROMPT"));
             return;
         }
 
@@ -1660,10 +1669,14 @@ void DisplayMods::OnChildDestroyed(int idd, int exit)
         CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST));
         if (list != nullptr && GApp != nullptr && GWorld != nullptr && GWorld->GetMode() == GModeIntro)
         {
-            RefreshInstalledStates(list, WorkshopModsRoot());
+            MarkCheckedDownloadsReady(list);
             RString modPath = list->BuildModPath(LocalModsRoot().c_str(), WorkshopModsRoot().c_str());
-            GApp->RequestRemountWithMods((const char*)modPath);
+            GApp->RequestRemountWithMods((const char*)modPath, std::move(_stagedInstalls));
         }
+    }
+    else if (idd == IDD_MODS_DOWNLOAD)
+    {
+        DiscardStagedModInstalls(_stagedInstalls);
     }
     Display::OnChildDestroyed(idd, exit);
 }
@@ -1749,34 +1762,54 @@ void DisplayMods::MergeWorkshopMods(const std::vector<MasterServerServiceModCata
 
     AutoArray<ModRow> rows;
     const AutoArray<ModRow>& current = list->GetRows();
-    std::set<std::string> existing; // lowercased catalog modId/folder id already in the list
     for (int i = 0; i < current.Size(); i++)
-    {
         rows.Add(current[i]);
-        existing.insert(LowerStr((const char*)current[i].modId));
-    }
 
     const std::string root = WorkshopModsRoot();
     for (const MasterServerServiceModCatalogEntry& e : catalog)
     {
         if (e.modId.empty())
             continue;
-        if (existing.count(LowerStr(e.modId)) > 0)
-            continue; // a local mod already shows this id — prefer the installed one
-        existing.insert(LowerStr(e.modId));
+
+        int existing = -1;
+        for (int i = 0; i < rows.Size(); ++i)
+        {
+            if (LowerStr((const char*)rows[i].modId) == LowerStr(e.modId))
+            {
+                existing = i;
+                break;
+            }
+        }
+        if (existing >= 0 && rows[existing].source == ModRowSource::Local)
+            continue;
 
         ModRow r;
         r.modId = e.modId.c_str();
         r.folderName = (e.folderName.empty() ? ("@" + e.modId) : e.folderName).c_str();
         r.name = e.name.empty() ? e.modId.c_str() : e.name.c_str();
         r.version = e.version.c_str();
+        r.packageRevision = e.packageRevision;
+        r.sha256 = e.sha256.c_str();
         r.sizeBytes = e.sizeBytes;
         r.source = ModRowSource::Workshop;
         r.downloadUrl = e.downloadUrl.c_str();
-        const ModInstallStatus st = GetModInstallStatus(root, e.modId, e.version);
+        const ModInstallStatus st = GetModInstallStatus(root, e.modId, e.version, e.packageRevision, e.sha256);
         r.state = (st == ModInstallStatus::NotInstalled) ? ModRowState::Missing : ModRowState::Downloaded;
-        r.checked = false; // shown only — not activated/downloaded for now
-        rows.Add(r);
+        r.freshness =
+            st == ModInstallStatus::UpdateAvailable
+                ? ModRowFreshness::UpdateAvailable
+                : (st == ModInstallStatus::InstalledAhead ? ModRowFreshness::Ahead : ModRowFreshness::Current);
+        if (existing >= 0)
+        {
+            r.checked = rows[existing].checked;
+            if (rows[existing].state == ModRowState::Active)
+                r.state = ModRowState::Active;
+            rows[existing] = r;
+        }
+        else
+        {
+            rows.Add(r);
+        }
     }
 
     list->SetRows(rows);
@@ -1802,7 +1835,8 @@ void DisplayMods::UpdateSortCarets()
 // DisplayModDownload — the download-progress dialog (agnostic)
 
 DisplayModDownload::DisplayModDownload(ControlsContainer* parent, std::vector<DownloadTask> tasks,
-                                       DownloadFileFn transport, const char* unitNoun, std::function<double()> now)
+                                       DownloadFileFn transport, const char* unitNoun, std::function<double()> now,
+                                       const char* promptKey)
     : Display(parent), _tasks(std::move(tasks)), _worker(std::move(transport), std::move(now)),
       _unitNoun(unitNoun != nullptr ? unitNoun : "addon"), _phase(PhasePrompt), _started(false)
 {
@@ -1814,8 +1848,10 @@ DisplayModDownload::DisplayModDownload(ControlsContainer* parent, std::vector<Do
         total += (t.expectedBytes > 0 ? t.expectedBytes : 0);
     const int count = static_cast<int>(_tasks.size());
     RString noun = LocalizedDownloadUnitNoun((const char*)_unitNoun, count);
-    _prompt = Format(LocalizeString("STR_DISP_MODS_DOWNLOAD_PROMPT"), count, (const char*)noun,
-                     DownloadProgress::FormatBytes(total).c_str());
+    const RString prompt = strcmp(promptKey, "STR_DISP_MODS_UPDATE_PROMPT") == 0
+                               ? RString(LocalizeStringWithFallback(promptKey, "Update %d %s (%s)."))
+                               : LocalizeString(promptKey);
+    _prompt = Format((const char*)prompt, count, (const char*)noun, DownloadProgress::FormatBytes(total).c_str());
     SetNotebookText(IDC_MODS_DL_PROMPT, _prompt);
 }
 

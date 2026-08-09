@@ -5,6 +5,7 @@
 #include <Poseidon/UI/GameModule.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Core/DownloadWorker.hpp>
+#include <Poseidon/Core/ModInstall.hpp>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -141,6 +142,7 @@ class DisplayMods : public Display
     bool _workshopMerged = false;
     int _sortColumn = 0; // active sort (ModsSortColumn); header click toggles dir
     bool _sortAscending = true;
+    std::vector<Poseidon::StagedModInstall> _stagedInstalls;
 
   public:
     DisplayMods(ControlsContainer* parent);
@@ -241,7 +243,8 @@ class DisplayModDownload : public Display
 
   public:
     DisplayModDownload(ControlsContainer* parent, std::vector<DownloadTask> tasks, DownloadFileFn transport,
-                       const char* unitNoun = "addon", std::function<double()> now = std::function<double()>());
+                       const char* unitNoun = "addon", std::function<double()> now = std::function<double()>(),
+                       const char* promptKey = "STR_DISP_MODS_DOWNLOAD_PROMPT");
 
     void OnButtonClicked(int idc) override;
     void OnSimulate(EntityAI* vehicle) override;
@@ -296,6 +299,13 @@ enum class ModRowState
     Active,     // installed + in the active set
 };
 
+enum class ModRowFreshness
+{
+    Current,
+    UpdateAvailable,
+    Ahead,
+};
+
 struct ModRow
 {
     bool checked = false; // selection tick -> drives the active set on Apply
@@ -303,8 +313,11 @@ struct ModRow
     RString folderName;
     RString name;
     RString version;
+    int64_t packageRevision = 1;
+    RString sha256;
     int64_t sizeBytes = 0;
     ModRowState state = ModRowState::Missing;
+    ModRowFreshness freshness = ModRowFreshness::Current;
     ModRowSource source = ModRowSource::Workshop;
     RString downloadUrl; // Workshop rows: PBO URL from the catalog (empty for local)
 };
@@ -502,8 +515,10 @@ class DisplayMultiplayer : public Display
     RString _joinTargetIp;
     int _joinTargetPort = 0;
     RString _joinServerMod;
+    std::vector<std::pair<std::string, int64_t>> _joinServerPackages;
     bool _joinServerEqualMod = false;
-    std::vector<DownloadTask> _joinTasks; // missing mods to fetch before the join (may be empty)
+    std::vector<DownloadTask> _joinTasks;
+    std::vector<Poseidon::StagedModInstall> _joinStagedInstalls;
 
   public:
     DisplayMultiplayer(ControlsContainer* parent);

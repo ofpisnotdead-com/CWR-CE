@@ -555,6 +555,13 @@ void CModsList::DrawItem(Vector3Par position, Vector3Par down, int i, float alph
 
     PackedColor stateColor;
     RString stateText;
+    if (mod.freshness == ModRowFreshness::UpdateAvailable)
+    {
+        stateText = LocalizeStringWithFallback("STR_DISP_MODS_STATE_UPDATE_AVAILABLE", "Update available");
+        stateColor = PackedColor(Color(1.0, 0.80, 0.45, alpha));
+        row.DrawColumn(0.25, stateText, stateColor);
+        return;
+    }
     switch (mod.state)
     {
         case ModRowState::Active:
@@ -984,6 +991,9 @@ bool DisplayMultiplayer::BeginModdedJoin(const SessionInfo& info)
     // Stash the target — the guid is "address:port".
     _joinGuid = info.guid;
     _joinServerMod = info.mod;
+    _joinServerPackages.clear();
+    for (int i = 0; i < info.modPackages.Size(); ++i)
+        _joinServerPackages.emplace_back((const char*)info.modPackages[i].modId, info.modPackages[i].packageRevision);
     _joinServerEqualMod = info.equalModRequired;
     std::string guid = (const char*)info.guid;
     _joinTargetIp = guid.c_str();
@@ -1005,23 +1015,26 @@ bool DisplayMultiplayer::BeginModdedJoin(const SessionInfo& info)
         std::vector<MasterServerServiceModCatalogEntry> mods;
         if (FetchMasterServerServiceModList(host.c_str(), nullptr, proxy.empty() ? nullptr : proxy.c_str(), mods))
         {
+            catalog.MarkReachable();
             for (const auto& m : mods)
                 catalog.Add(Poseidon::ModCatalogEntry(Poseidon::ModId(m.modId), m.name, m.downloadUrl, m.sizeBytes,
-                                                      m.folderName));
+                                                      m.folderName, m.packageRevision, m.sha256, m.version));
         }
     }
 
     // Installed (both roots) + active (current mount path).
-    std::vector<Poseidon::ModId> installed;
+    std::vector<Poseidon::InstalledModPackage> installed;
     for (const auto& m : Poseidon::ScanModsRoot(Poseidon::ModsLocalRoot(), Poseidon::ModSource::Local))
-        installed.emplace_back(m.catalogId.empty() ? m.id : m.catalogId);
+        installed.push_back({Poseidon::ModId(m.catalogId.empty() ? m.id : m.catalogId), m.packageRevision});
     for (const auto& m : Poseidon::ScanModsRoot(Poseidon::ModsWorkshopRoot(), Poseidon::ModSource::Workshop))
-        installed.emplace_back(m.catalogId.empty() ? m.id : m.catalogId);
+        installed.push_back({Poseidon::ModId(m.catalogId.empty() ? m.id : m.catalogId), m.packageRevision});
     std::vector<Poseidon::ModId> active;
     for (const auto& m : Poseidon::ActiveModsFromMountPath((const char*)Poseidon::ModSystem::GetModList()).All())
         active.emplace_back(m.catalogId.empty() ? m.id : m.catalogId);
 
-    const Poseidon::ServerModList required((const char*)info.mod, info.equalModRequired);
+    const Poseidon::ServerModList required = _joinServerPackages.empty()
+                                                 ? Poseidon::ServerModList((const char*)info.mod, info.equalModRequired)
+                                                 : Poseidon::ServerModList(_joinServerPackages, info.equalModRequired);
     const Poseidon::ServerModResolution res = Poseidon::ServerModResolver(installed, active).Resolve(required, catalog);
 
     // Already-mounted check: does the engine's current mount path already equal the
@@ -1046,10 +1059,12 @@ bool DisplayMultiplayer::BeginModdedJoin(const SessionInfo& info)
     // Download / ApplyThenConnect: stash the work and show the one-screen requirements
     // dialog (diff + password). Approving it chains to the download (if any) + apply.
     _joinTasks.clear();
+    Poseidon::DiscardStagedModInstalls(_joinStagedInstalls);
     const std::string root = Poseidon::ModsWorkshopRoot();
     for (const Poseidon::ModDownload& d : res.ToDownload())
-        _joinTasks.push_back(
-            Poseidon::MakeModDownloadTask(d.id.Value(), d.name, d.downloadUrl, d.sizeBytes, root, d.folderName));
+        _joinTasks.push_back(Poseidon::MakeModDownloadTask(d.id.Value(), d.name, d.downloadUrl, d.sizeBytes, root,
+                                                           _joinStagedInstalls, d.folderName, d.version,
+                                                           d.packageRevision, d.sha256));
 
     std::string diff = (const char*)LocalizeString("STR_DISP_MODS_JOIN_REQUIRES");
     diff += "\n";
@@ -1085,10 +1100,35 @@ void DisplayMultiplayer::ApplyModdedJoin()
     Poseidon::ModLoader loader;
     loader.AddRoot(Poseidon::ModsLocalRoot(), Poseidon::ModSource::Local);
     loader.AddRoot(Poseidon::ModsWorkshopRoot(), Poseidon::ModSource::Workshop);
-    const Poseidon::ServerModList required((const char*)_joinServerMod, _joinServerEqualMod);
-    const std::string path = loader.Load().MountPathForIds(required.Required());
+    const Poseidon::ServerModList required =
+        _joinServerPackages.empty() ? Poseidon::ServerModList((const char*)_joinServerMod, _joinServerEqualMod)
+                                    : Poseidon::ServerModList(_joinServerPackages, _joinServerEqualMod);
+    const Poseidon::ModCollection installed = loader.Load();
+    std::string path;
+    for (const Poseidon::ModId& id : required.Required())
+    {
+        const Poseidon::Mod* mod = installed.Find(id.Value());
+        std::string destination = mod != nullptr ? mod->path : std::string();
+        if (destination.empty())
+        {
+            for (const Poseidon::StagedModInstall& staged : _joinStagedInstalls)
+            {
+                if (Poseidon::ModId(staged.modId) == id)
+                {
+                    destination = staged.destinationDir;
+                    break;
+                }
+            }
+        }
+        if (!destination.empty())
+        {
+            if (!path.empty())
+                path += ';';
+            path += destination;
+        }
+    }
     Poseidon::GPendingConnect().Arm((const char*)_joinTargetIp, _joinTargetPort, (const char*)_password);
-    GApp->RequestRemountWithMods(path.c_str());
+    GApp->RequestRemountWithMods(path.c_str(), std::move(_joinStagedInstalls));
 }
 
 void DisplayMultiplayer::OnButtonClicked(int idc)
@@ -1420,6 +1460,10 @@ void DisplayMultiplayer::OnChildDestroyed(int idd, int exit)
             {
                 ApplyModdedJoin();
             }
+            else
+            {
+                Poseidon::DiscardStagedModInstalls(_joinStagedInstalls);
+            }
             break;
         default:
             Display::OnChildDestroyed(idd, exit);
@@ -1668,6 +1712,15 @@ void DisplayMultiplayer::UpdateServerList()
         dst.maxPlayers = info.maxPlayers;
         dst.timeleft = info.timeLeft;
         dst.mod = info.mod;
+        if (info.modPackages != nullptr)
+        {
+            for (const Poseidon::MasterServerServiceModPackage& package : *info.modPackages)
+            {
+                SessionModPackage& item = dst.modPackages[dst.modPackages.Add()];
+                item.modId = package.modId.c_str();
+                item.packageRevision = package.packageRevision;
+            }
+        }
         dst.equalModRequired = info.equalModRequired;
 
         if (info.address != nullptr && info.address[0] != 0 && info.hostPort > 0)

@@ -69,6 +69,98 @@ TEST_CASE("GetModInstallStatus reflects presence and version", "[mods][install]"
     std::filesystem::remove_all(root, ec);
 }
 
+TEST_CASE("GetModInstallStatus compares package revisions before author versions", "[mods][install]")
+{
+    const auto root = MakeTempDir();
+    const auto dir = root / "@stable";
+    std::filesystem::create_directories(dir);
+    std::ofstream(dir / "mod.json", std::ios::binary)
+        << R"({"modId":"stable","version":"1.0","packageRevision":2,"sha256":"abcd"})";
+
+    CHECK(GetModInstallStatus(root.string(), "stable", "1.0", 2, "abcd") == ModInstallStatus::Installed);
+    CHECK(GetModInstallStatus(root.string(), "stable", "1.0", 3, "ffff") == ModInstallStatus::UpdateAvailable);
+    CHECK(GetModInstallStatus(root.string(), "stable", "9.9", 1, "ffff") == ModInstallStatus::InstalledAhead);
+    CHECK(ReadInstalledPackageRevision(root.string(), "stable") == 2);
+    CHECK(ReadInstalledArtifactHash(root.string(), "stable") == "abcd");
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+}
+
+TEST_CASE("downloaded mod artifacts require the advertised size and SHA-256", "[mods][install][hash]")
+{
+    const auto root = MakeTempDir();
+    const auto artifact = root / "package.zst";
+    std::ofstream(artifact, std::ios::binary) << "abc";
+    const std::string digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+    std::string error;
+    CHECK(VerifyModArtifact(artifact.string(), 3, digest, &error));
+    CHECK_FALSE(VerifyModArtifact(artifact.string(), 4, digest, &error));
+    CHECK_FALSE(VerifyModArtifact(artifact.string(), 3, std::string(64, '0'), &error));
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+}
+
+TEST_CASE("staged mod installs replace stale files and roll back as one transaction", "[mods][install][transaction]")
+{
+    const auto root = MakeTempDir();
+    const auto first = root / "@first";
+    const auto second = root / "@second";
+    std::filesystem::create_directories(first);
+    std::filesystem::create_directories(second);
+    std::ofstream(first / "old.txt") << "first-old";
+    std::ofstream(first / "stale.txt") << "stale";
+    std::ofstream(second / "old.txt") << "second-old";
+
+    std::vector<StagedModInstall> installs = {MakeStagedModInstall(first.string()),
+                                              MakeStagedModInstall(second.string())};
+    std::filesystem::create_directories(installs[0].stagingDir);
+    std::filesystem::create_directories(installs[1].stagingDir);
+    std::ofstream(std::filesystem::path(installs[0].stagingDir) / "new.txt") << "first-new";
+    std::ofstream(std::filesystem::path(installs[1].stagingDir) / "new.txt") << "second-new";
+
+    REQUIRE(SwapStagedModInstalls(installs));
+    CHECK(std::filesystem::exists(first / "new.txt"));
+    CHECK_FALSE(std::filesystem::exists(first / "stale.txt"));
+    RestoreStagedModInstalls(installs);
+    CHECK(std::filesystem::exists(first / "old.txt"));
+    CHECK(std::filesystem::exists(first / "stale.txt"));
+    CHECK(std::filesystem::exists(second / "old.txt"));
+    CHECK_FALSE(std::filesystem::exists(second / "new.txt"));
+
+    DiscardStagedModInstalls(installs);
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+}
+
+TEST_CASE("a failed staged swap restores every earlier destination", "[mods][install][transaction]")
+{
+    const auto root = MakeTempDir();
+    const auto first = root / "@first";
+    const auto second = root / "@second";
+    std::filesystem::create_directories(first);
+    std::filesystem::create_directories(second);
+    std::ofstream(first / "marker.txt") << "first-old";
+    std::ofstream(second / "marker.txt") << "second-old";
+
+    std::vector<StagedModInstall> installs = {MakeStagedModInstall(first.string()),
+                                              MakeStagedModInstall(second.string())};
+    std::filesystem::create_directories(installs[0].stagingDir);
+    std::ofstream(std::filesystem::path(installs[0].stagingDir) / "new.txt") << "new";
+
+    std::string error;
+    CHECK_FALSE(SwapStagedModInstalls(installs, &error));
+    CHECK_FALSE(error.empty());
+    CHECK(std::filesystem::exists(first / "marker.txt"));
+    CHECK(std::filesystem::exists(second / "marker.txt"));
+    CHECK_FALSE(std::filesystem::exists(first / "new.txt"));
+
+    DiscardStagedModInstalls(installs);
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+}
+
 TEST_CASE("ModInstallDir composes the @modId path", "[mods][install]")
 {
     CHECK(ModInstallDir("/x/mods", "csla") == "/x/mods/@csla");

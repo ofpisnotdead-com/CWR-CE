@@ -3,6 +3,7 @@ using namespace Poseidon;
 #include <Poseidon/Core/Config/EngineConfig.hpp>
 #include <Poseidon/Core/Config/UserConfig.hpp>
 #include <Poseidon/Core/ModSystem.hpp>
+#include <Poseidon/Core/ModCollection.hpp>
 #include <Poseidon/Core/Version.hpp>
 #include <Poseidon/Foundation/Logging/Logging.hpp>
 #include <Poseidon/Core/Config/Config.hpp>
@@ -588,6 +589,13 @@ bool NetworkServer::FillMasterServerServiceRegistration(MasterServerServiceRegis
             ModSystem::GetModNames(), _equalModRequired, MasterServerPlatform(), registration))
     {
         return false;
+    }
+
+    registration.modPackages.clear();
+    for (const Mod& mod : ActiveModsFromMountPath((const char*)ModSystem::GetModList()).All())
+    {
+        registration.modPackages.push_back(
+            {mod.catalogId.empty() ? mod.id : mod.catalogId, std::max<int64_t>(1, mod.packageRevision)});
     }
 
     registration.stateElapsedSeconds = (int)((GlobalTickCount() - _stateEnteredTime) / 1000);

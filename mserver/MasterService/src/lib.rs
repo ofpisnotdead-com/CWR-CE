@@ -24,9 +24,9 @@ mod tests {
         openapi_yaml,
     };
     use crate::model::{
-        DirectoryServerRecord, ListModsQuery, ListServersQuery, ModCatalogEntry, ModUsageServer,
-        ObserveServerRequest, RegisterServerRequest, ServerDetail, ServiceMetadata, ServiceSummary,
-        VerificationState,
+        DirectoryServerRecord, ListModsQuery, ListServersQuery, ModCatalogEntry, ModPackage,
+        ModUsageServer, ObserveServerRequest, RegisterServerRequest, ServerDetail, ServiceMetadata,
+        ServiceSummary, VerificationState,
     };
     use crate::repository::{sqlite_url_for_path, ServerDirectory, SqliteServerDirectory};
 
@@ -46,6 +46,7 @@ mod tests {
             maxplayers: 8,
             password: false,
             mod_list: "synthetic-core".to_string(),
+            mod_packages: Vec::new(),
             equal_mod_required: true,
             transport_impl: "papa-bear".to_string(),
             platform: "win".to_string(),
@@ -194,6 +195,7 @@ mod tests {
         assert_eq!(row.required_addons, "");
         assert_eq!(row.version_tag, ""); // added column, defaults empty on a pre-vertag row
         assert_eq!(row.app_name, ""); // legacy rows predate app identity
+        assert!(row.mod_packages.is_empty());
 
         // A fresh register still round-trips through the upgraded table.
         let fresh = directory
@@ -211,15 +213,18 @@ mod tests {
             .await
             .unwrap();
 
-        let first = directory
-            .register(sample_request("srv-1", "Alpha", "10"), 1000)
-            .await
-            .unwrap();
+        let mut first_request = sample_request("srv-1", "Alpha", "10");
+        first_request.mod_packages = vec![ModPackage {
+            mod_id: "synthetic-core".to_string(),
+            package_revision: 4,
+        }];
+        let first = directory.register(first_request, 1000).await.unwrap();
         assert_eq!(first.server_id, "srv-1");
         // The host's build tag round-trips through the upsert (sample_request sets "rc1");
         // without the version_tag column/bind/select it would be absent or empty.
         assert_eq!(first.version_tag, "rc1");
         assert_eq!(first.app_name, "CWR");
+        assert_eq!(first.mod_packages[0].package_revision, 4);
 
         let listed = directory
             .list(
@@ -236,6 +241,7 @@ mod tests {
         // The served list row carries the tag the publisher registered with.
         assert_eq!(listed[0].version_tag, "rc1");
         assert_eq!(listed[0].app_name, "CWR");
+        assert_eq!(listed[0].mod_packages[0].mod_id, "synthetic-core");
 
         let updated = directory
             .register(sample_request("srv-1", "Bravo", "11"), 2000)
@@ -1227,11 +1233,8 @@ mod tests {
         let entry: ModCatalogEntry =
             serde_json::from_slice(&to_bytes(ok.into_body(), usize::MAX).await.unwrap()).unwrap();
         assert_eq!(entry.name, "Synthetic Upload");
-        assert!(
-            entry.mod_id.starts_with("synthetic-upload-"),
-            "unexpected mod_id {}",
-            entry.mod_id
-        );
+        assert_eq!(entry.mod_id, "synthetic-upload");
+        assert_eq!(entry.package_revision, 1);
         assert_eq!(entry.version.len(), 8); // default version = sha256[..8] hex
         assert_eq!(entry.app_name.as_deref(), Some("CWR"));
         assert_eq!(entry.actver, Some(302));
@@ -1239,11 +1242,12 @@ mod tests {
         assert_eq!(entry.authors, vec!["simi".to_string()]);
         assert_eq!(
             entry.download_url.as_deref(),
-            Some(format!("/v1/mods/{}/download", entry.mod_id).as_str())
+            Some(format!("/v1/mods/{}/revisions/1/download", entry.mod_id).as_str())
         );
-        assert!(mods_dir.join(&entry.mod_id).join("mod.json").is_file());
+        assert!(mods_dir.join(&entry.mod_id).join("current").is_file());
         assert!(mods_dir
             .join(&entry.mod_id)
+            .join("revisions/1")
             .join(format!("{}.pbo.zst", entry.mod_id))
             .is_file());
 
@@ -1272,7 +1276,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri(format!("/v1/mods/{}/download", entry.mod_id))
+                    .uri(format!("/v1/mods/{}/revisions/1/download", entry.mod_id))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1281,6 +1285,111 @@ mod tests {
         assert_eq!(download.status(), StatusCode::OK);
         let downloaded = to_bytes(download.into_body(), usize::MAX).await.unwrap();
         assert_eq!(downloaded.as_ref(), artifact);
+    }
+
+    #[tokio::test]
+    async fn http_mod_revision_routes_keep_stable_identity_and_history() {
+        let temp_dir = tempdir().unwrap();
+        let directory = Arc::new(
+            SqliteServerDirectory::open_path(temp_dir.path().join("revisions.sqlite"))
+                .await
+                .unwrap(),
+        );
+        let app = build_router_with_options(
+            directory,
+            Some("secret-key".to_string()),
+            Some(temp_dir.path().join("mods")),
+            None,
+            false,
+        );
+
+        let publish_body = |artifact: &'static [u8]| {
+            multipart_body(
+                "revisionboundary",
+                &[("name", "Revision Fixture"), ("version", "1.0")],
+                Some(("file", artifact)),
+            )
+        };
+        let request = |uri: &'static str, body: Vec<u8>| {
+            Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header(
+                    "content-type",
+                    "multipart/form-data; boundary=revisionboundary",
+                )
+                .header("x-api-key", "secret-key")
+                .body(Body::from(body))
+                .unwrap()
+        };
+
+        let created = app
+            .clone()
+            .oneshot(request("/v1/mods", publish_body(b"revision-one")))
+            .await
+            .unwrap();
+        assert_eq!(created.status(), StatusCode::OK);
+        let created: ModCatalogEntry =
+            serde_json::from_slice(&to_bytes(created.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(created.mod_id, "revision-fixture");
+        assert_eq!(created.package_revision, 1);
+
+        let collision = app
+            .clone()
+            .oneshot(request("/v1/mods", publish_body(b"other-bytes")))
+            .await
+            .unwrap();
+        assert_eq!(collision.status(), StatusCode::CONFLICT);
+
+        let update = multipart_body("revisionboundary", &[], Some(("file", b"revision-two")));
+        let updated = app
+            .clone()
+            .oneshot(request("/v1/mods/revision-fixture/revisions", update))
+            .await
+            .unwrap();
+        assert_eq!(updated.status(), StatusCode::OK);
+        let updated: ModCatalogEntry =
+            serde_json::from_slice(&to_bytes(updated.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(updated.package_revision, 2);
+        assert_eq!(updated.version, "1.0");
+
+        let history = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/mods/revision-fixture/revisions")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let history: Vec<ModCatalogEntry> =
+            serde_json::from_slice(&to_bytes(history.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(
+            history
+                .iter()
+                .map(|entry| entry.package_revision)
+                .collect::<Vec<_>>(),
+            vec![2, 1]
+        );
+
+        let latest_download = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/mods/revision-fixture/download")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(latest_download.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            latest_download.headers().get("location").unwrap(),
+            "/v1/mods/revision-fixture/revisions/2/download"
+        );
     }
 
     #[tokio::test]
@@ -1341,7 +1450,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(unauth.status(), StatusCode::UNAUTHORIZED);
-        assert!(mods_dir.join(&entry.mod_id).join("mod.json").is_file());
+        assert!(mods_dir.join(&entry.mod_id).join("current").is_file());
 
         // Wrong key -> 401.
         let wrong = app
@@ -1372,7 +1481,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(ok.status(), StatusCode::NO_CONTENT);
-        assert!(!mods_dir.join(&entry.mod_id).join("mod.json").exists());
+        assert!(!mods_dir.join(&entry.mod_id).join("current").exists());
         assert!(!mods_dir
             .join(&entry.mod_id)
             .join(format!("{}.pbo", entry.mod_id))
@@ -1480,7 +1589,7 @@ mod tests {
         // Host header alone -> http base.
         assert_eq!(
             list_mods(Some("papa-bear.cz"), None).await.as_deref(),
-            Some(format!("http://papa-bear.cz/v1/mods/{mod_id}/download").as_str())
+            Some(format!("http://papa-bear.cz/v1/mods/{mod_id}/revisions/1/download").as_str())
         );
 
         // X-Forwarded-Proto from the proxy -> https base.
@@ -1488,13 +1597,13 @@ mod tests {
             list_mods(Some("papa-bear.cz"), Some("https"))
                 .await
                 .as_deref(),
-            Some(format!("https://papa-bear.cz/v1/mods/{mod_id}/download").as_str())
+            Some(format!("https://papa-bear.cz/v1/mods/{mod_id}/revisions/1/download").as_str())
         );
 
         // No Host header (direct/unknown) -> left relative, as stored.
         assert_eq!(
             list_mods(None, None).await.as_deref(),
-            Some(format!("/v1/mods/{mod_id}/download").as_str())
+            Some(format!("/v1/mods/{mod_id}/revisions/1/download").as_str())
         );
 
         // The detail endpoint absolutises too.
@@ -1517,7 +1626,7 @@ mod tests {
                 .unwrap();
         assert_eq!(
             detail.download_url.as_deref(),
-            Some(format!("https://papa-bear.cz/v1/mods/{mod_id}/download").as_str())
+            Some(format!("https://papa-bear.cz/v1/mods/{mod_id}/revisions/1/download").as_str())
         );
     }
 
@@ -2048,9 +2157,9 @@ mod tests {
             .await
             .unwrap();
         let versions: Vec<ModCatalogEntry> = serde_json::from_slice(&versions_body).unwrap();
-        assert_eq!(versions.len(), 2);
+        assert_eq!(versions.len(), 1);
         assert_eq!(versions[0].mod_id, "effects-pack");
-        assert_eq!(versions[1].mod_id, "effects-pack-classic");
+        assert_eq!(versions[0].package_revision, 1);
 
         let usage_response = app
             .oneshot(
@@ -2387,6 +2496,7 @@ mod tests {
         assert!(text.contains("/v1/servers/{serverId}:"));
         assert!(text.contains("/v1/mods:"));
         assert!(text.contains("/v1/mods/{modId}:"));
+        assert!(text.contains("/v1/mods/{modId}/revisions:"));
         assert!(text.contains("x-api-key"));
         assert!(text.contains("/v1/meta/service:"));
         assert!(text.contains("/v1/meta/summary:"));
@@ -2407,6 +2517,9 @@ mod tests {
         assert!(paths.contains_key("/v1/mods"));
         assert!(paths.contains_key("/v1/mods/{modId}"));
         assert!(paths.contains_key("/v1/mods/{modId}/versions"));
+        assert!(paths.contains_key("/v1/mods/{modId}/revisions"));
+        assert!(paths.contains_key("/v1/mods/{modId}/revisions/{revision}"));
+        assert!(paths.contains_key("/v1/mods/{modId}/revisions/{revision}/download"));
         assert!(paths.contains_key("/v1/mods/{modId}/servers"));
         assert!(paths.contains_key("/v1/meta/service"));
         assert!(paths.contains_key("/v1/meta/summary"));

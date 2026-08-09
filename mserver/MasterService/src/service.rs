@@ -156,6 +156,37 @@ impl PapaBearService {
         store.finalize_mod(upload, meta).await
     }
 
+    pub async fn finalize_mod_revision_upload(
+        &self,
+        upload: ArtifactUpload,
+        mod_id: &str,
+        meta: ModUploadMeta,
+    ) -> Result<ModCatalogEntry> {
+        let store = self
+            .mod_store
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("mods store is not configured"))?;
+        store.finalize_revision(upload, mod_id, meta).await
+    }
+
+    pub async fn mod_revisions(&self, mod_id: &str) -> Result<Vec<ModCatalogEntry>> {
+        match &self.mod_store {
+            Some(store) => store.list_revisions(mod_id).await,
+            None => Ok(Vec::new()),
+        }
+    }
+
+    pub async fn get_mod_revision(
+        &self,
+        mod_id: &str,
+        revision: u64,
+    ) -> Result<Option<ModCatalogEntry>> {
+        match &self.mod_store {
+            Some(store) => store.get_revision(mod_id, revision).await,
+            None => Ok(None),
+        }
+    }
+
     /// Delete a mod (its catalog entry + artifact) from the store. Returns `true` if it
     /// existed, `false` if there was nothing to delete or mods are disabled.
     pub async fn delete_mod(&self, mod_id: &str) -> Result<bool> {
@@ -174,6 +205,17 @@ impl PapaBearService {
         }
     }
 
+    pub async fn mod_revision_artifact_stream(
+        &self,
+        mod_id: &str,
+        revision: u64,
+    ) -> Result<Option<(u64, ArtifactStream)>> {
+        match &self.mod_store {
+            Some(store) => store.revision_stream(mod_id, revision).await,
+            None => Ok(None),
+        }
+    }
+
     /// Signed direct artifact URL: `(size_bytes, url)`, or `None` when the store cannot sign
     /// externally reachable URLs (local/dev/MinIO streaming compatibility) or the mod is absent.
     pub async fn mod_artifact_signed_url(&self, mod_id: &str) -> Result<Option<(u64, String)>> {
@@ -183,26 +225,19 @@ impl PapaBearService {
         }
     }
 
+    pub async fn mod_revision_artifact_signed_url(
+        &self,
+        mod_id: &str,
+        revision: u64,
+    ) -> Result<Option<(u64, String)>> {
+        match &self.mod_store {
+            Some(store) => store.signed_revision_url(mod_id, revision).await,
+            None => Ok(None),
+        }
+    }
+
     pub async fn mod_versions(&self, mod_id: &str) -> Result<Vec<ModCatalogEntry>> {
-        let Some(current) = self.get_mod(mod_id).await? else {
-            return Ok(Vec::new());
-        };
-
-        let family_key = mod_family_key(&current);
-        let mut versions = self
-            .list_mods(&ListModsQuery::default())
-            .await?
-            .into_iter()
-            .filter(|entry| mod_family_key(entry) == family_key)
-            .collect::<Vec<_>>();
-
-        versions.sort_by(|lhs, rhs| {
-            (lhs.mod_id != current.mod_id)
-                .cmp(&(rhs.mod_id != current.mod_id))
-                .then_with(|| rhs.version.cmp(&lhs.version))
-                .then_with(|| lhs.mod_id.cmp(&rhs.mod_id))
-        });
-        Ok(versions)
+        self.mod_revisions(mod_id).await
     }
 
     pub async fn mod_usage_servers(&self, mod_id: &str) -> Result<Vec<ModUsageServer>> {
@@ -330,25 +365,6 @@ fn split_server_mods(mod_list: &str) -> Vec<String> {
     }
 
     mod_ids
-}
-
-fn mod_family_key(entry: &ModCatalogEntry) -> String {
-    let homepage = entry
-        .homepage_url
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_lowercase);
-    if let Some(homepage) = homepage {
-        return homepage;
-    }
-
-    entry
-        .name
-        .chars()
-        .filter(char::is_ascii_alphanumeric)
-        .flat_map(char::to_lowercase)
-        .collect()
 }
 
 fn server_players(server: &DirectoryServerRecord) -> Vec<ServerPlayer> {

@@ -34,6 +34,7 @@ struct MasterServerServiceSession
     int timeLeft = 15;
     int stateElapsedSeconds = 0;
     std::string mod;
+    std::vector<MasterServerServiceModPackage> modPackages;
     bool equalModRequired = false;
 };
 
@@ -56,6 +57,7 @@ struct MasterServerServiceRegistration
     int timeLeft = 0;
     int stateElapsedSeconds = 0;
     std::string mod;
+    std::vector<MasterServerServiceModPackage> modPackages;
     bool equalModRequired = false;
     std::string platform;
     std::string island;
@@ -101,6 +103,9 @@ struct MasterServerServiceModCatalogEntry
     bool compatible = false;
     std::string name;
     std::string version;
+    int64_t packageRevision = 1;
+    std::string sha256;
+    int64_t publishedUnixMs = 0;
     std::string folderName;
     std::string description;
     std::vector<std::string> authors;

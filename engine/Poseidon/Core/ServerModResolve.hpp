@@ -4,6 +4,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "ModId.hpp"
@@ -21,6 +22,13 @@ class ModCatalogEntry
         : _id(std::move(id)), _name(std::move(name)), _downloadUrl(std::move(downloadUrl)), _sizeBytes(sizeBytes)
     {
     }
+    ModCatalogEntry(ModId id, std::string name, std::string downloadUrl, int64_t sizeBytes, std::string folderName,
+                    int64_t packageRevision, std::string sha256, std::string version = {})
+        : _id(std::move(id)), _name(std::move(name)), _downloadUrl(std::move(downloadUrl)),
+          _folderName(std::move(folderName)), _sha256(std::move(sha256)), _version(std::move(version)),
+          _sizeBytes(sizeBytes), _packageRevision(packageRevision)
+    {
+    }
     ModCatalogEntry(ModId id, std::string name, std::string downloadUrl, int64_t sizeBytes, std::string folderName)
         : _id(std::move(id)), _name(std::move(name)), _downloadUrl(std::move(downloadUrl)),
           _folderName(std::move(folderName)), _sizeBytes(sizeBytes)
@@ -32,13 +40,19 @@ class ModCatalogEntry
     const std::string& DownloadUrl() const { return _downloadUrl; }
     const std::string& FolderName() const { return _folderName; }
     int64_t SizeBytes() const { return _sizeBytes; }
+    int64_t PackageRevision() const { return _packageRevision; }
+    const std::string& Sha256() const { return _sha256; }
+    const std::string& Version() const { return _version; }
 
   private:
     ModId _id;
     std::string _name;
     std::string _downloadUrl;
     std::string _folderName;
+    std::string _sha256;
+    std::string _version;
     int64_t _sizeBytes = 0;
+    int64_t _packageRevision = 1;
 };
 
 /// The set of mods available to download, looked up by id.
@@ -51,10 +65,13 @@ class ModCatalog
     bool Empty() const { return _entries.empty(); }
     std::size_t Size() const { return _entries.size(); }
     const std::vector<ModCatalogEntry>& All() const { return _entries; }
+    void MarkReachable() { _reachable = true; }
+    bool IsReachable() const { return _reachable; }
 
   private:
     std::vector<ModCatalogEntry> _entries;
     std::unordered_map<ModId, std::size_t, ModId::Hash> _index;
+    bool _reachable = false;
 };
 
 /// What a server requires of a joining client: a set of mod ids and whether the
@@ -64,16 +81,21 @@ class ServerModList
   public:
     ServerModList() = default;
     ServerModList(const std::string& modString, bool equalModRequired);
+    ServerModList(std::vector<std::pair<std::string, int64_t>> packages, bool equalModRequired);
 
     const std::vector<ModId>& Required() const { return _required; }
     bool RequiresExactMatch() const { return _exact; }
     bool Requires(const ModId& id) const { return _set.count(id) != 0; }
     bool Empty() const { return _required.empty(); }
+    int64_t RequiredRevision(const ModId& id) const;
+    bool HasExactRevisions() const { return _hasExactRevisions; }
 
   private:
     std::vector<ModId> _required;
     std::unordered_set<ModId, ModId::Hash> _set;
     bool _exact = false;
+    bool _hasExactRevisions = false;
+    std::unordered_map<ModId, int64_t, ModId::Hash> _revisions;
 };
 
 /// A required mod that is absent on disk but present in the catalog — what we'd
@@ -85,6 +107,15 @@ struct ModDownload
     std::string downloadUrl;
     std::string folderName;
     int64_t sizeBytes = 0;
+    int64_t packageRevision = 1;
+    std::string sha256;
+    std::string version;
+};
+
+struct InstalledModPackage
+{
+    ModId id;
+    int64_t packageRevision = 1;
 };
 
 /// The diff between a server's required set and the player's state: the answer the
@@ -141,11 +172,13 @@ class ServerModResolver
 {
   public:
     ServerModResolver(const std::vector<ModId>& installed, const std::vector<ModId>& active);
+    ServerModResolver(const std::vector<InstalledModPackage>& installed, const std::vector<ModId>& active);
 
     ServerModResolution Resolve(const ServerModList& server, const ModCatalog& catalog) const;
 
   private:
     std::unordered_set<ModId, ModId::Hash> _installed;
+    std::unordered_map<ModId, int64_t, ModId::Hash> _installedRevisions;
     std::vector<ModId> _active;
 };
 

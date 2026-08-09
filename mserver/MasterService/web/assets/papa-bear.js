@@ -468,18 +468,22 @@
             .join("");
     }
 
-    function renderVersionRows(modId, versions) {
-        if (!versions.length) {
-            return '<tr><td colspan="3">No related versions.</td></tr>';
+    function renderVersionRows(revisions) {
+        if (!revisions.length) {
+            return '<tr><td colspan="6">No package revisions.</td></tr>';
         }
 
-        return versions
+        const latestRevision = Math.max(...revisions.map((revision) => revision.packageRevision || 1));
+        return revisions
             .map(
-                (version) => `
+                (revision) => `
                     <tr>
-                        <td>${escapeHtml(version.version)}</td>
-                        <td>${version.modId === modId ? "current" : "related"}</td>
-                        <td>${renderModLinks(version)}</td>
+                        <td>${escapeHtml(revision.packageRevision || 1)}</td>
+                        <td>${escapeHtml(revision.version || "-")}</td>
+                        <td>${revision.publishedUnixMs ? escapeHtml(new Date(revision.publishedUnixMs).toLocaleDateString()) : "-"}</td>
+                        <td>${(revision.packageRevision || 1) === latestRevision ? "latest" : "historical"}</td>
+                        <td>${escapeHtml(formatBytes(revision.sizeBytes))}</td>
+                        <td>${revision.downloadUrl ? `<a href="${escapeHtml(revision.downloadUrl)}">download</a>` : "-"}</td>
                     </tr>
                 `,
             )
@@ -560,7 +564,9 @@
         title.textContent = detail.mod.name;
         const size = formatBytes(detail.mod.sizeBytes);
         summary.textContent =
-            size === "-" ? `version ${detail.mod.version}` : `version ${detail.mod.version} · ${size}`;
+            size === "-"
+                ? `revision ${detail.mod.packageRevision || 1} / mod version ${detail.mod.version}`
+                : `revision ${detail.mod.packageRevision || 1} / mod version ${detail.mod.version} / ${size}`;
         const factParts = [detail.modId];
         if (detail.mod.folderName) {
             factParts.push(detail.mod.folderName);
@@ -571,7 +577,7 @@
         facts.textContent = factParts.join(" · ");
         description.innerHTML = escapeHtml(detail.mod.description || "-");
         links.innerHTML = renderModLinks(detail.mod);
-        versions.innerHTML = renderVersionRows(detail.modId, detail.versions || []);
+        versions.innerHTML = renderVersionRows(detail.versions || []);
         servers.innerHTML = renderModServers(detail.servers);
     }
 
@@ -907,7 +913,7 @@
         try {
             const [mod, versions, servers] = await Promise.all([
                 fetchJson(`/v1/mods/${encodeURIComponent(modId)}`),
-                fetchJson(`/v1/mods/${encodeURIComponent(modId)}/versions`),
+                fetchJson(`/v1/mods/${encodeURIComponent(modId)}/revisions`),
                 fetchJson(`/v1/mods/${encodeURIComponent(modId)}/servers`),
             ]);
             fillModDetail({

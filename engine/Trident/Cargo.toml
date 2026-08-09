@@ -24,6 +24,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json"] }
 papa-bear-archive = { path = "../../mserver/Archive" }
 papa-bear-client = { path = "../../mserver/Client" }
 zstd = "0.13"
+sha2 = "0.10"
 
 [dev-dependencies]
 tempfile = "3"

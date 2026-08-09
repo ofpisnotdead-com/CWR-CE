@@ -14,6 +14,7 @@ use crate::scenarios::ScenarioResult;
 use anyhow::{Context, Result};
 use papa_bear_archive::Pbo;
 use papa_bear_client::query::query_server;
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
@@ -256,6 +257,15 @@ pub struct ServiceSeedModConfig {
     pub authors: Vec<String>,
     #[serde(default)]
     pub homepage_url: Option<String>,
+    #[serde(default)]
+    pub updates: Vec<ServiceSeedModUpdateConfig>,
+}
+
+#[derive(Clone, serde::Deserialize)]
+pub struct ServiceSeedModUpdateConfig {
+    pub source: String,
+    #[serde(default)]
+    pub version: Option<String>,
 }
 
 fn default_client() -> String {
@@ -390,52 +400,60 @@ fn seed_mod_store(
     replacements: &HashMap<String, String>,
 ) -> Result<()> {
     for seed in seeds {
-        let source = resolve_repo_path(&seed.source, replacements);
-        let pbo = Pbo::pack_dir(&source, None)
-            .with_context(|| format!("packing seed mod '{}' from {}", seed.id, source.display()))?;
-
         let seed_dir = mods_dir.join(&seed.id);
         std::fs::create_dir_all(&seed_dir)
             .with_context(|| format!("creating seed mod store {}", seed_dir.display()))?;
 
-        let mut raw = Vec::new();
-        pbo.write(&mut raw)
-            .with_context(|| format!("serialising seed mod '{}'", seed.id))?;
-        let archive_path = seed_dir.join(format!("{}.pbo.zst", seed.id));
-        let mut archive = File::create(&archive_path)
-            .with_context(|| format!("creating {}", archive_path.display()))?;
-        {
-            let mut encoder = zstd::stream::write::Encoder::new(&mut archive, 19)
-                .with_context(|| format!("starting zstd encoder for {}", archive_path.display()))?;
-            encoder
-                .write_all(&raw)
+        let mut revisions = vec![(seed.source.as_str(), seed.version.as_str())];
+        revisions.extend(seed.updates.iter().map(|update| {
+            (
+                update.source.as_str(),
+                update.version.as_deref().unwrap_or(&seed.version),
+            )
+        }));
+        for (index, (source, version)) in revisions.iter().enumerate() {
+            let revision = index + 1;
+            let source = resolve_repo_path(source, replacements);
+            let pbo = Pbo::pack_dir(&source, None).with_context(|| {
+                format!("packing seed mod '{}' from {}", seed.id, source.display())
+            })?;
+            let mut raw = Vec::new();
+            pbo.write(&mut raw)
+                .with_context(|| format!("serialising seed mod '{}'", seed.id))?;
+            let compressed = zstd::stream::encode_all(raw.as_slice(), 19)
                 .with_context(|| format!("compressing seed mod '{}'", seed.id))?;
-            encoder
-                .finish()
-                .with_context(|| format!("finishing zstd seed mod '{}'", seed.id))?;
+            let sha256 = format!("{:x}", Sha256::digest(&compressed));
+            let revision_dir = seed_dir.join("revisions").join(revision.to_string());
+            std::fs::create_dir_all(&revision_dir)
+                .with_context(|| format!("creating {}", revision_dir.display()))?;
+            let archive_path = revision_dir.join(format!("{}.pbo.zst", seed.id));
+            std::fs::write(&archive_path, &compressed)
+                .with_context(|| format!("writing {}", archive_path.display()))?;
+            let metadata = serde_json::json!({
+                "modId": seed.id,
+                "app": seed.app,
+                "actver": seed.actver,
+                "vertag": seed.version_tag,
+                "name": seed.name,
+                "version": version,
+                "packageRevision": revision,
+                "sha256": sha256,
+                "publishedUnixMs": revision,
+                "folderName": seed.folder,
+                "description": seed.description,
+                "authors": seed.authors,
+                "homepageUrl": seed.homepage_url,
+                "downloadUrl": format!("/v1/mods/{}/revisions/{revision}/download", seed.id),
+                "sizeBytes": compressed.len()
+            });
+            let metadata_path = revision_dir.join("mod.json");
+            std::fs::write(&metadata_path, serde_json::to_vec_pretty(&metadata)?)
+                .with_context(|| format!("writing {}", metadata_path.display()))?;
         }
-        let size_bytes = archive
-            .metadata()
-            .with_context(|| format!("sizing {}", archive_path.display()))?
-            .len();
-
-        let metadata = serde_json::json!({
-            "modId": seed.id,
-            "app": seed.app,
-            "actver": seed.actver,
-            "vertag": seed.version_tag,
-            "name": seed.name,
-            "version": seed.version,
-            "folderName": seed.folder,
-            "description": seed.description,
-            "authors": seed.authors,
-            "homepageUrl": seed.homepage_url,
-            "downloadUrl": format!("/v1/mods/{}/download", seed.id),
-            "sizeBytes": size_bytes
-        });
-        let metadata_path = seed_dir.join("mod.json");
-        std::fs::write(&metadata_path, serde_json::to_vec_pretty(&metadata)?)
-            .with_context(|| format!("writing {}", metadata_path.display()))?;
+        let current = serde_json::json!({"packageRevision": revisions.len()});
+        let current_path = seed_dir.join("current");
+        std::fs::write(&current_path, serde_json::to_vec_pretty(&current)?)
+            .with_context(|| format!("writing {}", current_path.display()))?;
     }
     Ok(())
 }
@@ -2575,6 +2593,61 @@ type = "server"
 
         assert_eq!(config.data_dir.as_deref(), Some("packages/Demo"));
         assert_eq!(config.required_env, ["CWR_MODS_SOURCE_DIR"]);
+    }
+
+    #[test]
+    fn seed_mod_store_writes_immutable_revision_history() {
+        let source_root = tempfile::tempdir().unwrap();
+        let revision_one = source_root.path().join("revision-one");
+        let revision_two = source_root.path().join("revision-two");
+        std::fs::create_dir_all(&revision_one).unwrap();
+        std::fs::create_dir_all(&revision_two).unwrap();
+        std::fs::write(revision_one.join("marker.txt"), b"one").unwrap();
+        std::fs::write(revision_two.join("marker.txt"), b"two").unwrap();
+        let config: MultiTestConfig = toml::from_str(&format!(
+            r#"
+[[services]]
+name = "master"
+type = "master-server"
+
+[[services.seed_mods]]
+id = "fixturemod"
+name = "Fixture Mod"
+version = "1.0"
+folder = "@fixturemod"
+source = {}
+
+[[services.seed_mods.updates]]
+source = {}
+version = "1.0"
+
+[[instances]]
+name = "client"
+"#,
+            toml::Value::String(revision_one.to_string_lossy().into()),
+            toml::Value::String(revision_two.to_string_lossy().into())
+        ))
+        .unwrap();
+        let store = tempfile::tempdir().unwrap();
+
+        seed_mod_store(store.path(), &config.services[0].seed_mods, &HashMap::new()).unwrap();
+
+        let mod_root = store.path().join("fixturemod");
+        let current: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(mod_root.join("current")).unwrap()).unwrap();
+        let first: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(mod_root.join("revisions/1/mod.json")).unwrap())
+                .unwrap();
+        let second: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(mod_root.join("revisions/2/mod.json")).unwrap())
+                .unwrap();
+
+        assert_eq!(current["packageRevision"], 2);
+        assert_eq!(first["packageRevision"], 1);
+        assert_eq!(second["packageRevision"], 2);
+        assert_ne!(first["sha256"], second["sha256"]);
+        assert!(mod_root.join("revisions/1/fixturemod.pbo.zst").is_file());
+        assert!(mod_root.join("revisions/2/fixturemod.pbo.zst").is_file());
     }
 
     #[tokio::test]

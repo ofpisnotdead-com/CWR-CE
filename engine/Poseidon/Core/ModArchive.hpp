@@ -14,12 +14,12 @@ namespace Poseidon
 class ModArchive
 {
 public:
-    static bool Unpack(const char* archivePath, const char* destDir, std::string* error = nullptr);
+  static bool IsSafeEntryPath(const std::string& entryName);
+  static bool Unpack(const char* archivePath, const char* destDir, std::string* error = nullptr);
 
-    /// Stream-decode a zstd-wrapped archive (`<name>.pbo.zst`) into a plain file at pboPath.
-    /// Decodes chunk-by-chunk so a multi-GB mod never lands fully in memory. Returns false with
-    /// *error set on a missing source, a truncated frame, or non-zstd input. Exposed for the
-    /// download path and for regression coverage of the streaming loop.
-    static bool DecompressArchive(const char* archivePath, const char* pboPath, std::string* error = nullptr);
+  /// Stream-decode a zstd-wrapped archive (`<name>.pbo.zst`) into a plain file at pboPath.
+  /// Decodes chunk-by-chunk so a multi-GB mod never lands fully in memory. Returns false with
+  /// *error set on a missing source, a truncated frame, or non-zstd input.
+  static bool DecompressArchive(const char* archivePath, const char* pboPath, std::string* error = nullptr);
 };
 } // namespace Poseidon

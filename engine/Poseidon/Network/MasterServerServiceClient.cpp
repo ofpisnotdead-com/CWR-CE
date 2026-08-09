@@ -489,6 +489,7 @@ void AssignMasterServerServiceSessionInfo(const MasterServerServiceSession& sour
                                   source.requiredVersion, source.versionTag.c_str(), source.password, source.gameState,
                                   source.ping, source.numPlayers, source.maxPlayers, source.timeLeft,
                                   source.mod.c_str(), source.equalModRequired);
+    session.modPackages = &source.modPackages;
 }
 
 const char* GetMasterServerServiceSessionStringValue(const MasterServerServiceSession& session, const char* key,
@@ -664,6 +665,14 @@ std::string BuildMasterServerServiceRegistrationJson(const MasterServerServiceRe
     cJSON_AddNumberToObject(root, MasterServerFieldMaxPlayers, registration.maxPlayers);
     cJSON_AddBoolToObject(root, MasterServerFieldPassword, registration.password);
     cJSON_AddStringToObject(root, MasterServerFieldMod, registration.mod.c_str());
+    cJSON* modPackages = cJSON_AddArrayToObject(root, "modPackages");
+    for (const MasterServerServiceModPackage& package : registration.modPackages)
+    {
+        cJSON* item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "modId", package.modId.c_str());
+        cJSON_AddNumberToObject(item, "packageRevision", static_cast<double>(package.packageRevision));
+        cJSON_AddItemToArray(modPackages, item);
+    }
     cJSON_AddBoolToObject(root, MasterServerFieldEqualModRequired, registration.equalModRequired);
     cJSON_AddStringToObject(root, MasterServerFieldImplementation, registration.transportImplementation.c_str());
     cJSON_AddStringToObject(root, MasterServerFieldPlatform, registration.platform.c_str());
@@ -713,6 +722,20 @@ bool TryParseMasterServerServiceSession(const cJSON* object, MasterServerService
                                      GetMasterServerServiceJsonBool(object, MasterServerFieldEqualModRequired, false));
     session.app = GetMasterServerServiceJsonString(object, "app");
     session.stateElapsedSeconds = GetMasterServerServiceJsonInt(object, MasterServerFieldStateElapsed, 0);
+    const cJSON* modPackages = GetMasterServerServiceJsonItem(object, "modPackages");
+    if (cJSON_IsArray(modPackages))
+    {
+        const int count = cJSON_GetArraySize(modPackages);
+        for (int i = 0; i < count; ++i)
+        {
+            const cJSON* item = cJSON_GetArrayItem(modPackages, i);
+            const std::string modId = GetMasterServerServiceJsonString(item, "modId");
+            if (!modId.empty())
+            {
+                session.modPackages.push_back({modId, GetMasterServerServiceJsonInt64(item, "packageRevision", 1)});
+            }
+        }
+    }
     return true;
 }
 
@@ -731,6 +754,9 @@ bool TryParseMasterServerServiceModCatalogEntry(const cJSON* object, MasterServe
     entry.compatible = GetMasterServerServiceJsonBool(object, "compatible", false);
     entry.name = GetMasterServerServiceJsonString(object, "name");
     entry.version = GetMasterServerServiceJsonString(object, "version");
+    entry.packageRevision = GetMasterServerServiceJsonInt64(object, "packageRevision", 1);
+    entry.sha256 = GetMasterServerServiceJsonString(object, "sha256");
+    entry.publishedUnixMs = GetMasterServerServiceJsonInt64(object, "publishedUnixMs", 0);
     entry.folderName = GetMasterServerServiceJsonString(object, "folderName");
     entry.description = GetMasterServerServiceJsonString(object, "description");
     entry.homepageUrl = GetMasterServerServiceJsonString(object, "homepageUrl");

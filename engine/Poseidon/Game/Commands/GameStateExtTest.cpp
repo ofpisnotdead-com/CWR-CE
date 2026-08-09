@@ -13,6 +13,7 @@ using namespace Poseidon;
 #include <Poseidon/Graphics/Shared/PNGWriter.hpp>
 #include <Poseidon/World/Scene/Scene.hpp>
 #include <Poseidon/Network/Network.hpp>
+#include <Poseidon/Network/NetworkConfig.hpp>
 #include <Poseidon/Input/KeyInput.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Audio/IAudioSystem.hpp>
@@ -24,9 +25,10 @@ using namespace Poseidon;
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
 #include <Poseidon/Graphics/Cursor/ICursorOverlay.hpp>
 #include <Poseidon/UI/Map/UIMap.hpp>
-#include <Poseidon/Core/resincl.hpp>    // IDC_* used by DisplayUI.hpp (not self-contained)
-#include <Poseidon/UI/DisplayUI.hpp>    // DisplayMultiplayer / DisplayMods for the seed verbs
-#include <Poseidon/Core/ModSystem.hpp>  // GetModList for triAssertActiveMod
+#include <Poseidon/Core/resincl.hpp>   // IDC_* used by DisplayUI.hpp (not self-contained)
+#include <Poseidon/UI/DisplayUI.hpp>   // DisplayMultiplayer / DisplayMods for the seed verbs
+#include <Poseidon/Core/ModSystem.hpp> // GetModList for triAssertActiveMod
+#include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <Poseidon/IO/ParamFileExt.hpp> // global Pars for triAssertConfigClass
 #include <sstream>
 #include <Poseidon/Network/MasterServerServiceClient.hpp> // catalog entry for triSeedWorkshopMods
@@ -56,6 +58,8 @@ extern unsigned GTriNetSoundsReceived;
 #include <array>
 #include <cctype>
 #include <functional>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -487,6 +491,26 @@ GameValue TriModsVisibleCount(const GameState* /*state*/)
     return GameValue(static_cast<float>(list->GetSize()));
 }
 
+GameValue TriModsFreshness(const GameState* /*state*/, GameValuePar arg)
+{
+    const int row = static_cast<int>(static_cast<GameScalarType>(arg));
+    DisplayMods* mods = dynamic_cast<DisplayMods*>(GetActiveDisplayForSQF());
+    if (mods == nullptr)
+        return GameValue("");
+    CModsList* list = dynamic_cast<CModsList*>(mods->GetCtrl(IDC_MODS_LIST));
+    if (list == nullptr || row < 0 || row >= list->GetRows().Size())
+        return GameValue("");
+    switch (list->GetRows()[row].freshness)
+    {
+        case ModRowFreshness::UpdateAvailable:
+            return GameValue("update");
+        case ModRowFreshness::Ahead:
+            return GameValue("ahead");
+        default:
+            return GameValue("current");
+    }
+}
+
 /// triModsSetFilter "text" — set the MODS name filter directly (bypassing the
 /// Filter dialog) and refresh the Filter button label. Lets a test pin the name
 /// filtering deterministically without driving the 3D edit field. Returns true.
@@ -594,6 +618,43 @@ GameValue TriSeedWorkshopMods(const GameState* /*state*/, GameValuePar arg)
     }
     mods->MergeWorkshopMods(catalog);
     return GameValue(true);
+}
+
+GameValue TriFetchWorkshopMods(const GameState* /*state*/)
+{
+    DisplayMods* mods = dynamic_cast<DisplayMods*>(GetActiveDisplayForSQF());
+    if (mods == nullptr)
+        return GameValue(false);
+    std::vector<MasterServerServiceModCatalogEntry> catalog;
+    if (!FetchMasterServerServiceModList(GetNetworkMasterServer(), nullptr, nullptr, catalog))
+        return GameValue(false);
+    mods->MergeWorkshopMods(catalog);
+    return GameValue(true);
+}
+
+GameValue TriReadWorkshopFile(const GameState* /*state*/, GameValuePar arg)
+{
+    const GameArrayType& values = arg;
+    if (values.Size() != 2)
+        return GameValue("");
+    const std::string modId = (const char*)static_cast<GameStringType>(values[0]);
+    const std::filesystem::path relative((const char*)static_cast<GameStringType>(values[1]));
+    if (modId.empty() || modId.find_first_of("/\\") != std::string::npos || modId == ".." || relative.empty() ||
+        relative.is_absolute())
+        return GameValue("");
+    for (const auto& component : relative)
+    {
+        if (component == "..")
+            return GameValue("");
+    }
+    const std::filesystem::path installDir =
+        std::filesystem::path(Foundation::GamePaths::Instance().WorkshopDir()) / ("@" + modId);
+    std::ifstream input(installDir / relative, std::ios::binary);
+    if (!input)
+        return GameValue("");
+    std::ostringstream contents;
+    contents << input.rdbuf();
+    return GameValue(contents.str().c_str());
 }
 
 /// triOpenModDownload <n> — open the download dialog (RscDisplayModDownload) as a

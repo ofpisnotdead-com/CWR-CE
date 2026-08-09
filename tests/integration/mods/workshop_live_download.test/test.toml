@@ -13,18 +13,27 @@ extra_args = ["--mods-dir", "${output}/master-mods"]
 id = "fixturemod"
 name = "Fixture Mod"
 version = "1.2.3"
-app = "CWR"
+app = "CWR-CE"
 actver = 303
 folder = "@fixturemod"
-source = "tests/fixtures/mods/@fixturemod"
+source = "tests/integration/mods/workshop_live_download.test/revision1"
 description = "Tiny downloadable fixture mod for Trident live workshop tests."
 authors = ["CWR test fixture"]
+
+[[services.seed_mods.updates]]
+source = "tests/integration/mods/workshop_live_download.test/revision2"
+version = "1.2.3"
 
 [[instances]]
 name = "client"
 type = "client"
 use_mission = false
 no_autotest = true
+copy_files = [
+    { source = "revision1/mod.json", target = "content/Workshop/@fixturemod/mod.json" },
+    { source = "revision1/revision.txt", target = "content/Workshop/@fixturemod/revision.txt" },
+    { source = "revision1/stale.txt", target = "content/Workshop/@fixturemod/stale.txt" },
+]
 extra_args = [
     "--no-strict",
     "--lang",
@@ -33,6 +42,4 @@ extra_args = [
     "${master.url}",
     "--mods-dir",
     "${output}/local-mods",
-    "--workshop-dir",
-    "${output}/client-workshop",
 ]

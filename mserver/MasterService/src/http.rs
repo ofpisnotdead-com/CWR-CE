@@ -13,10 +13,10 @@ use axum::{Json, Router};
 use utoipa::OpenApi;
 
 use crate::model::{
-    DirectoryServerRecord, ListModsQuery, ListServersQuery, ModCatalogEntry, ModUsageServer,
-    ObserveServerRequest, PruneServersRequest, PruneServersResponse, RegisterServerRequest,
-    ServerDetail, ServerModReference, ServerPlayer, ServerPopulationSample, ServerRecentSession,
-    ServerVersionGroup, ServiceMetadata, ServiceSummary,
+    DirectoryServerRecord, ListModsQuery, ListServersQuery, ModCatalogEntry, ModPackage,
+    ModUsageServer, ObserveServerRequest, PruneServersRequest, PruneServersResponse,
+    RegisterServerRequest, ServerDetail, ServerModReference, ServerPlayer, ServerPopulationSample,
+    ServerRecentSession, ServerVersionGroup, ServiceMetadata, ServiceSummary,
 };
 use crate::mods::ModUploadMeta;
 use crate::repository::SqliteServerDirectory;
@@ -53,6 +53,9 @@ fn max_mod_upload_bytes() -> usize {
         get_server,
         list_mods,
         get_mod,
+        list_mod_revisions,
+        get_mod_revision,
+        download_mod_revision,
         list_mod_versions,
         list_mod_servers,
         register_server,
@@ -76,6 +79,7 @@ fn max_mod_upload_bytes() -> usize {
         ServerRecentSession,
         ModUsageServer,
         ModCatalogEntry,
+        ModPackage,
         PruneServersRequest,
         PruneServersResponse,
         ServiceMetadata,
@@ -176,6 +180,20 @@ fn build_router_for_service(
                 .layer(DefaultBodyLimit::max(max_mod_upload_bytes())),
         )
         .route("/v1/mods/:mod_id", get(get_mod).delete(delete_mod))
+        .route(
+            "/v1/mods/:mod_id/revisions",
+            get(list_mod_revisions)
+                .post(publish_revision)
+                .layer(DefaultBodyLimit::max(max_mod_upload_bytes())),
+        )
+        .route(
+            "/v1/mods/:mod_id/revisions/:revision",
+            get(get_mod_revision),
+        )
+        .route(
+            "/v1/mods/:mod_id/revisions/:revision/download",
+            get(download_mod_revision),
+        )
         .route("/v1/mods/:mod_id/versions", get(list_mod_versions))
         .route("/v1/mods/:mod_id/servers", get(list_mod_servers))
         .route("/v1/mods/:mod_id/download", get(download_mod))
@@ -433,6 +451,65 @@ async fn list_mod_versions(
 
 #[utoipa::path(
     get,
+    path = "/v1/mods/{modId}/revisions",
+    params(("modId" = String, Path, description = "Stable mod identifier")),
+    responses(
+        (status = 200, description = "Immutable package revisions, newest first", body = [ModCatalogEntry])
+    )
+)]
+async fn list_mod_revisions(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(mod_id): Path<String>,
+) -> Result<Json<Vec<ModCatalogEntry>>, (StatusCode, String)> {
+    let mut records = state
+        .service
+        .mod_revisions(&mod_id)
+        .await
+        .map_err(|error| internal_error(&error))?;
+    let base = request_base_url(&headers);
+    for entry in &mut records {
+        absolutize_download_url(&mut entry.download_url, base.as_deref());
+    }
+    Ok(Json(records))
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/mods/{modId}/revisions/{revision}",
+    params(
+        ("modId" = String, Path, description = "Stable mod identifier"),
+        ("revision" = u64, Path, description = "Package revision")
+    ),
+    responses(
+        (status = 200, description = "Immutable package revision metadata", body = ModCatalogEntry),
+        (status = 404, description = "Revision not found")
+    )
+)]
+async fn get_mod_revision(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((mod_id, revision)): Path<(String, u64)>,
+) -> Result<Json<ModCatalogEntry>, StatusCode> {
+    match state
+        .service
+        .get_mod_revision(&mod_id, revision)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    {
+        Some(mut entry) => {
+            absolutize_download_url(
+                &mut entry.download_url,
+                request_base_url(&headers).as_deref(),
+            );
+            Ok(Json(entry))
+        }
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+#[utoipa::path(
+    get,
     path = "/v1/mods/{modId}/servers",
     params(
         ("modId" = String, Path, description = "Mod identifier")
@@ -460,7 +537,25 @@ async fn list_mod_servers(
 async fn publish_mod(
     State(state): State<AppState>,
     headers: HeaderMap,
+    multipart: Multipart,
+) -> Result<Json<ModCatalogEntry>, (StatusCode, String)> {
+    upload_mod(state, headers, multipart, None).await
+}
+
+async fn publish_revision(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(mod_id): Path<String>,
+    multipart: Multipart,
+) -> Result<Json<ModCatalogEntry>, (StatusCode, String)> {
+    upload_mod(state, headers, multipart, Some(mod_id)).await
+}
+
+async fn upload_mod(
+    state: AppState,
+    headers: HeaderMap,
     mut multipart: Multipart,
+    target_mod_id: Option<String>,
 ) -> Result<Json<ModCatalogEntry>, (StatusCode, String)> {
     require_admin_api_key(&state, &headers)?;
     if !state.service.mods_enabled() {
@@ -528,38 +623,50 @@ async fn publish_mod(
     }
 
     let name = name.filter(|value| !value.trim().is_empty());
-    if name.is_none() || !file_seen {
+    if (target_mod_id.is_none() && name.is_none()) || !file_seen {
         // Clean up the temp upload, then report the missing field.
         let _ = state
             .service
             .finalize_mod_upload(upload, ModUploadMeta::default())
             .await;
-        let missing = if name.is_none() { "name" } else { "file" };
+        let missing = if !file_seen { "file" } else { "name" };
         return Err((
             StatusCode::BAD_REQUEST,
             format!("missing '{missing}' field"),
         ));
     }
 
-    state
-        .service
-        .finalize_mod_upload(
-            upload,
-            ModUploadMeta {
-                name: name.unwrap(),
-                app_name: app_name.filter(|value| !value.trim().is_empty()),
-                actver: actver.and_then(|value| value.trim().parse().ok()),
-                version_tag: version_tag.filter(|value| !value.trim().is_empty()),
-                version: version.filter(|value| !value.trim().is_empty()),
-                folder_name: folder_name.filter(|value| !value.trim().is_empty()),
-                description: description.filter(|value| !value.is_empty()),
-                authors,
-                homepage_url: homepage_url.filter(|value| !value.trim().is_empty()),
-            },
-        )
-        .await
-        .map(Json)
-        .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))
+    let meta = ModUploadMeta {
+        name: name.unwrap_or_default(),
+        app_name: app_name.filter(|value| !value.trim().is_empty()),
+        actver: actver.and_then(|value| value.trim().parse().ok()),
+        version_tag: version_tag.filter(|value| !value.trim().is_empty()),
+        version: version.filter(|value| !value.trim().is_empty()),
+        folder_name: folder_name.filter(|value| !value.trim().is_empty()),
+        description: description.filter(|value| !value.is_empty()),
+        authors,
+        homepage_url: homepage_url.filter(|value| !value.trim().is_empty()),
+    };
+    let result = match target_mod_id {
+        Some(mod_id) => {
+            state
+                .service
+                .finalize_mod_revision_upload(upload, &mod_id, meta)
+                .await
+        }
+        None => state.service.finalize_mod_upload(upload, meta).await,
+    };
+    result.map(Json).map_err(|error| {
+        let message = error.to_string();
+        let status = if message.contains("already exists") {
+            StatusCode::CONFLICT
+        } else if message.contains("does not exist") {
+            StatusCode::NOT_FOUND
+        } else {
+            StatusCode::BAD_REQUEST
+        };
+        (status, message)
+    })
 }
 
 /// Delete a published mod (admin-gated): removes its catalog entry and its artifact from
@@ -589,7 +696,45 @@ async fn delete_mod(
 }
 
 async fn download_mod(State(state): State<AppState>, Path(mod_id): Path<String>) -> Response {
-    match state.service.mod_artifact_signed_url(&mod_id).await {
+    match state.service.get_mod(&mod_id).await {
+        Ok(Some(entry)) => (
+            [(
+                LOCATION,
+                format!(
+                    "/v1/mods/{mod_id}/revisions/{}/download",
+                    entry.package_revision
+                ),
+            )],
+            StatusCode::TEMPORARY_REDIRECT,
+        )
+            .into_response(),
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/mods/{modId}/revisions/{revision}/download",
+    params(
+        ("modId" = String, Path, description = "Stable mod identifier"),
+        ("revision" = u64, Path, description = "Package revision")
+    ),
+    responses(
+        (status = 200, description = "Immutable compressed package artifact"),
+        (status = 307, description = "Redirect to immutable object-store URL"),
+        (status = 404, description = "Revision not found")
+    )
+)]
+async fn download_mod_revision(
+    State(state): State<AppState>,
+    Path((mod_id, revision)): Path<(String, u64)>,
+) -> Response {
+    match state
+        .service
+        .mod_revision_artifact_signed_url(&mod_id, revision)
+        .await
+    {
         Ok(Some((_size, url))) => {
             return ([(LOCATION, url)], StatusCode::TEMPORARY_REDIRECT).into_response();
         }
@@ -597,7 +742,11 @@ async fn download_mod(State(state): State<AppState>, Path(mod_id): Path<String>)
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 
-    match state.service.mod_artifact_stream(&mod_id).await {
+    match state
+        .service
+        .mod_revision_artifact_stream(&mod_id, revision)
+        .await
+    {
         Ok(Some((size, stream))) => {
             // Stream the artifact straight from the store — never buffer the whole file.
             let headers = [

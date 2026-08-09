@@ -163,6 +163,7 @@ TEST_CASE("master mod catalog parse carries compatibility fields", "[network][ma
     const char* json = "{\"modId\":\"effects-pack\",\"app\":\"CWR-CE\",\"actver\":303,"
                        "\"vertag\":\"dev\","
                        "\"compatible\":true,\"name\":\"Effects Pack\",\"version\":\"1.0\","
+                       "\"packageRevision\":4,\"sha256\":\"abcd\",\"publishedUnixMs\":1234,"
                        "\"description\":\"fx\",\"authors\":[\"simi\"],\"sizeBytes\":42}";
 
     MasterServerServiceModCatalogEntry entry;
@@ -172,4 +173,22 @@ TEST_CASE("master mod catalog parse carries compatibility fields", "[network][ma
     REQUIRE(entry.actualVersion == 303);
     REQUIRE(entry.versionTag == "dev");
     REQUIRE(entry.compatible);
+    REQUIRE(entry.packageRevision == 4);
+    REQUIRE(entry.sha256 == "abcd");
+    REQUIRE(entry.publishedUnixMs == 1234);
+
+    MasterServerServiceModCatalogEntry legacy;
+    REQUIRE(ParseMasterServerServiceModDetailResponse(R"({"modId":"legacy","name":"Legacy","version":"1.0"})", legacy));
+    REQUIRE(legacy.packageRevision == 1);
+}
+
+TEST_CASE("master registration JSON carries exact mod package revisions", "[network][master][mods]")
+{
+    MasterServerServiceRegistration registration;
+    registration.mod = "effects-pack";
+    registration.modPackages.push_back({"effects-pack", 4});
+
+    const std::string json = BuildMasterServerServiceRegistrationJson(registration);
+    REQUIRE(json.find("\"mod\":\"effects-pack\"") != std::string::npos);
+    REQUIRE(json.find("\"modPackages\":[{\"modId\":\"effects-pack\",\"packageRevision\":4}]") != std::string::npos);
 }

@@ -9,6 +9,12 @@
 #include <Poseidon/Foundation/Strings/RString.hpp>
 #include <Poseidon/Foundation/Containers/Array.hpp>
 
+struct SessionModPackage
+{
+    RString modId;
+    int64_t packageRevision = 1;
+};
+
 // Description of multiplayer session
 struct SessionInfo
 {
@@ -46,6 +52,7 @@ struct SessionInfo
 	int timeleft;
   // mod list on host
   RString mod;
+  AutoArray<SessionModPackage> modPackages;
   // equal mod list is required by host
   bool equalModRequired;
   // host's version tag (must match to join)
@@ -332,4 +339,3 @@ NetTranspSessionEnum *CreateNetSessionEnum( const ParamEntry &cfg );
 NetTranspClient *CreateNetClient( const ParamEntry &cfg );
 // Create Net implementation of NetTranspServer class
 NetTranspServer *CreateNetServer( const ParamEntry &cfg );
-

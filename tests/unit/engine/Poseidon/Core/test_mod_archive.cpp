@@ -97,6 +97,16 @@ void WriteFileBytes(const std::filesystem::path& path, const uint8_t* data, size
 }
 } // namespace
 
+TEST_CASE("ModArchive rejects paths outside the staging directory", "[mods][pbo][paths]")
+{
+    CHECK(ModArchive::IsSafeEntryPath("addons/data.bin"));
+    CHECK(ModArchive::IsSafeEntryPath("addons\\data.bin"));
+    CHECK_FALSE(ModArchive::IsSafeEntryPath("../outside.bin"));
+    CHECK_FALSE(ModArchive::IsSafeEntryPath("addons/../../outside.bin"));
+    CHECK_FALSE(ModArchive::IsSafeEntryPath("/absolute.bin"));
+    CHECK_FALSE(ModArchive::IsSafeEntryPath("C:\\absolute.bin"));
+}
+
 TEST_CASE("ModArchive::Unpack extracts every PBO entry to disk", "[mods][pbo]")
 {
     // Mods ship as zstd-wrapped PBOs (`<name>.pbo.zst`) — the only format

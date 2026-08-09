@@ -46,6 +46,25 @@ std::string ReadModJsonString(const std::filesystem::path& modDir, const char* k
     return out;
 }
 
+int64_t ReadModJsonInt64(const std::filesystem::path& modDir, const char* key, int64_t fallback)
+{
+    std::ifstream in(modDir / "mod.json", std::ios::binary);
+    if (!in)
+        return fallback;
+    std::ostringstream buffer;
+    buffer << in.rdbuf();
+    cJSON* root = cJSON_Parse(buffer.str().c_str());
+    int64_t out = fallback;
+    if (root != nullptr)
+    {
+        const cJSON* item = cJSON_GetObjectItemCaseSensitive(root, key);
+        if (cJSON_IsNumber(item))
+            out = static_cast<int64_t>(item->valuedouble);
+        cJSON_Delete(root);
+    }
+    return out;
+}
+
 // Total size of every regular file under dir (recursive). Best-effort: I/O errors
 // stop the walk and return what was summed so far.
 int64_t DirSizeBytes(const std::filesystem::path& dir)
@@ -198,6 +217,8 @@ std::vector<Mod> ScanModsRoot(const std::string& root, ModSource source)
         m.catalogId = ReadModJsonString(it->path(), "modId");
         m.name = ModDisplayName(folder, ReadModJsonString(it->path(), "name"));
         m.version = ReadModJsonString(it->path(), "version");
+        m.packageRevision = std::max<int64_t>(1, ReadModJsonInt64(it->path(), "packageRevision", 1));
+        m.sha256 = ReadModJsonString(it->path(), "sha256");
         m.path = it->path().string();
         m.sizeBytes = DirSizeBytes(it->path());
         m.source = source;
@@ -299,6 +320,8 @@ ModCollection ActiveModsFromMountPath(const std::string& mountPath)
         m.catalogId = ReadModJsonString(std::filesystem::path(entry), "modId");
         m.name = ModDisplayName(m.id, ReadModJsonString(std::filesystem::path(entry), "name"));
         m.version = ReadModJsonString(std::filesystem::path(entry), "version");
+        m.packageRevision = std::max<int64_t>(1, ReadModJsonInt64(std::filesystem::path(entry), "packageRevision", 1));
+        m.sha256 = ReadModJsonString(std::filesystem::path(entry), "sha256");
         m.path = entry;
         col.Add(std::move(m));
     }

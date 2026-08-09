@@ -1781,6 +1781,7 @@ bool GameApplication::Remount(const char* newModPath)
     if (!CanRemount())
     {
         LOG_WARN(Core, "Re-mount refused: a mission is active");
+        Poseidon::DiscardStagedModInstalls(GApp->m_remountInstalls);
         return false;
     }
 
@@ -1812,6 +1813,23 @@ bool GameApplication::Remount(const char* newModPath)
         GEngine->ResetForRemount();
     }
 
+    std::string swapError;
+    if (!GApp->m_remountInstalls.empty() && !Poseidon::SwapStagedModInstalls(GApp->m_remountInstalls, &swapError))
+    {
+        LOG_ERROR(Core, "Re-mount install swap failed: {}", swapError);
+        Poseidon::ModSystem::SetModPath(prevModPath);
+        if (LoadGameData())
+        {
+            if (GWorld)
+                GWorld->StartIntro();
+            EnableRendering();
+        }
+        GApp->m_remountFailed = true;
+        Poseidon::DiscardStagedModInstalls(GApp->m_remountInstalls);
+        ProgressFinish();
+        return false;
+    }
+
     // Swap the active mod set, then reload everything from scratch.
     Poseidon::ModSystem::SetModPath(newModPath != nullptr ? newModPath : "");
 
@@ -1828,6 +1846,7 @@ bool GameApplication::Remount(const char* newModPath)
         {
             GEngine->ResetForRemount();
         }
+        Poseidon::RestoreStagedModInstalls(GApp->m_remountInstalls);
         Poseidon::ModSystem::SetModPath(prevModPath);
         if (LoadGameData())
         {
@@ -1842,6 +1861,7 @@ bool GameApplication::Remount(const char* newModPath)
             LOG_ERROR(Core, "Re-mount rollback also failed — rendering left disabled");
         }
         GApp->m_remountFailed = true; // the menu surfaces this once it is live again (AppIdle)
+        Poseidon::DiscardStagedModInstalls(GApp->m_remountInstalls);
         ProgressFinish();
         return false;
     }
@@ -1852,6 +1872,7 @@ bool GameApplication::Remount(const char* newModPath)
     }
 
     EnableRendering();
+    Poseidon::CommitStagedModInstalls(GApp->m_remountInstalls);
     ProgressFinish();
     LOG_INFO(Core, "Re-mount complete");
     return true;

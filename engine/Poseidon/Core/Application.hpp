@@ -3,6 +3,9 @@
 
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
+#include <Poseidon/Core/ModInstall.hpp>
 #include <Poseidon/Foundation/Logging/Logging.hpp> // Need full definition for unique_ptr<LoggingSystem>
 #include <Poseidon/Core/Config/Configuration.hpp>  // Need full definition for unique_ptr<ConfigurationSystem>
 
@@ -101,6 +104,7 @@ class Application
     bool m_remountHasModPath = false; // false → reload with the current mod set
     std::string m_remountModPath;     // explicit mod set when m_remountHasModPath ("" = base game)
     bool m_remountFailed = false;     // a Remount rolled back; the menu shows a message + clears this
+    std::vector<Poseidon::StagedModInstall> m_remountInstalls;
 
     // Queue an in-process re-mount for the next AppIdle (the only safe point). Both are safe
     // to call mid-frame / from an ImGui handler — they only set state; the teardown+reload
@@ -115,6 +119,11 @@ class Application
         m_remountModPath = modPath ? modPath : "";
         m_remountHasModPath = true;
         m_remountRequested = true;
+    }
+    void RequestRemountWithMods(const char* modPath, std::vector<Poseidon::StagedModInstall> installs)
+    {
+        m_remountInstalls = std::move(installs);
+        RequestRemountWithMods(modPath);
     }
 
     // Graphics engine creation hook — apps override to provide real backends.
