@@ -120,3 +120,50 @@ TEST_CASE("Man flare lookup validates the selected weapon slot", "[Infantry][sol
     CHECK(function.find("_currentWeapon < NMagazineSlots()") != std::string::npos);
     CHECK(function.find("if (slot._muzzle)") != std::string::npos);
 }
+
+TEST_CASE("MotionType rejects an out-of-range path destination", "[Infantry][soldierOld][motion]")
+{
+    ParamFile pf = ParseConfig("class EmptyActions {};\n"
+                               "class TestMoves {\n"
+                               "  class States {\n"
+                               "    class Idle {};\n"
+                               "    class Walk {};\n"
+                               "  };\n"
+                               "  class Interpolations {};\n"
+                               "  transitionsInterpolated[] = {};\n"
+                               "  transitionsSimple[] = {};\n"
+                               "  transitionsDisabled[] = {};\n"
+                               "  vehicleActions = EmptyActions;\n"
+                               "};\n");
+    MotionType motion;
+    motion.Load(pf >> "TestMoves");
+    MotionPath path;
+
+    REQUIRE_FALSE(motion.FindPath(path, motion.GetMoveId("Idle"), MotionPathItem(static_cast<MoveId>(32758))));
+    REQUIRE(path.Size() == 0);
+}
+
+TEST_CASE("MotionType ignores an out-of-range animation edge", "[Infantry][soldierOld][motion]")
+{
+    ParamFile pf = ParseConfig("class EmptyActions {};\n"
+                               "class TestMoves {\n"
+                               "  class States {\n"
+                               "    class Idle {};\n"
+                               "    class Walk {};\n"
+                               "  };\n"
+                               "  class Interpolations {};\n"
+                               "  transitionsInterpolated[] = {};\n"
+                               "  transitionsSimple[] = {};\n"
+                               "  transitionsDisabled[] = {};\n"
+                               "  vehicleActions = EmptyActions;\n"
+                               "};\n");
+    MotionType motion;
+    motion.Load(pf >> "TestMoves");
+    MoveId idle = motion.GetMoveId("Idle");
+    MoveId walk = motion.GetMoveId("Walk");
+    motion.AddEdge(idle, static_cast<MoveId>(32758), MEdgeSimple, 1.0f);
+    MotionPath path;
+
+    REQUIRE_FALSE(motion.FindPath(path, idle, MotionPathItem(walk)));
+    REQUIRE(path.Size() == 0);
+}
