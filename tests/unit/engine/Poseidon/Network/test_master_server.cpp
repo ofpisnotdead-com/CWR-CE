@@ -13,6 +13,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -20,6 +22,36 @@
 #include <Poseidon/Network/NetworkConfig.hpp>
 
 using namespace Poseidon;
+
+TEST_CASE("master service error text is bounded and single-line", "[network][master]")
+{
+    const std::string response = "bad\r\nrequest\t" + std::string(600, 'x');
+    const std::string sanitized = SanitizeMasterServerServiceError(response);
+
+    REQUIRE(sanitized.size() == 512);
+    REQUIRE(sanitized.starts_with("bad  request "));
+    REQUIRE(sanitized.find('\r') == std::string::npos);
+    REQUIRE(sanitized.find('\n') == std::string::npos);
+    REQUIRE(sanitized.find('\t') == std::string::npos);
+}
+
+TEST_CASE("master service token file is replaced atomically", "[network][master]")
+{
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / "cwr-master-token-test.txt";
+    std::filesystem::remove(path);
+    std::filesystem::remove(path.string() + ".tmp");
+
+    REQUIRE(StoreMasterServerServiceTokenFile(path.string(), "first-token"));
+    REQUIRE(StoreMasterServerServiceTokenFile(path.string(), "second-token"));
+    std::ifstream input(path, std::ios::binary);
+    std::string stored;
+    std::getline(input, stored);
+    REQUIRE(stored == "second-token");
+    REQUIRE_FALSE(std::filesystem::exists(path.string() + ".tmp"));
+
+    input.close();
+    std::filesystem::remove(path);
+}
 
 TEST_CASE("master registration JSON serializes the version tag under 'vertag'", "[network][master][version]")
 {

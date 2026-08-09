@@ -25,10 +25,12 @@ mod tests {
     };
     use crate::model::{
         DirectoryServerRecord, ListModsQuery, ListServersQuery, ModCatalogEntry, ModPackage,
-        ModUsageServer, ObserveServerRequest, RegisterServerRequest, ServerDetail, ServiceMetadata,
-        ServiceSummary, VerificationState,
+        ModUsageServer, ObserveServerRequest, RegisterServerRequest, ServerDetail,
+        ServerRecentSession, ServiceMetadata, ServiceSummary, VerificationState,
     };
-    use crate::repository::{sqlite_url_for_path, ServerDirectory, SqliteServerDirectory};
+    use crate::repository::{
+        sqlite_url_for_path, ServerDirectory, SqliteServerDirectory, TokenRelocation,
+    };
 
     fn sample_request(server_id: &str, hostname: &str, now_suffix: &str) -> RegisterServerRequest {
         RegisterServerRequest {
@@ -157,16 +159,15 @@ mod tests {
                     equal_mod_required INTEGER NOT NULL, transport_impl TEXT NOT NULL,
                     platform TEXT NOT NULL, last_seen_unix_ms INTEGER NOT NULL,
                     verification_state TEXT NOT NULL DEFAULT 'self_reported',
-                    last_observed_unix_ms INTEGER, observed_reachable INTEGER,
-                    consecutive_failures INTEGER NOT NULL DEFAULT 0, token_hash TEXT
+                    last_observed_unix_ms INTEGER, observed_reachable INTEGER
                 );
                 INSERT INTO servers (
                     server_id, address, hostport, hostname, gametype, actver, reqver, gstate,
                     numplayers, maxplayers, password, mod_list, equal_mod_required, transport_impl,
-                    platform, last_seen_unix_ms, verification_state, consecutive_failures
+                    platform, last_seen_unix_ms, verification_state
                 ) VALUES (
                     'old-srv', '1.2.3.4', 2302, 'Old Server', 'coop', 196, 196, 14, 3, 8, 0, 'synthetic-core',
-                    0, 'papa-bear', 'win', 1000, 'self_reported', 0
+                    0, 'papa-bear', 'win', 1000, 'self_reported'
                 );",
             )
             .execute(&pool)
@@ -325,7 +326,28 @@ mod tests {
         assert_eq!(updated.hostname, "PgBravo");
         assert_eq!(updated.last_seen_unix_ms, 1_500);
 
-        let fetched = directory.get(server_id).await.unwrap();
+        directory
+            .set_token_hash(server_id, "pg-token-hash")
+            .await
+            .unwrap();
+        let moved_id = "pg-placeholder-regression-moved";
+        directory.unregister(moved_id).await.unwrap();
+        assert_eq!(
+            directory
+                .relocate_token_owner(
+                    "pg-token-hash",
+                    moved_id,
+                    "203.0.113.90",
+                    2302,
+                    1_600,
+                    120_000,
+                )
+                .await
+                .unwrap(),
+            TokenRelocation::Moved
+        );
+
+        let fetched = directory.get(moved_id).await.unwrap();
         assert_eq!(
             fetched.map(|record| record.hostname),
             Some("PgBravo".to_string())
@@ -335,7 +357,7 @@ mod tests {
         // (real rows carry millisecond timestamps in the 2026 range).
         let removed = directory.prune_stale(2_000).await.unwrap();
         assert!(removed >= 1, "prune must remove the ancient test row");
-        assert!(directory.get(server_id).await.unwrap().is_none());
+        assert!(directory.get(moved_id).await.unwrap().is_none());
     }
 
     #[tokio::test]
@@ -1836,6 +1858,398 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn server_token_keeps_publisher_identity_across_public_address_changes() {
+        let temp_dir = tempdir().unwrap();
+        let directory = Arc::new(
+            SqliteServerDirectory::open_path(temp_dir.path().join("token-move.sqlite"))
+                .await
+                .unwrap(),
+        );
+        let app = build_router_with_options(
+            directory,
+            None,
+            None,
+            Some("x-forwarded-for".to_string()),
+            true,
+        );
+        let mut body = sample_request("body-address", "Moving server", "31");
+        body.hostport = 1985;
+
+        let register = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/servers/register")
+                    .header("content-type", "application/json")
+                    .header("x-forwarded-for", "198.51.100.10")
+                    .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(register.status(), StatusCode::OK);
+        let registered: DirectoryServerRecord =
+            serde_json::from_slice(&to_bytes(register.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        let token = registered.token.expect("first registration issues a token");
+
+        body.numplayers = 2;
+        let heartbeat = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/servers/heartbeat")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {token}"))
+                    .header("x-forwarded-for", "203.0.113.20")
+                    .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(heartbeat.status(), StatusCode::OK);
+        let moved: DirectoryServerRecord =
+            serde_json::from_slice(&to_bytes(heartbeat.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(moved.server_id, "203.0.113.20:1985");
+        assert_eq!(moved.token, None);
+
+        body.address = "8.8.4.4".to_string();
+        let private_heartbeat = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/servers/heartbeat")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {token}"))
+                    .header("x-forwarded-for", "10.114.0.3, 10.244.0.1")
+                    .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(private_heartbeat.status(), StatusCode::OK);
+        let retained: DirectoryServerRecord = serde_json::from_slice(
+            &to_bytes(private_heartbeat.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(retained.server_id, "203.0.113.20:1985");
+
+        let list = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/v1/servers?includeUnverifiedServers=true")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let servers: Vec<DirectoryServerRecord> =
+            serde_json::from_slice(&to_bytes(list.into_body(), usize::MAX).await.unwrap()).unwrap();
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[0].server_id, "203.0.113.20:1985");
+
+        let unregister = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/v1/servers/198.51.100.10:1985")
+                    .header("authorization", format!("Bearer {token}"))
+                    .header("x-forwarded-for", "192.0.2.99")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(unregister.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn persisted_unknown_token_registers_after_database_recreation() {
+        let temp_dir = tempdir().unwrap();
+        let directory = Arc::new(
+            SqliteServerDirectory::open_path(temp_dir.path().join("token-adopt.sqlite"))
+                .await
+                .unwrap(),
+        );
+        let app = build_router_with_options(directory, None, None, None, true);
+        let token = "4d6b2e9a5ef74af3a87bc81d566f49e391ef68562ac7db727318ca85c0091e18";
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/servers/register")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::from(
+                        serde_json::to_vec(&sample_request("srv-restored", "Restored", "32"))
+                            .unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let record: DirectoryServerRecord =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(record.token, None);
+    }
+
+    #[tokio::test]
+    async fn stale_endpoint_merge_preserves_publisher_history() {
+        let temp_dir = tempdir().unwrap();
+        let directory = SqliteServerDirectory::open_path(temp_dir.path().join("merge.sqlite"))
+            .await
+            .unwrap();
+        let old_id = "198.51.100.40:1985";
+        let new_id = "203.0.113.40:1985";
+        directory
+            .register(sample_request(old_id, "Owner", "40"), 1_000)
+            .await
+            .unwrap();
+        directory
+            .set_token_hash(old_id, "owner-hash")
+            .await
+            .unwrap();
+        directory
+            .insert_session(
+                old_id,
+                &ServerRecentSession {
+                    mission: "Owner mission".to_string(),
+                    label: "Owner session".to_string(),
+                    played_minutes: 10,
+                    peak_players: 2,
+                    ended_unix_ms: 1_100,
+                },
+            )
+            .await
+            .unwrap();
+        directory
+            .register(sample_request(new_id, "Stale duplicate", "41"), 2_000)
+            .await
+            .unwrap();
+        directory
+            .set_token_hash(new_id, "stale-hash")
+            .await
+            .unwrap();
+        directory
+            .insert_session(
+                new_id,
+                &ServerRecentSession {
+                    mission: "Duplicate mission".to_string(),
+                    label: "Duplicate session".to_string(),
+                    played_minutes: 20,
+                    peak_players: 3,
+                    ended_unix_ms: 2_100,
+                },
+            )
+            .await
+            .unwrap();
+
+        let result = directory
+            .relocate_token_owner("owner-hash", new_id, "203.0.113.40", 1985, 200_000, 120_000)
+            .await
+            .unwrap();
+        assert_eq!(result, TokenRelocation::Moved);
+        assert!(directory.get(old_id).await.unwrap().is_none());
+        assert_eq!(
+            directory
+                .server_token_hash(new_id)
+                .await
+                .unwrap()
+                .as_deref(),
+            Some("owner-hash")
+        );
+        assert_eq!(directory.history(new_id, 10).await.unwrap().len(), 2);
+        assert_eq!(directory.sessions(new_id, 10).await.unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn token_owner_cannot_move_onto_an_active_publisher() {
+        let temp_dir = tempdir().unwrap();
+        let directory = Arc::new(
+            SqliteServerDirectory::open_path(temp_dir.path().join("token-conflict.sqlite"))
+                .await
+                .unwrap(),
+        );
+        let app = build_router_with_options(
+            directory,
+            None,
+            None,
+            Some("x-forwarded-for".to_string()),
+            true,
+        );
+        let token_a = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let token_b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let post = |address: &str, token: &str, name: &str| {
+            Request::builder()
+                .method("POST")
+                .uri("/v1/servers/register")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {token}"))
+                .header("x-forwarded-for", address)
+                .body(Body::from(
+                    serde_json::to_vec(&sample_request("body", name, "33")).unwrap(),
+                ))
+                .unwrap()
+        };
+        assert_eq!(
+            app.clone()
+                .oneshot(post("198.51.100.30", token_a, "Alpha"))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            app.clone()
+                .oneshot(post("198.51.100.31", token_b, "Bravo"))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+        let conflict = app
+            .clone()
+            .oneshot(post("198.51.100.31", token_a, "Alpha"))
+            .await
+            .unwrap();
+        assert_eq!(conflict.status(), StatusCode::CONFLICT);
+
+        let list = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/servers?includeUnverifiedServers=true")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let servers: Vec<DirectoryServerRecord> =
+            serde_json::from_slice(&to_bytes(list.into_body(), usize::MAX).await.unwrap()).unwrap();
+        assert_eq!(servers.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn concurrent_publishers_cannot_claim_the_same_endpoint() {
+        let temp_dir = tempdir().unwrap();
+        let directory = Arc::new(
+            SqliteServerDirectory::open_path(temp_dir.path().join("token-race.sqlite"))
+                .await
+                .unwrap(),
+        );
+        let app = build_router_with_options(directory, None, None, None, true);
+        let request = |token: &'static str, name: &'static str| {
+            let app = app.clone();
+            async move {
+                app.oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/v1/servers/register")
+                        .header("content-type", "application/json")
+                        .header("authorization", format!("Bearer {token}"))
+                        .body(Body::from(
+                            serde_json::to_vec(&sample_request("shared-endpoint", name, "35"))
+                                .unwrap(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+            }
+        };
+        let (alpha, bravo) = tokio::join!(
+            request(
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "Alpha"
+            ),
+            request(
+                "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "Bravo"
+            )
+        );
+        let statuses = [alpha.status(), bravo.status()];
+        assert_eq!(
+            statuses
+                .iter()
+                .filter(|status| **status == StatusCode::OK)
+                .count(),
+            1
+        );
+        assert!(statuses.iter().any(|status| {
+            *status == StatusCode::UNAUTHORIZED || *status == StatusCode::CONFLICT
+        }));
+    }
+
+    #[tokio::test]
+    async fn trusted_proxy_rejects_new_private_publisher_address() {
+        let temp_dir = tempdir().unwrap();
+        let directory = Arc::new(
+            SqliteServerDirectory::open_path(temp_dir.path().join("private-address.sqlite"))
+                .await
+                .unwrap(),
+        );
+        let app = build_router_with_options(
+            directory,
+            None,
+            None,
+            Some("x-forwarded-for".to_string()),
+            true,
+        );
+        let mut body = sample_request("192.168.1.30:1985", "Private", "34");
+        body.address = "192.168.1.30".to_string();
+        body.hostport = 1985;
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/servers/register")
+                    .header("content-type", "application/json")
+                    .header("x-forwarded-for", "10.114.0.3, 10.244.0.1")
+                    .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn malformed_publisher_json_returns_actionable_bad_request() {
+        let app = test_app().await;
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/servers/heartbeat")
+                    .header("content-type", "application/json")
+                    .header("user-agent", "CWR/303 (role=server-heartbeat)")
+                    .body(Body::from(r#"{"serverId":"broken","state":}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = String::from_utf8(
+            to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .to_vec(),
+        )
+        .unwrap();
+        assert!(body.contains("Failed to parse the request body as JSON"));
+        assert!(!body.contains("authorization"));
+    }
+
+    #[tokio::test]
     async fn http_prune_requires_admin_api_key_when_configured() {
         let temp_dir = tempdir().unwrap();
         let database_path = temp_dir.path().join("directory.sqlite");
@@ -2810,6 +3224,11 @@ mod tests {
         assert!(js_text.contains("loadBrowserList"));
         assert!(js_text.contains("if (serviceElement)"));
         assert!(js_text.contains("loadServerDetailPage"));
+        assert!(js_text.contains("formatServerGameVersion(sv)"));
+        assert!(!js_text.contains("formatServerVersion("));
+        assert!(js_text
+            .contains("error.status === 404 ? \"Server not found\" : \"Server unavailable\""));
+        assert!(js_text.contains("Server details could not be displayed"));
         assert!(js_text.contains("loadModsList"));
         assert!(js_text.contains("currentModsTextFilter"));
         assert!(js_text.contains("modCompatibilityGroups"));

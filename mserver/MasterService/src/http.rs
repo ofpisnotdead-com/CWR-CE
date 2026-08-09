@@ -3,7 +3,8 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use axum::body::Body;
-use axum::extract::{ConnectInfo, DefaultBodyLimit, Multipart, Path, Query, State};
+use axum::extract::rejection::JsonRejection;
+use axum::extract::{ConnectInfo, DefaultBodyLimit, Multipart, OriginalUri, Path, Query, State};
 use axum::http::header::{CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_TYPE, LOCATION};
 use axum::http::HeaderMap;
 use axum::http::StatusCode;
@@ -19,7 +20,7 @@ use crate::model::{
     ServerRecentSession, ServerVersionGroup, ServiceMetadata, ServiceSummary,
 };
 use crate::mods::ModUploadMeta;
-use crate::repository::SqliteServerDirectory;
+use crate::repository::{SqliteServerDirectory, TokenRelocation};
 use crate::service::{self, PapaBearService};
 
 /// A silent (no-heartbeat) row older than this may be reclaimed without the token, so a
@@ -226,16 +227,104 @@ fn build_router_for_service(
 )]
 async fn register_server(
     State(state): State<AppState>,
+    OriginalUri(uri): OriginalUri,
     headers: HeaderMap,
     connect_info: Option<ConnectInfo<SocketAddr>>,
-    Json(mut request): Json<RegisterServerRequest>,
+    payload: Result<Json<RegisterServerRequest>, JsonRejection>,
 ) -> Result<Json<DirectoryServerRecord>, (StatusCode, String)> {
-    if let Some(ip) = publish_client_ip(&state, &headers, connect_info.as_ref().map(|info| info.0))
+    let Json(mut request) = payload.map_err(|rejection| {
+        let status = rejection.status();
+        publisher_error(uri.path(), &headers, status, rejection.body_text())
+    })?;
+    let provided_token = bearer_token(&headers);
+    if provided_token
+        .as_deref()
+        .is_some_and(|token| !valid_server_token(token))
     {
+        return Err(publisher_error(
+            uri.path(),
+            &headers,
+            StatusCode::UNAUTHORIZED,
+            "invalid server token",
+        ));
+    }
+    let provided_hash = provided_token.as_deref().map(service::token_hash);
+    let published_ip =
+        publish_client_ip(&state, &headers, connect_info.as_ref().map(|info| info.0));
+    if let Some(ip) = published_ip {
         request.server_id = format!("{ip}:{}", request.hostport);
         request.address = ip;
+    } else if state.client_ip_header.is_some() {
+        let owner = match provided_hash.as_deref() {
+            Some(hash) => state
+                .service
+                .server_id_for_token_hash(hash)
+                .await
+                .map_err(|error| internal_error(&error))?,
+            None => None,
+        };
+        if let Some(owner) = owner {
+            let record = state
+                .service
+                .get(&owner)
+                .await
+                .map_err(|error| internal_error(&error))?
+                .ok_or_else(|| internal_error(&anyhow::anyhow!("token owner disappeared")))?;
+            request.server_id = record.server_id;
+            request.address = record.address;
+            request.hostport = record.hostport;
+        } else if is_public_forwarded_ip(&request.address) {
+            request.server_id = format!("{}:{}", request.address, request.hostport);
+        } else {
+            return Err(publisher_error(
+                uri.path(),
+                &headers,
+                StatusCode::SERVICE_UNAVAILABLE,
+                "no public publisher address is available",
+            ));
+        }
     }
     let server_id = request.server_id.clone();
+    let now_unix_ms = current_time_millis();
+
+    let token_owner_found = if let Some(hash) = provided_hash.as_deref() {
+        match state
+            .service
+            .relocate_token_owner(
+                hash,
+                &request.server_id,
+                &request.address,
+                request.hostport,
+                now_unix_ms,
+                SERVER_TOKEN_RECOVERY_MS,
+            )
+            .await
+            .map_err(|error| internal_error(&error))?
+        {
+            TokenRelocation::NotFound => false,
+            TokenRelocation::Unchanged => true,
+            TokenRelocation::Moved => {
+                tracing::info!(
+                    route = %uri.path(),
+                    server_id = %request.server_id,
+                    address = %request.address,
+                    hostport = request.hostport,
+                    "Master server publisher endpoint relocated"
+                );
+                true
+            }
+            TokenRelocation::Conflict => {
+                return Err(publisher_error(
+                    uri.path(),
+                    &headers,
+                    StatusCode::CONFLICT,
+                    "publisher endpoint is owned by another token",
+                ));
+            }
+        }
+    } else {
+        false
+    };
 
     let existing = state
         .service
@@ -247,44 +336,56 @@ async fn register_server(
         .server_token_hash(&server_id)
         .await
         .map_err(|error| internal_error(&error))?;
-    let provided_token = bearer_token(&headers);
-    let token_ok = matches!(
-        (&provided_token, &stored_hash),
-        (Some(token), Some(hash)) if &service::token_hash(token) == hash
-    );
+    let token_ok = token_owner_found
+        || matches!(
+            (&provided_token, &stored_hash),
+            (Some(token), Some(hash)) if &service::token_hash(token) == hash
+        );
 
     // Protect an actively-heartbeating, token-held row from takeover by a wrong/missing
     // token (only when enforcement is on). A stale row (silent owner) may be reclaimed,
     // which is the crash-recovery path.
     if state.require_server_token && !token_ok && stored_hash.is_some() {
-        let fresh = existing.is_some_and(|row| {
-            current_time_millis() - row.last_seen_unix_ms < SERVER_TOKEN_RECOVERY_MS
-        });
+        let fresh = existing
+            .is_some_and(|row| now_unix_ms - row.last_seen_unix_ms < SERVER_TOKEN_RECOVERY_MS);
         if fresh {
-            return Err((
+            return Err(publisher_error(
+                uri.path(),
+                &headers,
                 StatusCode::UNAUTHORIZED,
-                "missing or invalid server token".to_string(),
+                "missing or invalid server token",
             ));
         }
     }
 
-    let mut record = state
-        .service
-        .register(request, current_time_millis())
-        .await
-        .map_err(|error| internal_error(&error))?;
-
-    // Issue a token on first registration, and rotate it on an (authorized) takeover; a
-    // valid-token heartbeat keeps the existing token.
-    if !token_ok {
-        let (token, hash) = service::issue_token().map_err(|error| internal_error(&error))?;
-        state
+    if token_ok {
+        let record = state
             .service
-            .set_token_hash(&server_id, &hash)
+            .register(request, now_unix_ms)
             .await
             .map_err(|error| internal_error(&error))?;
-        record.token = Some(token);
+        return Ok(Json(record));
     }
+    let (claim_hash, issued_token) = if let Some(hash) = provided_hash {
+        (hash, None)
+    } else {
+        let (token, hash) = service::issue_token().map_err(|error| internal_error(&error))?;
+        (hash, Some(token))
+    };
+    let mut record = state
+        .service
+        .register_with_token_claim(request, now_unix_ms, &claim_hash, stored_hash.as_deref())
+        .await
+        .map_err(|error| internal_error(&error))?
+        .ok_or_else(|| {
+            publisher_error(
+                uri.path(),
+                &headers,
+                StatusCode::CONFLICT,
+                "publisher endpoint ownership changed during registration",
+            )
+        })?;
+    record.token = issued_token;
     Ok(Json(record))
 }
 
@@ -789,39 +890,54 @@ async fn unregister_server(
     headers: HeaderMap,
     Path(server_id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    // Only the owning IP may unregister its server (server_id is "<ip>:<port>").
-    if let Some(ip) = caller_client_ip(&state, &headers) {
-        let owner_ip = server_id
-            .rsplit_once(':')
-            .map_or(server_id.as_str(), |(host, _)| host);
-        if owner_ip != ip {
-            return Err((
-                StatusCode::FORBIDDEN,
-                "server id does not match caller address".to_string(),
-            ));
+    let provided = bearer_token(&headers);
+    let authenticated_server_id = if let Some(token) = provided.as_deref() {
+        if !valid_server_token(token) {
+            return Err((StatusCode::UNAUTHORIZED, "invalid server token".to_string()));
         }
-    }
-    // With enforcement on, a token-held row can only be removed with its token.
-    if state.require_server_token {
-        let stored = state
+        state
             .service
-            .server_token_hash(&server_id)
+            .server_id_for_token_hash(&service::token_hash(token))
             .await
-            .map_err(|error| internal_error(&error))?;
-        if stored.is_some() {
-            let provided = bearer_token(&headers);
-            let token_ok = matches!((&provided, &stored), (Some(token), Some(hash)) if &service::token_hash(token) == hash);
-            if !token_ok {
+            .map_err(|error| internal_error(&error))?
+    } else {
+        None
+    };
+    let delete_server_id = if let Some(owner) = authenticated_server_id {
+        owner
+    } else {
+        if let Some(ip) = caller_client_ip(&state, &headers) {
+            let owner_ip = server_id
+                .rsplit_once(':')
+                .map_or(server_id.as_str(), |(host, _)| host);
+            if owner_ip != ip {
                 return Err((
-                    StatusCode::UNAUTHORIZED,
-                    "missing or invalid server token".to_string(),
+                    StatusCode::FORBIDDEN,
+                    "server id does not match caller address".to_string(),
                 ));
             }
         }
-    }
+        if state.require_server_token {
+            let stored = state
+                .service
+                .server_token_hash(&server_id)
+                .await
+                .map_err(|error| internal_error(&error))?;
+            if stored.is_some() {
+                let token_ok = matches!((&provided, &stored), (Some(token), Some(hash)) if &service::token_hash(token) == hash);
+                if !token_ok {
+                    return Err((
+                        StatusCode::UNAUTHORIZED,
+                        "missing or invalid server token".to_string(),
+                    ));
+                }
+            }
+        }
+        server_id
+    };
     if state
         .service
-        .unregister(&server_id)
+        .unregister(&delete_server_id)
         .await
         .map_err(|error| internal_error(&error))?
     {
@@ -994,6 +1110,31 @@ fn internal_error(error: &anyhow::Error) -> (StatusCode, String) {
     (StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
 }
 
+fn publisher_error(
+    route: &str,
+    headers: &HeaderMap,
+    status: StatusCode,
+    reason: impl Into<String>,
+) -> (StatusCode, String) {
+    let reason = reason.into();
+    tracing::warn!(
+        route,
+        status = status.as_u16(),
+        request_id = headers
+            .get("x-request-id")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("-"),
+        user_agent = headers
+            .get("user-agent")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("-"),
+        token_present = bearer_token(headers).is_some(),
+        reason,
+        "Master server publisher request rejected"
+    );
+    (status, reason)
+}
+
 /// Public base URL (`scheme://host`) for absolutising catalog links, derived from the
 /// request: the `Host` header plus `X-Forwarded-Proto` (set by the TLS-terminating
 /// proxy; defaults to `http` for a direct/local connection). `None` when there is no
@@ -1123,6 +1264,10 @@ fn bearer_token(headers: &HeaderMap) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string)
+}
+
+fn valid_server_token(token: &str) -> bool {
+    token.len() == 64 && token.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn require_admin_api_key(

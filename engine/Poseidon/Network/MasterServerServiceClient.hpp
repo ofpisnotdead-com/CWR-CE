@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -458,6 +459,7 @@ std::string BuildMasterServerServiceRegisterUrl(const char* masterServerHost);
 std::string BuildMasterServerServiceHeartbeatUrl(const char* masterServerHost);
 std::string BuildMasterServerServiceUnregisterUrl(const char* masterServerHost, const char* serverId);
 std::string BuildMasterServerServiceRegistrationJson(const MasterServerServiceRegistration& registration);
+bool StoreMasterServerServiceTokenFile(const std::string& path, const std::string& token);
 bool TryParseMasterServerServiceSession(const cJSON* object, MasterServerServiceSession& session);
 bool TryParseMasterServerServiceModCatalogEntry(const cJSON* object, MasterServerServiceModCatalogEntry& entry);
 bool ParseMasterServerServiceModDetailResponse(const char* json, MasterServerServiceModCatalogEntry& detail);
@@ -469,6 +471,21 @@ bool ParseMasterServerServiceModUsageResponse(const char* json,
 inline const char* GetMasterServerServicePublishAction(bool heartbeat)
 {
     return heartbeat ? "heartbeat" : "register";
+}
+
+inline std::string SanitizeMasterServerServiceError(const std::string& responseBody, size_t limit = 512)
+{
+    std::string result;
+    result.reserve(std::min(responseBody.size(), limit));
+    for (const unsigned char byte : responseBody)
+    {
+        if (result.size() == limit)
+        {
+            break;
+        }
+        result.push_back(byte < 0x20 || byte == 0x7f ? ' ' : static_cast<char>(byte));
+    }
+    return result;
 }
 
 inline bool BuildMasterServerServicePublishRequest(const char* masterServerHost,

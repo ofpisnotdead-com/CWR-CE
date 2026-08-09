@@ -1209,13 +1209,9 @@ void StoreIssuedServerToken(const std::string& token)
     }
     std::lock_guard<std::mutex> lock(g_serverTokenMutex);
     g_serverToken = token;
-    if (!g_serverTokenPath.empty())
+    if (!g_serverTokenPath.empty() && !StoreMasterServerServiceTokenFile(g_serverTokenPath, token))
     {
-        std::ofstream output(g_serverTokenPath, std::ios::trunc);
-        if (output)
-        {
-            output << g_serverToken;
-        }
+        LOG_WARN(Network, "Master server token could not be persisted to '{}'", g_serverTokenPath);
     }
 }
 
@@ -1229,6 +1225,31 @@ void CaptureIssuedServerToken(const std::string& responseBody)
     }
 }
 } // namespace
+
+bool StoreMasterServerServiceTokenFile(const std::string& path, const std::string& token)
+{
+    const std::string tempPath = path + ".tmp";
+    {
+        std::ofstream output(tempPath, std::ios::binary | std::ios::trunc);
+        output.write(token.data(), static_cast<std::streamsize>(token.size()));
+        output.flush();
+        if (!output)
+        {
+            remove(tempPath.c_str());
+            return false;
+        }
+    }
+#if defined(_WIN32)
+    if (!MoveFileExA(tempPath.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+#else
+    if (rename(tempPath.c_str(), path.c_str()) != 0)
+#endif
+    {
+        remove(tempPath.c_str());
+        return false;
+    }
+    return true;
+}
 
 void SetMasterServerServiceTokenStore(const char* tokenFilePath)
 {
@@ -1257,8 +1278,9 @@ bool PublishMasterServerServiceRegistration(const char* masterServerHost, const 
     }
     else
     {
-        LOG_WARN(Network, "Master server service {} failed: url='{}' status={}",
-                 GetMasterServerServicePublishAction(heartbeat), request.url, statusCode);
+        LOG_WARN(Network, "Master server service {} failed: url='{}' status={} response='{}'",
+                 GetMasterServerServicePublishAction(heartbeat), request.url, statusCode,
+                 SanitizeMasterServerServiceError(responseBody));
     }
     return ok;
 }
@@ -1278,7 +1300,8 @@ bool UnregisterMasterServerService(const char* masterServerHost, const char* pro
                                                           SendMasterServerServiceRequest);
     if (!ok && !IsIgnorableMasterServerServiceUnregisterStatus(statusCode))
     {
-        LOG_WARN(Network, "Master server service unregister failed: url='{}' status={}", request.url, statusCode);
+        LOG_WARN(Network, "Master server service unregister failed: url='{}' status={} response='{}'", request.url,
+                 statusCode, SanitizeMasterServerServiceError(responseBody));
     }
     return ok || IsIgnorableMasterServerServiceUnregisterStatus(statusCode);
 }

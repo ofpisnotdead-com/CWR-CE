@@ -10,7 +10,7 @@ use crate::model::{
     ServiceMetadata, ServiceSummary,
 };
 use crate::mods::{ArtifactStream, ArtifactUpload, ModStore, ModUploadMeta};
-use crate::repository::SqliteServerDirectory;
+use crate::repository::{SqliteServerDirectory, TokenRelocation};
 
 pub const SERVICE_NAME: &str = "papa-bear";
 pub const PRODUCT_NAME: &str = "PAPA BEAR";
@@ -59,6 +59,18 @@ impl PapaBearService {
         self.directory.register(request, now_unix_ms).await
     }
 
+    pub async fn register_with_token_claim(
+        &self,
+        request: RegisterServerRequest,
+        now_unix_ms: i64,
+        token_hash: &str,
+        expected_token_hash: Option<&str>,
+    ) -> Result<Option<DirectoryServerRecord>> {
+        self.directory
+            .register_with_token_claim(request, now_unix_ms, token_hash, expected_token_hash)
+            .await
+    }
+
     pub async fn observe(
         &self,
         server_id: &str,
@@ -93,6 +105,31 @@ impl PapaBearService {
 
     pub async fn server_token_hash(&self, server_id: &str) -> Result<Option<String>> {
         self.directory.server_token_hash(server_id).await
+    }
+
+    pub async fn server_id_for_token_hash(&self, token_hash: &str) -> Result<Option<String>> {
+        self.directory.server_id_for_token_hash(token_hash).await
+    }
+
+    pub async fn relocate_token_owner(
+        &self,
+        token_hash: &str,
+        new_server_id: &str,
+        new_address: &str,
+        new_hostport: u16,
+        now_unix_ms: i64,
+        recovery_ms: i64,
+    ) -> Result<TokenRelocation> {
+        self.directory
+            .relocate_token_owner(
+                token_hash,
+                new_server_id,
+                new_address,
+                new_hostport,
+                now_unix_ms,
+                recovery_ms,
+            )
+            .await
     }
 
     pub async fn get_server_detail(&self, server_id: &str) -> Result<Option<ServerDetail>> {
