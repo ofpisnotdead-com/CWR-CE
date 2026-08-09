@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -281,6 +282,77 @@ TEST_CASE("AttachFileSink captures log lines into the file", "[logging][file]")
     CHECK_FALSE(hasAnsi);
 
     fs::remove(path, ec);
+}
+
+TEST_CASE("Initialize survives a --log-file path it cannot open", "[logging][file]")
+{
+    namespace fs = std::filesystem;
+    // A directory in place of the log file: open-for-write fails on Windows and Linux alike.
+    const fs::path blocked = fs::temp_directory_path() / "cwr_logfile_blocked";
+    std::error_code ec;
+    fs::remove_all(blocked, ec);
+    fs::create_directories(blocked);
+
+    Poseidon::Foundation::LoggingSystem logSys;
+    REQUIRE_NOTHROW(logSys.Initialize("info", "", "text", blocked.string().c_str()));
+    CHECK_FALSE(logSys.GetFileSinkError().empty());
+
+    TestLogCapture capture;
+    capture.Install();
+    LOG_INFO(Core, "logging alive after an unusable log path");
+    CHECK(capture.HasMessage("logging alive after an unusable log path"));
+    capture.Uninstall();
+
+    logSys.Shutdown();
+    fs::remove_all(blocked, ec);
+}
+
+TEST_CASE("Initialize records the --log-file path it opened", "[logging][file]")
+{
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "cwr_logfile_ok";
+    const fs::path path = dir / "run.log";
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+
+    Poseidon::Foundation::LoggingSystem logSys;
+    REQUIRE_NOTHROW(logSys.Initialize("info", "", "text", path.string().c_str()));
+    CHECK(logSys.GetFileSinkError().empty());
+    CHECK(std::string(Poseidon::Foundation::LoggingSystem::GetLogFilePath()) == path.string());
+
+    LOG_INFO(Core, "log file probe 67890");
+    logSys.Shutdown();
+
+    std::ifstream in(path);
+    std::stringstream contents;
+    contents << in.rdbuf();
+    CHECK(contents.str().find("log file probe 67890") != std::string::npos);
+
+    in.close();
+    fs::remove_all(dir, ec);
+}
+
+TEST_CASE("WantsRunLogFile decides when the per-run log stands in", "[logging][file]")
+{
+    using Poseidon::Foundation::WantsRunLogFile;
+
+    SECTION("no --log-file leaves the per-run file as the only one")
+    {
+        CHECK(WantsRunLogFile(false, true, false));
+    }
+    SECTION("a --log-file that opened takes the per-run file's place")
+    {
+        CHECK_FALSE(WantsRunLogFile(true, true, false));
+    }
+    SECTION("a --log-file that failed falls back to the per-run file")
+    {
+        CHECK(WantsRunLogFile(true, false, false));
+    }
+    SECTION("--no-log-file suppresses it either way")
+    {
+        CHECK_FALSE(WantsRunLogFile(false, true, true));
+        CHECK_FALSE(WantsRunLogFile(true, false, true));
+    }
 }
 
 TEST_CASE("MakeTimestampedLogName builds a fixed-width dated .log name", "[logging][wiper]")

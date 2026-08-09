@@ -578,15 +578,31 @@ void LoggingSystem::Initialize(const char* logLevel, const char* categoryFilter,
     sinks.push_back(std::make_shared<ErrorCountingSink>());
 
     // Optional file sink (--log-file)
+    m_fileSinkError.clear();
     if (logFile && logFile[0] != '\0')
     {
-        auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFile, true);
-        auto formatter = std::make_unique<spdlog::pattern_formatter>();
-        formatter->add_flag<PoseidonFormatter>('*', this, /*colored=*/false);
-        formatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %*%v");
-        file_sink->set_formatter(std::move(formatter));
-        sinks.push_back(file_sink);
-        m_hasFileSink = true;
+        try
+        {
+            std::filesystem::path p(logFile);
+            if (p.has_parent_path())
+            {
+                std::error_code ec;
+                std::filesystem::create_directories(p.parent_path(), ec);
+            }
+
+            auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFile, true);
+            auto formatter = std::make_unique<spdlog::pattern_formatter>();
+            formatter->add_flag<PoseidonFormatter>('*', this, /*colored=*/false);
+            formatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %*%v");
+            file_sink->set_formatter(std::move(formatter));
+            sinks.push_back(file_sink);
+            m_hasFileSink = true;
+            snprintf(m_logFilePath, sizeof(m_logFilePath), "%s", logFile);
+        }
+        catch (const std::exception& e)
+        {
+            m_fileSinkError = e.what();
+        }
     }
 
     // Flush policy: flush every message when writing to file (game may exit abruptly),
@@ -660,6 +676,11 @@ void LoggingSystem::AttachFileSink(const char* path)
     {
         LOG_WARN(Core, "Could not open log file {}: {}", path, e.what());
     }
+}
+
+bool WantsRunLogFile(bool logFileRequested, bool logFileOpened, bool noLogFile)
+{
+    return !noLogFile && (!logFileRequested || !logFileOpened);
 }
 
 std::string MakeTimestampedLogName(const char* prefix)
