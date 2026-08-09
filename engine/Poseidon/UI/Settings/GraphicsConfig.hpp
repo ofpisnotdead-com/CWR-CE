@@ -45,8 +45,8 @@ public:
 		PresetCustom = 4,   // sentinel — UI shows "Custom" when the four tier rows
 		                     // don't match any of Low/Medium/High/Ultra's bundle
 	};
-	// Terrain / Object / Shadow / Particles share the same Off-to-Ultra
-	// shape.  Off only legal where called out (Shadow, Particles).
+	// Extreme is legal only for Terrain. Off is legal only for Shadow and
+	// Particles.
 	enum Tier
 	{
 		TierOff    = 0,
@@ -54,6 +54,7 @@ public:
 		TierMedium = 2,
 		TierHigh   = 3,
 		TierUltra  = 4,
+		TierExtreme = 5,
 	};
 	enum VsyncMode
 	{

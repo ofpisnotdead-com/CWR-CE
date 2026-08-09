@@ -128,6 +128,23 @@ TEST_CASE("GraphicsPage anti-aliasing rows round-trip through the provider", "[U
     CHECK(p.RowValue(11) == 4);
 }
 
+TEST_CASE("GraphicsPage offers the manual terrain tier last", "[UI][GraphicsPage]")
+{
+    TestableGraphicsPage page;
+    auto& p = page.Provider();
+
+    CHECK(p.RowFor(1).count == 5);
+    CHECK(p.RowFor(2).count == 4);
+
+    p.SetRowValue(1, 4);
+    CHECK(p.RowValue(1) == 4);
+    CHECK(p.RowValue(0) == GraphicsConfig::PresetCustom);
+
+    const std::string description = p.RowDescription(1);
+    CHECK(description.find("not recommended") != std::string::npos);
+    CHECK(description.find("not fully compatible with the original game") != std::string::npos);
+}
+
 TEST_CASE("GraphicsPage multitexturing row is a boolean defaulting to on", "[UI][GraphicsPage]")
 {
     TestableGraphicsPage page;

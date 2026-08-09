@@ -21,6 +21,7 @@
 
 namespace Poseidon
 {
+float TerrainGridForTier(GraphicsConfig::Tier tier);
 void ApplyGraphicsConfigToEngine(const GraphicsConfig& cfg);
 
 } // namespace Poseidon

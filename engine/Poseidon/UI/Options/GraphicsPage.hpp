@@ -95,6 +95,8 @@ private:
 
 	std::array<std::string, 5>      m_presetLabels;
 	std::array<const char*, 5>      m_presetCStrs{};
+	std::array<std::string, 5>      m_terrainLabels;
+	std::array<const char*, 5>      m_terrainCStrs{};
 	std::array<std::string, 4>      m_tierFourLabels;
 	std::array<const char*, 4>      m_tierFourCStrs{};
 	std::array<std::string, 4>      m_shadowLabels;

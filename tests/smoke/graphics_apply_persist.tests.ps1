@@ -57,7 +57,7 @@ Describe "graphics.cfg persistence through live UI flow" {
 
             Test-Path $cfgPath | Should -BeTrue -Because "GraphicsPage::Unmount should write graphics.cfg"
             $kv = Read-CfgFile $cfgPath
-            $kv['terrainDetail'] | Should -Be '1' -Because "tri cycled Terrain stepper from Ultra (4) to Low (1)"
+            $kv['terrainDetail'] | Should -Be '5' -Because "tri advanced Terrain Detail from Ultra to Extreme"
             $kv['qualityPreset'] | Should -Be '4' -Because "touching a tier row drops Quality Preset to Custom (4)"
         } finally {
             Remove-EphemeralGamePaths $eph

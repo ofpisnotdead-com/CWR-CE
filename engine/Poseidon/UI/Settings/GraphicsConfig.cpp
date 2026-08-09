@@ -169,7 +169,7 @@ bool GraphicsConfig::Normalize(const Environment& /*env*/)
     }
 
     // Tier rows.  Off allowed only for Shadow + Particles.
-    if (!IsValidTier(terrainDetail, /*allowOff=*/false))
+    if (terrainDetail != TierExtreme && !IsValidTier(terrainDetail, /*allowOff=*/false))
     {
         terrainDetail = TierUltra;
         changed = true;

@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <Poseidon/UI/Settings/GraphicsConfig.hpp>
+#include <Poseidon/UI/Settings/GraphicsApply.hpp>
 
 #include <filesystem>
 #include <fstream>
@@ -298,6 +299,33 @@ TEST_CASE("GraphicsConfig: DerivePresetFromTiers returns Custom when tiers diver
     c.ApplyPresetToTiers(GraphicsConfig::PresetHigh);
     c.objectLod = GraphicsConfig::TierLow; // High preset has objectLod=High; mismatch
     CHECK(c.DerivePresetFromTiers() == GraphicsConfig::PresetCustom);
+}
+
+TEST_CASE("GraphicsConfig: the manual terrain tier stays outside every preset", "[Settings][GraphicsConfig]")
+{
+    constexpr auto manualTerrainTier = GraphicsConfig::TierExtreme;
+    FakeEnvironment env;
+    GraphicsConfig c;
+
+    c.terrainDetail = manualTerrainTier;
+    CHECK_FALSE(c.Normalize(env));
+    CHECK(c.terrainDetail == manualTerrainTier);
+    CHECK(c.DerivePresetFromTiers() == GraphicsConfig::PresetCustom);
+
+    for (int value = GraphicsConfig::PresetLow; value <= GraphicsConfig::PresetUltra; ++value)
+    {
+        c.ApplyPresetToTiers(static_cast<GraphicsConfig::Preset>(value));
+        CHECK(c.terrainDetail != manualTerrainTier);
+    }
+
+    c.objectLod = manualTerrainTier;
+    c.shadowQuality = manualTerrainTier;
+    c.particlesQuality = manualTerrainTier;
+    REQUIRE(c.Normalize(env));
+    CHECK(c.objectLod == GraphicsConfig::TierUltra);
+    CHECK(c.shadowQuality == GraphicsConfig::TierHigh);
+    CHECK(c.particlesQuality == GraphicsConfig::TierHigh);
+    CHECK(Poseidon::TerrainGridForTier(manualTerrainTier) == 3.125f);
 }
 
 TEST_CASE("GraphicsConfig: Normalize is a no-op when every field is valid", "[Settings][GraphicsConfig]")

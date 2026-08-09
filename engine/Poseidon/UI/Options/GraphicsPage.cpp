@@ -30,7 +30,8 @@ const GraphicsRowText kRows[] = {
     {"STR_DISP_MAIN_OPT_GRAPHICS_QUALITY_PRESET", "STR_DISP_MAIN_OPT_GRAPHICS_QUALITY_PRESET_DESC", "Quality Preset",
      "Sets the four quality tiers below to a known bundle. Touching any tier row drops the preset to Custom."},
     {"STR_DISP_MAIN_OPT_GRAPHICS_TERRAIN_DETAIL", "STR_DISP_MAIN_OPT_GRAPHICS_TERRAIN_DETAIL_DESC", "Terrain Detail",
-     "Terrain mesh density. Lower means a coarser ground silhouette but cheaper rendering."},
+     "Terrain mesh density. Lower means a coarser ground silhouette but cheaper rendering. Extreme is not recommended "
+     "and is not fully compatible with the original game."},
     {"STR_DISP_MAIN_OPT_GRAPHICS_OBJECT_LOD", "STR_DISP_MAIN_OPT_GRAPHICS_OBJECT_LOD_DESC", "Object LOD",
      "Bias for entity LOD selection. Higher means finer geometry at the same distance."},
     {"STR_DISP_MAIN_OPT_GRAPHICS_SHADOW_QUALITY", "STR_DISP_MAIN_OPT_GRAPHICS_SHADOW_QUALITY_DESC", "Shadow Quality",
@@ -201,7 +202,7 @@ OptionsScrollList::RowDef GraphicsPage::GraphicsProvider::RowFor(int row) const
         case kRowPreset:
             return {502, m_page->m_presetCStrs.data(), 5};
         case kRowTerrain:
-            return {512, m_page->m_tierFourCStrs.data(), 4};
+            return {512, m_page->m_terrainCStrs.data(), 5};
         case kRowObjectLod:
             return {522, m_page->m_tierFourCStrs.data(), 4};
         case kRowShadow:
@@ -249,7 +250,6 @@ int GraphicsPage::GraphicsProvider::RowValue(int row) const
                        ? (int)c.qualityPreset
                        : (int)GraphicsConfig::PresetCustom;
         case kRowTerrain:
-            // Map TierLow..TierUltra (1..4) to options-array index 0..3.
             return (int)c.terrainDetail - (int)GraphicsConfig::TierLow;
         case kRowObjectLod:
             return (int)c.objectLod - (int)GraphicsConfig::TierLow;
@@ -322,7 +322,7 @@ void GraphicsPage::GraphicsProvider::SetRowValue(int row, int v)
             }
             break;
         case kRowTerrain:
-            if (v >= 0 && v < 4)
+            if (v >= 0 && v < 5)
             {
                 c.terrainDetail = static_cast<GraphicsConfig::Tier>((int)GraphicsConfig::TierLow + v);
                 tierTouched = true;
@@ -429,6 +429,14 @@ void GraphicsPage::RefreshLocalizedChoices()
     m_presetLabels[4] = LocalizeString("STR_DISP_MAIN_OPT_VALUE_CUSTOM");
     for (size_t i = 0; i < m_presetLabels.size(); ++i)
         m_presetCStrs[i] = m_presetLabels[i].c_str();
+
+    m_terrainLabels[0] = LocalizeString("STR_DISP_MAIN_OPT_VALUE_LOW");
+    m_terrainLabels[1] = LocalizeString("STR_DISP_MAIN_OPT_VALUE_MEDIUM");
+    m_terrainLabels[2] = LocalizeString("STR_DISP_MAIN_OPT_VALUE_HIGH");
+    m_terrainLabels[3] = LocalizeString("STR_DISP_MAIN_OPT_VALUE_ULTRA");
+    m_terrainLabels[4] = LocalizeString("STR_DISP_MAIN_OPT_VALUE_EXTREME");
+    for (size_t i = 0; i < m_terrainLabels.size(); ++i)
+        m_terrainCStrs[i] = m_terrainLabels[i].c_str();
 
     m_tierFourLabels[0] = LocalizeString("STR_DISP_MAIN_OPT_VALUE_LOW");
     m_tierFourLabels[1] = LocalizeString("STR_DISP_MAIN_OPT_VALUE_MEDIUM");
