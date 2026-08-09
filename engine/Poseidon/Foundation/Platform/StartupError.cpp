@@ -78,13 +78,10 @@ bool ShouldShowGuiError()
     return true;
 }
 
-void ShowStartupError(const char* title, const char* message)
+namespace
 {
-    if (!title || !title[0])
-        title = "Startup Error";
-    if (!message || !message[0])
-        message = "The game could not start.";
-
+void ReportStartup(SDL_MessageBoxFlags severity, const char* title, const char* message)
+{
     const char* logPath = LoggingSystem::GetLogFilePath();
     const std::string diagDir = DiagnosticsDir();
 
@@ -95,13 +92,29 @@ void ShowStartupError(const char* title, const char* message)
         body += std::string("Log file:\n") + logPath;
     else
         body += "Logs:\n" + diagDir + "logs";
-    body += "\n\n";
-    body += "Crash reports:\n" + diagDir + "crashes";
+    // Only a fatal report sends the player looking for a crash dump.
+    if (severity == SDL_MESSAGEBOX_ERROR)
+    {
+        body += "\n\nCrash reports:\n" + diagDir + "crashes";
+    }
 
     fprintf(stderr, "\n%s\n%s\n\n", title, body.c_str());
     fflush(stderr);
 
     if (ShouldShowGuiError())
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title, body.c_str(), nullptr);
+        SDL_ShowSimpleMessageBox(severity, title, body.c_str(), nullptr);
+}
+} // namespace
+
+void ShowStartupError(const char* title, const char* message)
+{
+    ReportStartup(SDL_MESSAGEBOX_ERROR, (title && title[0]) ? title : "Startup Error",
+                  (message && message[0]) ? message : "The game could not start.");
+}
+
+void ShowStartupWarning(const char* title, const char* message)
+{
+    ReportStartup(SDL_MESSAGEBOX_WARNING, (title && title[0]) ? title : "Startup Warning",
+                  (message && message[0]) ? message : "The game hit a problem during startup.");
 }
 } // namespace Poseidon::Foundation

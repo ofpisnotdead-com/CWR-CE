@@ -17,4 +17,7 @@ bool ShouldShowGuiError();
 // Report a fatal startup error: always to stderr, plus a native SDL dialog when
 // ShouldShowGuiError(). Names the log and crash paths. Never throws; safe pre-init.
 void ShowStartupError(const char* title, const char* message);
+
+// The same report at warning severity, for a startup problem the game runs on through.
+void ShowStartupWarning(const char* title, const char* message);
 } // namespace Poseidon::Foundation
