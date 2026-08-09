@@ -172,9 +172,12 @@ bool GameBase::ParseCommandLine(const char* commandLine)
     Poseidon::Foundation::WipeOldFiles(crashesDir, "crash-", ".dmp", kCrashKeepN); // Windows minidumps
 #endif
 
-    // On a console-less launch (Steam/GUI) capture logs to a per-run file. --log-file
-    // overrides it; terminals, tests, the tri harness, and --check stay console-only.
-    if (AppConfig::Instance().GetLogFile().empty() && !AppConfig::Instance().NoLogFile() &&
+    // On a console-less launch (Steam/GUI) capture logs to a per-run file. A working
+    // --log-file overrides it; terminals, tests, the tri harness, and --check stay
+    // console-only.
+    const std::string& logFileError = GetLoggingSystem().GetFileSinkError();
+    if (Poseidon::Foundation::WantsRunLogFile(!AppConfig::Instance().GetLogFile().empty(), logFileError.empty(),
+                                              AppConfig::Instance().NoLogFile()) &&
         Poseidon::Foundation::ShouldWriteAutoLog())
     {
         const std::string logsDir = (std::filesystem::path(diagDir) / "logs").string();
@@ -185,6 +188,14 @@ bool GameBase::ParseCommandLine(const char* commandLine)
             LOG_INFO(Core, "Log file: {}", logPath);
         // Trim after opening this run's file so keep-last-N counts the current run.
         Poseidon::Foundation::WipeOldFiles(logsDir, "cwr_", ".log", kLogKeepN);
+    }
+
+    if (!logFileError.empty())
+    {
+        LOG_WARN(Core, "--log-file: {}", logFileError);
+        Poseidon::Foundation::ShowStartupWarning(
+            "Cold War Assault - Startup Warning",
+            ("The log file given by --log-file cannot be written:\n\n" + logFileError).c_str());
     }
 
     // A typo'd launch flag is otherwise dropped silently; surface it (now that any log
