@@ -7,7 +7,9 @@
         });
 
         if (!response.ok) {
-            throw new Error("Request failed");
+            const error = new Error(`Request failed with status ${response.status}`);
+            error.status = response.status;
+            throw error;
         }
 
         return response.json();
@@ -539,7 +541,7 @@
             sv.description ? escapeHtml(sv.description) : "",
             [sv.param1, sv.param2].filter(Boolean).map((p) => escapeHtml(p)).join(" · "),
             sv.requiredAddons ? `addons: ${escapeHtml(sv.requiredAddons)}` : "",
-            `${escapeHtml(sv.platform)} · ${escapeHtml(formatServerVersion(sv))} (req ${escapeHtml(sv.reqver)})${sv.impl ? ` · ${escapeHtml(sv.impl)}` : ""}`,
+            `${escapeHtml(sv.platform)} / ${escapeHtml(formatServerGameVersion(sv))} (req ${escapeHtml(sv.reqver)})${sv.impl ? ` / ${escapeHtml(sv.impl)}` : ""}`,
             `${sv.password ? "password-protected" : "open"} · observed ${escapeHtml(relativeObservedTime(sv.lastObservedUnixMs))}`,
         ];
         facts.innerHTML = factLines.filter(Boolean).map((line) => `<div>${line}</div>`).join("");
@@ -785,13 +787,24 @@
             return;
         }
 
+        let detail;
         try {
-            const detail = await fetchJson(`/v1/servers/${encodeURIComponent(serverId)}`);
-            fillServerDetail(detail);
-        } catch {
+            detail = await fetchJson(`/v1/servers/${encodeURIComponent(serverId)}`);
+        } catch (error) {
             const title = document.getElementById("detail-title");
             if (title) {
-                title.textContent = "Server not found";
+                title.textContent = error.status === 404 ? "Server not found" : "Server unavailable";
+            }
+            return;
+        }
+
+        try {
+            fillServerDetail(detail);
+        } catch (error) {
+            console.error("Server detail rendering failed", error);
+            const title = document.getElementById("detail-title");
+            if (title) {
+                title.textContent = "Server details could not be displayed";
             }
         }
     }
