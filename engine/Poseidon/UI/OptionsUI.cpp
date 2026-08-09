@@ -31,6 +31,7 @@
 #include <Poseidon/Foundation/Common/Win.h>
 #include <Poseidon/Foundation/Common/PlayerPrefs.hpp>
 #include <Poseidon/IO/Filesystem/FileOps.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <Poseidon/Core/ModSystem.hpp>
 #include <Poseidon/UI/GameModule.hpp>
 #include <limits.h>
@@ -162,6 +163,7 @@ static RString BaseDirectory;
 
 static RString BaseSubdirectory;
 static std::optional<float> CurrentMissionViewDistance;
+static bool UserMission = false;
 
 void UpdateCurrentMissionViewDistance()
 {
@@ -221,8 +223,37 @@ void CreatePath(RString path)
     }
 }
 
+static RString GetLegacyUserSaveDirectory()
+{
+    return GetUserDirectory() + RString("Saved/") + GetBaseDirectory() + GetBaseSubdirectory() +
+           RString(Glob.header.filenameReal) + RString(".") + RString(Glob.header.worldname) + RString("/");
+}
+
+static void CopyLegacyUserSaveFiles(RString destination)
+{
+    const RString source = GetLegacyUserSaveDirectory();
+    static const char* filenames[] = {"autosave.fps", "continue.fps", "save.fps", "weapons.cfg"};
+    for (const char* filename : filenames)
+    {
+        CopyFileUtf8(source + RString(filename), destination + RString(filename), true);
+    }
+}
+
 RString GetSaveDirectory()
 {
+    if (UserMission)
+    {
+        if (Glob.header.filenameReal.GetLength() == 0)
+        {
+            return GetTmpSaveDirectory();
+        }
+        RString dir = GetUserDirectory() + RString("UserSaved/") + GetBaseSubdirectory() +
+                      RString(Glob.header.filenameReal) + RString(".") + RString(Glob.header.worldname) + RString("/");
+        CreatePath(dir);
+        CopyLegacyUserSaveFiles(dir);
+        return dir;
+    }
+
     /*
         RString dir = GetUserDirectory() + RString("Saved");
         mkdir(dir, nullptr);
@@ -755,8 +786,9 @@ const ParamEntry* FindRscTitle(RString name)
 
 // campaign description.ext
 
-void SetBaseDirectory(RString dir)
+void SetBaseDirectory(bool userMission, RString dir)
 {
+    UserMission = userMission;
     BaseDirectory = dir;
     ExtParsCampaign.Clear();
     if (BaseDirectory.GetLength() > 0)
@@ -771,6 +803,16 @@ void SetBaseDirectory(RString dir)
             ExtParsCampaign.Parse(filename);
         }
     }
+}
+
+void SetBaseDirectory(RString dir)
+{
+    SetBaseDirectory(false, dir);
+}
+
+bool IsUserMission()
+{
+    return UserMission;
 }
 
 void SetBaseSubdirectory(RString dir)

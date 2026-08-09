@@ -9,6 +9,7 @@
 #include <Poseidon/Foundation/Platform/AppConfig.hpp>
 #include <Poseidon/IO/ParamFileExt.hpp>
 #include <Poseidon/UI/UIActiveDisplay.hpp>
+#include <Poseidon/UI/OptionsUICommon.hpp>
 #include <Poseidon/World/World.hpp>
 #include <Poseidon/World/Scene/Scene.hpp>
 #include <Poseidon/Graphics/Core/Engine.hpp>
@@ -1804,7 +1805,7 @@ LSError World::Serialize(ParamArchive& ar, int message)
 
         RString dir;
         PARAM_CHECK(ar.Serialize("directory", dir, 1, ""))
-        SetBaseDirectory(dir);
+        SetBaseDirectory(dir == GetUserMissionsBase(), dir);
         RString mission;
         PARAM_CHECK(ar.Serialize("mission", mission, 1, ""))
         SetMission(world, mission);

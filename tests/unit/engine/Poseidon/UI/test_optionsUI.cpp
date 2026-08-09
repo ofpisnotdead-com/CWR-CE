@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -210,4 +211,45 @@ TEST_CASE("Continue save selection creates a readable copy", "[optionsUI][savega
     std::string payload;
     input >> payload;
     CHECK(payload == "saved-world");
+}
+
+TEST_CASE("User missions use profile save directories", "[optionsUI][savegame]")
+{
+    const bool userMission = IsUserMission();
+    const RString baseDirectory = GetBaseDirectory();
+    const RString baseSubdirectory = GetBaseSubdirectory();
+    const RString filenameReal = Glob.header.filenameReal;
+    const std::string worldName = Glob.header.worldname;
+
+    SetBaseDirectory(true, GetUserMissionsBase());
+    SetBaseSubdirectory("missions/");
+    Glob.header.filenameReal = "";
+
+    CHECK(GetSaveDirectory() == GetTmpSaveDirectory());
+
+    Glob.header.filenameReal = "editor_test";
+    std::snprintf(Glob.header.worldname, sizeof(Glob.header.worldname), "%s", "demo");
+    const RString namedSaveDirectory = GetUserDirectory() + RString("UserSaved/missions/editor_test.demo/");
+    CHECK(GetSaveDirectory() == namedSaveDirectory);
+
+#ifndef _WIN32
+    Glob.header.filenameReal = "legacy_test";
+    const RString legacySaveDirectory = GetUserDirectory() + RString("Saved/") + GetBaseDirectory() +
+                                        GetBaseSubdirectory() + RString("legacy_test.demo/");
+    fs::create_directories(fs::path(static_cast<const char*>(legacySaveDirectory)));
+    std::ofstream(fs::path(static_cast<const char*>(legacySaveDirectory)) / "save.fps", std::ios::binary)
+        << "saved-world";
+
+    const RString migratedSaveDirectory = GetSaveDirectory();
+    std::ifstream migrated(fs::path(static_cast<const char*>(migratedSaveDirectory)) / "save.fps", std::ios::binary);
+    std::string payload;
+    migrated >> payload;
+    CHECK(payload == "saved-world");
+    CHECK(fs::exists(fs::path(static_cast<const char*>(legacySaveDirectory)) / "save.fps"));
+#endif
+
+    SetBaseDirectory(userMission, baseDirectory);
+    SetBaseSubdirectory(baseSubdirectory);
+    Glob.header.filenameReal = filenameReal;
+    std::snprintf(Glob.header.worldname, sizeof(Glob.header.worldname), "%s", worldName.c_str());
 }

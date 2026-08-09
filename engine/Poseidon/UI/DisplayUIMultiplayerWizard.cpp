@@ -837,7 +837,7 @@ void DisplayWizardMap::OnButtonClicked(int idc)
             {
                 // set mission
                 RString userDir = GetUserMissionsBase();
-                SetBaseDirectory(userDir);
+                SetBaseDirectory(true, userDir);
                 if (_multiplayer)
                 {
                     GetNetworkManager().CreateMission("", "");
@@ -860,7 +860,7 @@ void DisplayWizardMap::OnButtonClicked(int idc)
             {
                 // set mission
                 RString userDir = GetUserMissionsBase();
-                SetBaseDirectory(userDir);
+                SetBaseDirectory(true, userDir);
                 if (_multiplayer)
                 {
                     ::SetMission(_world, _name, GetMPMissionsDir());
@@ -966,7 +966,7 @@ void DisplayWizardMap::OnChildDestroyed(int idd, int exit)
             //			if (exit == IDC_OK)
             {
                 RString userDir = GetUserMissionsBase();
-                SetBaseDirectory(userDir);
+                SetBaseDirectory(true, userDir);
                 if (_multiplayer)
                 {
                     GetNetworkManager().CreateMission("", "");

@@ -817,7 +817,7 @@ void DisplayMain::OnChildDestroyed(int idd, int exit)
                 CurrentCampaign = "";
                 CurrentBattle = "";
                 CurrentMission = "";
-                SetBaseDirectory(userDir);
+                SetBaseDirectory(true, userDir);
                 ::CreateDirectory(BaseDirectory + RString("missions"), nullptr);
                 SetMission(world, "");
 
