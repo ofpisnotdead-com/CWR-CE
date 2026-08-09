@@ -278,6 +278,7 @@ public:
 	IControl *GetCtrl(float x, float y) override;
 
 	bool SetSubControlPos(int idc, float x, float y, float w, float h);
+	bool GetSubControlPos(int idc, float &x, float &y, float &w, float &h) const;
 
 	int GetHoveredIdc() const;
 

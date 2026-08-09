@@ -31,6 +31,8 @@ using namespace Poseidon;
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <Poseidon/IO/ParamFileExt.hpp> // global Pars for triAssertConfigClass
 #include <sstream>
+#include <chrono>
+#include <thread>
 #include <Poseidon/Network/MasterServerServiceClient.hpp> // catalog entry for triSeedWorkshopMods
 #include <Poseidon/Graphics/Rendering/Draw/FontMapping.hpp>
 #include <Poseidon/Dev/Debug/DebugOverlay.hpp>
@@ -511,9 +513,7 @@ GameValue TriModsFreshness(const GameState* /*state*/, GameValuePar arg)
     }
 }
 
-/// triModsSetFilter "text" — set the MODS name filter directly (bypassing the
-/// Filter dialog) and refresh the Filter button label. Lets a test pin the name
-/// filtering deterministically without driving the 3D edit field. Returns true.
+/// triModsSetFilter "text" sets the MODS name filter directly.
 GameValue TriModsSetFilter(const GameState* /*state*/, GameValuePar arg)
 {
     GameStringType text = static_cast<GameStringType>(arg);
@@ -657,11 +657,7 @@ GameValue TriReadWorkshopFile(const GameState* /*state*/, GameValuePar arg)
     return GameValue(contents.str().c_str());
 }
 
-/// triOpenModDownload <n> — open the download dialog (RscDisplayModDownload) as a
-/// child of the current display with n synthetic tasks and a FAKE in-process
-/// transport (no network/disk). Exercises the live dialog — two bars, speed/ETA,
-/// completion — offline. Click idc 125 (Download) to start, then again (relabeled
-/// "Continue") to dismiss on success. Returns true.
+/// triOpenModDownload <n> opens the download dialog with deterministic fake tasks.
 GameValue TriOpenModDownload(const GameState* /*state*/, GameValuePar arg)
 {
     int n = static_cast<int>(static_cast<GameScalarType>(arg));
@@ -678,6 +674,11 @@ GameValue TriOpenModDownload(const GameState* /*state*/, GameValuePar arg)
         t.label = "@wsmod" + std::to_string(i + 1);
         t.url = "test://" + t.label;
         t.expectedBytes = static_cast<int64_t>(i + 1) * 4 * 1024 * 1024;
+        t.postStep = [](const DownloadTask&, std::string&) -> bool
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(300));
+            return true;
+        };
         tasks.push_back(std::move(t));
     }
     // Fake transport: stream the file in two halves in-process, no I/O.

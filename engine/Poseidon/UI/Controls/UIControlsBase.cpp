@@ -682,6 +682,22 @@ bool ControlObjectContainer::SetSubControlPos(int idc, float x, float y, float w
     return false;
 }
 
+bool ControlObjectContainer::GetSubControlPos(int idc, float& x, float& y, float& w, float& h) const
+{
+    for (int i = 0; i < _controls.Size(); ++i)
+    {
+        if (_controls[i]._control && _controls[i]._control->IDC() == idc)
+        {
+            x = _controls[i].x;
+            y = _controls[i].y;
+            w = _controls[i].w;
+            h = _controls[i].h;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool ControlObjectContainer::FocusCtrlByIdc(int idc)
 {
     for (int i = 0; i < _controls.Size(); ++i)

@@ -3,6 +3,7 @@
 #include <Poseidon/Foundation/Strings/Mbcs.hpp>
 
 #include <cstdint>
+#include <vector>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -113,6 +114,51 @@ int FoldCompareUtf8(const char* a, const char* b)
         pa += na > 0 ? na : 1; // never stall on a malformed byte
         pb += nb > 0 ? nb : 1;
     }
+}
+
+bool ContainsFoldedUtf8(const char* text, const char* query)
+{
+    if (query == nullptr || query[0] == 0)
+        return true;
+    if (text == nullptr || text[0] == 0)
+        return false;
+
+    std::vector<uint32_t> needle;
+    for (const char* p = query; *p;)
+    {
+        uint32_t cp = 0;
+        const int bytes = DecodeUtf8Codepoint(p, &cp);
+        p += bytes > 0 ? bytes : 1;
+        if (cp >= 0x300 && cp <= 0x36F)
+            continue;
+        needle.push_back(FoldPrimary(cp));
+    }
+    if (needle.empty())
+        return true;
+
+    for (const char* start = text; *start;)
+    {
+        const char* p = start;
+        size_t i = 0;
+        while (*p && i < needle.size())
+        {
+            uint32_t cp = 0;
+            const int bytes = DecodeUtf8Codepoint(p, &cp);
+            p += bytes > 0 ? bytes : 1;
+            if (cp >= 0x300 && cp <= 0x36F)
+                continue;
+            if (FoldPrimary(cp) != needle[i])
+                break;
+            ++i;
+        }
+        if (i == needle.size())
+            return true;
+
+        uint32_t ignored = 0;
+        const int bytes = DecodeUtf8Codepoint(start, &ignored);
+        start += bytes > 0 ? bytes : 1;
+    }
+    return false;
 }
 
 #ifdef _WIN32

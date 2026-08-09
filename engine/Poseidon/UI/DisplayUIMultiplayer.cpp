@@ -24,7 +24,6 @@ using namespace Poseidon;
 #include <Poseidon/UI/DisplayUI.hpp>
 #include <Poseidon/UI/DisplayUICommon.hpp>
 #include <Poseidon/UI/OptionsUICommon.hpp>
-#include <Poseidon/Foundation/Strings/Mbcs.hpp>
 #include <Poseidon/Core/SaveVersion.hpp>
 #include <Poseidon/Core/Version.hpp>
 #include <Poseidon/Foundation/Strings/Bstring.hpp>
@@ -384,7 +383,7 @@ void CSessions::DrawItem(Vector3Par position, Vector3Par down, int i, float alph
         alpha *= (15.0 - age) * (1.0 / 5.0);
     }
 
-    C3DTableRow row = BeginRow(position, down, i, alpha, 0.05, 0.4, true);
+    C3DTableRow row = BeginRow(position, down, i, alpha, 0.05, 0.84, true);
     PackedColor color = row.color;
 
     // icon (sits inside the left of the name column)
@@ -523,63 +522,162 @@ void CSessions::DrawItem(Vector3Par position, Vector3Par down, int i, float alph
     }
 }
 
-// Compact human-readable size for the catalog Size column.
-static RString FormatModSize(int64_t bytes)
+static RString ModSourceText(const ModRow& mod)
 {
-    if (bytes <= 0)
-        return RString("--");
-    double mb = static_cast<double>(bytes) / (1024.0 * 1024.0);
-    if (mb >= 1024.0)
-        return Format("%.1f GB", mb / 1024.0);
-    return Format("%.1f MB", mb);
+    return LocalizeString(mod.source == ModRowSource::Local ? "STR_DISP_MODS_SOURCE_LOCAL_VALUE"
+                                                            : "STR_DISP_MODS_SOURCE_WORKSHOP_VALUE");
 }
 
-// One catalog row across the notebook surface via the shared C3DTableRow
-// painter. Columns sum to 1.0 of the list width (checkbox .07, Name .31,
-// Source .14, Version .10, Size .13, State .25). Only State takes a colour; the
-// rest use the row base colour (green-CRT _ftColor, or _selColor when selected).
-void CModsList::DrawItem(Vector3Par position, Vector3Par down, int i, float alpha)
+static RString ModStateText(const ModRow& mod)
 {
-    C3DTableRow row = BeginRow(position, down, i, alpha, 0.05, 0.4, true);
-    const ModRow& mod = _modRows[VisibleRow(i)]; // i = display row; map to the actual row
-
-    // "[X]" / "[ ]" — both three glyphs so the box is the same width either way
-    // (a two-space "[  ]" made the empty box wider). Width shared with the click
-    // target (HandleRowClick) so what is drawn lines up with what toggles.
-    row.DrawColumn(kCheckboxColumnWidth, mod.checked ? "[X]" : "[ ]");
-    row.DrawColumn(0.31, mod.name);
-    row.DrawColumn(0.14, mod.source == ModRowSource::Local ? LocalizeString("STR_DISP_MODS_SOURCE_LOCAL_VALUE")
-                                                           : LocalizeString("STR_DISP_MODS_SOURCE_WORKSHOP_VALUE"));
-    row.DrawColumn(0.10, mod.version);
-    row.DrawColumn(0.13, FormatModSize(mod.sizeBytes));
-
-    PackedColor stateColor;
-    RString stateText;
     if (mod.freshness == ModRowFreshness::UpdateAvailable)
-    {
-        stateText = LocalizeStringWithFallback("STR_DISP_MODS_STATE_UPDATE_AVAILABLE", "Update available");
-        stateColor = PackedColor(Color(1.0, 0.80, 0.45, alpha));
-        row.DrawColumn(0.25, stateText, stateColor);
-        return;
-    }
+        return LocalizeStringWithFallback("STR_DISP_MODS_STATE_UPDATE_AVAILABLE", "Update available");
     switch (mod.state)
     {
         case ModRowState::Active:
-            stateText = LocalizeString("STR_DISP_MODS_STATE_ACTIVE");
-            stateColor = PackedColor(Color(0.55, 1.0, 0.55, alpha));
-            break;
+            return LocalizeString("STR_DISP_MODS_STATE_ACTIVE");
         case ModRowState::Downloaded:
-            stateText = LocalizeString("STR_DISP_MODS_STATE_DOWNLOADED");
-            stateColor = PackedColor(Color(0.55, 0.80, 1.0, alpha));
-            break;
+            return LocalizeString("STR_DISP_MODS_STATE_DOWNLOADED");
         case ModRowState::Missing:
         default:
-            // "Available" — known on the workshop catalog but not yet downloaded.
-            stateText = LocalizeString("STR_DISP_MODS_STATE_AVAILABLE");
-            stateColor = PackedColor(Color(1.0, 0.80, 0.45, alpha));
-            break;
+            return LocalizeString("STR_DISP_MODS_STATE_AVAILABLE");
     }
-    row.DrawColumn(0.25, stateText, stateColor);
+}
+
+static RString ModActionText(const ModRow& mod)
+{
+    switch (GetModRowAction(mod))
+    {
+        case ModRowAction::DownloadAndLoad:
+            return LocalizeString("STR_DISP_MODS_ACTION_DOWNLOAD_LOAD");
+        case ModRowAction::UpdateAndLoad:
+            return LocalizeString("STR_DISP_MODS_ACTION_UPDATE_LOAD");
+        case ModRowAction::Load:
+            return LocalizeString("STR_DISP_MODS_ACTION_LOAD");
+        case ModRowAction::Unload:
+            return LocalizeString("STR_DISP_MODS_ACTION_UNLOAD");
+        case ModRowAction::None:
+        default:
+            return RString();
+    }
+}
+
+static constexpr float kModsRowTextTop = 0.10f;
+static constexpr float kModsRowTextSize = 0.76f;
+
+static float MeasureModsText(const CModsList& list, RString text)
+{
+    return list.MeasureTextWidth(text, kModsRowTextSize);
+}
+
+void CModsList::UpdateColumnLayout(const std::array<float, MTCCount>& headerWidths)
+{
+    std::array<float, MTCCount> desiredWidths = {
+        headerWidths[MTCActive], headerWidths[MTCName],  headerWidths[MTCVersion],
+        headerWidths[MTCSource], headerWidths[MTCState], headerWidths[MTCAction],
+    };
+
+    auto includeValue = [&](ModsTableColumn column, RString text)
+    { desiredWidths[column] = std::max(desiredWidths[column], MeasureModsText(*this, text)); };
+    includeValue(MTCActive, LocalizeString("STR_DISP_MODS_ENABLED_ROW"));
+    includeValue(MTCActive, LocalizeString("STR_DISP_MODS_DISABLED_ROW"));
+    includeValue(MTCSource, LocalizeString("STR_DISP_MODS_SOURCE_LOCAL_VALUE"));
+    includeValue(MTCSource, LocalizeString("STR_DISP_MODS_SOURCE_WORKSHOP_VALUE"));
+    includeValue(MTCState, LocalizeString("STR_DISP_MODS_STATE_ACTIVE"));
+    includeValue(MTCState, LocalizeString("STR_DISP_MODS_STATE_DOWNLOADED"));
+    includeValue(MTCState, LocalizeString("STR_DISP_MODS_STATE_AVAILABLE"));
+    includeValue(MTCState, LocalizeStringWithFallback("STR_DISP_MODS_STATE_UPDATE_AVAILABLE", "Update available"));
+    includeValue(MTCAction, LocalizeString("STR_DISP_MODS_ACTION_DOWNLOAD_LOAD"));
+    includeValue(MTCAction, LocalizeString("STR_DISP_MODS_ACTION_UPDATE_LOAD"));
+    includeValue(MTCAction, LocalizeString("STR_DISP_MODS_ACTION_LOAD"));
+    includeValue(MTCAction, LocalizeString("STR_DISP_MODS_ACTION_UNLOAD"));
+
+    for (int i = 0; i < _modRows.Size(); ++i)
+    {
+        const ModRow& mod = _modRows[i];
+        includeValue(MTCName, mod.name);
+        includeValue(MTCVersion, mod.version);
+    }
+
+    const float availableWidth = _right.Size() * ContentWidthFraction();
+    const float padding = 0.02f * availableWidth;
+    for (float& width : desiredWidths)
+        width += padding;
+
+    _columnWidths = AllocateColumnWidths(desiredWidths, MTCName, availableWidth);
+}
+
+std::array<float, MTCCount> CModsList::AllocateColumnWidths(const std::array<float, MTCCount>& desiredWidths,
+                                                            ModsTableColumn mainColumn, float availableWidth)
+{
+    constexpr float minimumWidth = 0.001f;
+    availableWidth = std::max(availableWidth, minimumWidth * MTCCount);
+    float fixedWidth = 0.0f;
+    for (int i = 0; i < MTCCount; ++i)
+        if (i != mainColumn)
+            fixedWidth += std::max(desiredWidths[i], minimumWidth);
+
+    std::array<float, MTCCount> widths;
+    if (fixedWidth < availableWidth - minimumWidth)
+    {
+        for (int i = 0; i < MTCCount; ++i)
+            if (i != mainColumn)
+                widths[i] = std::max(desiredWidths[i], minimumWidth) / availableWidth;
+        widths[mainColumn] = (availableWidth - fixedWidth) / availableWidth;
+    }
+    else
+    {
+        const float fixedAvailable = availableWidth - minimumWidth;
+        for (int i = 0; i < MTCCount; ++i)
+            widths[i] = i == mainColumn ? minimumWidth / availableWidth
+                                        : (std::max(desiredWidths[i], minimumWidth) / fixedWidth) *
+                                              (fixedAvailable / availableWidth);
+    }
+    return widths;
+}
+
+void CModsList::DrawItem(Vector3Par position, Vector3Par down, int i, float alpha)
+{
+    C3DTableRow row = BeginRow(position, down, i, alpha, kModsRowTextTop, kModsRowTextSize, true);
+    const ModRow& mod = _modRows[VisibleRow(i)]; // i = display row; map to the actual row
+
+    const PackedColor enabledColor = PackedColor(Color(0.55, 1.0, 0.55, alpha));
+    const PackedColor disabledColor = PackedColor(Color(0.35, 0.55, 0.35, alpha));
+    const PackedColor pendingColor = PackedColor(Color(1.0, 0.82, 0.30, alpha));
+    const bool pending = HasPendingChange(mod);
+    const PackedColor textColor = pending ? pendingColor : row.color;
+    const bool active = IsModRowActive(mod);
+    row.DrawColumn(_columnWidths[MTCActive],
+                   active ? LocalizeString("STR_DISP_MODS_ENABLED_ROW") : LocalizeString("STR_DISP_MODS_DISABLED_ROW"),
+                   pending ? pendingColor : (active ? enabledColor : disabledColor), true);
+    row.DrawColumn(_columnWidths[MTCName], mod.name, textColor, true);
+    row.DrawColumn(_columnWidths[MTCVersion], mod.version, textColor, true);
+    row.DrawColumn(_columnWidths[MTCSource], ModSourceText(mod), textColor, true);
+
+    PackedColor stateColor;
+    const RString stateText = ModStateText(mod);
+    if (mod.freshness == ModRowFreshness::UpdateAvailable)
+    {
+        stateColor = PackedColor(Color(1.0, 0.80, 0.45, alpha));
+    }
+    else
+    {
+        switch (mod.state)
+        {
+            case ModRowState::Active:
+                stateColor = PackedColor(Color(0.55, 1.0, 0.55, alpha));
+                break;
+            case ModRowState::Downloaded:
+                stateColor = PackedColor(Color(0.55, 0.80, 1.0, alpha));
+                break;
+            case ModRowState::Missing:
+            default:
+                stateColor = PackedColor(Color(1.0, 0.80, 0.45, alpha));
+                break;
+        }
+    }
+    row.DrawColumn(_columnWidths[MTCState], stateText, pending ? pendingColor : stateColor, true);
+    row.DrawColumn(_columnWidths[MTCAction], ModActionText(mod), pendingColor);
 }
 
 struct CmpModsContext
@@ -607,6 +705,12 @@ int CmpMods(const ModRow* a, const ModRow* b, CmpModsContext ctx)
             break;
         case MSCSource:
             value = static_cast<int>(a->source) - static_cast<int>(b->source);
+            break;
+        case MSCActive:
+            value = static_cast<int>(IsModRowActive(*a)) - static_cast<int>(IsModRowActive(*b));
+            break;
+        case MSCAction:
+            value = static_cast<int>(GetModRowAction(*a)) - static_cast<int>(GetModRowAction(*b));
             break;
     }
     return ctx.ascending ? value : -value;
@@ -681,19 +785,7 @@ RString CModsList::BuildModPath(const char* localRoot, const char* workshopRoot)
 // Case-insensitive substring test for the name filter; empty needle matches anything.
 bool CModsList::ContainsNoCase(const char* hay, const char* needle)
 {
-    if (needle == nullptr || needle[0] == 0)
-        return true;
-    if (hay == nullptr)
-        return false;
-    for (const char* h = hay; *h != 0; ++h)
-    {
-        int k = 0;
-        while (needle[k] != 0 && h[k] != 0 && tolower((unsigned char)h[k]) == tolower((unsigned char)needle[k]))
-            ++k;
-        if (needle[k] == 0)
-            return true;
-    }
-    return false;
+    return Poseidon::Foundation::ContainsFoldedUtf8(hay, needle);
 }
 
 struct CmpSessionsContext

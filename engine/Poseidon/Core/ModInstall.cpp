@@ -260,6 +260,61 @@ void DiscardStagedModInstalls(std::vector<StagedModInstall>& installs)
     installs.clear();
 }
 
+static std::filesystem::path PreservedInstallDir(const std::string& destinationDir)
+{
+    const std::filesystem::path destination(destinationDir);
+    return destination.parent_path() / ".downloads" / destination.filename();
+}
+
+bool PreserveStagedModInstalls(std::vector<StagedModInstall>& installs, std::string* error)
+{
+    namespace fs = std::filesystem;
+    for (StagedModInstall& install : installs)
+    {
+        const fs::path preserved = PreservedInstallDir(install.destinationDir);
+        std::error_code ec;
+        fs::create_directories(preserved.parent_path(), ec);
+        if (ec)
+        {
+            if (error != nullptr)
+                *error = "cannot create downloaded mod cache: " + ec.message();
+            return false;
+        }
+        fs::remove_all(preserved, ec);
+        ec.clear();
+        fs::rename(install.stagingDir, preserved, ec);
+        if (ec)
+        {
+            if (error != nullptr)
+                *error = "cannot preserve downloaded mod: " + ec.message();
+            return false;
+        }
+        ec.clear();
+        fs::remove(install.stagingDir + ".pbo.zst", ec);
+    }
+    installs.clear();
+    return true;
+}
+
+bool FindPreservedStagedModInstall(const std::string& destinationDir, const std::string& modId, int64_t packageRevision,
+                                   const std::string& sha256, StagedModInstall& install)
+{
+    namespace fs = std::filesystem;
+    const fs::path preserved = PreservedInstallDir(destinationDir);
+    std::error_code ec;
+    if (!fs::is_directory(preserved, ec))
+        return false;
+    const std::vector<ScannedMod> mods = ScanLocalMods(preserved.parent_path().string());
+    const auto found = std::find_if(mods.begin(), mods.end(), [&](const ScannedMod& mod)
+                                    { return mod.modId == modId && fs::path(mod.folderName) == preserved.filename(); });
+    if (found == mods.end() || found->packageRevision != packageRevision ||
+        (!sha256.empty() && found->sha256 != sha256))
+        return false;
+    install = MakeStagedModInstall(destinationDir, modId);
+    install.stagingDir = preserved.string();
+    return true;
+}
+
 std::string ModInstallDir(const std::string& modsRoot, const std::string& modId)
 {
     return modsRoot + "/@" + modId;

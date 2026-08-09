@@ -453,6 +453,21 @@ RString C3DStatic::GetLine(int i) const
     return ControlLineTextWithoutTrailingBreaks(_text, from, to);
 }
 
+float C3DStatic::MeasureTextWidth(RString text) const
+{
+    if (_down.SquareSize() <= 0.0f)
+        return 0.0f;
+    const Vector3 right = 0.75f * _down.Size() * _right.Normalized();
+    return GEngine->GetText3DWidth(right, _font, text).Size();
+}
+
+float C3DStatic::MeasureTextFraction(RString text) const
+{
+    if (_right.SquareSize() <= 0.0f)
+        return 0.0f;
+    return MeasureTextWidth(text) / _right.Size();
+}
+
 void C3DStatic::DrawText(const char* text, Vector3Par top, Vector3Par down, PackedColor color)
 {
     // formatting
@@ -1042,6 +1057,21 @@ void C3DActiveText::SetText(RString text)
             _texture->SetMaxSize(1024); // no limits
         }
     }
+}
+
+float C3DActiveText::MeasureTextWidth(RString text) const
+{
+    if (_down.SquareSize() <= 0.0f)
+        return 0.0f;
+    const Vector3 right = 0.75f * _down.Size() * _right.Normalized();
+    return GEngine->GetText3DWidth(right, _font, text).Size();
+}
+
+float C3DActiveText::MeasureTextFraction(RString text) const
+{
+    if (_right.SquareSize() <= 0.0f)
+        return 0.0f;
+    return MeasureTextWidth(text) / _right.Size();
 }
 
 bool C3DActiveText::OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
@@ -2077,7 +2107,7 @@ C3DTableRow C3DListBox::BeginRow(Vector3Par position, Vector3Par down, int i, fl
 
     Vector3 normal = _down.CrossProduct(_right).Normalized();
     Vector3 dir = _right.Normalized();
-    float rightSBSize = (1.0 - _sb3DWidth) * _right.Size();
+    float rightSBSize = ContentWidthFraction() * _right.Size();
     float border = 0.01 * rightSBSize;
     Vector3 curPos = position - 0.002 * normal;
 
@@ -2088,9 +2118,7 @@ C3DTableRow C3DListBox::BeginRow(Vector3Par position, Vector3Par down, int i, fl
         if (drawSelection)
         {
             PackedColor selBgColor = ModAlpha(_selBgColor, alpha);
-            Vector3 rightSB = _right;
-            if (GetSize() > _rows)
-                rightSB = (1.0 - _sb3DWidth) * _right;
+            Vector3 rightSB = ContentWidthFraction() * _right;
             GEngine->Draw3D(position, down, rightSB, ClipAll, selBgColor, DisableSun, nullptr, 0, y1c, 1, y2c);
         }
         color = ModAlpha(_selColor, alpha);
@@ -2124,6 +2152,15 @@ C3DTableRow C3DListBox::BeginRow(Vector3Par position, Vector3Par down, int i, fl
     row.font = _font;
     row.color = color;
     return row;
+}
+
+float C3DListBox::MeasureTextWidth(RString text, float rowTextSize) const
+{
+    if (_rows <= 0.0f || _down.SquareSize() <= 0.0f)
+        return 0.0f;
+    const Vector3 up = -(rowTextSize / _rows) * _down;
+    const Vector3 right = 0.75f * up.Size() * _right.Normalized();
+    return GEngine->GetText3DWidth(right, _font, text).Size();
 }
 
 void C3DTableRow::DrawColumn(float widthFraction, RString text, PackedColor textColor, bool divider)

@@ -16,7 +16,7 @@ env:
   CCACHE_NOHASHDIR: true
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
-  DEMO_ASSETS_URL: https://files.ofpisnotdead.com/CWR-demo-assets.zip
+  DEMO_ASSETS_URL: https://files.ofpisnotdead.com/CWR-demo-assets-v2.zip
   CWR_ARTIFACT_PREFIX: Linux-x64-rwdi
   TRIDENT_RENDER: gl33
   TRIDENT_AUDIO: openal
@@ -268,7 +268,7 @@ jobs:
         with:
           url: ${{ env.DEMO_ASSETS_URL }}
           path: packages/Demo
-          archive-name: CWR-demo-assets.zip
+          archive-name: CWR-demo-assets-v2.zip
 
       - name: Install Linux runtime packages
         run: |

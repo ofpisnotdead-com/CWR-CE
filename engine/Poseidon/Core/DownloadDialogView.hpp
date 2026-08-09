@@ -11,6 +11,7 @@
 
 #include <Poseidon/Core/DownloadWorker.hpp>
 
+#include <cstdint>
 #include <string>
 
 namespace Poseidon
@@ -37,5 +38,7 @@ struct DownloadDialogLabels
 
 DownloadDialogView BuildDownloadDialogView(const DownloadSnapshot& snapshot, const char* unitNoun = "addon",
                                            const DownloadDialogLabels& labels = {});
+
+std::string FormatAnimatedActivity(const char* label, uint64_t elapsedMs);
 
 } // namespace Poseidon

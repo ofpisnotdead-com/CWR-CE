@@ -161,6 +161,35 @@ TEST_CASE("a failed staged swap restores every earlier destination", "[mods][ins
     std::filesystem::remove_all(root, ec);
 }
 
+TEST_CASE("completed downloads persist outside the workshop scan until activation", "[mods][install][staging]")
+{
+    const auto root = MakeTempDir();
+    const auto destination = root / "@ready";
+    std::vector<StagedModInstall> installs = {MakeStagedModInstall(destination.string(), "ready")};
+    std::filesystem::create_directories(installs[0].stagingDir);
+    std::ofstream(std::filesystem::path(installs[0].stagingDir) / "mod.json", std::ios::binary)
+        << R"({"modId":"ready","name":"Ready","packageRevision":2,"sha256":"abcd"})";
+    std::ofstream(std::filesystem::path(installs[0].stagingDir) / "payload.txt") << "downloaded";
+    std::ofstream(installs[0].stagingDir + ".pbo.zst") << "archive";
+
+    std::string error;
+    REQUIRE(PreserveStagedModInstalls(installs, &error));
+    CHECK(installs.empty());
+    CHECK_FALSE(std::filesystem::exists(destination));
+    CHECK(ScanLocalMods(root.string()).empty());
+
+    StagedModInstall ready;
+    CHECK(FindPreservedStagedModInstall(destination.string(), "ready", 2, "abcd", ready));
+    CHECK_FALSE(FindPreservedStagedModInstall(destination.string(), "ready", 3, "ffff", ready));
+    std::vector<StagedModInstall> activation = {ready};
+    REQUIRE(SwapStagedModInstalls(activation, &error));
+    CommitStagedModInstalls(activation);
+    CHECK(std::filesystem::exists(destination / "payload.txt"));
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+}
+
 TEST_CASE("ModInstallDir composes the @modId path", "[mods][install]")
 {
     CHECK(ModInstallDir("/x/mods", "csla") == "/x/mods/@csla");

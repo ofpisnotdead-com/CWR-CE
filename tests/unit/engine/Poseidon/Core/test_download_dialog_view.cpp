@@ -10,6 +10,7 @@ using Poseidon::BuildDownloadDialogView;
 using Poseidon::DownloadDialogLabels;
 using Poseidon::DownloadDialogView;
 using Poseidon::DownloadSnapshot;
+using Poseidon::FormatAnimatedActivity;
 
 TEST_CASE("DownloadDialogView: a running multi-addon job shows both bars, speed and ETA", "[download][view]")
 {
@@ -126,4 +127,12 @@ TEST_CASE("DownloadDialogView: an empty/idle snapshot yields blank lines", "[dow
     CHECK(v.currentLine.empty());
     CHECK(v.overallLine.empty());
     CHECK(v.statusLine.empty());
+}
+
+TEST_CASE("Download dialog activity cycles one to three dots", "[download][view]")
+{
+    CHECK(FormatAnimatedActivity("Unpacking", 0) == "Unpacking.");
+    CHECK(FormatAnimatedActivity("Unpacking", 400) == "Unpacking..");
+    CHECK(FormatAnimatedActivity("Unpacking", 800) == "Unpacking...");
+    CHECK(FormatAnimatedActivity("Unpacking", 1200) == "Unpacking.");
 }

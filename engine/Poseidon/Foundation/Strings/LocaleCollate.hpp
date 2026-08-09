@@ -17,5 +17,8 @@ int CollateUtf8(const char* a, const char* b);
 // mapped to ASCII), case-insensitively, with the raw code points breaking exact
 // ties so the order is stable. Exposed so it can be tested without a system locale.
 int FoldCompareUtf8(const char* a, const char* b);
+
+// Case- and diacritic-insensitive UTF-8 substring match for user-entered search.
+bool ContainsFoldedUtf8(const char* text, const char* query);
 } // namespace Foundation
 } // namespace Poseidon

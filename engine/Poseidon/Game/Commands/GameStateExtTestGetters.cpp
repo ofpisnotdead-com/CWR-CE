@@ -421,16 +421,16 @@ GameValue TriGetModsMountSet(const GameState* /*state*/)
     return GameValue(RString(got.c_str()));
 }
 
-/// triGetModsSortColumn — index 0-4 of the visible sort-caret icon, or -1 if none.
+/// triGetModsSortColumn returns the visible sort-caret index, or -1 if none.
 GameValue TriGetModsSortColumn(const GameState* /*state*/)
 {
     UITestEngine tmp;
     DisplayMods* mods = dynamic_cast<DisplayMods*>(tmp.GetActiveDisplay());
     if (!mods)
         return GameValue(static_cast<float>(-1));
-    const int idcs[5] = {IDC_MODS_ICON_NAME, IDC_MODS_ICON_VERSION, IDC_MODS_ICON_SIZE, IDC_MODS_ICON_STATE,
-                         IDC_MODS_ICON_SOURCE};
-    for (int c = 0; c < 5; c++)
+    const int idcs[] = {IDC_MODS_ICON_NAME,   IDC_MODS_ICON_VERSION, IDC_MODS_ICON_SIZE,  IDC_MODS_ICON_STATE,
+                        IDC_MODS_ICON_SOURCE, IDC_MODS_ICON_ACTIVE,  IDC_MODS_ICON_ACTION};
+    for (int c = 0; c < static_cast<int>(std::size(idcs)); c++)
     {
         IControl* icon = mods->GetCtrl(idcs[c]);
         if (icon && icon->IsVisible())

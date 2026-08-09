@@ -51,7 +51,7 @@ using DownloadFileFn =
 // tasks complete.
 void RunDownloadJobs(const std::vector<DownloadTask>& tasks, DownloadProgress& progress, std::mutex& mtx,
                      const DownloadFileFn& download, const std::function<double()>& now,
-                     const std::atomic<bool>& cancel);
+                     const std::atomic<bool>& cancel, std::atomic<bool>* postProcessing = nullptr);
 
 struct DownloadSnapshot
 {
@@ -67,6 +67,7 @@ struct DownloadSnapshot
     bool done = false;
     bool failed = false;
     bool cancelled = false;
+    bool postProcessing = false;
     std::string error;
 };
 
@@ -104,6 +105,7 @@ class DownloadWorker
         DownloadProgress progress;
         std::atomic<bool> cancel{false};
         std::atomic<bool> active{false};
+        std::atomic<bool> postProcessing{false};
     };
 
     DownloadFileFn _download;

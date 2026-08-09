@@ -25,6 +25,7 @@ triAssertEq [(triDisplay), 72]          // IDD_MODS
 
 triSeedMods 6
 triAssertEq [(triGetModsActiveSet), "@testmod1,@testmod3,@testmod5"]
+triClick 7003                // Workshop contains testmod1, testmod3, testmod5
 
 // Click the row body (name column, u=0.5) — must NOT change the tick.
 triModsRowClick [0, 0.5]

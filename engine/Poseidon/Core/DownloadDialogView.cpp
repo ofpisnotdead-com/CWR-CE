@@ -26,6 +26,13 @@ std::string Pluralize(const char* noun, int count)
 }
 } // namespace
 
+std::string FormatAnimatedActivity(const char* label, uint64_t elapsedMs)
+{
+    std::string text = label != nullptr ? label : "";
+    text.append(1 + (elapsedMs / 400) % 3, '.');
+    return text;
+}
+
 DownloadDialogView BuildDownloadDialogView(const DownloadSnapshot& snapshot, const char* unitNoun,
                                            const DownloadDialogLabels& labels)
 {

@@ -50,8 +50,6 @@ triAssertIncludes [(triVisibleTexts), "State"]
 triScreenshot "12_mods_catalog"
 
 triGpadButton 3
-triAssertEq [(triDisplay), 73]
-triClick 2
 triAssertEq [(triDisplay), 72]
 
 triClick 2

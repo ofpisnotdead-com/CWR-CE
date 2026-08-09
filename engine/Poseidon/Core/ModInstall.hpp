@@ -9,10 +9,10 @@ namespace Poseidon
 /// One installed mod found on disk by ScanLocalMods.
 struct ScannedMod
 {
-    std::string modId;     ///< catalog modId when present, else folder name
-    std::string folderName;///< folder name verbatim (e.g. "@fixturemod" or "CSLA")
-    std::string name;      ///< mod.json "name", else the folder name (a leading '@' trimmed)
-    std::string version;   ///< mod.json "version", else ""
+    std::string modId;      ///< catalog modId when present, else folder name
+    std::string folderName; ///< folder name verbatim (e.g. "@fixturemod" or "CSLA")
+    std::string name;       ///< mod.json "name", else the folder name (a leading '@' trimmed)
+    std::string version;    ///< mod.json "version", else ""
     int64_t packageRevision = 1;
     std::string sha256;
     int64_t sizeBytes = 0; ///< total bytes on disk (recursive), 0 if unknown
@@ -64,6 +64,9 @@ bool SwapStagedModInstalls(std::vector<StagedModInstall>& installs, std::string*
 void RestoreStagedModInstalls(std::vector<StagedModInstall>& installs);
 void CommitStagedModInstalls(std::vector<StagedModInstall>& installs);
 void DiscardStagedModInstalls(std::vector<StagedModInstall>& installs);
+bool PreserveStagedModInstalls(std::vector<StagedModInstall>& installs, std::string* error = nullptr);
+bool FindPreservedStagedModInstall(const std::string& destinationDir, const std::string& modId, int64_t packageRevision,
+                                   const std::string& sha256, StagedModInstall& install);
 
 /// Compares author versions for callers without package revision metadata.
 ModInstallStatus GetModInstallStatus(const std::string& modsRoot, const std::string& modId,

@@ -1,4 +1,5 @@
 #include <Poseidon/UI/Options/OptionsScrollList.hpp>
+#include <Poseidon/Foundation/Strings/Mbcs.hpp>
 #include <Poseidon/UI/Options/OptionsShell.hpp>
 #include <Poseidon/UI/OptionsUI.hpp>
 #include <Poseidon/UI/Controls/UIControlsBase.hpp>
@@ -149,6 +150,9 @@ TEST_CASE("OptionsScrollList::FormatCell clips idle cells and marquees focused o
     OptionsScrollList::FormatCell("Left Shift", OptionsScrollList::kBindingAltInnerChars, false, advanced, buf,
                                   sizeof(buf));
     CHECK(std::string(buf) == "Left S");
+
+    OptionsScrollList::FormatCell("Načíst vybrané mody", 8, true, advanced, buf, sizeof(buf));
+    CHECK(Foundation::CountUtf8Codepoints(buf) == 8);
 }
 
 TEST_CASE("OptionsPage cycle membership helper only accepts listed IDCs", "[optionsUI][UI]")

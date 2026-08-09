@@ -179,7 +179,7 @@ TEST_CASE("master server attribution label includes the configured endpoint", "[
     REQUIRE(std::string(FormatNetworkMasterServerAttribution("")) == "Operated by disabled");
 }
 
-TEST_CASE("master mod list URL filters by current app and version", "[network][master][mods]")
+TEST_CASE("master mod list URL uses the workshop catalog app and current version", "[network][master][mods]")
 {
     const std::string url = BuildMasterServerServiceModListUrl("https://master.example", "effects");
 

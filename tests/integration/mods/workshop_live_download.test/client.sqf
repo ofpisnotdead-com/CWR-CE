@@ -17,7 +17,14 @@ triAssertIncludes [(triVisibleTexts), "Download"]
 triClick 125
 triAssertIncludes [(triVisibleTexts), "Complete"]
 triAssertIncludes [(triVisibleTexts), "Continue"]
-triClick 125
+triAssertIncludes [(triVisibleTexts), "Back"]
+triClick 2
+
+triAssertEq [(triDisplay), 72]
+triAssertIncludes [(triReadWorkshopFile ["fixturemod", "revision.txt"]), "revision-one"]
+triModsRowClick [0, 0.03]
+triClick 115
+triAssertEq [(triDisplay), 0]
 
 triAssertIncludes [(triReadWorkshopFile ["fixturemod", "revision.txt"]), "revision-two"]
 triAssertEq [(triReadWorkshopFile ["fixturemod", "stale.txt"]), ""]

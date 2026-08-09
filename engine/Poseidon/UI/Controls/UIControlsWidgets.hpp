@@ -854,6 +854,8 @@ public:
 	void FormatText();
 	int GetLineCount() const { return _lines.Size(); } // wrapped/explicit-break line count (ST_MULTI)
 	RString GetLine(int i) const;
+	float MeasureTextWidth(RString text) const;
+	float MeasureTextFraction(RString text) const;
 
 	void OnDraw(float alpha) override;
 
@@ -937,6 +939,8 @@ public:
 
 	RString GetText() {return _text;}
 	void SetText(RString text);
+	float MeasureTextWidth(RString text) const;
+	float MeasureTextFraction(RString text) const;
 	void ReloadLocalizedText() override
 	{
 		if (const ParamEntry* saved = _textCls)
@@ -1128,8 +1132,10 @@ public:
 	);
 
 	void UpdateInfo(ControlObject *object, ControlInObject &info) override;
+	float MeasureTextWidth(RString text, float rowTextSize) const;
 
 	float NRows() const override {return _rows;}
+	float ContentWidthFraction() { return GetSize() > _rows ? 1.0f - _sb3DWidth : 1.0f; }
 
 	void SetColorPicture(bool set) {_colorPicture = set;}
 

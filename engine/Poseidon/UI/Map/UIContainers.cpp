@@ -1663,7 +1663,6 @@ Poseidon::ControllerUiScene Display::GetControllerUiScene() const
         case IDD_PASSWORD:
         case IDD_IP_ADDRESS:
         case IDD_PORT:
-        case IDD_MODS_FILTER:
         case IDD_LOGIN:
         case IDD_NEW_USER:
             scene.kind = Poseidon::ControllerSceneKind::TextEntry;
