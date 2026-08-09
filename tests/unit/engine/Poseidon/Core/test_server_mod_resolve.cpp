@@ -19,6 +19,7 @@ using Poseidon::ModCatalog;
 using Poseidon::ModCatalogEntry;
 using Poseidon::ModDownload;
 using Poseidon::ModId;
+using Poseidon::MpJoinBlockReason;
 using Poseidon::ServerModList;
 using Poseidon::ServerModResolver;
 
@@ -228,9 +229,15 @@ TEST_CASE("ServerModResolver - exact package revisions never downgrade", "[mods]
     const auto oldServer = latestClient.Resolve(ServerModList({{"stable", 2}}, false), catalog);
     REQUIRE_FALSE(oldServer.CanProceed());
     REQUIRE(oldServer.ToDownload().empty());
+    REQUIRE(oldServer.BlockReason() == MpJoinBlockReason::ServerOutdated);
 
     const auto alreadyOld = oldClient.Resolve(ServerModList({{"stable", 2}}, false), catalog);
     REQUIRE_FALSE(alreadyOld.CanProceed());
+    REQUIRE(alreadyOld.BlockReason() == MpJoinBlockReason::ServerOutdated);
+
+    const auto futureServer = latestClient.Resolve(ServerModList({{"stable", 4}}, false), catalog);
+    REQUIRE_FALSE(futureServer.CanProceed());
+    REQUIRE(futureServer.BlockReason() == MpJoinBlockReason::RevisionUnavailable);
 
     const ModCatalog unreachable;
     const auto exactInstalled = latestClient.Resolve(ServerModList({{"stable", 3}}, false), unreachable);
@@ -241,4 +248,5 @@ TEST_CASE("ServerModResolver - exact package revisions never downgrade", "[mods]
     reachableWithoutPackage.MarkReachable();
     const auto unavailable = latestClient.Resolve(ServerModList({{"stable", 3}}, false), reachableWithoutPackage);
     REQUIRE_FALSE(unavailable.CanProceed());
+    REQUIRE(unavailable.BlockReason() == MpJoinBlockReason::RevisionUnavailable);
 }

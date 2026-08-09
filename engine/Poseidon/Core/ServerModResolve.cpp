@@ -97,11 +97,17 @@ ServerModResolution ServerModResolver::Resolve(const ServerModList& server, cons
             catalogEntry->PackageRevision() != requiredRevision)
         {
             out._blocked.push_back(id);
+            if (catalogEntry->PackageRevision() > requiredRevision &&
+                out._blockReason != MpJoinBlockReason::RevisionUnavailable)
+                out._blockReason = MpJoinBlockReason::ServerOutdated;
+            else
+                out._blockReason = MpJoinBlockReason::RevisionUnavailable;
             continue;
         }
         if (server.HasExactRevisions() && catalogEntry == nullptr && catalog.IsReachable())
         {
             out._blocked.push_back(id);
+            out._blockReason = MpJoinBlockReason::RevisionUnavailable;
             continue;
         }
         if (installed != _installedRevisions.end() &&
@@ -120,6 +126,7 @@ ServerModResolution ServerModResolver::Resolve(const ServerModList& server, cons
         else
         {
             out._blocked.push_back(id);
+            out._blockReason = MpJoinBlockReason::RevisionUnavailable;
         }
     }
 

@@ -118,6 +118,13 @@ struct InstalledModPackage
     int64_t packageRevision = 1;
 };
 
+enum class MpJoinBlockReason
+{
+    None,
+    ServerOutdated,
+    RevisionUnavailable
+};
+
 /// The diff between a server's required set and the player's state: the answer the
 /// join UI renders and acts on.
 class ServerModResolution
@@ -127,6 +134,7 @@ class ServerModResolution
     const std::vector<ModDownload>& ToDownload() const { return _toDownload; }
     const std::vector<ModId>& ToDisable() const { return _toDisable; }
     const std::vector<ModId>& Blocked() const { return _blocked; }
+    MpJoinBlockReason BlockReason() const { return _blockReason; }
 
     /// Anything to do before joining with the right set.
     bool NeedsWork() const { return !_toDownload.empty() || !_toDisable.empty() || !_blocked.empty(); }
@@ -139,6 +147,7 @@ class ServerModResolution
     std::vector<ModDownload> _toDownload;
     std::vector<ModId> _toDisable;
     std::vector<ModId> _blocked;
+    MpJoinBlockReason _blockReason = MpJoinBlockReason::None;
 };
 
 /// What the MP browser should do when the player clicks Join on a server, given the

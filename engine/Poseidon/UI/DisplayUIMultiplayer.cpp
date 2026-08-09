@@ -1144,7 +1144,17 @@ bool DisplayMultiplayer::BeginModdedJoin(const SessionInfo& info)
     }
     if (action == Poseidon::MpJoinAction::Blocked)
     {
-        CreateMsgBox(MB_BUTTON_OK, LocalizeString(IDS_MSG_MP_VERSION));
+        if (_joinServerPackages.empty())
+            CreateMsgBox(MB_BUTTON_OK, LocalizeString(IDS_MSG_MP_VERSION));
+        else
+            CreateMsgBox(MB_BUTTON_OK,
+                         res.BlockReason() == Poseidon::MpJoinBlockReason::ServerOutdated
+                             ? LocalizeStringWithFallback("STR_DISP_MODS_JOIN_SERVER_OUTDATED",
+                                                          "This server is running an older mod revision. The server "
+                                                          "must update before you can join.")
+                             : LocalizeStringWithFallback("STR_DISP_MODS_JOIN_REVISION_UNAVAILABLE",
+                                                          "A mod revision required by this server is unavailable. You "
+                                                          "cannot join this server."));
         return true;
     }
 
