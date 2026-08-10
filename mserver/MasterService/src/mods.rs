@@ -21,6 +21,14 @@ use crate::model::{ListModsQuery, ModCatalogEntry};
 pub type ArtifactStream =
     futures::stream::BoxStream<'static, std::result::Result<Bytes, object_store::Error>>;
 
+async fn sha256_stream(mut stream: ArtifactStream) -> Result<String> {
+    let mut hasher = Sha256::new();
+    while let Some(chunk) = stream.next().await {
+        hasher.update(chunk?);
+    }
+    Ok(hex(&hasher.finalize()))
+}
+
 /// An in-flight streamed upload to a temporary object. The publisher compresses the artifact
 /// (`.pbo.zst`) before upload, so the service stores the chunks verbatim — written as they
 /// arrive so the process never holds the whole artifact (mods reach tens of GB).
@@ -847,9 +855,14 @@ impl ModStore {
     ) -> Result<ModCatalogEntry> {
         let mut metadata: ModCatalogEntry = serde_json::from_slice(bytes)
             .with_context(|| format!("parsing mod.json for {dir_id}"))?;
+        let mut changed = false;
 
         if metadata.mod_id.is_empty() {
             metadata.mod_id = dir_id.to_string();
+            changed = true;
+        }
+        if metadata.package_revision != revision {
+            changed = true;
         }
         metadata.package_revision = revision;
 
@@ -865,11 +878,13 @@ impl ModStore {
                 .await
             {
                 metadata.size_bytes = Some(head.size as u64);
+                changed = true;
             }
         }
         if metadata.sha256.is_none() {
             if let Ok(result) = self.store.get(&self.store_path(artifact_path)).await {
-                metadata.sha256 = Some(hex(&Sha256::digest(&result.bytes().await?)));
+                metadata.sha256 = Some(sha256_stream(result.into_stream()).await?);
+                changed = true;
             }
         }
         if metadata.download_url.is_none() {
@@ -877,6 +892,16 @@ impl ModStore {
                 "/v1/mods/{}/revisions/{revision}/download",
                 metadata.mod_id
             ));
+            changed = true;
+        }
+        if legacy && changed {
+            self.store
+                .put(
+                    &self.store_path(Self::metadata_path(dir_id)),
+                    Bytes::from(serde_json::to_vec_pretty(&metadata)?).into(),
+                )
+                .await
+                .with_context(|| format!("updating legacy metadata for {dir_id}"))?;
         }
 
         Ok(metadata)
@@ -978,13 +1003,17 @@ fn apply_mod_filters(mods: &mut Vec<ModCatalogEntry>, query: &ListModsQuery) {
 
 fn is_mod_compatible(entry: &ModCatalogEntry, query: &ListModsQuery) -> bool {
     if let Some(app_name) = query.app_name.as_deref() {
-        if entry.app_name.as_deref() != Some(app_name) {
-            return false;
+        if let Some(entry_app) = entry.app_name.as_deref() {
+            if entry_app != app_name {
+                return false;
+            }
         }
     }
     if let Some(actver) = query.actver {
-        if entry.actver != Some(actver) {
-            return false;
+        if let Some(entry_actver) = entry.actver {
+            if entry_actver != actver {
+                return false;
+            }
         }
     }
     if let Some(version_tag) = query
@@ -1007,9 +1036,55 @@ fn is_mod_compatible(entry: &ModCatalogEntry, query: &ListModsQuery) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{ModStore, ModUploadMeta};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    use bytes::Bytes;
+    use futures::{stream, StreamExt};
+    use sha2::{Digest, Sha256};
+
+    use super::{sha256_stream, ArtifactStream, ModStore, ModUploadMeta};
     use crate::model::ListModsQuery;
     use tempfile::tempdir;
+
+    struct TrackedChunk {
+        data: &'static [u8],
+        live: Arc<AtomicUsize>,
+    }
+
+    impl AsRef<[u8]> for TrackedChunk {
+        fn as_ref(&self) -> &[u8] {
+            self.data
+        }
+    }
+
+    impl Drop for TrackedChunk {
+        fn drop(&mut self) {
+            self.live.fetch_sub(1, Ordering::SeqCst);
+        }
+    }
+
+    #[tokio::test]
+    async fn artifact_hash_releases_each_stream_chunk_before_reading_the_next() {
+        const CHUNKS: [&[u8]; 3] = [b"large-", b"legacy-", b"artifact"];
+        let live = Arc::new(AtomicUsize::new(0));
+        let stream = stream::iter(CHUNKS).then({
+            let live = Arc::clone(&live);
+            move |data| {
+                assert_eq!(live.load(Ordering::SeqCst), 0);
+                live.fetch_add(1, Ordering::SeqCst);
+                std::future::ready(Ok(Bytes::from_owner(TrackedChunk {
+                    data,
+                    live: Arc::clone(&live),
+                })))
+            }
+        });
+        let stream: ArtifactStream = Box::pin(stream);
+
+        let hash = sha256_stream(stream).await.unwrap();
+        assert_eq!(hash, super::hex(&Sha256::digest(b"large-legacy-artifact")));
+        assert_eq!(live.load(Ordering::SeqCst), 0);
+    }
 
     fn streamed_meta(name: &str, version: &str) -> ModUploadMeta {
         ModUploadMeta {
@@ -1033,7 +1108,14 @@ mod tests {
         std::fs::write(mod_dir.join("legacy-mod.pbo.zst"), vec![0u8; 4096]).unwrap();
 
         let store = ModStore::local(root.path()).unwrap();
-        let mods = store.list_mods(&ListModsQuery::default()).await.unwrap();
+        let mods = store
+            .list_mods(&ListModsQuery {
+                app_name: Some("CWR".to_string()),
+                actver: Some(303),
+                ..ListModsQuery::default()
+            })
+            .await
+            .unwrap();
         assert_eq!(mods.len(), 1);
         // Size comes from the artifact in the store; the link is the (relative) download route.
         assert_eq!(mods[0].size_bytes, Some(4096));
@@ -1041,6 +1123,10 @@ mod tests {
             mods[0].download_url.as_deref(),
             Some("/v1/mods/legacy-mod/revisions/1/download")
         );
+        let persisted: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(mod_dir.join("mod.json")).unwrap()).unwrap();
+        assert_eq!(persisted["sha256"], mods[0].sha256.as_deref().unwrap());
+        assert_eq!(persisted["sizeBytes"], 4096);
     }
 
     #[tokio::test]
