@@ -43,6 +43,16 @@ TEST_CASE("stalled client abort uses a disconnect-only debriefing", "[UI][multip
     CHECK(ResolveClientDebriefingMode(false, false, true) == ClientDebriefingMode::DisconnectOnly);
 }
 
+TEST_CASE("multiplayer session row keeps its two text lines separate", "[UI][multiplayer][layout]")
+{
+    constexpr MultiplayerSessionRowLayout layout = GetMultiplayerSessionRowLayout();
+
+    CHECK(layout.primarySize == 0.4f);
+    CHECK(layout.secondarySize == 0.4f);
+    CHECK(layout.primaryTop + layout.primarySize <= layout.secondaryTop);
+    CHECK(layout.secondaryTop + layout.secondarySize <= 1.0f);
+}
+
 TEST_CASE("mod rows describe the operation applied to the loaded set", "[UI][mods]")
 {
     ModRow row;

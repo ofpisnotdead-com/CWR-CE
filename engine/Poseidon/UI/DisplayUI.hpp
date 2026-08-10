@@ -223,6 +223,19 @@ enum SortColumn
     SCPing
 };
 
+struct MultiplayerSessionRowLayout
+{
+    float primaryTop;
+    float primarySize;
+    float secondaryTop;
+    float secondarySize;
+};
+
+constexpr MultiplayerSessionRowLayout GetMultiplayerSessionRowLayout()
+{
+    return {0.05f, 0.4f, 0.5f, 0.4f};
+}
+
 class CSessions : public C3DListBox
 {
     friend class DisplayMultiplayer;

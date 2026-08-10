@@ -373,6 +373,8 @@ CSessions::CSessions(ControlsContainer* parent, int idc, const ParamEntry& cls) 
 
 void CSessions::DrawItem(Vector3Par position, Vector3Par down, int i, float alpha)
 {
+    constexpr MultiplayerSessionRowLayout layout = GetMultiplayerSessionRowLayout();
+
     // i is the display row (BeginRow position + selection); a is the actual session
     // it maps to through the shared filter layer (identity when no filter is active).
     const int a = VisibleRow(i);
@@ -383,7 +385,7 @@ void CSessions::DrawItem(Vector3Par position, Vector3Par down, int i, float alph
         alpha *= (15.0 - age) * (1.0 / 5.0);
     }
 
-    C3DTableRow row = BeginRow(position, down, i, alpha, 0.05, 0.84, true);
+    C3DTableRow row = BeginRow(position, down, i, alpha, layout.primaryTop, layout.primarySize, true);
     PackedColor color = row.color;
 
     // icon (sits inside the left of the name column)
@@ -486,7 +488,7 @@ void CSessions::DrawItem(Vector3Par position, Vector3Par down, int i, float alph
     row.DrawColumn(0.08, Format("%d", _sessions[a].ping), color);
 
     // second line (no selection redraw)
-    C3DTableRow row2 = BeginRow(position, down, i, alpha, 0.5, 0.4, false);
+    C3DTableRow row2 = BeginRow(position, down, i, alpha, layout.secondaryTop, layout.secondarySize, false);
 
     // versions (actual + required, second offset by the first text width)
     {
