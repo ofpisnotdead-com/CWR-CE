@@ -879,6 +879,48 @@ TEST_CASE("OAL: stopped wave can restart after reload", "[Audio][parity][preview
     delete sys;
 }
 
+TEST_CASE("OAL: streamed OGG can restart after reload", "[Audio][parity][oal][streaming]")
+{
+    auto* sys = dynamic_cast<SoundSystemOAL*>(CreateSoundSystemOAL());
+    if (!sys)
+    {
+        SKIP("OpenAL not available");
+    }
+
+    const std::string ogg = GET_FIXTURE("audio/stream_loop.ogg");
+    auto* wave = dynamic_cast<WaveOAL*>(sys->CreateWave(ogg.c_str(), false, true));
+    if (!wave)
+    {
+        delete sys;
+        SKIP("Cannot create streamed OGG fixture wave");
+    }
+    REQUIRE(wave->IsStreamed());
+
+    const auto waitForPlayback = [&]
+    {
+        for (int i = 0; i < 80; ++i)
+        {
+            sys->Commit();
+            if (wave->State() == WaveState::Playing && wave->GetCurrentOffsetSeconds() > 0.02f)
+                return true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        return false;
+    };
+
+    for (int shot = 0; shot < 4; ++shot)
+    {
+        if (shot > 0)
+            wave->Restart();
+        wave->Play();
+        REQUIRE(waitForPlayback());
+    }
+    CHECK_FALSE(wave->IsTerminated());
+
+    wave->Release();
+    delete sys;
+}
+
 // End-to-end wiring: SetVolume's freq argument (the engine's pitch ratio,
 // e.g. a vehicle engine sound at rpm*1.2) must reach the real AL source as
 // AL_PITCH via the 1:1 DirectSound mapping — NOT floored at 0.5x.  Broken
