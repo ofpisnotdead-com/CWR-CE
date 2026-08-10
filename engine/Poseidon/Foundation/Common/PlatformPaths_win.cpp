@@ -1,4 +1,5 @@
 #include <Poseidon/Foundation/Common/PlatformPaths.hpp>
+#include <Poseidon/Foundation/Framework/Log.hpp>
 #include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <ShlObj.h>
 
@@ -12,7 +13,10 @@ std::string getWindowsFolder(int csidl, const char* appName)
     {
         std::wstring dir = std::wstring(buf) + L"\\" + Poseidon::Utf8PathToWide(appName);
         std::string utf8 = Poseidon::WidePathToUtf8(dir.c_str());
-        Poseidon::CreateDirectoryUtf8(utf8.c_str());
+        if (!Poseidon::CreateDirectoryUtf8(utf8.c_str()))
+        {
+            LOG_ERROR(Core, "Failed to create user directory '{}'", utf8);
+        }
         return utf8;
     }
     return std::string(".\\") + appName;

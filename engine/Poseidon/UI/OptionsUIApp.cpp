@@ -33,7 +33,6 @@ using namespace Poseidon;
 #include <Poseidon/Game/Scripting/Scripts.hpp>
 
 #include <Poseidon/Foundation/Common/Win.h>
-#include <Poseidon/Foundation/Common/PlayerPrefs.hpp>
 #include <Poseidon/IO/Filesystem/FileOps.hpp>
 #include <Poseidon/Core/ModSystem.hpp>
 #include <Poseidon/Core/ModInstall.hpp>
@@ -1089,7 +1088,7 @@ void DisplayMain::OnChildDestroyed(int idd, int exit)
                 Glob.header.playerName = ctrl->GetText(index);
                 //				LoadHeader();
                 const char* name = Glob.header.playerName;
-                Foundation::prefsSetString(AppName, "PlayerName", name);
+                SaveActiveProfile(name);
                 Display::OnChildDestroyed(idd, exit);
 
                 // load info from identity
@@ -1144,7 +1143,7 @@ void DisplayMain::OnChildDestroyed(int idd, int exit)
                 }
 
                 //				LoadHeader();
-                Foundation::prefsSetString(AppName, "PlayerName", name);
+                SaveActiveProfile(name);
                 GetTmpSaveDirectory(); // only create directory
 
                 C3DListBox* ctrl = dynamic_cast<C3DListBox*>(_child->GetCtrl(IDC_NEW_USER_FACE));

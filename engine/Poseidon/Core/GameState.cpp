@@ -45,7 +45,6 @@ using Poseidon::CheckAddonContext;
 using Poseidon::LoadBanksContext;
 
 #include <Poseidon/Foundation/Common/Win.h>
-#include <Poseidon/Foundation/Common/PlayerPrefs.hpp>
 #include <Poseidon/Foundation/Common/PlatformPaths.hpp>
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <Poseidon/Core/Profile/ProfileService.hpp>
@@ -349,10 +348,8 @@ void Globals::Init()
         // fresh OS-login/default profile; only create and remember a default
         // when no profile exists yet.
         ProfileService selector({std::string(Foundation::GamePaths::Instance().UserDir()),
-                                 [] { return Foundation::prefsGetString(AppName, "PlayerName"); },
-                                 [](const std::string& name)
-                                 { Foundation::prefsSetString(AppName, "PlayerName", name.c_str()); },
-                                 [] { return Foundation::getCurrentUserName(); }});
+                                 [] { return LoadActiveProfile(); }, [](const std::string& name)
+                                 { SaveActiveProfile(name); }, [] { return Foundation::getCurrentUserName(); }});
         header.playerName = selector.ResolveStartupProfile().c_str();
     }
 

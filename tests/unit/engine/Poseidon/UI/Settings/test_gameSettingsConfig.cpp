@@ -1,9 +1,11 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <Poseidon/UI/Settings/GameSettingsConfig.hpp>
 #include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 
 #include <filesystem>
+#include <fstream>
 #include <random>
 #include <string>
 #include <optional>
@@ -40,6 +42,7 @@ TEST_CASE("GameSettingsConfig: defaults follow detected language", "[Settings][G
 
     CHECK(cfg.textLanguage == "Czech");
     CHECK(cfg.voiceLanguage == "Czech");
+    CHECK(cfg.activeProfile.empty());
     CHECK(cfg.blood == true);
     CHECK(cfg.preferredViewDistance == 900.0f);
     CHECK(cfg.respectMissionViewDistance == true);
@@ -119,6 +122,7 @@ TEST_CASE("GameSettingsConfig: save and load round-trip every field", "[Settings
     GameSettingsConfig src;
     src.textLanguage = "German";
     src.voiceLanguage = "Russian";
+    src.activeProfile = "Veteran";
     src.blood = false;
     src.preferredViewDistance = 1700.0f;
     src.respectMissionViewDistance = false;
@@ -128,6 +132,7 @@ TEST_CASE("GameSettingsConfig: save and load round-trip every field", "[Settings
     REQUIRE(dst.Load(path));
     CHECK(dst.textLanguage == src.textLanguage);
     CHECK(dst.voiceLanguage == src.voiceLanguage);
+    CHECK(dst.activeProfile == src.activeProfile);
     CHECK(dst.blood == src.blood);
     CHECK(dst.preferredViewDistance == src.preferredViewDistance);
     CHECK(dst.respectMissionViewDistance == src.respectMissionViewDistance);
@@ -157,8 +162,38 @@ TEST_CASE("GameSettingsConfig: missing file leaves instance untouched", "[Settin
 
     GameSettingsConfig cfg;
     cfg.textLanguage = "Polish";
+    cfg.activeProfile = "Original";
     CHECK_FALSE(cfg.Load(path));
     CHECK(cfg.textLanguage == "Polish");
+    CHECK(cfg.activeProfile == "Original");
+}
+
+TEST_CASE("GameSettingsConfig: migrates the legacy active profile", "[Settings][GameSettings]")
+{
+    const std::string& userDir = Poseidon::Foundation::GamePaths::Instance().UserDir();
+    const std::string gamePath = userDir + "game.cfg";
+    const std::string prefsPath = userDir + "prefs.cfg";
+    std::filesystem::remove(gamePath);
+    std::filesystem::remove(prefsPath);
+
+    {
+        std::ofstream prefs(prefsPath);
+        REQUIRE(prefs.is_open());
+        prefs << "PlayerName=Veteran\n";
+    }
+
+    CHECK(Poseidon::LoadActiveProfile() == "Veteran");
+
+    GameSettingsConfig migrated;
+    REQUIRE(migrated.Load(gamePath));
+    CHECK(migrated.activeProfile == "Veteran");
+
+    migrated.activeProfile = "Current";
+    REQUIRE(migrated.Save(gamePath));
+    CHECK(Poseidon::LoadActiveProfile() == "Current");
+
+    std::filesystem::remove(gamePath);
+    std::filesystem::remove(prefsPath);
 }
 
 TEST_CASE("GameSettingsConfig: effective view distance respects mission policy", "[Settings][GameSettings]")

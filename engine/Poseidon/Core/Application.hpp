@@ -21,9 +21,6 @@ struct GraphicsEngineParams;
 }
 using Poseidon::GraphicsEngineParams;
 
-// Application display name; defined in Application.cpp.
-extern const char* AppName;
-
 // Forward declarations for Windows types (Linux gets these from PoseidonBase platform headers)
 #ifdef _WIN32
 struct HINSTANCE__;

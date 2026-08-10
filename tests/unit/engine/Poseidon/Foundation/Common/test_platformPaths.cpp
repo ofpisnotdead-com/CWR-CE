@@ -1,5 +1,4 @@
 #include <catch2/catch_test_macros.hpp>
-#include <Poseidon/Foundation/Common/PlayerPrefs.hpp>
 #include <Poseidon/Foundation/Common/PlatformPaths.hpp>
 #include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 
@@ -84,18 +83,6 @@ TEST_CASE("Windows user directories preserve UTF-8 app names", "[platformPaths][
     fs::remove_all(Poseidon::FilesystemPathFromUtf8(dir));
 }
 
-TEST_CASE("Windows player preferences persist in UTF-8 user directories", "[platformPaths][windows][utf8]")
-{
-    const std::string root =
-        Poseidon::FilesystemPathToUtf8(fs::temp_directory_path()) + "/cwr_prefs_\xE6\xB5\x8B\xE8\xAF\x95";
-    REQUIRE(Poseidon::CreateDirectoryUtf8(root.c_str()));
-
-    ScopedEnv userDir("POSEIDON_USER_DIR", root.c_str());
-    Poseidon::Foundation::prefsSetString("CWR", "PlayerName", "\xE4\xB8\x81");
-    REQUIRE(Poseidon::Foundation::prefsGetString("CWR", "PlayerName") == "\xE4\xB8\x81");
-
-    fs::remove_all(Poseidon::FilesystemPathFromUtf8(root));
-}
 #endif
 
 TEST_CASE("getUserCacheDir returns non-empty path", "[platformPaths]")

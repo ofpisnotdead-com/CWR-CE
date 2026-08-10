@@ -65,7 +65,6 @@ using namespace Poseidon::Dev;
 #include <Poseidon/Core/Config/EngineConfig.hpp>
 #include <Poseidon/Core/Profile/ProfileManager.hpp>
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
-#include <Poseidon/Foundation/Common/PlayerPrefs.hpp>
 #include <Poseidon/Foundation/Memory/CheckMem.hpp>
 #include <Poseidon/AI/AI.hpp>
 #include <Poseidon/AI/VehicleAI.hpp>
@@ -1773,19 +1772,16 @@ GameValue TriPlayCustomRadio(const GameState* /*state*/, GameValuePar arg)
     return GameValue(GWorld->UI()->PlayCustomRadio(index) ? "OK" : "FAIL:not_available");
 }
 
-/// triSetPlayerPref <name> — write the persisted last-used profile name (the
-/// PlayerName pref). A sequence phase uses this to leave a stale pref for the
-/// next boot. Returns "OK".
-GameValue TriSetPlayerPref(const GameState* /*state*/, GameValuePar arg)
+GameValue TriSetActiveProfile(const GameState* /*state*/, GameValuePar arg)
 {
     std::string name = ((RString)(GameStringType)arg).Data();
-    Foundation::prefsSetString(AppName, "PlayerName", name.c_str());
+    SaveActiveProfile(name);
     return GameValue("OK");
 }
 
 /// triAssertProfileMissing <name> -> "OK" if no profile directory exists for
 /// <name> under the user dir, else "FAIL:profile_exists". A later boot must not
-/// recreate a profile that a stale pref points at.
+/// recreate a profile that a stale active-profile setting points at.
 GameValue TriAssertProfileMissing(const GameState* /*state*/, GameValuePar arg)
 {
     std::string name = ((RString)(GameStringType)arg).Data();
@@ -3072,7 +3068,7 @@ INIT_MODULE(GameStateExtTest, 3)
     GGameState.NewFunction(GameFunction(GameString, "triAssertRegionHasColor", TriAssertRegionHasColor, GameArray));
     GGameState.NewNularOp(GameNular(GameString, "triCustomRadio", TriCustomRadio));
     GGameState.NewFunction(GameFunction(GameString, "triPlayCustomRadio", TriPlayCustomRadio, GameScalar));
-    GGameState.NewFunction(GameFunction(GameString, "triSetPlayerPref", TriSetPlayerPref, GameString));
+    GGameState.NewFunction(GameFunction(GameString, "triSetActiveProfile", TriSetActiveProfile, GameString));
     GGameState.NewFunction(GameFunction(GameString, "triAssertProfileMissing", TriAssertProfileMissing, GameString));
     GGameState.NewFunction(GameFunction(GameString, "triDamagePlayerVehicle", TriDamagePlayerVehicle, GameScalar));
     GGameState.NewNularOp(GameNular(GameScalar, "triPlayerVehicleDammage", TriPlayerVehicleDammage));

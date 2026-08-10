@@ -19,6 +19,10 @@
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <Poseidon/Foundation/Framework/Log.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
+
+#include <cstdlib>
+#include <fstream>
 
 namespace Poseidon
 {
@@ -59,6 +63,49 @@ std::string GameSettingsPath()
     return dir + "game.cfg";
 }
 
+std::string JoinPath(std::string dir, const char* filename)
+{
+    if (!dir.empty() && dir.back() != '/' && dir.back() != '\\')
+        dir += '/';
+    return dir + filename;
+}
+
+std::string LegacyPlayerPrefsPath()
+{
+    if (const char* userDir = std::getenv("POSEIDON_USER_DIR"); userDir && userDir[0] != '\0')
+        return JoinPath(userDir, "prefs.cfg");
+
+#ifdef _WIN32
+    return {};
+#else
+    std::string configDir;
+    if (const char* xdg = std::getenv("XDG_CONFIG_HOME"); xdg && xdg[0] != '\0')
+        configDir = xdg;
+    else if (const char* home = std::getenv("HOME"); home && home[0] != '\0')
+        configDir = JoinPath(home, ".config");
+    else
+        configDir = "/tmp";
+    return JoinPath(JoinPath(configDir, "ARMA:CWA-RE-CE"), "prefs.cfg");
+#endif
+}
+
+std::string LoadLegacyActiveProfile()
+{
+    const std::string path = LegacyPlayerPrefsPath();
+    if (path.empty())
+        return {};
+
+    std::ifstream file(Poseidon::FilesystemPathFromUtf8(path));
+    std::string line;
+    while (std::getline(file, line))
+    {
+        constexpr const char prefix[] = "PlayerName=";
+        if (line.rfind(prefix, 0) == 0)
+            return line.substr(sizeof(prefix) - 1);
+    }
+    return {};
+}
+
 void ApplyToRuntime(const GameSettingsConfig& cfg)
 {
     SetLanguage(RString(cfg.textLanguage.c_str()));
@@ -93,6 +140,7 @@ void GameSettingsConfig::LoadDefaults(const Environment& env)
 {
     textLanguage = CfgLib::NormalizeSupportedLanguage(env.DetectSystemLanguage());
     voiceLanguage = textLanguage;
+    activeProfile.clear();
     blood = true;
     preferredViewDistance = 900.0f;
     respectMissionViewDistance = true;
@@ -146,6 +194,8 @@ bool GameSettingsConfig::Load(const std::string& path)
         textLanguage = ((RString)*entry).Data();
     if (auto* entry = cfg.FindEntry("voiceLanguage"))
         voiceLanguage = ((RString)*entry).Data();
+    if (auto* entry = cfg.FindEntry("activeProfile"))
+        activeProfile = ((RString)*entry).Data();
     if (auto* entry = cfg.FindEntry("blood"))
         blood = (bool)*entry;
     if (auto* entry = cfg.FindEntry("preferredViewDistance"))
@@ -161,6 +211,7 @@ bool GameSettingsConfig::Save(const std::string& path) const
     ParamFile cfg;
     cfg.Add("textLanguage", RString(textLanguage.c_str()));
     cfg.Add("voiceLanguage", RString(voiceLanguage.c_str()));
+    cfg.Add("activeProfile", RString(activeProfile.c_str()));
     cfg.Add("blood", blood);
     cfg.Add("preferredViewDistance", preferredViewDistance);
     cfg.Add("respectMissionViewDistance", respectMissionViewDistance);
@@ -224,14 +275,15 @@ void LoadGameSettings()
 
 void SaveGameSettings()
 {
+    const std::string path = GameSettingsPath();
     GameSettingsConfig cfg;
+    cfg.Load(path);
     cfg.textLanguage = CfgLib::NormalizeSupportedLanguage((const char*)GLanguage);
     cfg.voiceLanguage = CfgLib::NormalizeSupportedLanguage(GetSelectedVoiceLanguage(), cfg.textLanguage);
     cfg.blood = ENGINE_CONFIG.blood;
     cfg.preferredViewDistance = GetSelectedPreferredViewDistance();
     cfg.respectMissionViewDistance = GetRespectMissionViewDistance();
 
-    const std::string path = GameSettingsPath();
     if (!cfg.Save(path))
     {
         LOG_WARN(Config, "GameSettings: failed to write '{}'", path);
@@ -242,6 +294,34 @@ void SaveGameSettings()
     LOG_DEBUG(Config, "GameSettings: saved text='{}' voice='{}' blood={} viewDistance={} respectMissionViewDistance={}",
               cfg.textLanguage, cfg.voiceLanguage, cfg.blood, cfg.preferredViewDistance,
               cfg.respectMissionViewDistance);
+}
+
+std::string LoadActiveProfile()
+{
+    GameSettingsConfig cfg;
+    if (cfg.Load(GameSettingsPath()) && !cfg.activeProfile.empty())
+        return cfg.activeProfile;
+
+    const std::string legacyProfile = LoadLegacyActiveProfile();
+    if (!legacyProfile.empty())
+        SaveActiveProfile(legacyProfile);
+    return legacyProfile;
+}
+
+void SaveActiveProfile(const std::string& name)
+{
+    const std::string path = GameSettingsPath();
+    LiveEnvironment env;
+    GameSettingsConfig cfg;
+    if (!EnsureGameSettingsFile(cfg, path, env))
+    {
+        LOG_WARN(Config, "GameSettings: failed to prepare '{}' for active profile", path);
+        return;
+    }
+
+    cfg.activeProfile = name;
+    if (!cfg.Save(path))
+        LOG_WARN(Config, "GameSettings: failed to save active profile to '{}'", path);
 }
 
 const std::string& GetSelectedVoiceLanguage()

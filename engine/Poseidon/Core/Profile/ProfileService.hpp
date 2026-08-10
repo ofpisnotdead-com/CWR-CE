@@ -6,7 +6,7 @@
 // function (DecideStartupProfile); ProfileService wires it to injected
 // boundaries (where profiles live, how the last-used name is loaded/saved, what
 // the OS login name is) so both the policy and the orchestration are testable
-// without touching the real user directory or prefs.
+// without touching the real user directory or settings file.
 
 #pragma once
 
@@ -39,7 +39,7 @@ ProfileChoice DecideStartupProfile(const std::string& persistedName, const std::
 
 /// Applies DecideStartupProfile against injected boundaries: enumerates and
 /// creates profiles under `userDir` (via ProfileManager), reads/writes the
-/// last-used name through the prefs callbacks, and asks `osLogin` for the OS
+/// last-used name through the persistence callbacks, and asks `osLogin` for the OS
 /// login. Game code wires the real implementations; tests wire fakes.
 class ProfileService
 {
@@ -47,8 +47,8 @@ class ProfileService
     struct Boundaries
     {
         std::string userDir;                                       ///< profiles live in userDir/Users/
-        std::function<std::string()> loadPersistedName;            ///< read last-used profile (prefs)
-        std::function<void(const std::string&)> savePersistedName; ///< write last-used profile (prefs)
+        std::function<std::string()> loadPersistedName;            ///< read last-used profile
+        std::function<void(const std::string&)> savePersistedName; ///< write last-used profile
         std::function<std::string()> osLogin;                      ///< OS login name (may be empty)
     };
 

@@ -102,7 +102,6 @@ set(MERGED_SUPPORT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Enums/EnumNames.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/Platform.cpp
     $<IF:$<PLATFORM_ID:Windows>,${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/PlatformPaths_win.cpp,${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/PlatformPaths_posix.cpp>
-    ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/PlayerPrefs.cpp
     $<IF:$<PLATFORM_ID:Windows>,${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/ConsoleUtils_win.cpp,${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/ConsoleUtils_posix.cpp>
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/GamePaths.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Framework/AppFrame.cpp
