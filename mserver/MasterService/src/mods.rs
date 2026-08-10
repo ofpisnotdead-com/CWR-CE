@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::{bail, Context, Result};
 use bytes::Bytes;
 use futures::StreamExt;
-use object_store::aws::{AmazonS3, AmazonS3Builder};
+use object_store::aws::{AmazonS3, AmazonS3Builder, S3ConditionalPut};
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
 use object_store::signer::Signer;
@@ -105,6 +105,13 @@ pub struct ModStore {
     prefix: Option<ObjectPath>,
     signed_url_ttl: Duration,
     current_lock: Arc<tokio::sync::Mutex<()>>,
+    artifact_placement: ArtifactPlacement,
+}
+
+#[derive(Clone, Copy)]
+enum ArtifactPlacement {
+    ConditionalRename,
+    ReservedRename,
 }
 
 pub struct S3StoreConfig<'a> {
@@ -133,6 +140,7 @@ impl ModStore {
             prefix: None,
             signed_url_ttl: Duration::from_secs(0),
             current_lock: Arc::new(tokio::sync::Mutex::new(())),
+            artifact_placement: ArtifactPlacement::ConditionalRename,
         })
     }
 
@@ -146,6 +154,7 @@ impl ModStore {
             .with_access_key_id(config.access_key)
             .with_secret_access_key(config.secret_key)
             .with_virtual_hosted_style_request(config.virtual_hosted_style)
+            .with_conditional_put(S3ConditionalPut::ETagMatch)
             // ClientOptions replaces the builder's defaults wholesale, so allow_http must be
             // set here too. Disable the 30s request timeout: a streamed download/upload of a
             // large mod runs longer (bounded by the client's transfer speed), and the default
@@ -171,7 +180,32 @@ impl ModStore {
             prefix: normalize_prefix(config.prefix),
             signed_url_ttl: config.signed_url_ttl,
             current_lock: Arc::new(tokio::sync::Mutex::new(())),
+            artifact_placement: ArtifactPlacement::ReservedRename,
         })
+    }
+
+    async fn place_temp_if_absent(
+        &self,
+        temp: &ObjectPath,
+        destination: &ObjectPath,
+    ) -> object_store::Result<()> {
+        match self.artifact_placement {
+            ArtifactPlacement::ConditionalRename => {
+                self.store.rename_if_not_exists(temp, destination).await?;
+            }
+            ArtifactPlacement::ReservedRename => {
+                let reservation = ObjectPath::from(format!("{}.reserved", destination.as_ref()));
+                self.store
+                    .put_opts(
+                        &reservation,
+                        Bytes::from(temp.as_ref().as_bytes().to_vec()).into(),
+                        PutMode::Create.into(),
+                    )
+                    .await?;
+                self.store.rename(temp, destination).await?;
+            }
+        }
+        Ok(())
     }
 
     fn artifact_path(mod_id: &str) -> ObjectPath {
@@ -482,8 +516,7 @@ impl ModStore {
         };
 
         let artifact_path = self.store_path(Self::revision_artifact_path(&slug, 1));
-        self.store
-            .rename_if_not_exists(&temp, &artifact_path)
+        self.place_temp_if_absent(&temp, &artifact_path)
             .await
             .with_context(|| format!("placing revision 1 artifact for {slug}"))?;
 
@@ -578,7 +611,7 @@ impl ModStore {
         let mut revision = current.revision + 1;
         loop {
             let artifact_path = self.store_path(Self::revision_artifact_path(mod_id, revision));
-            match self.store.rename_if_not_exists(&temp, &artifact_path).await {
+            match self.place_temp_if_absent(&temp, &artifact_path).await {
                 Ok(()) => break,
                 Err(object_store::Error::AlreadyExists { .. }) => revision += 1,
                 Err(error) => return Err(error.into()),
@@ -1187,6 +1220,54 @@ mod tests {
         let stored = store.artifact_bytes("streamed-mod").await.unwrap().unwrap();
         assert_eq!(stored, payload);
         assert_eq!(entry.size_bytes, Some(payload.len() as u64));
+    }
+
+    #[tokio::test]
+    async fn reserved_placement_supports_streamed_publish_and_concurrent_updates() {
+        let root = tempdir().unwrap();
+        let mut store = ModStore::local(root.path()).unwrap();
+        store.artifact_placement = super::ArtifactPlacement::ReservedRename;
+
+        let mut upload = store.begin_upload().await.unwrap();
+        upload.write(&[1]);
+        store
+            .finalize_mod(upload, streamed_meta("Reserved Mod", "1.0"))
+            .await
+            .unwrap();
+        assert!(root
+            .path()
+            .join("reserved-mod/revisions/1/reserved-mod.pbo.zst.reserved")
+            .exists());
+
+        let left = store.clone();
+        let right = store.clone();
+        let (left, right) = tokio::join!(
+            left.add_revision("reserved-mod", vec![2], super::ModUploadMeta::default()),
+            right.add_revision("reserved-mod", vec![3], super::ModUploadMeta::default())
+        );
+        let mut allocated = vec![
+            left.unwrap().package_revision,
+            right.unwrap().package_revision,
+        ];
+        allocated.sort_unstable();
+        assert_eq!(allocated, vec![2, 3]);
+        assert!(root
+            .path()
+            .join("reserved-mod/revisions/2/reserved-mod.pbo.zst.reserved")
+            .exists());
+        assert!(root
+            .path()
+            .join("reserved-mod/revisions/3/reserved-mod.pbo.zst.reserved")
+            .exists());
+        assert_eq!(
+            store
+                .get_mod("reserved-mod")
+                .await
+                .unwrap()
+                .unwrap()
+                .package_revision,
+            3
+        );
     }
 
     #[tokio::test]
