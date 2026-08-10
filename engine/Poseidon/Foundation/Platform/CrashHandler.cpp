@@ -44,23 +44,38 @@ LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep)
     HANDLE f = CreateFileA(dmp, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
     if (f != INVALID_HANDLE_VALUE)
     {
-        MINIDUMP_EXCEPTION_INFORMATION mei = {GetCurrentThreadId(), ep, FALSE};
-        BOOL written = MiniDumpWriteDump(proc, GetCurrentProcessId(), f, MiniDumpWithDataSegs, &mei, nullptr, nullptr);
-        DWORD error = written ? ERROR_SUCCESS : GetLastError();
-        bool normalDump = false;
-        if (!written)
+        // dbghelp can refuse a write and refuse the smaller dump in the same instant, so the
+        // attempts drop detail and then back off in time.
+        struct DumpAttempt
         {
+            MINIDUMP_TYPE type;
+            DWORD backoffMs;
+        };
+        static const DumpAttempt attempts[] = {
+            {MiniDumpWithDataSegs, 0}, {MiniDumpNormal, 0}, {MiniDumpNormal, 100}, {MiniDumpNormal, 400}};
+
+        MINIDUMP_EXCEPTION_INFORMATION mei = {GetCurrentThreadId(), ep, FALSE};
+        BOOL written = FALSE;
+        DWORD error = ERROR_SUCCESS;
+        bool normalDump = false;
+        for (const DumpAttempt& attempt : attempts)
+        {
+            Sleep(attempt.backoffMs);
+
             LARGE_INTEGER start = {};
-            if (SetFilePointerEx(f, start, nullptr, FILE_BEGIN) && SetEndOfFile(f))
-            {
-                written = MiniDumpWriteDump(proc, GetCurrentProcessId(), f, MiniDumpNormal, &mei, nullptr, nullptr);
-                error = written ? ERROR_SUCCESS : GetLastError();
-                normalDump = written;
-            }
-            else
+            if (!SetFilePointerEx(f, start, nullptr, FILE_BEGIN) || !SetEndOfFile(f))
             {
                 error = GetLastError();
+                break;
             }
+
+            written = MiniDumpWriteDump(proc, GetCurrentProcessId(), f, attempt.type, &mei, nullptr, nullptr);
+            if (written)
+            {
+                normalDump = attempt.type == MiniDumpNormal;
+                break;
+            }
+            error = GetLastError();
         }
         CloseHandle(f);
         if (written)
