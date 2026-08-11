@@ -27,6 +27,7 @@
 #include <Poseidon/Foundation/Common/Win.h>
 #include <Poseidon/Core/SaveVersion.hpp>
 #include <Poseidon/Core/Profile/ProfileManager.hpp>
+#include <Poseidon/UI/Settings/GameSettingsConfig.hpp>
 #include <Poseidon/Foundation/Platform/GamePaths.hpp>
 #include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <filesystem>
@@ -166,10 +167,19 @@ void DisplayLogin::OnChildDestroyed(int idd, int exit)
                 int index = ctrl->GetCurSel();
                 if (index >= 0)
                 {
-                    const char* name = ctrl->GetText(index);
-                    ProfileManager::DeleteProfile(GamePaths::Instance().UserDir(), name);
+                    const std::string name = ctrl->GetText(index).Data();
+                    if (!ProfileManager::DeleteProfile(GamePaths::Instance().UserDir(), name))
+                        break;
+
+                    const bool activeDeleted = stricmp(name.c_str(), Glob.header.playerName) == 0;
                     ctrl->DeleteString(index);
                     ctrl->SetCurSel(0);
+                    if (activeDeleted)
+                    {
+                        const std::string activeName = ctrl->GetSize() > 0 ? ctrl->GetText(0).Data() : "";
+                        Glob.header.playerName = activeName.c_str();
+                        SaveActiveProfile(activeName);
+                    }
                 }
             }
             break;

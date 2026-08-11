@@ -30,6 +30,25 @@ static fs::path usersFsPath(const std::string& basePath)
     return FilesystemPathFromUtf8(usersDir(basePath));
 }
 
+static void makeTreeWritable(const fs::path& path)
+{
+    std::error_code ec;
+    if (fs::is_symlink(fs::symlink_status(path, ec)))
+        return;
+
+    fs::permissions(path, fs::perms::owner_all, fs::perm_options::add, ec);
+    ec.clear();
+    fs::recursive_directory_iterator entry(path, fs::directory_options::skip_permission_denied, ec);
+    const fs::recursive_directory_iterator end;
+    while (entry != end)
+    {
+        std::error_code permissionError;
+        if (!entry->is_symlink(permissionError))
+            fs::permissions(entry->path(), fs::perms::owner_all, fs::perm_options::add, permissionError);
+        entry.increment(ec);
+    }
+}
+
 namespace ProfileManager
 {
 
@@ -117,6 +136,7 @@ bool DeleteProfile(const std::string& basePath, const std::string& name)
     if (!fs::exists(dirPath, ec))
         return false;
 
+    makeTreeWritable(dirPath);
     auto removed = fs::remove_all(dirPath, ec);
     return removed > 0 && !ec;
 }

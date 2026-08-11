@@ -43,6 +43,7 @@
 #include <system_error>
 #include <vector>
 #include <Poseidon/Foundation/Containers/Array.hpp>
+#include <Poseidon/Foundation/Common/Win.h>
 #include <Poseidon/Foundation/Framework/Log.hpp>
 #include <Poseidon/Foundation/Math/Math3D.hpp>
 #include <Poseidon/Foundation/Math/Math3DP.hpp>
@@ -143,6 +144,8 @@ GameValue TriDblClick(const GameState*, GameValuePar);
 GameValue TriSelectList(const GameState*, GameValuePar);
 GameValue TriSelectListByData(const GameState*, GameValuePar);
 GameValue TriListSel(const GameState*, GameValuePar);
+GameValue TriListSize(const GameState*, GameValuePar);
+GameValue TriListText(const GameState*, GameValuePar);
 GameValue TriAssertListSelAtLeast(const GameState*, GameValuePar);
 GameValue TriRemoveNestedControl(const GameState*, GameValuePar);
 GameValue TriSendKey(const GameState*, GameValuePar);
@@ -1780,6 +1783,37 @@ GameValue TriSetActiveProfile(const GameState* /*state*/, GameValuePar arg)
     return GameValue("OK");
 }
 
+GameValue TriMakeProfileReadOnly(const GameState* /*state*/, GameValuePar arg)
+{
+    const std::string name = ((RString)(GameStringType)arg).Data();
+    const std::filesystem::path dir = Poseidon::FilesystemPathFromUtf8(
+        Poseidon::ProfileManager::GetProfileDirPath(Poseidon::Foundation::GamePaths::Instance().UserDir(), name));
+    std::error_code ec;
+    if (!std::filesystem::is_directory(dir, ec))
+        return GameValue("FAIL:profile_missing");
+
+    auto makeReadOnly = [](const std::filesystem::path& path)
+    {
+#ifdef _WIN32
+        const DWORD attributes = ::GetFileAttributesW(path.c_str());
+        return attributes != INVALID_FILE_ATTRIBUTES &&
+               ::SetFileAttributesW(path.c_str(), attributes | FILE_ATTRIBUTE_READONLY) != FALSE;
+#else
+        std::error_code permissionError;
+        std::filesystem::permissions(path,
+                                     std::filesystem::perms::owner_write | std::filesystem::perms::group_write |
+                                         std::filesystem::perms::others_write,
+                                     std::filesystem::perm_options::remove, permissionError);
+        return !permissionError;
+#endif
+    };
+
+    bool success = makeReadOnly(dir);
+    for (std::filesystem::recursive_directory_iterator entry(dir, ec), end; entry != end; entry.increment(ec))
+        success = makeReadOnly(entry->path()) && success;
+    return GameValue(success && !ec ? "OK" : "FAIL:permissions");
+}
+
 /// triAssertProfileMissing <name> -> "OK" if no profile directory exists for
 /// <name> under the user dir, else "FAIL:profile_exists". A later boot must not
 /// recreate a profile that a stale active-profile setting points at.
@@ -2999,6 +3033,8 @@ INIT_MODULE(GameStateExtTest, 3)
     GGameState.NewFunction(GameFunction(GameBool, "triSelectList", TriSelectList, GameArray));
     GGameState.NewFunction(GameFunction(GameBool, "triSelectListByData", TriSelectListByData, GameArray));
     GGameState.NewFunction(GameFunction(GameScalar, "triListSel", TriListSel, GameScalar));
+    GGameState.NewFunction(GameFunction(GameScalar, "triListSize", TriListSize, GameScalar));
+    GGameState.NewFunction(GameFunction(GameString, "triListText", TriListText, GameArray));
     GGameState.NewFunction(GameFunction(GameBool, "triRemoveNestedControl", TriRemoveNestedControl, GameScalar));
     GGameState.NewFunction(GameFunction(GameBool, "triSendKey", TriSendKey, GameScalar));
     GGameState.NewFunction(GameFunction(GameBool, "triSendKey", TriSendKeyArr, GameArray));
@@ -3071,6 +3107,7 @@ INIT_MODULE(GameStateExtTest, 3)
     GGameState.NewNularOp(GameNular(GameString, "triCustomRadio", TriCustomRadio));
     GGameState.NewFunction(GameFunction(GameString, "triPlayCustomRadio", TriPlayCustomRadio, GameScalar));
     GGameState.NewFunction(GameFunction(GameString, "triSetActiveProfile", TriSetActiveProfile, GameString));
+    GGameState.NewFunction(GameFunction(GameString, "triMakeProfileReadOnly", TriMakeProfileReadOnly, GameString));
     GGameState.NewFunction(GameFunction(GameString, "triAssertProfileMissing", TriAssertProfileMissing, GameString));
     GGameState.NewFunction(GameFunction(GameString, "triDamagePlayerVehicle", TriDamagePlayerVehicle, GameScalar));
     GGameState.NewNularOp(GameNular(GameScalar, "triPlayerVehicleDammage", TriPlayerVehicleDammage));

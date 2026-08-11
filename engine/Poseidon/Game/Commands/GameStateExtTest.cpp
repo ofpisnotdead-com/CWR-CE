@@ -1148,6 +1148,38 @@ GameValue TriListSel(const GameState* /*state*/, GameValuePar arg)
     return GameValue(static_cast<float>(ListBoxCurSel(display->GetCtrl(idc))));
 }
 
+GameValue TriListSize(const GameState* /*state*/, GameValuePar arg)
+{
+    int idc = static_cast<int>(static_cast<GameScalarType>(arg));
+    auto* display = GetActiveDisplayForSQF();
+    if (!display)
+        return GameValue(static_cast<float>(-1));
+    IControl* ctrl = display->GetCtrl(idc);
+    if (auto* lb = dynamic_cast<CListBox*>(ctrl))
+        return GameValue(static_cast<float>(lb->GetSize()));
+    if (auto* lb3d = dynamic_cast<C3DListBox*>(ctrl))
+        return GameValue(static_cast<float>(lb3d->GetSize()));
+    return GameValue(static_cast<float>(-1));
+}
+
+GameValue TriListText(const GameState* /*state*/, GameValuePar arg)
+{
+    const GameArrayType& arr = arg;
+    if (arr.Size() < 2)
+        return GameValue("");
+    int idc = static_cast<int>(static_cast<GameScalarType>(arr[0]));
+    int index = static_cast<int>(static_cast<GameScalarType>(arr[1]));
+    auto* display = GetActiveDisplayForSQF();
+    if (!display)
+        return GameValue("");
+    IControl* ctrl = display->GetCtrl(idc);
+    if (auto* lb = dynamic_cast<CListBox*>(ctrl))
+        return index >= 0 && index < lb->GetSize() ? GameValue(lb->GetText(index)) : GameValue("");
+    if (auto* lb3d = dynamic_cast<C3DListBox*>(ctrl))
+        return index >= 0 && index < lb3d->GetSize() ? GameValue(lb3d->GetText(index)) : GameValue("");
+    return GameValue("");
+}
+
 /// triSelectListByData [idc, "substr"] — select the first C3DListBox row whose data
 /// (for the session list, the guid "addr:port") contains substr. Returns true if found.
 /// Lets a test pick a specific enumerated server (e.g. the 127.0.0.1 one) when LAN

@@ -147,6 +147,22 @@ TEST_CASE("Poseidon::ProfileManager::DeleteProfile", "[profile]")
     REQUIRE_FALSE(Poseidon::ProfileManager::DeleteProfile(tmp.path, "DoesNotExist"));
 }
 
+TEST_CASE("Poseidon::ProfileManager::DeleteProfile removes a read-only profile tree", "[profile]")
+{
+    TempDirGuard tmp;
+    REQUIRE(Poseidon::ProfileManager::CreateProfile(tmp.path, "ReadOnly"));
+
+    const fs::path profileDir = fs::path(tmp.path) / "Users" / "ReadOnly";
+    fs::permissions(profileDir, fs::perms::owner_read | fs::perms::owner_exec, fs::perm_options::replace);
+
+    const bool deleted = Poseidon::ProfileManager::DeleteProfile(tmp.path, "ReadOnly");
+    std::error_code ec;
+    fs::permissions(profileDir, fs::perms::owner_all, fs::perm_options::add, ec);
+
+    REQUIRE(deleted);
+    REQUIRE_FALSE(fs::exists(profileDir));
+}
+
 TEST_CASE("Poseidon::ProfileManager::RenameProfile", "[profile]")
 {
     TempDirGuard tmp;

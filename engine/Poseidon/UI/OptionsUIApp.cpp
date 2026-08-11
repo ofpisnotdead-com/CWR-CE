@@ -1132,16 +1132,17 @@ void DisplayMain::OnChildDestroyed(int idd, int exit)
             if (exit == IDC_OK)
             {
                 C3DEdit* edit = dynamic_cast<C3DEdit*>(_child->GetCtrl(IDC_NEW_USER_NAME));
-                Glob.header.playerName = edit->GetText();
-                const char* name = Glob.header.playerName;
+                const std::string name = edit->GetText().Data();
 
                 DisplayNewUser* disp = static_cast<DisplayNewUser*>((ControlsContainer*)_child);
-                if (disp->_edit && stricmp(name, disp->_name) != 0)
+                if (disp->_edit && stricmp(name.c_str(), disp->_name.Data()) != 0 &&
+                    !ProfileManager::RenameProfile(GamePaths::Instance().UserDir(), disp->_name.Data(), name))
                 {
-                    // rename directory
-                    ::MoveFile(RString("Users\\") + disp->_name, RString("Users\\") + Glob.header.playerName);
+                    Display::OnChildDestroyed(idd, exit);
+                    break;
                 }
 
+                Glob.header.playerName = name.c_str();
                 //				LoadHeader();
                 SaveActiveProfile(name);
                 GetTmpSaveDirectory(); // only create directory
