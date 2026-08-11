@@ -206,7 +206,9 @@ RString GetBriefingFile()
 
 void CreatePath(RString path)
 {
-    CreateDirectoryUtf8(path.Data());
+    const std::filesystem::path directory = FilesystemPathFromUtf8(path.Data()).parent_path();
+    if (!directory.empty())
+        CreateDirectoryUtf8(FilesystemPathToUtf8(directory).c_str());
 }
 
 static RString GetLegacyUserSaveDirectory()
