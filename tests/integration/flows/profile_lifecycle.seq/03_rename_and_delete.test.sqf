@@ -15,7 +15,8 @@ triSimFrames 2
 triMouseLeft 0
 triSimFrames 2
 for "_i" from 0 to 23 do { triSendKey 42; triSimFrames 1 }
-triSendText [101, _renamed]
+triSimFrames 30
+triTypeText _renamed
 triAssertEq [(triControlText 101), _renamed]
 triClick 1
 triSimFrames 30

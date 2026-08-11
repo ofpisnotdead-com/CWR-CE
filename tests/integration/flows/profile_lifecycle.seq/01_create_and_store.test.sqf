@@ -18,7 +18,8 @@ triSimFrames 2
 triMouseLeft 0
 triSimFrames 2
 for "_i" from 0 to 23 do { triSendKey 42; triSimFrames 1 }
-triSendText [101, _ascii]
+triSimFrames 30
+triTypeText _ascii
 triAssertEq [(triControlText 101), _ascii]
 triClick 1
 triSimFrames 30
@@ -35,7 +36,8 @@ triSimFrames 2
 triMouseLeft 0
 triSimFrames 2
 for "_i" from 0 to 23 do { triSendKey 42; triSimFrames 1 }
-triSendText [101, _unicode]
+triSimFrames 30
+triTypeText _unicode
 triAssertEq [(triControlText 101), _unicode]
 triClick 1
 triSimFrames 30

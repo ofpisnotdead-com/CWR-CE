@@ -206,20 +206,7 @@ RString GetBriefingFile()
 
 void CreatePath(RString path)
 {
-    // string will be changed temporarily
-    char* start = (char*)path.Data();
-    char* end = start;
-    while (*end)
-    {
-        if (*end == '\\' || *end == '/')
-        {
-            char saved = *end;
-            *end = 0;
-            ::CreateDirectory(path, nullptr);
-            *end = saved;
-        }
-        end++;
-    }
+    CreateDirectoryUtf8(path.Data());
 }
 
 static RString GetLegacyUserSaveDirectory()
