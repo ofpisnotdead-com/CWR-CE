@@ -56,8 +56,9 @@ void* JimboAllocator::New(size_t size)
         return nullptr;
     }
 
-    // Sanity check - reject absurdly large allocations
-    if (size >= kMaxSingleAllocation)
+    // Extreme terrain allocates an 8192 x 8192 float heightmap at the 256 MiB limit.
+    // TODO: Reduce terrain subdivision's peak allocation.
+    if (size > kMaxSingleAllocation)
     {
         LOG_DEBUG(Memory, "JimboAllocator: Rejecting allocation of %zu bytes (too large)", size);
         return nullptr;
