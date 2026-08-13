@@ -24,7 +24,7 @@ static uint64_t LightsSignature(const LightList& lights)
 }
 
 #ifndef NDEBUG
-// Signature of the frame-constant lighting inputs DoSetMaterial folds into its
+// Signature of the frame-constant lighting inputs DoSetMaterialAndLights folds into its
 // upload (MainLight NightEffect, sun diffuse/ambient, sun-enable) but
 // deliberately leaves OUT of the per-draw cache key — they are constant within a
 // frame and the cache is invalidated each frame (InitDraw), so they cannot go
@@ -49,9 +49,9 @@ static uint64_t MaterialFrameInputsSig(const render::LegacySpec& spec, bool sunE
 }
 #endif
 
-// Set material and lights for rendering — low-level path that updates
-// pixel-shader specular selection and uploads material constants.
-void EngineGL33::DoSetMaterial(const TLMaterial& mat, const LightList& lights, const Poseidon::render::LegacySpec& spec)
+// Low-level material path: uploads material constants, sets this draw's local lights, and
+// selects the specular pixel shader.
+void EngineGL33::DoSetMaterialAndLights(const TLMaterial& mat, const LightList& lights, const Poseidon::render::LegacySpec& spec)
 {
     _materialSet = mat;
     // Cache key narrows to the only material bit SetMaterial actually
@@ -67,12 +67,11 @@ void EngineGL33::DoSetMaterial(const TLMaterial& mat, const LightList& lights, c
 
     UploadVSMaterialConstants(mat, _sunEnabled);
 
-    // Local lights illuminate geometry only at night; DisableSun materials
-    // (which the legacy SetupLights forced to full night) always receive them.
-    float night = GScene->MainLight()->NightEffect();
-    if (static_cast<std::uint32_t>(spec.material & render::Material::DisableSun) != 0)
-        night = 1.0f;
-    UploadVSLights(lights, mat, night);
+    // Resolve this draw's local lights to LocalLights-buffer indices; the shader applies
+    // material and night strength.
+    int idx[VSConst::MaxLocalLights];
+    int n = ResolveLocalLightIndices(lights, idx);
+    SetLocalLightIndices(idx, n);
 
     if (mat.specularPower > 0)
         SelectPixelShaderSpecular(PSSSpecular);
@@ -81,7 +80,7 @@ void EngineGL33::DoSetMaterial(const TLMaterial& mat, const LightList& lights, c
 }
 
 // Set material and lights with caching — high-level path used by callers,
-// avoids redundant DoSetMaterial calls when the active state already matches.
+// avoids redundant DoSetMaterialAndLights calls when the active state already matches.
 void EngineGL33::SetMaterial(const TLMaterial& mat, const LightList& lights, const Poseidon::render::LegacySpec& spec)
 {
     const int narrowedKey = static_cast<int>(static_cast<std::uint32_t>(spec.material & Poseidon::render::Material::DisableSun));
@@ -97,7 +96,7 @@ void EngineGL33::SetMaterial(const TLMaterial& mat, const LightList& lights, con
 #endif
         return;
     }
-    DoSetMaterial(mat, lights, spec);
+    DoSetMaterialAndLights(mat, lights, spec);
 }
 
 void EngineGL33::EnableSunLight(bool enable)
