@@ -683,7 +683,7 @@ void AppConfig::ParseCommandLine(int argc, char** argv)
 
         showOption(
             debugGroup
-                ->add_option("--duration", _simulateDuration, "Simulation duration in seconds (0 = until endGame)")
+                ->add_option("--duration", _simulateDuration, "Simulation duration in seconds (0 = until triEndGame)")
                 ->check(CLI::NonNegativeNumber),
             CliHelpVisibility::Dev);
 

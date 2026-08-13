@@ -254,7 +254,7 @@ public:
     /// Simulate mode (--simulate): headless mission execution without players
     bool IsSimulateMode() const { return _simulateMode; }
     
-    /// Simulation duration in seconds (--duration N, 0 = run until endGame or Ctrl+C)
+    /// Simulation duration in seconds (--duration N, 0 = run until triEndGame or Ctrl+C)
     int GetSimulateDuration() const { return _simulateDuration; }
     
     bool LogFileOps() const { return _logFileOps; }

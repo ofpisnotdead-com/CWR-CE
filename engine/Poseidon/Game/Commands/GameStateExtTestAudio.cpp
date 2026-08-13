@@ -107,6 +107,7 @@ bool TriNetworkAssetFileExists(const RString& relativePath)
 } // namespace
 
 GameValue TriVersion(const GameState*);
+GameValue TriEndGame(const GameState*);
 GameValue TriGameMode(const GameState*);
 GameValue TriDisplay(const GameState*);
 GameValue TriEditorMode(const GameState*);
@@ -2929,6 +2930,7 @@ INIT_MODULE(GameStateExtTest, 3)
     if (!appConfig.DevMode() && appConfig.GetHarnessPort() < 0 && appConfig.GetTestMissionPath().empty())
         return;
 
+    GGameState.NewNularOp(GameNular(GameNothing, "triEndGame", TriEndGame));
     GGameState.NewNularOp(GameNular(GameString, "triVersion", TriVersion));
     GGameState.NewNularOp(GameNular(GameScalar, "triGameMode", TriGameMode));
     GGameState.NewNularOp(GameNular(GameScalar, "triDisplay", TriDisplay));

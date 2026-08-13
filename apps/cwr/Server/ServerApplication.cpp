@@ -495,7 +495,7 @@ void ServerApplication::DedicatedServerLoop()
             }
         }
 
-        // Clean exit on close request — simulate-mode endGame/debriefing, or a harness
+        // Clean exit on close request - simulate-mode triEndGame/debriefing, or a harness
         // "exit"/triEndTest (IsExitRequested -> m_closeRequest above). Honouring it in
         // non-simulate mode too lets the Trident runner shut the server down at test end.
         if (m_closeRequest)

@@ -330,6 +330,8 @@ TEST_CASE("VBS-derived functions remain registered in GGameState", "[game][gameS
     GGameState.AppendNularOpList(nulars, AcceptAllNames);
 
     REQUIRE(ContainsName(nulars, "newConfig"));
+    REQUIRE_FALSE(ContainsName(nulars, "endGame"));
+    REQUIRE_FALSE(ContainsName(nulars, "triEndGame"));
     REQUIRE(ContainsName(functions, "loadConfig"));
     REQUIRE(ContainsName(functions, "VBS_addHeader"));
     REQUIRE(ContainsName(functions, "VBS_addEvent"));
