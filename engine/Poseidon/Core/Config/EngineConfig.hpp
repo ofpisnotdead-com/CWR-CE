@@ -108,6 +108,11 @@ public:
 	bool enableHWTL = true;
 	bool enablePIII = false;
 	int d3dAdapter = -1;
+	// GPU skinning master switch (default OFF).  Read by both World (Man::Animate,
+	// to retain the per-object bone palette) and the GL33 backend (to build
+	// SSkinnedVertex buffers + upload the BonePalette UBO).  Single source of
+	// truth so the two layers never disagree.  See PERF-gpu-skinning-scope.md.
+	bool enableGpuSkinning = false;
 };
 
 // Convenience macro for accessing engine config

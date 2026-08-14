@@ -137,7 +137,7 @@ class Skeleton: public RefCountWithLinks
 	int NBones() const {return _matrixNames.Size();}
 	RStringB GetBone( int i ) const {return _matrixNames[i];}
 
-	void Prepare(LODShape *lShape, WeightInfo &weights);
+	void Prepare(LODShape *lShape, WeightInfo &weights, bool gpuSkin = false);
 };
 
 template<>
@@ -272,9 +272,15 @@ class AnimationRT: public RefCount, public CLDLink
 		const Matrix4Array &matrices, int pointIndex
 	);
 
+	// skinTarget: when non-null and GPU skinning is enabled for this LOD
+	// (Object retains a palette + shape->HasSkin()), the per-vertex CPU skin is
+	// skipped and this frame's palette is retained on skinTarget for the vertex
+	// shader to skin from a static bind-pose VBO. Default (null) keeps the pure
+	// CPU path, unchanged, for every existing caller.
 	void Apply
 	(
-		const WeightInfo &lWeights, LODShape *lShape, int level, float time
+		const WeightInfo &lWeights, LODShape *lShape, int level, float time,
+		class Object *skinTarget = nullptr
 	) const;
 	void Matrix
 	(
@@ -293,7 +299,7 @@ class AnimationRT: public RefCount, public CLDLink
 	int GetKeyframeCount() const {return _nPhases;}
 	const Skeleton *GetSkeleton() const {return _name.skeleton;}
 
-	void Prepare(LODShape *lShape, Skeleton *skelet, WeightInfo &weights, bool looped);
+	void Prepare(LODShape *lShape, Skeleton *skelet, WeightInfo &weights, bool looped, bool gpuSkin = false);
 	void RemoveLoopFrame();
 	void ForceMatrixOrientation(int matIndex, const Matrix3 &orient, float factor);
 	void IntroduceStep();

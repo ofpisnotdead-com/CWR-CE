@@ -423,6 +423,7 @@ private:
 
     // Debug & Testing
     bool _benchmark = false;
+    bool _gpuSkinning = false; // --gpu-skinning: GPU-skin infantry view LODs (experimental)
     bool _logFileOps = false;
     bool _netLog = false;
     bool _writeMPReport = false;

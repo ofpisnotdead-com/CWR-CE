@@ -11,6 +11,7 @@
 #include <Poseidon/Graphics/Rendering/Frame/Frame.hpp>
 #include <Poseidon/Graphics/Shared/ScreenshotWriter.hpp>
 #include <Poseidon/Dev/Debug/DebugOverlay.hpp>
+#include <Poseidon/Core/Config/EngineConfig.hpp>
 
 using namespace Poseidon::Dev;
 
@@ -34,6 +35,7 @@ class VertexBufferGL33 : public VertexBuffer
     GLuint _vbo = 0;
     GLuint _ibo = 0;
     bool _dynamic = false;
+    bool _skinned = false; // VBO uses SSkinnedVertex layout (GPU skinning)
     int _vertexCount = 0;
     int _indexCount = 0;
     AutoArray<VBSectionInfo> _sections;
@@ -44,11 +46,25 @@ class VertexBufferGL33 : public VertexBuffer
 
     bool Init(const Shape& src, VBType type);
     void Update(const Shape& src, bool dynamic) override;
+    bool IsSkinned() const override { return _skinned; }
 
   private:
     void CopyVertices(const Shape& src);
     void SetupVertexAttribs();
+    size_t VertexStride() const { return _skinned ? sizeof(SSkinnedVertex) : sizeof(SVertex); }
 };
+
+// GPU-skinning master switch — see EngineGL33.hpp.  Backed by the shared engine
+// config so World (Man::Animate) and this backend read one source of truth.
+void SetGpuSkinningEnabled(bool on)
+{
+    ENGINE_CONFIG.enableGpuSkinning = on;
+}
+
+bool GpuSkinningEnabled()
+{
+    return ENGINE_CONFIG.enableGpuSkinning;
+}
 
 VertexBufferGL33::~VertexBufferGL33()
 {
@@ -65,8 +81,17 @@ void VertexBufferGL33::SetupVertexAttribs()
 {
     // Caller must have _vao bound and _vbo bound to GL_ARRAY_BUFFER.
     // Layout shared with the engine's `_vaoMesh` setup — see
-    // `GLVertexAttribLayouts.hpp` for the single source of truth.
-    Poseidon::render::vao::SetupSVertexLayout();
+    // `GLVertexAttribLayouts.hpp` for the single source of truth.  Skinned
+    // buffers add the two integer bone attributes (locations 3/4); the
+    // SSkinnedVertex layout is per-shape only and never aliases `_vaoMesh`.
+    if (_skinned)
+    {
+        Poseidon::render::vao::SetupSkinnedVertexLayout();
+    }
+    else
+    {
+        Poseidon::render::vao::SetupSVertexLayout();
+    }
 }
 
 void VertexBufferGL33::CopyVertices(const Shape& src)
@@ -74,6 +99,7 @@ void VertexBufferGL33::CopyVertices(const Shape& src)
     if (_vertexCount <= 0)
         return;
 
+    const size_t stride = VertexStride();
     glBindBuffer(GL_ARRAY_BUFFER, _vbo);
     // The map-flag combination is selected by the named helper.  There
     // is no API exposed by `Poseidon::render::buf` that maps a static buffer with
@@ -81,28 +107,45 @@ void VertexBufferGL33::CopyVertices(const Shape& src)
     // wrong helper is the only way to land in the bug class, and the
     // helper name makes the mistake glaring.  See
     // `engine/Poseidon/Graphics/Core/GLBufferMap.hpp`.
-    void* mapped = _dynamic ? Poseidon::render::buf::MapDynamicWriteInvalidate(GL_ARRAY_BUFFER, 0, _vertexCount * sizeof(SVertex))
+    void* mapped = _dynamic ? Poseidon::render::buf::MapDynamicWriteInvalidate(GL_ARRAY_BUFFER, 0, _vertexCount * stride)
                             : Poseidon::render::buf::MapStaticWriteOnce(GL_ARRAY_BUFFER);
-    SVertex* sData = static_cast<SVertex*>(mapped);
-    if (!sData)
+    if (!mapped)
     {
         LOG_ERROR(Graphics, "GL33: VBO map failed");
         return;
     }
+    char* base = static_cast<char*>(mapped);
 
     const UVPair* uv = &src.UV(0);
-    const Vector3* pos = &src.Pos(0);
-    const Vector3* norm = &src.Norm(0);
-    for (int i = src.NVertex(); --i >= 0;)
+    // Skinned buffers hold the BIND POSE (OrigPos/OrigNorm), uploaded once; the VS
+    // re-skins from it each frame via the bone palette.  Uploading the CPU-skinned
+    // Pos/Norm would double-transform.  Fall back to Pos/Norm if the original pose
+    // has not been saved yet (SaveOriginalPos runs inside ApplyMatrices).
+    const bool bindPose = _skinned && src.OriginalPosValid();
+    const Vector3* pos = bindPose ? &src.OrigPos(0) : &src.Pos(0);
+    const Vector3* norm = bindPose ? &src.OrigNorm(0) : &src.Norm(0);
+    const int n = src.NVertex();
+    for (int i = 0; i < n; i++)
     {
-        sData->pos = Vector3P(pos->X(), pos->Y(), pos->Z());
+        // pos/norm/t0 occupy identical offsets in SVertex and SSkinnedVertex, so
+        // the SVertex view writes the shared fields for both strides.
+        SVertex* v = reinterpret_cast<SVertex*>(base + i * stride);
+        v->pos = Vector3P(pos[i].X(), pos[i].Y(), pos[i].Z());
         // Normals are negated (matches D3D11 convention)
-        sData->norm = Vector3P(-norm->X(), -norm->Y(), -norm->Z());
-        pos++;
-        norm++;
-        sData->t0 = *uv;
-        uv++;
-        sData++;
+        v->norm = Vector3P(-norm[i].X(), -norm[i].Y(), -norm[i].Z());
+        v->t0 = uv[i];
+        if (_skinned)
+        {
+            // Static bone attributes — uploaded once (GL_STATIC_DRAW), never
+            // rewritten per frame; the palette moves instead (BonePalette UBO).
+            SSkinnedVertex* s = reinterpret_cast<SSkinnedVertex*>(base + i * stride);
+            const SkinVertexBinding& b = src.Skin(i);
+            for (int j = 0; j < 4; j++)
+            {
+                s->boneIdx[j] = b.idx[j];
+                s->boneWeight[j] = b.weight[j];
+            }
+        }
     }
 
     glUnmapBuffer(GL_ARRAY_BUFFER);
@@ -116,7 +159,14 @@ bool VertexBufferGL33::Init(const Shape& src, VBType type)
         return false;
     }
 
-    _dynamic = (type == VBDynamic || type == VBSmallDiscardable);
+    // Skinned only when the master switch is on AND the shape carries a full
+    // per-vertex binding table (built by Skeleton::Prepare).  Off -> classic
+    // SVertex path, unchanged.
+    _skinned = GpuSkinningEnabled() && src.HasSkin();
+    // Skinned buffers hold the static bind pose (the palette animates on the GPU),
+    // so they never need a per-frame re-upload -> force GL_STATIC_DRAW and skip
+    // Update().  This removes the dynamic vertex-streaming cost for the view mesh.
+    _dynamic = (type == VBDynamic || type == VBSmallDiscardable) && !_skinned;
     _vertexCount = src.NVertex();
 
     // Core profile requires a non-zero VAO bound before any
@@ -129,7 +179,7 @@ bool VertexBufferGL33::Init(const Shape& src, VBType type)
     GLenum vbUsage = _dynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW;
     glGenBuffers(1, &_vbo);
     glBindBuffer(GL_ARRAY_BUFFER, _vbo);
-    glBufferData(GL_ARRAY_BUFFER, _vertexCount * sizeof(SVertex), nullptr, vbUsage);
+    glBufferData(GL_ARRAY_BUFFER, _vertexCount * VertexStride(), nullptr, vbUsage);
     CopyVertices(src);
 
     // Count total indices (fan triangulation: N-gon → N-2 triangles)
@@ -208,6 +258,14 @@ bool VertexBufferGL33::Init(const Shape& src, VBType type)
 
 void VertexBufferGL33::Update(const Shape& src, bool dynamic)
 {
+    // Skinned buffers are the static bind pose — never re-upload.  This is the
+    // per-frame dynamic-streaming (~libgallium) cost the GPU-skinning change
+    // removes: the CPU may still write bufferDirty, but we intentionally ignore it.
+    if (_skinned)
+    {
+        bufferDirty = false;
+        return;
+    }
     if (_dynamic || dynamic || bufferDirty)
     {
         CopyVertices(src);

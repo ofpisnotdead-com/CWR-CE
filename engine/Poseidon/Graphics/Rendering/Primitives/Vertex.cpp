@@ -86,6 +86,7 @@ void VertexTable::ReleaseTables()
     _norm.Clear();
     _orig.Clear();
     _origClip.Clear();
+    _skin.Clear();
 }
 void VertexTable::ReallocTable(int nPos)
 {
@@ -114,6 +115,7 @@ void VertexTable::DoConstruct(const VertexTable& src)
     _pos = src._pos;
     _clip = src._clip;
     _norm = src._norm;
+    _skin = src._skin;
     _orHints = src._orHints;
     _andHints = src._andHints;
 

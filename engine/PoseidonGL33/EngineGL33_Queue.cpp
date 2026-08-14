@@ -316,6 +316,11 @@ void EngineGL33::BeginPass(PassId passId)
     SwitchPassDebugGroup(PassIdName(passId));
     _activePassId = passId;
 
+    // Start every pass on the non-skinned mesh VS.  GPU skinning batches its
+    // program state across shapes (no per-shape restore), so clear the flag here
+    // as a safety net — a stale skinned state must never leak into a pass whose
+    // draws don't go through Shape::Draw's per-shape SelectSkinnedMesh.
+    _meshSkinnedActive = false;
     SelectVertexShader(VSTransform);
     // BeginPass bootstraps the 3D pass through the normal mesh shader before
     // the first descriptor-owned draw. If the previous 3D draw had the same

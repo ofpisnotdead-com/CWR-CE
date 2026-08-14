@@ -107,6 +107,31 @@ void Shape::Draw(class IAnimator* matSource, const LightList& lights, ClipFlags 
             // check if shape is dynamic or not
             bool dynamic = matSource->GetAnimated(*this);
             engine->BeginMeshTL(*this, spec, dynamic);
+            bool wantSkinned = false;
+            if (_buffer->IsSkinned())
+            {
+                // GPU skinning: push the object's bone palette to the backend once
+                // per skinned shape draw, before the section draws whose VS reads it.
+                const Matrix4* pal = nullptr;
+                int palCount = 0;
+                matSource->GetBonePalette(pal, palCount);
+                if (palCount > 0)
+                {
+                    engine->UploadBonePalette(pal, palCount);
+                    wantSkinned = true;
+                }
+                // palCount == 0 (no active animation): draw the static bind pose
+                // through the normal mesh VS — the skinned VAO's locations 0-2 read
+                // pos/norm/uv fine — instead of skinning from a stale shared
+                // BonePalette UBO left by a previous object.
+            }
+            // Select the skinned/normal mesh VS for this shape.  Batched: this is a
+            // no-op when the state is unchanged, so a run of consecutive skinned
+            // shapes (a crowd of soldiers) shares ONE program bind instead of two
+            // program switches per shape — the switch happens only at a
+            // skinned<->non-skinned boundary.  There is deliberately no per-shape
+            // restore; the next shape (or a pass boundary) sets the correct state.
+            engine->SelectSkinnedMesh(wantSkinned);
             // check first face properties
             int secBeg = -1;
             int secEnd = -1;
