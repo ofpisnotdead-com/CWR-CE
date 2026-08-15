@@ -206,7 +206,13 @@ RString GetBriefingFile()
 
 void CreatePath(RString path)
 {
-    const std::filesystem::path directory = FilesystemPathFromUtf8(path.Data()).parent_path();
+    std::string normalized = path.Data();
+    for (char& c : normalized)
+    {
+        if (c == '\\')
+            c = '/';
+    }
+    const std::filesystem::path directory = FilesystemPathFromUtf8(normalized).parent_path();
     if (!directory.empty())
         CreateDirectoryUtf8(FilesystemPathToUtf8(directory).c_str());
 }
