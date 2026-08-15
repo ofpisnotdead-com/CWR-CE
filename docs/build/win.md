@@ -8,7 +8,7 @@ The quickest way to play the game is to download pre-built binaries. Changes to 
 
 On this page, the download links for the latest build are sorted to the top of the list. Among the download options, you'll find:
 
-- `Linux-x64-rwdi-Game` - The full game. Intended to be run with the [Steam game data](https://store.steampowered.com/app/65790/Arma_Cold_War_Assault_Remastered/), but you may use it with the [Steam demo data](https://store.steampowered.com/app/4819000/Arma_Cold_War_Assault_Remastered_Demo/) to unlock usage of additional features (like the editor).
+- `Linux-x64-rwdi-Game` - The full game. Intended to be run with the [Steam](https://store.steampowered.com/app/65790/Arma_Cold_War_Assault_Remastered/) or [GOG](https://www.gog.com/en/game/arma_cold_war_assault) game data, but you may use it with the [Steam demo data](https://store.steampowered.com/app/4819000/Arma_Cold_War_Assault_Remastered_Demo/) to unlock usage of additional features (like the editor).
 - `Windows-x64-rwdi-GameDemo` - The game demo, with fewer features. Intended to be run with the [Steam demo data](https://store.steampowered.com/app/4819000/Arma_Cold_War_Assault_Remastered_Demo/).
 - `Windows-x64-rwdi-Server` - The multiplayer server.
 
@@ -73,9 +73,9 @@ Note that these may take a while, especially the first time they are run. Afterw
 
 ## Install binaries alongside game data
 
-The game expects to be run alongside remastered game data, including the [Steam game](https://store.steampowered.com/app/65790/Arma_Cold_War_Assault_Remastered/) and [Steam demo](https://store.steampowered.com/app/4819000/Arma_Cold_War_Assault_Remastered_Demo/). To install the binaries, you must:
+The game expects to be run alongside remastered game data, including the [Steam game](https://store.steampowered.com/app/65790/Arma_Cold_War_Assault_Remastered/), [GOG game](https://www.gog.com/en/game/arma_cold_war_assault), and [Steam demo](https://store.steampowered.com/app/4819000/Arma_Cold_War_Assault_Remastered_Demo/). To install the binaries, you must:
 
-1. Install the [game](https://store.steampowered.com/app/65790/Arma_Cold_War_Assault_Remastered/) or [demo](https://store.steampowered.com/app/4819000/Arma_Cold_War_Assault_Remastered_Demo/) within Steam.
-2. Copy the binaries into the `Remastered` folder in the game's files, or the top level of the demo's downloaded files. If you aren't sure how to find these, follow the instructions in the [Steam Support article for finding bonus content](https://help.steampowered.com/en/faqs/view/720F-F7D3-0EB2-059F).
+1. Install the [game](https://store.steampowered.com/app/65790/Arma_Cold_War_Assault_Remastered/) or [demo](https://store.steampowered.com/app/4819000/Arma_Cold_War_Assault_Remastered_Demo/) within Steam, or the [game from GOG](https://www.gog.com/en/game/arma_cold_war_assault).
+2. Copy the binaries into the `Remastered` folder in the game's files, or the top level of the demo's downloaded files. If you aren't sure how to find these on Steam, follow the instructions in the [Steam Support article for finding bonus content](https://help.steampowered.com/en/faqs/view/720F-F7D3-0EB2-059F).
 
-After the binaries are in place, they may be run directly, or you may press play in Steam.
+After the binaries are in place, they may be run directly, or you may press play in Steam/GOG Galaxy.
