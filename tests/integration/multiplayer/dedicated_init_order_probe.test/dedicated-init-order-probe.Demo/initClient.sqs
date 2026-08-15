@@ -7,5 +7,5 @@ probePlayerIsRoleAtScan = player == probeWest
 probePlayerLocalAtScan = local player
 probePlayerGroupAtScan = group player == probeGroup
 
-? player == leader probeGroup : [player] exec "playerInit.sqs"
+[player] exec "playerInit.sqs"
 exit

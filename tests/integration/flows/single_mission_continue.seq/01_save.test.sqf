@@ -4,7 +4,9 @@ triAssertEq [(triDisplay), 0]
 triClickText "SINGLE MISSION"
 triAssertEq [(triDisplay), 2]
 triClickText "Play"
+triAssertEq [(triGetCameraEffectActive), 1]
 triSendKey 41
+triAssertIncludes [(triVisibleTexts), "Ambush (Demo)"]
 triClick 1
 triAssertMissionPlayable
 

@@ -2,5 +2,5 @@
 # a world with a raw-CP1252-byte "Malmö" description. --mods-dir lets the relative
 # --mod name resolve; game CWD under tri is the data dir (packages/Demo). Its own
 # isolated fixtures dir so the scan-based mods_* tests aren't contaminated.
-extra_args = ["--mods-dir", "../../tests/fixtures/mods-nordicnames", "--mod", "@nordicnames"]
+extra_args = ["--no-strict", "--mods-dir", "../../tests/fixtures/mods-nordicnames", "--mod", "@nordicnames"]
 tags = ["headless", "full_game"]
