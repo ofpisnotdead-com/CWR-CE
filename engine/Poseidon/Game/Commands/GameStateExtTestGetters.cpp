@@ -10,6 +10,7 @@ using namespace Poseidon;
 #include <Poseidon/UI/Controls/UIControls.hpp>
 #include <Poseidon/Dev/Debug/DebugOverlay.hpp>
 #include <Poseidon/Core/ModSystem.hpp>
+#include <Poseidon/Core/Config/UserConfig.hpp>
 #include <Poseidon/Core/resincl.hpp>
 #include <Poseidon/UI/DisplayUI.hpp>
 #include <Poseidon/Game/Chat.hpp>
@@ -19,6 +20,7 @@ using namespace Poseidon;
 #include <Poseidon/Input/ControllerUiScene.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/World/World.hpp>
+#include <Poseidon/World/Entities/Weapons/Weapons.hpp>
 
 #include <cstdint>
 #include <string>
@@ -42,6 +44,14 @@ GameValue TriGetGLErrorCount(const GameState*);
 // ============================================================================
 // Window getters
 // ============================================================================
+
+GameValue TriGetDifficultyEnabled(const GameState* /*state*/, GameValuePar arg)
+{
+    const int type = toInt(static_cast<GameScalarType>(arg));
+    if (type < 0 || type >= DTN)
+        return GameValue(static_cast<float>(-1));
+    return GameValue(USER_CONFIG.IsEnabled(static_cast<DifficultyType>(type)) ? 1.0f : 0.0f);
+}
 
 GameValue TriGetResizable(const GameState* /*state*/)
 {
@@ -99,6 +109,25 @@ GameValue TriGetShadowMapCacheTest(const GameState* /*state*/)
     if (!GEngine)
         return GameValue("0");
     return GameValue(GEngine->ShadowMapCacheSelfTest() ? "1" : "0");
+}
+
+/// triGetHandItemClass -> class name of the weapon the hand proxies draw for
+/// the player, "" when the player carries nothing in the binocular slot.
+/// Resolves through the same lookup the proxies use, against live config.
+GameValue TriGetHandItemClass(const GameState* /*state*/)
+{
+    const EntityAI* player = GWorld ? GWorld->PlayerOn() : nullptr;
+    if (!player)
+    {
+        return GameValue("");
+    }
+    RefArray<WeaponType> weapons;
+    for (int i = 0; i < player->NWeaponSystems(); i++)
+    {
+        weapons.Add(const_cast<WeaponType*>(player->GetWeaponSystem(i)));
+    }
+    const WeaponType* item = Poseidon::FindBinocularWeapon(weapons);
+    return GameValue(item ? RString(item->GetName()) : RString(""));
 }
 
 GameValue TriGetProxyVertCount(const GameState* /*state*/)
@@ -185,6 +214,36 @@ GameValue TriGetPixelMaxDiff(const GameState* /*state*/, GameValuePar arg)
             mx = d;
     }
     return GameValue(static_cast<float>(mx));
+}
+
+/// triAssertPixelNotWhite [u, v, threshold] — passes when at least one RGB
+/// channel is below threshold. Useful for catching missing white placeholder
+/// textures without depending on the exact face artwork.
+GameValue TriAssertPixelNotWhite(const GameState* /*state*/, GameValuePar arg)
+{
+    if (!GEngine)
+        return GameValue("FAIL:no_engine");
+    const GameArrayType& a = arg;
+    if (a.Size() < 2)
+        return GameValue("FAIL:need [u,v,(threshold)]");
+    const float u = static_cast<float>(static_cast<GameScalarType>(a[0]));
+    const float v = static_cast<float>(static_cast<GameScalarType>(a[1]));
+    const int threshold = a.Size() >= 3 ? static_cast<int>(static_cast<GameScalarType>(a[2])) : 245;
+    const int w = GEngine->Width();
+    const int h = GEngine->Height();
+    if (w <= 0 || h <= 0)
+        return GameValue("FAIL:no_backbuffer");
+    const int px = static_cast<int>(u * static_cast<float>(w - 1));
+    const int py = static_cast<int>(v * static_cast<float>(h - 1));
+    uint8_t rgb[3] = {0, 0, 0};
+    if (!GEngine->SamplePixel(px, py, rgb))
+        return GameValue("FAIL:sample");
+    const int mn = std::min({static_cast<int>(rgb[0]), static_cast<int>(rgb[1]), static_cast<int>(rgb[2])});
+    if (mn < threshold)
+        return GameValue("OK");
+    char buf[64];
+    snprintf(buf, sizeof(buf), "FAIL:white:%d,%d,%d", rgb[0], rgb[1], rgb[2]);
+    return GameValue(buf);
 }
 
 // ============================================================================
@@ -362,16 +421,16 @@ GameValue TriGetModsMountSet(const GameState* /*state*/)
     return GameValue(RString(got.c_str()));
 }
 
-/// triGetModsSortColumn — index 0-4 of the visible sort-caret icon, or -1 if none.
+/// triGetModsSortColumn returns the visible sort-caret index, or -1 if none.
 GameValue TriGetModsSortColumn(const GameState* /*state*/)
 {
     UITestEngine tmp;
     DisplayMods* mods = dynamic_cast<DisplayMods*>(tmp.GetActiveDisplay());
     if (!mods)
         return GameValue(static_cast<float>(-1));
-    const int idcs[5] = {IDC_MODS_ICON_NAME, IDC_MODS_ICON_VERSION, IDC_MODS_ICON_SIZE, IDC_MODS_ICON_STATE,
-                         IDC_MODS_ICON_SOURCE};
-    for (int c = 0; c < 5; c++)
+    const int idcs[] = {IDC_MODS_ICON_NAME,   IDC_MODS_ICON_VERSION, IDC_MODS_ICON_SIZE,  IDC_MODS_ICON_STATE,
+                        IDC_MODS_ICON_SOURCE, IDC_MODS_ICON_ACTIVE,  IDC_MODS_ICON_ACTION};
+    for (int c = 0; c < static_cast<int>(std::size(idcs)); c++)
     {
         IControl* icon = mods->GetCtrl(idcs[c]);
         if (icon && icon->IsVisible())
@@ -474,6 +533,8 @@ void EnsureGameStateExtTestGettersLinked() {}
 
 INIT_MODULE(GameStateExtTestGetters, 3)
 {
+    GGameState.NewFunction(GameFunction(GameScalar, "triGetDifficultyEnabled", TriGetDifficultyEnabled, GameScalar));
+
     // Window
     GGameState.NewNularOp(GameNular(GameString, "triGetResizable", TriGetResizable));
     GGameState.NewNularOp(GameNular(GameScalar, "triGetBackBufferNonBlackCount", TriGetBackBufferNonBlackCount));
@@ -487,6 +548,7 @@ INIT_MODULE(GameStateExtTestGetters, 3)
     GGameState.NewNularOp(GameNular(GameScalar, "triGetShadowFrozenCasters", TriGetShadowFrozenCasters));
     GGameState.NewNularOp(GameNular(GameString, "triGetShadowMapCacheTest", TriGetShadowMapCacheTest));
     GGameState.NewNularOp(GameNular(GameScalar, "triGetProxyVertCount", TriGetProxyVertCount));
+    GGameState.NewNularOp(GameNular(GameString, "triGetHandItemClass", TriGetHandItemClass));
 
     // Audio
     GGameState.NewNularOp(GameNular(GameScalar, "triGetAudioCacheEntries", TriGetAudioCacheEntries));
@@ -495,6 +557,7 @@ INIT_MODULE(GameStateExtTestGetters, 3)
     // Pixel
     GGameState.NewFunction(GameFunction(GameScalar, "triGetPixelMaxChannel", TriGetPixelMaxChannel, GameArray));
     GGameState.NewFunction(GameFunction(GameScalar, "triGetPixelMaxDiff", TriGetPixelMaxDiff, GameArray));
+    GGameState.NewFunction(GameFunction(GameString, "triAssertPixelNotWhite", TriAssertPixelNotWhite, GameArray));
 
     // UI / controls
     GGameState.NewFunction(GameFunction(GameString, "triGetControlVisible", TriGetControlVisible, GameScalar));

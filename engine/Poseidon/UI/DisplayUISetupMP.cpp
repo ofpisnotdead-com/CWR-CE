@@ -5,6 +5,7 @@
 #include <Poseidon/Core/PlayerMuteIgnore.hpp>
 #include <Poseidon/Core/resincl.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <Poseidon/Network/Network.hpp>
 #include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <Poseidon/Game/Chat.hpp>
@@ -858,6 +859,7 @@ void DisplayMultiplayerSetup::OnDraw(EntityAI* vehicle, float alpha)
     else
     {
         Display::OnDraw(vehicle, alpha);
+        GChatList.OnDraw();
 
         if (_dragging)
         {
@@ -958,7 +960,10 @@ void DisplayMultiplayerSetup::OnLBDrop(float x, float y)
 
 // Client and server briefing, debriefing
 
-DisplayClientDebriefing::DisplayClientDebriefing(ControlsContainer* parent, bool animation) : base(parent, animation) {}
+DisplayClientDebriefing::DisplayClientDebriefing(ControlsContainer* parent, bool animation, bool disconnectOnly)
+    : base(parent, animation, disconnectOnly)
+{
+}
 
 void DisplayClientDebriefing::OnSimulate(EntityAI* vehicle)
 {
@@ -1153,6 +1158,12 @@ void DisplayClientGetReady::OnButtonClicked(int idc)
     }
 }
 
+void DisplayClientGetReady::OnDraw(EntityAI* vehicle, float alpha)
+{
+    base::OnDraw(vehicle, alpha);
+    GChatList.OnDraw();
+}
+
 void DisplayClientGetReady::OnSimulate(EntityAI* vehicle)
 {
     // update player list
@@ -1212,8 +1223,11 @@ void DisplayClientGetReady::OnSimulate(EntityAI* vehicle)
         lbox->SortItemsByValue();
     }
 
-    NetworkGameState gameState = GetNetworkManager().GetServerState();
-    switch (gameState)
+    const NetworkGameState serverState = GetNetworkManager().GetServerState();
+    const NetworkGameState clientState = GetNetworkManager().GetGameState();
+    const NetworkGameState effectiveState =
+        serverState < NGSBriefing && clientState >= NGSBriefing ? clientState : serverState;
+    switch (effectiveState)
     {
         case NGSNone:
         case NGSCreating:
@@ -1225,8 +1239,9 @@ void DisplayClientGetReady::OnSimulate(EntityAI* vehicle)
         case NGSPrepareOK:
         case NGSDebriefing:
         case NGSTransferMission:
-        case NGSLoadIsland:
             OnButtonClicked(IDC_AUTOCANCEL);
+            break;
+        case NGSLoadIsland:
             break;
         case NGSBriefing:
             // Auto-ready after delay when --mp-assign is active
@@ -1240,22 +1255,7 @@ void DisplayClientGetReady::OnSimulate(EntityAI* vehicle)
             }
             break;
         case NGSPlay:
-            // User already confirmed — exit to mission
-            if (_launched)
-            {
-                Exit(IDC_OK);
-                break;
-            }
-            // Auto-ready countdown for automated tests (--mp-assign)
-            if (_autoReadyFrames > 0)
-                _autoReadyFrames--;
-            else if (_autoReadyFrames == 0 && !_autoReadySent)
-            {
-                LOG_DEBUG(Network, "[mp-assign] Auto-ready in play state");
-                OnButtonClicked(IDC_OK);
-                _autoReadySent = true;
-            }
-            // else: wait for user to click "I'm Ready"
+            Exit(IDC_OK);
             break;
     }
     base::OnSimulate(vehicle);
@@ -1565,12 +1565,9 @@ void DisplayMPPlayers::UpdatePlayerInfo()
     RString picture;
     if (squad && squad->picture.GetLength() > 0)
     {
-        picture = Poseidon::FindNetworkSquadPictureTmpPath(squad->nick, squad->picture, [](const RString& path)
-                                                           { return QIFStream::FileExists(path); });
-        if (picture.GetLength() > 0)
-        {
-            picture = RString("\\") + picture;
-        }
+        picture =
+            Poseidon::FindNetworkSquadPicturePath(Poseidon::GetUserDirectory(), squad->nick, squad->picture,
+                                                  [](const RString& path) { return Poseidon::FileExistsUtf8(path); });
     }
     ctrl = dynamic_cast<C3DStatic*>(GetCtrl(IDC_MP_SQ_PICTURE));
     if (ctrl)

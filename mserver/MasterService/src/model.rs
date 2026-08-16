@@ -10,6 +10,14 @@ pub enum VerificationState {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, ToSchema)]
+pub struct ModPackage {
+    #[serde(rename = "modId")]
+    pub mod_id: String,
+    #[serde(rename = "packageRevision", default = "default_package_revision")]
+    pub package_revision: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, ToSchema)]
 pub struct RegisterServerRequest {
     #[serde(rename = "app", default)]
     pub app_name: String,
@@ -31,6 +39,8 @@ pub struct RegisterServerRequest {
     pub password: bool,
     #[serde(rename = "mod")]
     pub mod_list: String,
+    #[serde(rename = "modPackages", default)]
+    pub mod_packages: Vec<ModPackage>,
     #[serde(rename = "equalModRequired")]
     pub equal_mod_required: bool,
     #[serde(rename = "impl")]
@@ -88,6 +98,8 @@ pub struct DirectoryServerRecord {
     pub password: bool,
     #[serde(rename = "mod")]
     pub mod_list: String,
+    #[serde(rename = "modPackages", default)]
+    pub mod_packages: Vec<ModPackage>,
     #[serde(rename = "equalModRequired")]
     pub equal_mod_required: bool,
     #[serde(rename = "impl")]
@@ -145,6 +157,7 @@ impl RegisterServerRequest {
             maxplayers: self.maxplayers,
             password: self.password,
             mod_list: self.mod_list,
+            mod_packages: self.mod_packages,
             equal_mod_required: self.equal_mod_required,
             transport_impl: self.transport_impl,
             platform: self.platform,
@@ -279,6 +292,16 @@ pub struct ModCatalogEntry {
     pub compatible: bool,
     pub name: String,
     pub version: String,
+    #[serde(rename = "packageRevision", default = "default_package_revision")]
+    pub package_revision: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
+    #[serde(
+        rename = "publishedUnixMs",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub published_unix_ms: Option<i64>,
     /// Canonical on-disk mod folder name (verbatim, incl. any `@` and case) the client
     /// installs into, e.g. `@fixture_alpha`, `@fixture_beta`, or `fixture_gamma`.
     /// Falls back to `@<modId>` when unset.
@@ -297,6 +320,10 @@ pub struct ModCatalogEntry {
     pub download_url: Option<String>,
     #[serde(rename = "sizeBytes", default)]
     pub size_bytes: Option<u64>,
+}
+
+pub(crate) const fn default_package_revision() -> u64 {
+    1
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, ToSchema)]
@@ -359,4 +386,15 @@ pub struct ServerDetail {
     pub player_history: Vec<ServerPopulationSample>,
     #[serde(rename = "recentSessions")]
     pub recent_sessions: Vec<ServerRecentSession>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ModPackage;
+
+    #[test]
+    fn mod_package_defaults_missing_revision_to_one() {
+        let package: ModPackage = serde_json::from_str(r#"{"modId":"legacy"}"#).unwrap();
+        assert_eq!(package.package_revision, 1);
+    }
 }

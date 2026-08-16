@@ -87,9 +87,9 @@ private:
 
 		bool IsDisabled(int /*row*/) const override
 		{
-			// All rows are live.  EAX wires to GSoundsys->EnableEAX —
-			// backends without EFX silently no-op the toggle, the row
-			// stays focusable so the user can read the description.
+			// The OpenAL backend exposes this as software EFX reverb when
+			// ALC_EXT_EFX is available, so the row stays live even though
+			// legacy hardware acceleration is unsupported.
 			return false;
 		}
 

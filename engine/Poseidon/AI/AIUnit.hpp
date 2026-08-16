@@ -23,6 +23,7 @@ public:
 	int subgroup;
 	int id;
 	int name;
+	int playerId;
 	int face;
 	int glasses;
 	int speaker;

@@ -1,10 +1,9 @@
 #include <Poseidon/UI/Settings/AudioConfig.hpp>
 
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
+#include <Poseidon/UI/Settings/SettingsFile.hpp>
 
 #include <algorithm>
-#include <filesystem>
-#include <system_error>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 
 namespace Poseidon
@@ -63,12 +62,9 @@ bool AudioConfig::Normalize(const Environment& env)
 
 bool AudioConfig::Load(const std::string& path)
 {
-    std::error_code ec;
-    if (!std::filesystem::exists(path, ec))
-        return false;
-
     ParamFile cfg;
-    cfg.Parse(RString(path.c_str()));
+    if (!ReadSettingsFile(path, cfg))
+        return false;
 
     // Each field optional — partial files are tolerated, missing keys
     // keep the current in-memory value.  This makes forward-compat easy:
@@ -91,11 +87,6 @@ bool AudioConfig::Load(const std::string& path)
 
 bool AudioConfig::Save(const std::string& path) const
 {
-    std::error_code ec;
-    std::filesystem::path p(path);
-    if (p.has_parent_path())
-        std::filesystem::create_directories(p.parent_path(), ec);
-
     ParamFile cfg;
     cfg.Add("musicVolume", musicVolume);
     cfg.Add("effectsVolume", effectsVolume);
@@ -104,8 +95,7 @@ bool AudioConfig::Save(const std::string& path) const
     cfg.Add("outputDevice", RString(outputDevice.c_str()));
     cfg.Add("inputDevice", RString(inputDevice.c_str()));
 
-    cfg.Save(RString(path.c_str()));
-    return std::filesystem::exists(path, ec);
+    return WriteSettingsFile(path, cfg);
 }
 
 } // namespace Poseidon

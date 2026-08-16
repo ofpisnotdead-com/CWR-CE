@@ -28,6 +28,7 @@ struct KeyboardState
     bool cheat1 = false;
     bool cheat2 = false;
 #endif
+    bool cheatEntryTrigger = false; // set from the bound UACheatEntry combo; arms awaitCheat
     bool awaitCheat = false;
     CheatCode cheatActive = CheatNone;
     RString cheatInProgress;

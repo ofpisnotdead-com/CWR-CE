@@ -16,7 +16,7 @@ env:
   CCACHE_NOHASHDIR: true
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
-  DEMO_ASSETS_URL: https://files.ofpisnotdead.com/CWR-demo-assets.zip
+  DEMO_ASSETS_URL: https://files.ofpisnotdead.com/CWR-demo-assets-v2.zip
   CWR_ARTIFACT_PREFIX: Linux-x64-rwdi
   TRIDENT_RENDER: gl33
   TRIDENT_AUDIO: openal
@@ -63,6 +63,67 @@ jobs:
         with:
           name: ${{ env.CWR_ARTIFACT_PREFIX }}-GameDemo-${{ steps.build_metadata.outputs.sha_short }}
           path: ${{ env.CWR_DIST_DIR }}/PoseidonGameDemo
+          if-no-files-found: error
+
+      - name: Upload Server
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Server-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ env.CWR_DIST_DIR }}/PoseidonServer
+          if-no-files-found: error
+
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+          - arch: x64
+    name: macOS ${{ matrix.arch }} RelWithDebInfo
+    runs-on: macos-26
+    env:
+      CWR_PRESET: macos-${{ matrix.arch }}-clang-rwdi
+      CWR_VCPKG_TRIPLET: ${{ matrix.arch }}-macos-clang
+      CWR_BUILD_DIR: build/macos-${{ matrix.arch }}-clang-rwdi
+      CWR_CTEST_EXCLUDE: 'PoseidonTests - OAL -|PoseidonFoundationTests - potime - Platform consistency|PoseidonFoundationTests - potime - Poseidon - Foundation - getSystemTime timing accuracy|PoseidonFoundationTests - potime - SLEEP_MS macro'
+      CWR_DIST_DIR: dist/${{ matrix.arch }}-macos-rwdi
+      CWR_ARTIFACT_PREFIX: macOS-${{ matrix.arch }}-rwdi
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build metadata
+        id: build_metadata
+        shell: bash
+        run: echo "sha_short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test
+        uses: ./.github/actions/build-cwr
+        with:
+          preset: ${{ env.CWR_PRESET }}
+          vcpkg-triplet: ${{ env.CWR_VCPKG_TRIPLET }}
+          build-dir: ${{ env.CWR_BUILD_DIR }}
+          ctest-exclude: ${{ env.CWR_CTEST_EXCLUDE }}
+
+      - name: Upload Game
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Game-${{ steps.build_metadata.outputs.sha_short }}
+          path: |
+            ${{ env.CWR_DIST_DIR }}/PoseidonGame
+            ${{ env.CWR_DIST_DIR }}/libopenal.dylib
+            ${{ env.CWR_DIST_DIR }}/OpenAL-Soft.LICENSE.txt
+          if-no-files-found: error
+
+      - name: Upload GameDemo
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-GameDemo-${{ steps.build_metadata.outputs.sha_short }}
+          path: |
+            ${{ env.CWR_DIST_DIR }}/PoseidonGameDemo
+            ${{ env.CWR_DIST_DIR }}/libopenal.dylib
+            ${{ env.CWR_DIST_DIR }}/OpenAL-Soft.LICENSE.txt
           if-no-files-found: error
 
       - name: Upload Server
@@ -188,11 +249,15 @@ jobs:
         run: cargo test --locked
 
   trident-test:
-    name: Linux Trident
+    name: Linux Trident (shard ${{ matrix.shard }})
     runs-on: ubuntu-24.04
     needs:
       - build-linux
       - trident
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     steps:
       - name: Checkout
@@ -203,7 +268,7 @@ jobs:
         with:
           url: ${{ env.DEMO_ASSETS_URL }}
           path: packages/Demo
-          archive-name: CWR-demo-assets.zip
+          archive-name: CWR-demo-assets-v2.zip
 
       - name: Install Linux runtime packages
         run: |
@@ -284,6 +349,8 @@ jobs:
             exe/tri test \
             --output-dir "$TRI_OUTPUT_DIR" \
             --render "$TRIDENT_RENDER" \
+            --jobs 2 \
+            --shard ${{ matrix.shard }}/4 \
             --retries 2 \
             --skip-tag ci-host-blocked \
             --game-arg --audio \
@@ -295,7 +362,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: trident-output-${{ steps.build_metadata.outputs.sha_short }}
+          name: trident-output-${{ steps.build_metadata.outputs.sha_short }}-shard${{ matrix.shard }}
           path: trident-output
           if-no-files-found: ignore
 

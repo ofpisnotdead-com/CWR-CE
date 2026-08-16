@@ -132,17 +132,62 @@ TEST_CASE("VoNJitterBuffer too-old packet discarded", "[VoN][buffer]")
     REQUIRE(jb.buffered() == 0); // rejected as too old
 }
 
-TEST_CASE("VoNJitterBuffer overflow discarded", "[VoN][buffer]")
+TEST_CASE("VoNJitterBuffer resyncs to a far-ahead origin", "[VoN][buffer]")
 {
     VoNJitterBuffer jb(4, FRAME);
 
-    int16_t f[FRAME];
-    fillFrame(f, 1);
+    int16_t f0[FRAME], f10[FRAME];
+    fillFrame(f0, 1);
+    fillFrame(f10, 77);
 
-    jb.push(0, f, FRAME); // sets _nextOrigin = 0
-    // Push frame way beyond capacity (slot 10, capacity 4)
-    jb.push(FRAME * 10, f, FRAME);
-    REQUIRE(jb.buffered() == 1); // only frame 0
+    jb.push(0, f0, FRAME); // sets _nextOrigin = 0
+    // A frame beyond the window (slot 10, capacity 4) means the stream
+    // skipped ahead; buffered frames behind it can no longer form a
+    // contiguous stream — the buffer must jump to the new position.
+    jb.push(FRAME * 10, f10, FRAME);
+    REQUIRE(jb.buffered() == 1);
+
+    int16_t out[FRAME];
+    REQUIRE(jb.pull(out, FRAME) == FRAME);
+    REQUIRE(out[0] == 77); // the far frame plays; frame 0 was dropped
+}
+
+// Regression: a push-to-talk burst that follows a large capture backlog
+// flood used to wedge the buffer permanently — the flood advanced the
+// sender origin far past the play cursor, every later frame was "too far
+// ahead", and the sender stayed mute for the rest of the session.
+TEST_CASE("VoNJitterBuffer keeps accepting live audio after a flood beyond capacity", "[VoN][buffer]")
+{
+    VoNJitterBuffer jb(8, FRAME);
+
+    int16_t f[FRAME];
+    int16_t out[FRAME];
+
+    // Burst 1: three frames sent and played in lock-step.
+    for (int i = 0; i < 3; ++i)
+    {
+        fillFrame(f, static_cast<int16_t>(100 + i));
+        jb.push(static_cast<uint64_t>(FRAME) * i, f, FRAME);
+        REQUIRE(jb.pull(out, FRAME) == FRAME);
+    }
+
+    // Burst 2 arrives as a 50-frame backlog flood in one network pump,
+    // origins continuing monotonically from burst 1.
+    for (int i = 3; i < 53; ++i)
+    {
+        fillFrame(f, static_cast<int16_t>(1000 + i));
+        jb.push(static_cast<uint64_t>(FRAME) * i, f, FRAME);
+    }
+
+    // Live speech continues after the flood.
+    fillFrame(f, 9999);
+    jb.push(static_cast<uint64_t>(FRAME) * 53, f, FRAME);
+
+    // Draining the buffer must eventually play the live frame.
+    bool sawLive = false;
+    for (int i = 0; i < 16 && jb.pull(out, FRAME) == FRAME; ++i)
+        sawLive = sawLive || out[0] == 9999;
+    REQUIRE(sawLive);
 }
 
 // audio-invariants A-31 — every gap-fill emitted by pull() increments

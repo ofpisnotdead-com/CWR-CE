@@ -1,0 +1,36 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 180
+tags = ["headful", "network", "exclusive"]
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl", "--mp-auto-start", "2", "--config", "${output}/server/user/server.cfg"]
+name = "server"
+type = "server"
+use_mission = true
+mission = "tests/integration/multiplayer/stock_paintball_dedicated_start.test/custom_paintball.Demo"
+copy_files = [
+  { source = "server.cfg", target = "server.cfg" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "paintball-u1", "--log-format", "jsonl"]
+machine_id = "trident:stock_paintball_dedicated_start:u1"
+name = "client1"
+type = "client"
+use_mission = false
+connect = "server"
+after = "server"
+start_delay_ms = 4000
+mp_assign = "WEST:1"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "paintball-u4", "--log-format", "jsonl"]
+machine_id = "trident:stock_paintball_dedicated_start:u4"
+name = "client2"
+type = "client"
+use_mission = false
+connect = "server"
+after = "server"
+start_delay_ms = 1000
+mp_assign = "WEST:2"

@@ -1,0 +1,43 @@
+mission = "tests/integration/missions/jip_basic.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 60
+
+tags = ["network"]
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl"]
+name = "server"
+type = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl"]
+name = "client1"
+type = "client"
+connect = "server"
+after = "server"
+start_delay_ms = 4000
+wait_ngs = 13
+mp_assign = "WEST:1"
+machine_id = "trident:custom_face_visual:client1"
+copy_files = [
+  { source = "client1/game.cfg", target = "game.cfg" },
+  { source = "client1/UserInfo.cfg", target = "Users/测试一/UserInfo.cfg" },
+  { source = "client1/face.jpg", target = "Users/测试一/face.jpg" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl"]
+name = "client2"
+type = "client"
+connect = "server"
+after = "server"
+start_delay_ms = 5000
+wait_ngs = 13
+mp_assign = "WEST:2"
+machine_id = "trident:custom_face_visual:client2"
+copy_files = [
+  { source = "client2/game.cfg", target = "game.cfg" },
+  { source = "client2/UserInfo.cfg", target = "Users/测试二/UserInfo.cfg" },
+  { source = "client2/face.jpg", target = "Users/测试二/face.jpg" },
+]

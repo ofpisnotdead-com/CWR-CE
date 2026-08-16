@@ -13,6 +13,8 @@
 
 namespace Poseidon
 {
+class UserConfig;
+
 namespace Presentation
 {
 
@@ -25,7 +27,9 @@ AspectRatio::Settings Resolve(int viewportWidth, int viewportHeight);
 // is active.  The Display options page and boot config loader update this
 // once; resize then reuses the same policy.
 void SetPolicy(AspectRatio::DisplayStyle style, AspectRatio::UltrawideClamp clamp);
-AspectRatio::PolicyInput CurrentPolicy(int viewportWidth, int viewportHeight);
+
+// Returns true when the profile migration needs to be persisted.
+bool ConfigureUserFov(UserConfig& config, int viewportWidth, int viewportHeight);
 
 // Resolve + map + Engine::SetAspectSettings — the one apply site.
 // Returns the resolved settings for the caller's diagnostics.

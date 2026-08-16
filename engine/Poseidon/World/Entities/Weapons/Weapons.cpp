@@ -656,6 +656,35 @@ RStringB WeaponType::GetPictureName() const
     return _picName.GetLength() > 0 ? _picName : GetName();
 }
 
+bool WeaponType::IsBinocular() const
+{
+    return (_weaponType & MaskSlotBinocular) != 0 && stricmp(GetName(), "binocular") == 0;
+}
+
+// The hand proxies carry any item in the binocular slot. Several classes can
+// occupy it at once, so the Binocular takes precedence over the others.
+const WeaponType* Poseidon::FindBinocularWeapon(const RefArray<WeaponType>& weapons)
+{
+    const WeaponType* slotItem = nullptr;
+    for (int i = 0; i < weapons.Size(); i++)
+    {
+        const WeaponType* weapon = weapons[i];
+        if (!weapon || (weapon->_weaponType & MaskSlotBinocular) == 0)
+        {
+            continue;
+        }
+        if (weapon->IsBinocular())
+        {
+            return weapon;
+        }
+        if (!slotItem)
+        {
+            slotItem = weapon;
+        }
+    }
+    return slotItem;
+}
+
 void WeaponType::Init(const char* name)
 {
     const ParamEntry& cls = Pars >> "CfgWeapons" >> name;

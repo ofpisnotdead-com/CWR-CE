@@ -224,6 +224,37 @@ TEST_CASE("DownloadWorker runs the job on a thread and Poll reports completion",
     CHECK_FALSE(worker.Running());
 }
 
+TEST_CASE("DownloadWorker reports post-processing after download completion", "[download][worker][thread]")
+{
+    FakeClock clock;
+    std::atomic<bool> entered{false};
+    std::atomic<bool> release{false};
+    DownloadTask task{"@a", "http://a", "a.pbo", 100, {}};
+    task.postStep = [&](const DownloadTask&, std::string&) -> bool
+    {
+        entered.store(true);
+        while (!release.load())
+            std::this_thread::yield();
+        return true;
+    };
+
+    DownloadWorker worker(TwoHalfDownload(clock), clock.Fn());
+    worker.Start({task});
+    while (!entered.load())
+        std::this_thread::yield();
+
+    const DownloadSnapshot unpacking = worker.Poll();
+    CHECK(unpacking.postProcessing);
+    CHECK_FALSE(unpacking.done);
+    CHECK_THAT(unpacking.currentFraction, WithinAbs(1.0f, 1e-4f));
+
+    release.store(true);
+    worker.Wait();
+    const DownloadSnapshot done = worker.Poll();
+    CHECK_FALSE(done.postProcessing);
+    CHECK(done.done);
+}
+
 TEST_CASE("DownloadWorker: teardown does not block on a stuck download (cancel freeze)", "[download][worker][thread]")
 {
     // A download stuck in a blocking transport that doesn't honour cancel

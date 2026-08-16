@@ -583,6 +583,14 @@ bool CTree::OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
 
     switch (nChar)
     {
+        case SDLK_PLUS:
+        case SDLK_KP_PLUS:
+            Expand(_selected, true);
+            return true;
+        case SDLK_MINUS:
+        case SDLK_KP_MINUS:
+            Expand(_selected, false);
+            return true;
         case SDLK_UP:
             if (_selected != firstVisible)
             {

@@ -127,7 +127,7 @@ void KeyboardState::Update(DWORD sysTime, DWORD timeDelta, bool userInputEnabled
         }
     }
 
-    if (keys[SDL_SCANCODE_LSHIFT] > 0.0f && keys[SDL_SCANCODE_KP_MINUS] > 0.0f)
+    if (cheatEntryTrigger)
     {
         awaitCheat = true;
         cheatInProgress = RString();
@@ -183,6 +183,7 @@ void KeyboardState::ForgetKeys()
     keyCount_ = 0;
     cheatActive = CheatNone;
     awaitCheat = false;
+    cheatEntryTrigger = false;
     cheatInProgress = RString();
 }
 } // namespace Poseidon

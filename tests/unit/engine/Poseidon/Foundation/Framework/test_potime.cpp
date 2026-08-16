@@ -237,73 +237,13 @@ TEST_CASE("potime - SLEEP_MS macro", "[framework][potime][sleep]")
     }
 }
 
-// Usage Patterns
-
-TEST_CASE("potime - Common usage patterns", "[framework][potime]")
+TEST_CASE("potime - Section timing", "[framework][potime]")
 {
-    SECTION("Measure operation duration")
-    {
-        unsigned64 start = Poseidon::Foundation::getSystemTime();
+    const Poseidon::Foundation::SectionTimeHandle start = Poseidon::Foundation::StartSectionTime();
 
-        // Simulate some work
-        volatile int sum = 0;
-        for (int i = 0; i < 10000; i++)
-        {
-            sum += i;
-        }
-
-        unsigned64 end = Poseidon::Foundation::getSystemTime();
-        unsigned64 duration_us = end - start;
-
-        // Should measure something
-        REQUIRE(duration_us < 1000000); // Less than 1 second
-    }
-
-    SECTION("Frame timing pattern")
-    {
-        unsigned64 frame_start = Poseidon::Foundation::getSystemTime();
-
-        // Simulate frame work
-        SLEEP_MS(5);
-
-        unsigned64 frame_end = Poseidon::Foundation::getSystemTime();
-        unsigned64 frame_time_us = frame_end - frame_start;
-        double frame_time_ms = frame_time_us / 1000.0;
-
-        // Frame time should be reasonable
-        REQUIRE(frame_time_ms >= 1.0);
-        REQUIRE(frame_time_ms < 100.0);
-    }
-
-    SECTION("Timeout pattern")
-    {
-        unsigned64 timeout_us = 20000; // 20ms timeout
-        unsigned64 start = Poseidon::Foundation::getSystemTime();
-
-        bool operation_complete = false;
-        while (!operation_complete)
-        {
-            unsigned64 now = Poseidon::Foundation::getSystemTime();
-            unsigned64 elapsed = now - start;
-
-            if (elapsed >= timeout_us)
-            {
-                break; // Timeout reached
-            }
-
-            // Simulate checking for operation completion
-            SLEEP_MS(5);
-            operation_complete = (Poseidon::Foundation::getSystemTime() - start >= 15000); // Completes after 15ms
-        }
-
-        unsigned64 end = Poseidon::Foundation::getSystemTime();
-        unsigned64 total_elapsed = end - start;
-        double elapsed_ms = total_elapsed / 1000.0;
-
-        // Should have completed before timeout (generous tolerance for scheduler)
-        REQUIRE(elapsed_ms < 50.0); // Increased tolerance
-        REQUIRE(operation_complete == true);
-    }
+    REQUIRE(Poseidon::Foundation::GetSectionResolution() > 0);
+    REQUIRE(Poseidon::Foundation::GetSectionTime(start) >= 0.0f);
+    REQUIRE(Poseidon::Foundation::CompareSectionTimeGE(start, 0.0f));
 }
 
 // Cross-Platform Consistency

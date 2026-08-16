@@ -227,12 +227,15 @@ pub async fn seed_dev_mods(store: &ModStore) -> Result<usize> {
 
         let metadata = ModCatalogEntry {
             mod_id: row.mod_id,
-            app_name: Some("CWR-CE".to_string()),
-            actver: Some(301),
+            app_name: Some("CWR".to_string()),
+            actver: Some(303),
             version_tag: None,
             compatible: false,
             name: row.name,
             version,
+            package_revision: 1,
+            sha256: None,
+            published_unix_ms: None,
             folder_name: None,
             description: row.description.trim_end_matches(" Website").to_string(),
             authors: Vec::new(),
@@ -263,7 +266,7 @@ struct DevServerSeed {
 impl DevServerSeed {
     fn to_request(&self) -> RegisterServerRequest {
         RegisterServerRequest {
-            app_name: "CWR-CE".to_string(),
+            app_name: "CWR".to_string(),
             server_id: self.server_id.to_string(),
             address: "127.0.0.1".to_string(),
             hostport: self.hostport,
@@ -277,6 +280,7 @@ impl DevServerSeed {
             maxplayers: self.maxplayers,
             password: self.password,
             mod_list: self.mod_list.to_string(),
+            mod_packages: Vec::new(),
             equal_mod_required: false,
             transport_impl: "papa-bear".to_string(),
             platform: "win".to_string(),
@@ -529,5 +533,6 @@ mod tests {
             .any(|entry| entry.description.contains("Synthetic catalog entry 001")));
         assert!(mods.iter().any(|entry| entry.version.len() == 8));
         assert!(mods.iter().any(|entry| entry.download_url.is_some()));
+        assert!(mods.iter().all(|entry| entry.actver == Some(303)));
     }
 }

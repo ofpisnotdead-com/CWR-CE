@@ -87,8 +87,7 @@ inline bool RemoteExecNameAllowed(const AutoArray<RString>& allowedNames, RStrin
 }
 
 inline bool RemoteExecClientAuthorized(int from, int gameMaster, int botClient, int noGameMaster,
-                                       RemoteExecPolicyMode mode, const AutoArray<RString>& allowedNames,
-                                       RString name)
+                                       RemoteExecPolicyMode mode, const AutoArray<RString>& allowedNames, RString name)
 {
     if (from == botClient)
     {
@@ -174,6 +173,63 @@ inline bool RoleSwapAllowed(int currentRolePlayer, int newPlayer, int from, int 
            currentRolePlayer == from && (newPlayer == aiPlayer || newPlayer == noPlayer) ||
            currentRolePlayer == aiPlayer && newPlayer == noPlayer ||
            currentRolePlayer == noPlayer && newPlayer == aiPlayer;
+}
+
+inline bool RoleSelfRefreshAllowed(int currentRolePlayer, int newPlayer, int from)
+{
+    return currentRolePlayer == from && newPlayer == from;
+}
+
+inline bool RoleDuplicateClearRequired(int foundIndex, int targetIndex)
+{
+    return foundIndex >= 0 && foundIndex != targetIndex;
+}
+
+inline bool DelayedRoleShouldStartMissionCatchUp(bool acceptedDelayedRole, int serverState, int playerState,
+                                                 bool hasRole, int transferMissionState, int briefingState)
+{
+    return acceptedDelayedRole && serverState >= transferMissionState && serverState <= briefingState &&
+           playerState < briefingState && hasRole;
+}
+
+inline bool ShouldIgnoreStaleMissionReadyState(int requestedState, int playerState, int serverState, int prepareOkState,
+                                               int transferMissionState, int briefingState)
+{
+    return serverState >= transferMissionState && serverState <= briefingState && playerState >= transferMissionState &&
+           requestedState <= prepareOkState;
+}
+
+inline bool ShouldBroadcastNetworkMissionState(int targetState, bool joiningInProgress, int playerState,
+                                               bool missionParticipant, int transferMissionState, int loadIslandState,
+                                               int briefingState, int playState)
+{
+    if (!missionParticipant && targetState >= transferMissionState)
+    {
+        return false;
+    }
+    if (!joiningInProgress)
+    {
+        return true;
+    }
+    if (targetState == briefingState)
+    {
+        return playerState >= loadIslandState;
+    }
+    if (targetState == playState)
+    {
+        return playerState >= briefingState;
+    }
+    return true;
+}
+
+inline bool ClientShouldAcceptTransferState(int clientState, int loadIslandState)
+{
+    return clientState < loadIslandState;
+}
+
+inline bool ClientShouldPrepareLoadIsland(int clientState, int loadIslandState)
+{
+    return clientState < loadIslandState;
 }
 
 // Whether a freshly-placed role should be marked locked (a real player took a real, non-own slot).

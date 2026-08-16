@@ -1,0 +1,84 @@
+version=11;
+class Mission
+{
+	randomSeed=200001;
+	class Intel
+	{
+	};
+	class Groups
+	{
+		items=2;
+		class Item0
+		{
+			side="WEST";
+			class Vehicles
+			{
+				items=1;
+				class Item0
+				{
+					position[]={6710.527832,82.907585,5408.891602};
+					id=0;
+					side="WEST";
+					vehicle="SoldierWB";
+					player="PLAYER COMMANDER";
+					leader=1;
+					skill=0.600000;
+					init="this moveInDriver squadJeep;";
+				};
+			};
+		};
+		class Item1
+		{
+			side="WEST";
+			class Vehicles
+			{
+				items=1;
+				class Item0
+				{
+					position[]={6719.004883,82.311951,5419.918457};
+					id=1;
+					side="WEST";
+					vehicle="SoldierWB";
+					player="PLAYER COMMANDER";
+					leader=1;
+					skill=0.600000;
+				};
+			};
+		};
+	};
+	class Vehicles
+	{
+		items=1;
+		class Item0
+		{
+			position[]={6710.527832,82.907585,5408.891602};
+			azimut=0.000000;
+			id=10;
+			side="EMPTY";
+			vehicle="Jeep";
+			skill=0.600000;
+			text="squadJeep";
+		};
+	};
+};
+class Intro
+{
+	randomSeed=200002;
+	class Intel
+	{
+	};
+};
+class OutroWin
+{
+	randomSeed=200003;
+	class Intel
+	{
+	};
+};
+class OutroLoose
+{
+	randomSeed=200004;
+	class Intel
+	{
+	};
+};

@@ -184,16 +184,7 @@ bool GamepadPage::DeviceFilter(int packedCode) const
 
 bool GamepadPage::IsActionVisible(UserAction action, ControlsCategory category) const
 {
-    if (IsMovementGroup(action, category) || IsAimGroup(action, category) || IsFreelookGroup(action))
-        return true;
-    if (category == ControlsCategoryOnFoot && (action == UAMoveBack || action == UAMoveLeft || action == UAMoveRight ||
-                                               action == UAAimUp || action == UAAimDown || action == UAAimLeft))
-        return false;
-    if (category == ControlsCategoryGunner && (action == UAAimUp || action == UAAimDown || action == UAAimLeft))
-        return false;
-    if (IsFreelookDirection(action))
-        return false;
-    return BindingsPage::IsActionVisible(action, category);
+    return IsActionVisibleOnGamepad(action, category);
 }
 
 const char* GamepadPage::ActionLabelOverride(UserAction action, ControlsCategory category) const

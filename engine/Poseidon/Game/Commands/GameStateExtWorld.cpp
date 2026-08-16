@@ -784,10 +784,10 @@ GameValue ForceEnd(const GameState* state)
     return NOTHING;
 }
 
-GameValue EndGame(const GameState* state)
+GameValue TriEndGame(const GameState* state)
 {
     if (AppConfig::Instance().IsSimulateMode())
-        LOG_INFO(Mission, "[endGame]");
+        LOG_INFO(Mission, "[triEndGame]");
 
     const bool automationMissionExit = AppConfig::Instance().IsSimulateMode() ||
                                        !AppConfig::Instance().GetTestMissionPath().empty() ||
@@ -795,9 +795,9 @@ GameValue EndGame(const GameState* state)
     if (automationMissionExit)
         GStats.OnMPMissionEnd();
 
-    // In mp-assign mode, endGame means the mission completed successfully
+    // In mp-assign mode, triEndGame means the mission completed successfully
     if (!AppConfig::Instance().GetMPAssign().empty())
-        GApp->m_exitCode = 0;
+        GApp->m_exitCode = ResolveMultiplayerAutomationExitCode(GApp->m_exitCode, GApp->m_closeRequest, true);
     GApp->m_closeRequest = true;
     return NOTHING;
 }

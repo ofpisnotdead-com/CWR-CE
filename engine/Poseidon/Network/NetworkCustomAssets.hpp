@@ -2,6 +2,7 @@
 
 #include <Poseidon/Foundation/platform.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
+#include <Poseidon/UI/Locale/Stringtable/CodepageTranscode.hpp>
 
 #include <cstddef>
 #include <cstdio>
@@ -134,6 +135,17 @@ RString FindNetworkSquadPictureTmpPath(const RString& squadNick, const RString& 
         return RString();
     }
     return path;
+}
+
+template <class FileExistsFn>
+RString FindNetworkSquadPicturePath(const RString& userDir, const RString& squadNick, const RString& picture,
+                                    FileExistsFn&& fileExists)
+{
+    const RString relative = BuildNetworkSquadPictureTmpPath(squadNick, picture);
+    if (relative.GetLength() == 0)
+        return RString();
+    const RString path = userDir + relative;
+    return fileExists(path) ? path : RString();
 }
 
 inline bool IsNetworkPlayerFaceAssetName(const RString& assetName)
@@ -298,8 +310,8 @@ inline RString BuildNetworkPlayerAssetTmpDir(int playerId)
 inline RString BuildNetworkServerUploadPath(const RString& serverTmpDir, const RString& relative)
 {
     return relative.GetLength() > 0 ? BuildNetworkRelativePath(NormalizeNetworkPathSeparators(serverTmpDir),
-                                                               NormalizeNetworkPathSeparators(relative)) :
-                                      RString();
+                                                               NormalizeNetworkPathSeparators(relative))
+                                    : RString();
 }
 
 inline RString BuildNetworkServerSquadPictureUploadPath(const RString& serverTmpDir, const RString& squadNick,
@@ -394,6 +406,24 @@ inline RString BuildNetworkCustomRadioSoundPath(const RString& remotePlayerName,
     return localSoundDir + soundName;
 }
 
+inline RString BuildNetworkCustomRadioMenuText(const RString& soundName, Codepage preferredCodepage)
+{
+    const char* value = soundName;
+    if (value == nullptr || value[0] == 0)
+    {
+        return RString();
+    }
+
+    const char* ext = strrchr(value, '.');
+    const RString baseName = ext != nullptr ? soundName.Substring(0, ext - value) : soundName;
+    return DecodeLegacyTextToRString(baseName, preferredCodepage);
+}
+
+inline RString BuildNetworkCustomRadioMenuText(const RString& soundName)
+{
+    return BuildNetworkCustomRadioMenuText(soundName, Codepage::CP1252);
+}
+
 inline RString BuildNetworkTransferredAssetProbeTmpPath(const RString& kind, const RString& owner, const RString& name)
 {
     if (stricmp(kind, "player") == 0 || stricmp(kind, "playerFace") == 0)
@@ -457,6 +487,10 @@ inline bool IsSafeNetworkTransferredAssetPath(const RString& path)
 inline bool IsNetworkSquadTransferredAssetPath(const RString& path)
 {
     const char* data = path;
+    if (!data)
+    {
+        return false;
+    }
     const char squadPrefix[] = "tmp/squads/";
     const int squadPrefixLen = static_cast<int>(sizeof(squadPrefix) - 1);
     return strncmp(data, squadPrefix, squadPrefixLen) == 0 && IsSafeNetworkTransferredAssetPath(path);
@@ -475,15 +509,55 @@ inline bool ShouldAcceptNetworkTransferredAsset(const RString& path, size_t size
 
 inline bool IsSafeNetworkServerPlayerUploadPath(const RString& path, const RString& serverTmpDir, int playerId)
 {
-    const RString prefix = BuildNetworkServerPlayerUploadDir(serverTmpDir, playerId);
-    if (prefix.GetLength() == 0 || strnicmp(path, prefix, prefix.GetLength()) != 0)
+    RString prefix = BuildNetworkServerPlayerUploadDir(serverTmpDir, playerId);
+    if (prefix.GetLength() == 0)
     {
         return false;
     }
+
+    RString relative;
+    const RString normalizedPath = NormalizeNetworkPathSeparators(path);
+    if (strnicmp(normalizedPath, prefix, prefix.GetLength()) == 0)
+    {
+        relative = normalizedPath.Substring(prefix.GetLength(), INT_MAX);
+    }
+    else
+    {
+        prefix = RString("/") + BuildNetworkPlayerAssetRelativeDir(playerId);
+        const char* match = strstr(static_cast<const char*>(normalizedPath), static_cast<const char*>(prefix));
+        if (!match || match == static_cast<const char*>(normalizedPath) || match[prefix.GetLength()] == '\0')
+        {
+            return false;
+        }
+        relative = RString(match + prefix.GetLength());
+    }
+
     const RString playerKey = BuildNetworkPlayerStorageKey(playerId);
-    return IsSafeNetworkTransferredAssetPath(RString("tmp/players/") + playerKey +
-                                             RString("/") +
-                                             NormalizeNetworkPathSeparators(path.Substring(prefix.GetLength(), INT_MAX)));
+    return IsSafeNetworkTransferredAssetPath(RString("tmp/players/") + playerKey + RString("/") + relative);
+}
+
+inline RString NormalizeNetworkServerPlayerUploadPath(const RString& path, const RString& serverTmpDir, int playerId)
+{
+    if (!IsSafeNetworkServerPlayerUploadPath(path, serverTmpDir, playerId))
+    {
+        return RString();
+    }
+
+    const RString normalizedPath = NormalizeNetworkPathSeparators(path);
+    const RString serverPrefix = BuildNetworkServerPlayerUploadDir(serverTmpDir, playerId);
+    if (serverPrefix.GetLength() > 0 && strnicmp(normalizedPath, serverPrefix, serverPrefix.GetLength()) == 0)
+    {
+        return normalizedPath;
+    }
+
+    const RString playerPrefix = RString("/") + BuildNetworkPlayerAssetRelativeDir(playerId);
+    const char* match = strstr(static_cast<const char*>(normalizedPath), static_cast<const char*>(playerPrefix));
+    if (!match || match == static_cast<const char*>(normalizedPath))
+    {
+        return RString();
+    }
+
+    return BuildNetworkServerUploadPath(serverTmpDir, RString(match + 1));
 }
 
 } // namespace Poseidon

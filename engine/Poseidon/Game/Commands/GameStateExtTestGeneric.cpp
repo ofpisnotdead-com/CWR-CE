@@ -1,6 +1,9 @@
 #include <Evaluator/express.hpp>
 using namespace Poseidon;
+#include <Poseidon/Foundation/Common/Win.h>
 #include <Poseidon/Foundation/Modules/Modules.hpp>
+#include <Poseidon/Foundation/platform.hpp>
+#include <Poseidon/Network/XML/Xml.hpp>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -410,6 +413,22 @@ GameValue TriClearRemoteExecLog(const GameState*)
     return GameValue("OK");
 }
 
+GameValue TriHttpGet(const GameState*, GameValuePar arg)
+{
+    const std::string url = TriValStr(arg);
+    size_t size = 0;
+    char* payload = DownloadFile(url.c_str(), size, nullptr, 64 * 1024);
+    if (!payload)
+        return GameValue("FAIL:download failed");
+    const std::string result(payload, size);
+#ifdef _WIN32
+    GlobalFree(payload);
+#else
+    free(payload);
+#endif
+    return GameValue(result.c_str());
+}
+
 // Called from GameStateExtTestAudio.cpp's INIT_MODULE to force this TU into
 // the link when building PoseidonGame (where no other game code references
 // the TriAssert* family directly).
@@ -433,4 +452,5 @@ INIT_MODULE(GameStateExtTestGeneric, 3)
     GGameState.NewFunction(GameFunction(GameString, "triRecordRemoteExec", TriRecordRemoteExec, GameArray));
     GGameState.NewNularOp(GameNular(GameString, "triRemoteExecLog", TriRemoteExecLog));
     GGameState.NewNularOp(GameNular(GameString, "triClearRemoteExecLog", TriClearRemoteExecLog));
+    GGameState.NewFunction(GameFunction(GameString, "triHttpGet", TriHttpGet, GameString));
 };

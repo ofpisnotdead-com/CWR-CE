@@ -20,14 +20,14 @@ class TextBankDummy : public AbstractTextBank
     Ref<Texture> LoadInterpolated(RStringB, RStringB, float) override { return nullptr; }
     MipInfo UseMipmap(Texture* tex, int level, int top) override { return MipInfo(tex, level); }
 
-    void Compact() override {}
+    void Compact() override { _texture.Compact(); }
     void ReleaseMipmap() {}
     void Preload() override {}
 
     int NTextures() const override { return _texture.Size(); }
     Texture* GetTexture(int i) const override { return _texture[i]; }
 
-    void FlushTextures() override {}
+    void FlushTextures() override { Compact(); }
     // Drop the cached texture links so a kept-alive engine doesn't accumulate stale
     // (auto-nulled) weak-link entries across in-process re-mounts.
     void ReleaseAllTextures() override { _texture.Clear(); }

@@ -1,6 +1,7 @@
 # The join-requirements dialog (RscDisplayJoinRequirements) is exercised offline:
 # triOpenJoinRequirements injects a synthetic mod diff + opens the live dialog as a
 # child of the menu — no network, no server. Proves the resource parses + renders
-# (diff body, password field, Download & Join / Cancel) and exits cleanly.
+# (diff body, password field, Download & Join / Set up & Join / Cancel) and exits
+# cleanly.
 timeout = 120
-tags = ["headful"]
+tags = ["headful", "ci-host-blocked"]

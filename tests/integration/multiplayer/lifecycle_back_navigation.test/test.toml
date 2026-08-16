@@ -1,0 +1,17 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 90
+
+tags = ["headful", "network", "exclusive"]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "host", "--log-format", "jsonl"]
+name = "host"
+type = "client"
+use_mission = false
+no_autotest = true
+machine_id = "trident:lifecycle_back_navigation:host"
+copy_files = [
+  { source = "lifecycle-back-navigation.Demo/description.ext", target = "content/MPMissions/lifecycle-back-navigation.Demo/description.ext" },
+  { source = "lifecycle-back-navigation.Demo/mission.sqm", target = "content/MPMissions/lifecycle-back-navigation.Demo/mission.sqm" },
+]

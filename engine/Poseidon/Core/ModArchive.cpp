@@ -126,6 +126,24 @@ std::string NormalizeEntryName(const std::string& name)
 }
 } // namespace
 
+bool ModArchive::IsSafeEntryPath(const std::string& entryName)
+{
+    namespace fs = std::filesystem;
+    const std::string normalized = NormalizeEntryName(entryName);
+    if (normalized.empty() || normalized[0] == '/' ||
+        (normalized.size() >= 2 && std::isalpha(static_cast<unsigned char>(normalized[0])) && normalized[1] == ':'))
+        return false;
+    const fs::path path(normalized);
+    if (path.is_absolute() || path.has_root_name() || path.has_root_directory())
+        return false;
+    for (const fs::path& component : path)
+    {
+        if (component == "..")
+            return false;
+    }
+    return true;
+}
+
 bool ModArchive::Unpack(const char* archivePath, const char* destDir, std::string* error)
 {
     const auto fail = [&](const std::string& message)
@@ -185,6 +203,15 @@ bool ModArchive::Unpack(const char* archivePath, const char* destDir, std::strin
     }
 
     const fs::path root(destDir);
+    for (const auto& entry : info.entries)
+    {
+        if (!IsSafeEntryPath(entry.name))
+        {
+            bank.Unlock();
+            cleanup();
+            return fail(std::string("unsafe archive entry: ") + entry.name);
+        }
+    }
     fs::create_directories(root, ec);
 
     bool ok = true;

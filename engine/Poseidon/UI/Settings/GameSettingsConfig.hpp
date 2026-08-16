@@ -16,6 +16,7 @@ class GameSettingsConfig
 
     std::string textLanguage;
     std::string voiceLanguage;
+    std::string activeProfile;
     bool blood = true;
     float preferredViewDistance = 900.0f;
     bool respectMissionViewDistance = true;
@@ -35,6 +36,8 @@ bool EnsureGameSettingsFile(GameSettingsConfig& cfg, const std::string& path,
                             const GameSettingsConfig::Environment& env, bool* created = nullptr);
 void LoadGameSettings();
 void SaveGameSettings();
+std::string LoadActiveProfile();
+void SaveActiveProfile(const std::string& name);
 
 const std::string& GetSelectedVoiceLanguage();
 void SetSelectedVoiceLanguage(const std::string& language);

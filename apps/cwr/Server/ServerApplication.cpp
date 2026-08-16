@@ -147,7 +147,7 @@ int ServerApplication::RunServerStages()
         Poseidon::Foundation::gSoftAssert = true;
 
     if (!ReadConfiguration())
-        return 0;
+        return 1;
 
     // Configuration loading can reset engine flags, so set dedicated-server mode after it.
     ENGINE_CONFIG.doCreateDedicatedServer = true;
@@ -447,6 +447,7 @@ void ServerApplication::DedicatedServerLoop()
             // SQF eval/exec — the dedicated server has a world + GameState, so server-side test
             // verbs (triAssertNgs, triEndTest) run here just as on the client.
             HarnessBuiltins::RegisterSqf(*harnessServer);
+            HarnessBuiltins::RegisterHttpFixtures(*harnessServer);
 
             harnessServer->RegisterEvent({"player_joined", "Player connected", {{"dpid", "int"}, {"name", "string"}}});
             harnessServer->RegisterEvent({"player_left", "Player disconnected", {{"dpid", "int"}, {"name", "string"}}});
@@ -494,7 +495,7 @@ void ServerApplication::DedicatedServerLoop()
             }
         }
 
-        // Clean exit on close request — simulate-mode endGame/debriefing, or a harness
+        // Clean exit on close request - simulate-mode triEndGame/debriefing, or a harness
         // "exit"/triEndTest (IsExitRequested -> m_closeRequest above). Honouring it in
         // non-simulate mode too lets the Trident runner shut the server down at test end.
         if (m_closeRequest)

@@ -5,6 +5,7 @@
 // on Linux.
 
 #include <catch2/catch_test_macros.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
 #include <Poseidon/IO/Streams/QStream.hpp>
 #include "../Support/test_fixtures.hpp"
@@ -219,6 +220,34 @@ TEST_CASE("QIFStream FileExists - exact path", "[qstream][path][fileexists]")
 
     REQUIRE(QIFStream::FileExists(GetTestFixturePath("qstream/test_input.txt")) == true);
     REQUIRE(QIFStream::FileExists("nonexistent_file_12345.txt") == false);
+}
+
+TEST_CASE("QStream reads files from UTF-8 profile paths", "[qstream][path][fileexists][utf8]")
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() /
+#ifdef _WIN32
+                                       std::filesystem::path(L"cwr_\u6d4b\u8bd5");
+    const std::filesystem::path file = root / L"face.paa";
+    const std::string rootUtf8 = Poseidon::WidePathToUtf8(root.wstring().c_str());
+    const std::string fileUtf8 = Poseidon::WidePathToUtf8(file.wstring().c_str());
+#else
+                                       std::filesystem::path("cwr_\xE6\xB5\x8B\xE8\xAF\x95");
+    const std::filesystem::path file = root / "face.paa";
+    const std::string rootUtf8 = root.string();
+    const std::string fileUtf8 = file.string();
+#endif
+    const char payload[] = "custom-face";
+
+    REQUIRE(Poseidon::CreateDirectoryUtf8(rootUtf8.c_str()));
+    REQUIRE(Poseidon::WriteFileUtf8(fileUtf8.c_str(), payload, sizeof(payload)));
+    REQUIRE(QIFStream::FileExists(fileUtf8.c_str()));
+
+    FileBufferLoaded buffer(fileUtf8.c_str());
+    REQUIRE(buffer.GetSize() == sizeof(payload));
+    CHECK(memcmp(buffer.GetData(), payload, sizeof(payload)) == 0);
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
 }
 
 #ifndef _WIN32

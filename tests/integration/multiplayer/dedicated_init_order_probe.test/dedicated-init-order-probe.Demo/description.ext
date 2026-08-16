@@ -1,0 +1,3 @@
+onLoadMission = "Dedicated initialization order probe";
+joinInProgress = 0;
+respawn = 0;

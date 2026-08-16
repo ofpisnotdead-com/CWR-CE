@@ -236,6 +236,7 @@ class IAudioSystem // whole playing system
 	virtual Vector3 GetListenerPosition() const = 0;
 	virtual void Commit() = 0;
 	virtual void Activate( bool active ) = 0;
+	virtual void SetSimulationRunning( bool running ) {}
 	virtual void SetEnvironment( const SoundEnvironment &env ) {}
 	virtual bool IsReady() const { return true; }
 	virtual ~IAudioSystem(){}

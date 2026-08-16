@@ -1,0 +1,39 @@
+mission = "tests/integration/missions/jip_basic.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 240
+tags = ["headful", "network", "exclusive"]
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl", "--force-jip"]
+name = "server"
+type = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "force-jip-stayer", "--log-format", "jsonl"]
+machine_id = "trident:force_jip_reconnect_jip_basic:stayer"
+name = "stayer"
+no_autotest = true
+type = "client"
+use_mission = false
+after = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "force-jip-leaver", "--log-format", "jsonl"]
+machine_id = "trident:force_jip_reconnect_jip_basic:leaver"
+name = "leaver"
+no_autotest = true
+start_delay_ms = 2000
+type = "client"
+use_mission = false
+after = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "force-jip-rejoiner", "--log-format", "jsonl"]
+machine_id = "trident:force_jip_reconnect_jip_basic:rejoiner"
+name = "rejoiner"
+no_autotest = true
+start_delay_ms = 5000
+type = "client"
+use_mission = false
+after = "server"

@@ -1,5 +1,8 @@
 #include <Poseidon/UI/Controls/UIControls.hpp>
+#include <Poseidon/Core/resincl.hpp>
 #include <Poseidon/Foundation/Strings/Mbcs.hpp>
+#include <Poseidon/IO/ParamFile/ParamFile.hpp>
+#include <Poseidon/IO/Streams/QStream.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <stdint.h>
@@ -7,9 +10,58 @@
 #include <string>
 #include <Poseidon/Foundation/Math/Math3D.hpp>
 
+namespace
+{
+class ZeroEvaluatorFunctions final : public Poseidon::EvaluatorFunctions
+{
+  public:
+    float EvaluateFloat(const char* /*expr*/, GameVarSpace* /*vars*/) override { return 0.0f; }
+    float EvaluateFloatInternal(const char* /*expr*/) override { return 0.0f; }
+};
+
+class ScopedEvaluatorFunctions final
+{
+  public:
+    explicit ScopedEvaluatorFunctions(Poseidon::EvaluatorFunctions* replacement)
+        : _previous(Poseidon::ParamFile::DefaultEvalFunctions())
+    {
+        Poseidon::ParamFile::SetDefaultEvalFunctions(replacement);
+    }
+
+    ~ScopedEvaluatorFunctions() { Poseidon::ParamFile::SetDefaultEvalFunctions(_previous); }
+
+    ScopedEvaluatorFunctions(const ScopedEvaluatorFunctions&) = delete;
+    ScopedEvaluatorFunctions& operator=(const ScopedEvaluatorFunctions&) = delete;
+
+  private:
+    Poseidon::EvaluatorFunctions* _previous;
+};
+} // namespace
+
 TEST_CASE("uiControls compiles", "[ui][controls]")
 {
     REQUIRE(sizeof(Control) > 0);
+}
+
+TEST_CASE("legacy control IDs resolve without evaluator enum variables", "[ui][controls][resource]")
+{
+    const char* resource = "class StaticButton\n"
+                           "{\n"
+                           "    idc = \"IDC_STATIC\";\n"
+                           "    type = 1;\n"
+                           "    style = 2;\n"
+                           "};\n";
+    Poseidon::ParamFile pf;
+    QIStream in(resource, static_cast<int>(strlen(resource)));
+    pf.Parse(in);
+
+    ZeroEvaluatorFunctions zeroEvaluator;
+    ScopedEvaluatorFunctions scopedEvaluator(&zeroEvaluator);
+
+    const Poseidon::ParamEntry& cls = pf >> "StaticButton";
+    REQUIRE(ResolveLegacyControlInt(cls >> "idc") == -1);
+    REQUIRE(ResolveLegacyControlInt(cls >> "type") == CT_BUTTON);
+    REQUIRE(ResolveLegacyControlInt(cls >> "style") == ST_CENTER);
 }
 
 TEST_CASE("UTF-8 text element helpers keep Czech glyphs intact", "[ui][controls][utf8]")
@@ -50,6 +102,23 @@ TEST_CASE("UTF-8 decode and advance helpers share one runtime path", "[ui][contr
     REQUIRE(DecodeUtf8Codepoint(emoji, &cp) == 4);
     REQUIRE(cp == 0x1F600);
     REQUIRE(CountUtf8Codepoints(text) == 6);
+}
+
+TEST_CASE("multi-line controls trim explicit line break delimiters", "[ui][controls][text]")
+{
+    RString text = "vyžaduje:\n  @csla nainstalováno\r\nhotovo";
+    std::string raw = static_cast<const char*>(text);
+
+    int firstEnd = static_cast<int>(raw.find('\n')) + 1;
+    int secondStart = firstEnd;
+    int secondEnd = static_cast<int>(raw.find('\n', secondStart)) + 1;
+
+    REQUIRE(std::string(static_cast<const char*>(ControlLineTextWithoutTrailingBreaks(text, 0, firstEnd))) ==
+            "vyžaduje:");
+    REQUIRE(std::string(static_cast<const char*>(ControlLineTextWithoutTrailingBreaks(text, secondStart, secondEnd))) ==
+            "  @csla nainstalováno");
+    REQUIRE(std::string(static_cast<const char*>(ControlLineTextWithoutTrailingBreaks(text, secondEnd, raw.size()))) ==
+            "hotovo");
 }
 
 // ─── C3DScrollBar — embedded helper used by C3DListBox / C3DCombo / the new

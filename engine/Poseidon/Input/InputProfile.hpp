@@ -44,5 +44,10 @@ class InputProfile
 
     void MarkDirty(UserAction action);
 };
+
+// Default modifier scancode for an action's default key, or -1 for none. Used at every
+// site that rebuilds default bindings from the bare UserActionDesc key list, so a combo
+// default (currently only the cheat-entry trigger) survives load and reset.
+int DefaultModifierForDefaultKey(UserAction action, int packedKey);
 } // namespace Poseidon
 

@@ -23,7 +23,7 @@ struct RecoilFFRamp
 class RecoilFunction: public RefCount
 {
 	AutoArray<RecoilItem> _queue;
-	const ParamEntry *_cfg;
+	RStringB _name;
 
 	public:
 	RecoilFunction();

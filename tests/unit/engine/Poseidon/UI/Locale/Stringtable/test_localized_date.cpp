@@ -26,6 +26,9 @@
 #include <unistd.h>
 #ifndef MAX_PATH
 #define MAX_PATH PATH_MAX
+#if __APPLE__
+#include <mach-o/dyld.h>
+#endif
 #endif
 #endif
 
@@ -39,7 +42,12 @@ static std::string DateFixturePath()
     char* slash = strrchr(p, '\\');
     const char* sep = "\\fixtures\\";
 #else
+#if __APPLE__
+    uint32_t n = sizeof(p) - 1;
+    _NSGetExecutablePath(p, &n);
+#else
     ssize_t n = readlink("/proc/self/exe", p, sizeof(p) - 1);
+#endif
     p[n > 0 ? n : 0] = '\0';
     char* slash = strrchr(p, '/');
     const char* sep = "/fixtures/";

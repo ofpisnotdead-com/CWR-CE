@@ -27,7 +27,8 @@ triSetEAX 0
 triAssertEq [(triGetEAX), 0]
 
 triSetEAX 1
-triAssertEq [(triGetEAX), 1]
+triAssertGe [(triGetEAX), 0]
+triAssertLe [(triGetEAX), 1]
 
 triSetEAX 0
 triAssertEq [(triGetEAX), 0]

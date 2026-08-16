@@ -1,0 +1,5 @@
+probeRootInitDuplicate = format ["%1", probeRootInitSeen] == "1"
+probeRootInitSeen = 1
+
+? !isServer : [] exec "initClient.sqs"
+exit

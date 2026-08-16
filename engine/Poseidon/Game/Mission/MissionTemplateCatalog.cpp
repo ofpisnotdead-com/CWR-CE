@@ -1,10 +1,14 @@
 #include <Poseidon/Game/Mission/MissionTemplateCatalog.hpp>
 
+#include <Poseidon/Core/ModSystem.hpp>
 #include <Poseidon/Foundation/platform.hpp>
 #include <Poseidon/IO/Filesystem/DirScanner.hpp>
 #include <Poseidon/UI/Locale/MissionHtmlLocalization.hpp>
 
+#include <cctype>
+#include <set>
 #include <string.h>
+#include <string>
 
 namespace Poseidon
 {
@@ -32,8 +36,8 @@ void AddTemplate(AutoArray<MissionTemplateEntry>& templates, RString name, RStri
     entry.bank = bank;
 }
 
-void ScanTemplateEntries(AutoArray<MissionTemplateEntry>& templates, RString root, RString world, bool multiplayer,
-                         bool bank)
+void ScanTemplateEntries(AutoArray<MissionTemplateEntry>& templates, std::set<std::string>& seen, RString root,
+                         RString world, bool multiplayer, bool bank)
 {
     char suffix[256];
     snprintf(suffix, sizeof(suffix), bank ? ".%s.pbo" : ".%s", (const char*)world);
@@ -52,6 +56,11 @@ void ScanTemplateEntries(AutoArray<MissionTemplateEntry>& templates, RString roo
             continue;
 
         const RString templ = StripSuffix(filename, suffix);
+        std::string key((const char*)templ);
+        for (char& c : key)
+            c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+        if (!seen.insert(key).second)
+            continue; // a mod (scanned first) or an earlier same-name entry already claimed this template
         AddTemplate(templates, templ, GetMissionTemplateBasePath(multiplayer, templ, world), bank);
     } while (scanner.Next());
 }
@@ -74,13 +83,47 @@ RString ResolveMissionTemplateDisplayName(RString missionDirectory, RString fall
     return displayName.GetLength() > 0 ? displayName : fallback;
 }
 
+RString GetMissionTemplateSelectorText(const MissionTemplateEntry& templ)
+{
+    return templ.name;
+}
+
 void ListMissionTemplates(AutoArray<MissionTemplateEntry>& templates, bool multiplayer, RString world)
 {
     templates.Clear();
 
-    const RString root = GetMissionTemplateRoot(multiplayer);
-    ScanTemplateEntries(templates, root, world, multiplayer, false);
-    ScanTemplateEntries(templates, root, world, multiplayer, true);
+    const RString subRoot = GetMissionTemplateRoot(multiplayer);
+
+    std::set<std::string> seen;
+    struct Ctx
+    {
+        AutoArray<MissionTemplateEntry>* templates;
+        std::set<std::string>* seen;
+        RString world;
+        bool multiplayer;
+        RString subRoot;
+    } ctx{&templates, &seen, world, multiplayer, subRoot};
+
+    // Every active mod's Templates/SPTemplates (packed only) plus the base, additively and deduped
+    // case-folded (mods first). basePath stays relative; the load side resolves it via the mod dir.
+    ModSystem::EnumDirectories(
+        [](RStringB dir, void* context) -> bool
+        {
+            auto* c = static_cast<Ctx*>(context);
+            if (dir.GetLength() == 0)
+            {
+                ScanTemplateEntries(*c->templates, *c->seen, c->subRoot, c->world, c->multiplayer, false);
+                ScanTemplateEntries(*c->templates, *c->seen, c->subRoot, c->world, c->multiplayer, true);
+            }
+            else
+            {
+                const char sep[2] = {PATH_SEP, '\0'};
+                const RString modRoot = RString((const char*)dir) + RString(sep) + c->subRoot;
+                ScanTemplateEntries(*c->templates, *c->seen, modRoot, c->world, c->multiplayer, true);
+            }
+            return false;
+        },
+        &ctx);
 }
 
 } // namespace Poseidon

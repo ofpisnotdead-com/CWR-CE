@@ -35,6 +35,17 @@ pub enum Command {
     #[serde(rename = "query")]
     Query { what: String },
 
+    #[serde(rename = "query")]
+    MpJoin {
+        what: String,
+        address: String,
+        port: u16,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        password: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        modpath: Option<String>,
+    },
+
     #[serde(rename = "screenshot")]
     Screenshot { path: String },
 
@@ -50,6 +61,9 @@ pub enum Command {
 
     #[serde(rename = "exec")]
     Exec { code: String },
+
+    #[serde(rename = "http_fixture")]
+    HttpFixture { url: String, target: String },
 
     #[serde(rename = "exit")]
     Exit,
@@ -341,5 +355,18 @@ mod tests {
         let json = serde_json::to_string(&cmd).unwrap();
         assert!(json.contains(r#""cmd":"exec""#));
         assert!(json.contains(r#""code":"hint 'hello'""#));
+    }
+
+    #[test]
+    fn serialize_http_fixture() {
+        let cmd = Command::HttpFixture {
+            url: "https://fixtures.test/value.txt".into(),
+            target: "http://127.0.0.1:43127/fixture/0".into(),
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        assert_eq!(
+            json,
+            r#"{"cmd":"http_fixture","url":"https://fixtures.test/value.txt","target":"http://127.0.0.1:43127/fixture/0"}"#
+        );
     }
 }

@@ -205,3 +205,20 @@ TEST_CASE("I-05: Font destructor tolerates shutdown after GEngine is gone", "[Gr
     REQUIRE(region.find("if (GLOB_ENGINE)") != std::string::npos);
     REQUIRE(region.find("GLOB_ENGINE->FontDestroyed(this)") != std::string::npos);
 }
+
+TEST_CASE("I-05: FreeType renderer cache survives texture cache clears", "[Graphics][Font][ShutdownOrder][I-05]")
+{
+    const std::string body = ReadTextFile(PoseidonDir() / "Graphics" / "Rendering" / "Draw" / "Font.cpp");
+    REQUIRE_FALSE(body.empty());
+
+    const std::string fnTag = "void ClearFreeTypeCaches()";
+    const size_t fnPos = body.find(fnTag);
+    REQUIRE(fnPos != std::string::npos);
+
+    const size_t scanEnd = std::min(body.size(), fnPos + 700);
+    const std::string region = body.substr(fnPos, scanEnd - fnPos);
+    CAPTURE(region);
+
+    REQUIRE(region.find("ClearFreeTypeAtlasTextures()") != std::string::npos);
+    REQUIRE(region.find("GetFTRenderers().clear()") == std::string::npos);
+}

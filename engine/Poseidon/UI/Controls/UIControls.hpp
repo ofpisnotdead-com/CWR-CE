@@ -5,6 +5,8 @@
 
 class MsgBox;
 
+RString ControlLineTextWithoutTrailingBreaks(const RString &text, int from, int to);
+
 enum ControlList
 {
 	CLNone,

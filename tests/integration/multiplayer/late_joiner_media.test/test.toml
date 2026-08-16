@@ -1,0 +1,42 @@
+mission = "tests/integration/missions/jip_basic.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 75
+
+tags = ["network"]
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl"]
+name = "server"
+type = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl"]
+name = "early"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:1"
+machine_id = "trident:late_joiner_media:early"
+copy_files = [
+  { source = "early/game.cfg", target = "game.cfg" },
+  { source = "early/UserInfo.cfg", target = "Users/测试一/UserInfo.cfg" },
+  { source = "early/Sound/tri_mp_ping.wav", target = "Users/测试一/Sound/tri_mp_ping.wav" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl"]
+name = "late"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+start_delay_ms = 12000
+mp_assign = "WEST:2"
+machine_id = "trident:late_joiner_media:late"
+copy_files = [
+  { source = "late/game.cfg", target = "game.cfg" },
+  { source = "late/UserInfo.cfg", target = "Users/测试二/UserInfo.cfg" },
+  { source = "late/Sound/tri_mp_ping.wav", target = "Users/测试二/Sound/tri_mp_ping.wav" },
+]

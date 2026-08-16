@@ -43,6 +43,25 @@ std::string NormalizeSupportedLanguage(const std::string& language, const std::s
     auto& reg = LanguageRegistry::Instance();
     if (const LanguageInfo* l = reg.Find(language))
         return l->name;
+
+    for (const auto& l : reg.Languages())
+    {
+        if (!l.code.empty() && CaseCmp(language.c_str(), l.code.c_str()) == 0)
+            return l.name;
+        if (!l.autonym.empty() && CaseCmp(language.c_str(), l.autonym.c_str()) == 0)
+            return l.name;
+        for (const auto& alias : l.localeAliases)
+        {
+            const size_t len = alias.size();
+            if (len > 0 && language.size() >= len && CaseCmp(language.substr(0, len).c_str(), alias.c_str()) == 0 &&
+                (language.size() == len || language[len] == '_' || language[len] == '.' || language[len] == '@' ||
+                 language[len] == '-'))
+            {
+                return l.name;
+            }
+        }
+    }
+
     if (const LanguageInfo* f = reg.Find(fallback))
         return f->name;
     const auto& langs = reg.Languages();

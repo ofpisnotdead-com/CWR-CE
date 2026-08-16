@@ -7,7 +7,7 @@ triAssert [(triGetControlEnabled 101)]
 triClick 101
 triAssertEq [(triDisplay), 43]
 triAssertIncludes [(triVisibleTexts), "Demo Campaign"]
-triClick 2
+triSendKey 41
 triSimUntil { triDisplay == 0 }
 triAssertEq [(triDisplay), 0]
 triEndTest

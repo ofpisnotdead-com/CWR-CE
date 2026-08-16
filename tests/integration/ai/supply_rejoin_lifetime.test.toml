@@ -1,0 +1,6 @@
+tags = ["ai", "headless"]
+binary = "PoseidonGame"
+data_dir = "packages/Demo"
+mission = "tests/integration/missions/command_menu_basic.Demo"
+timeout = 90
+extra_args = ["--dev"]

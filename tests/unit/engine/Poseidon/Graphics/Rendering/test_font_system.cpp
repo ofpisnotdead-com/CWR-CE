@@ -63,8 +63,8 @@ TEST_CASE("FontSystem reports the slot-0 required font set", "[font][system]")
     // a row, this list must too — otherwise Initialize would happily
     // succeed against an incomplete set.
     const std::vector<std::string> expected = {
-        "fonts\\cwr_title.ttf", "fonts\\cwr_body.ttf", "fonts\\cwr_mono.ttf",
-        "fonts\\cwr_serif.ttf", "fonts\\cwr_hand.ttf",
+        "Fonts\\cwr_title.ttf", "Fonts\\cwr_body.ttf", "Fonts\\cwr_mono.ttf",
+        "Fonts\\cwr_serif.ttf", "Fonts\\cwr_hand.ttf",
     };
     for (const auto& path : expected)
     {
@@ -95,10 +95,10 @@ TEST_CASE("FontSystem::RequiredFontsMissing lists absent files", "[font][system]
     auto missing = FontSystem::RequiredFontsMissing();
     CHECK(missing.size() == 5);
 
-    StageFont("fonts\\cwr_body.ttf");
+    StageFont("Fonts\\cwr_body.ttf");
     auto stillMissing = FontSystem::RequiredFontsMissing();
     CHECK(stillMissing.size() == 4);
-    CHECK(std::find(stillMissing.begin(), stillMissing.end(), "fonts\\cwr_body.ttf") == stillMissing.end());
+    CHECK(std::find(stillMissing.begin(), stillMissing.end(), "Fonts\\cwr_body.ttf") == stillMissing.end());
 
     std::filesystem::current_path(std::filesystem::temp_directory_path());
     std::filesystem::remove_all(tmp);

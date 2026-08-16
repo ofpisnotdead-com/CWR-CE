@@ -125,3 +125,26 @@ TEST_CASE("Release builds reject --dev before help or option registration", "[de
     REQUIRE(releaseGuard < helpMode);
     REQUIRE(devBuildGuard < devRegistration);
 }
+
+TEST_CASE("Script error popups are restricted to rwdi dev runs", "[dev][script][regression]")
+{
+    const auto root = std::filesystem::path(TESTS_ROOT_DIR).parent_path();
+    const std::string src = ReadTextFile(root / "engine" / "Poseidon" / "Game" / "Scripting" / "ExpressExt.cpp");
+    REQUIRE_FALSE(src.empty());
+
+    const std::string displayBody =
+        ExtractFunctionBody(src, "void GameStateStringtableInfoFunctions::DisplayErrorMessage");
+    REQUIRE_FALSE(displayBody.empty());
+
+    const size_t buildTypeGate = displayBody.find("BuildInfo::BuildType");
+    const size_t rwdiGate = displayBody.find("\"RelWithDebInfo\"");
+    const size_t devModeGate = displayBody.find("DevMode()");
+    const size_t popup = displayBody.find("GlobalShowMessage");
+    REQUIRE(buildTypeGate != std::string::npos);
+    REQUIRE(rwdiGate != std::string::npos);
+    REQUIRE(devModeGate != std::string::npos);
+    REQUIRE(popup != std::string::npos);
+    REQUIRE(buildTypeGate < popup);
+    REQUIRE(rwdiGate < popup);
+    REQUIRE(devModeGate < popup);
+}

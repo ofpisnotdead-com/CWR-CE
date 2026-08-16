@@ -34,6 +34,11 @@ class InputSubsystem
     float GetAction(InputContext ctx, UserAction action, bool checkFocus = true) const;
     bool GetActionToDo(UserAction action, bool reset = true, bool checkFocus = true);
 
+    // Forward / fast-forward for a context with the Turbo modifier folded in (Turbo
+    // promotes MoveForward to fast). Vehicle pilots read these, not the raw actions.
+    float GetMoveForward(InputContext ctx) const;
+    float GetMoveFastForward(InputContext ctx) const;
+
     // Computed movement state (set by Update())
     float GetMoveForward() const { return moveForward_; }
     float GetMoveFastForward() const { return moveFastForward_; }

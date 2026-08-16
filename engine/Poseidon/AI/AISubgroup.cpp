@@ -1046,35 +1046,36 @@ void AISubgroup::InsertCommand(int index, Command* cmd)
     GetCurrent()->_fsm->SetState(0);
 }
 
-void AISubgroup::DeleteCommand(int index, Command* cmd)
+void AISubgroup::DeleteCommand(NetworkId id)
 {
-    if (index >= _stack.Size())
+    int n = _stack.Size();
+    for (int i = 0; i < n; i++)
     {
-        Fail("Bad index");
-        return;
-    }
-
-    AI_ERROR(_stack[index]._task->GetNetworkId() == cmd->GetNetworkId());
-    if (index == _stack.Size() - 1)
-    {
-        // FIX: remove dummy items
-        for (int i = index - 1; i >= 0; i--)
+        Command* task = _stack[i]._task;
+        if (task && task->GetNetworkId() == id)
         {
-            if (!_stack[i]._fsm)
+            if (i == n - 1)
             {
-                _stack.Delete(i, 1);
-            }
-        }
+                for (int j = i - 1; j >= 0; j--)
+                {
+                    if (!_stack[j]._fsm)
+                    {
+                        _stack.Delete(j, 1);
+                    }
+                }
 
-        AISubgroupContext context(this);
-        context._task = GetCurrent()->_task;
-        context._fsm = GetCurrent()->_fsm;
-        PopTask(&context, false);
-    }
-    else
-    {
-        RptF("Warning: Delete out of order");
-        _stack.Delete(index);
+                AISubgroupContext context(this);
+                context._task = GetCurrent()->_task;
+                context._fsm = GetCurrent()->_fsm;
+                PopTask(&context, false);
+            }
+            else
+            {
+                RptF("Warning: Delete out of order");
+                _stack.Delete(i);
+            }
+            break;
+        }
     }
 }
 
@@ -1233,7 +1234,7 @@ void AISubgroup::AddUnitWithCargo(AIUnit* unit)
         return;
     }
 
-    AI_ERROR(AssertValid());
+    PoseidonAssert(AssertValid());
 
     Transport* veh = unit->GetVehicleIn();
     if (veh)
@@ -1277,7 +1278,7 @@ void AISubgroup::AddUnitWithCargo(AIUnit* unit)
     SelectLeader();
     RefreshPlan();
 
-    AI_ERROR(AssertValid());
+    PoseidonAssert(AssertValid());
 }
 
 } // namespace Poseidon
@@ -1396,7 +1397,7 @@ void AISubgroup::SelectLeader(AIUnit* unit)
 
     _doRefresh = true; // process DoRefresh in next Think
 
-    AI_ERROR(AssertValid());
+    PoseidonAssert(AssertValid());
 }
 namespace Poseidon
 {
@@ -1433,7 +1434,7 @@ void AISubgroup::JoinToSubgroup(AISubgroup* subgrp)
     }
     AI_ERROR(this != GetGroup()->MainSubgroup());
 
-    AI_ERROR(AssertValid());
+    PoseidonAssert(AssertValid());
 
     ClearAllCommands();
 
@@ -1460,7 +1461,7 @@ void AISubgroup::JoinToSubgroup(AISubgroup* subgrp)
     subgrp->RefreshPlan();
     subgrp->UpdateFormationPos();
 
-    AI_ERROR(subgrp->AssertValid());
+    PoseidonAssert(subgrp->AssertValid());
 }
 
 // Mind
@@ -1561,7 +1562,7 @@ bool AISubgroup::Think(ThinkImportance prec)
 #endif
         }
 
-        AI_ERROR(GLOB_WORLD->CheckVehicleStructure());
+        PoseidonAssert(GLOB_WORLD->CheckVehicleStructure());
 
         // Refresh command
         if (Leader() && Leader()->GetExposureChange() >= CRITICAL_EXPOSURE_CHANGE || Glob.time >= _refreshTime)
@@ -1577,7 +1578,7 @@ bool AISubgroup::Think(ThinkImportance prec)
             Leader()->ClearExposureChange();
         }
 
-        AI_ERROR(GLOB_WORLD->CheckVehicleStructure());
+        PoseidonAssert(GLOB_WORLD->CheckVehicleStructure());
     }
 
     bool path = false;
@@ -1594,7 +1595,7 @@ bool AISubgroup::Think(ThinkImportance prec)
         }
     }
 
-    AI_ERROR(GLOB_WORLD->CheckVehicleStructure());
+    PoseidonAssert(GLOB_WORLD->CheckVehicleStructure());
 
     return path; // OperPath called - return busy
 }
@@ -1616,7 +1617,7 @@ void AISubgroup::ReceiveAnswer(AIUnit* from, Answer answer)
         case AI::UnitDestroyed:
         {
             AICenter* center = GetGroup()->GetCenter();
-            AI_ERROR(center->AssertValid());
+            PoseidonAssert(center->AssertValid());
             {
                 Ref<AIGroup> group = GetGroup(); // group may be removed from center
                 AI_ERROR(group);
@@ -1696,7 +1697,7 @@ void AISubgroup::ReceiveAnswer(AIUnit* from, Answer answer)
                 }
                 // group are not destroyed even when all units are destroyed
             }
-            AI_ERROR(center->AssertValid());
+            PoseidonAssert(center->AssertValid());
         }
         break;
         default:

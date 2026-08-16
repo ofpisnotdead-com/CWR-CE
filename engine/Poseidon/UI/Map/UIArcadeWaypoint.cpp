@@ -3,6 +3,8 @@
 
 #include <Poseidon/Core/resincl.hpp>
 #include <Poseidon/UI/Locale/StringtableExt.hpp>
+#include <Poseidon/UI/Locale/Stringtable/CodepageTranscode.hpp>
+#include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
 #include <Poseidon/Game/Mission/MissionPathLoader.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
 
@@ -501,7 +503,8 @@ Control* DisplayTemplateLoad::OnCreateCtrl(int type, int idc, const ParamEntry& 
                 continue;
             }
 
-            int index = combo->AddString(Pars >> "CfgWorlds" >> name >> "description");
+            int index = combo->AddString(
+                Poseidon::DecodeLegacyTextToRString(Pars >> "CfgWorlds" >> name >> "description", GLanguage));
             combo->SetData(index, name);
 
             if (stricmp(name, Glob.header.worldname) == 0)
@@ -943,10 +946,13 @@ bool ParseCutscene(RString cutscene, bool multiplayer)
             }
             message = message + CurrentTemplate.missingAddOns[i];
         }
+        LOG_WARN(Mission, "Cannot load {} from {}: {}", (const char*)cutscene, (const char*)name, (const char*)message);
         Poseidon::Foundation::WarningMessage(message);
     }
     else if (result != LSOK)
     {
+        LOG_WARN(Mission, "Cannot load {} from {}: {}", (const char*)cutscene, (const char*)name,
+                 ar.GetErrorName(result));
         Poseidon::Foundation::WarningMessage("Cannot load mission");
     }
     if (ar.GetArVersion() < 7)

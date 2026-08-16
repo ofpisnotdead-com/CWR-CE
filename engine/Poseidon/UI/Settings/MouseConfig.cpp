@@ -1,10 +1,9 @@
 #include <Poseidon/UI/Settings/MouseConfig.hpp>
 
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
+#include <Poseidon/UI/Settings/SettingsFile.hpp>
 
 #include <algorithm>
-#include <filesystem>
-#include <system_error>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 
 namespace Poseidon
@@ -64,12 +63,9 @@ bool MouseConfig::Normalize()
 
 bool MouseConfig::Load(const std::string& path)
 {
-    std::error_code ec;
-    if (!std::filesystem::exists(path, ec))
-        return false;
-
     ParamFile cfg;
-    cfg.Parse(RString(path.c_str()));
+    if (!ReadSettingsFile(path, cfg))
+        return false;
 
     // Schema version: absent ⇒ legacy v1 file (written before the tuning fields).
     int ver = 1;
@@ -131,11 +127,6 @@ bool MouseConfig::Load(const std::string& path)
 
 bool MouseConfig::Save(const std::string& path) const
 {
-    std::error_code ec;
-    std::filesystem::path p(path);
-    if (p.has_parent_path())
-        std::filesystem::create_directories(p.parent_path(), ec);
-
     ParamFile cfg;
     cfg.Add("version", kCurrentVersion);
 
@@ -159,8 +150,7 @@ bool MouseConfig::Save(const std::string& path) const
     cfg.Add("menuCursorScale", menuCursorScale);
     cfg.Add("extendedRange", extendedRange);
 
-    cfg.Save(RString(path.c_str()));
-    return std::filesystem::exists(path, ec);
+    return WriteSettingsFile(path, cfg);
 }
 
 } // namespace Poseidon

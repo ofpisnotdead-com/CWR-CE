@@ -534,7 +534,6 @@ bool EngineGL33::ResetHard()
     PreReset(true);
     DestroySurfaces();
 
-    DoSetGamma();
     InitGL();
 
     PostReset();
@@ -648,6 +647,23 @@ int EngineGL33::GetSwapInterval() const
     int v = 1;
     SDL_GL_GetSwapInterval(&v);
     return v;
+}
+
+void EngineGL33::StartTextInput()
+{
+    if (_sdlWindow)
+        SDL_StartTextInput(_sdlWindow);
+}
+
+void EngineGL33::StopTextInput()
+{
+    if (_sdlWindow)
+        SDL_StopTextInput(_sdlWindow);
+}
+
+bool EngineGL33::IsTextInputActive() const
+{
+    return _sdlWindow && SDL_TextInputActive(_sdlWindow);
 }
 
 bool EngineGL33::SetWindowMode(WindowMode mode)
@@ -1063,6 +1079,7 @@ void EngineGL33::ShutdownGL()
 
     DeinitVertexShaders();
     DeinitPixelShaders();
+    DestroyGammaTarget();
     DestroySamplerStates();
     DestroyVBTL();
     DestroyVB();

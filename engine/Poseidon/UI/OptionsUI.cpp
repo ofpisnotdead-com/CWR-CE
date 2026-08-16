@@ -16,6 +16,7 @@
 #include <Poseidon/Core/Progress.hpp>
 
 #include <Poseidon/IO/Serialization/ParamArchive.hpp>
+#include <Poseidon/IO/FileServer.hpp>
 #include <Poseidon/Core/SaveVersion.hpp>
 
 #include <Poseidon/IO/Streams/QBStream.hpp>
@@ -28,8 +29,8 @@
 #include <Poseidon/Game/Scripting/Scripts.hpp>
 
 #include <Poseidon/Foundation/Common/Win.h>
-#include <Poseidon/Foundation/Common/PlayerPrefs.hpp>
 #include <Poseidon/IO/Filesystem/FileOps.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <Poseidon/Core/ModSystem.hpp>
 #include <Poseidon/UI/GameModule.hpp>
 #include <limits.h>
@@ -121,7 +122,7 @@ RString GetUserDirectory()
 {
     std::string dir =
         ProfileManager::GetProfileDirPath(GamePaths::Instance().UserDir(), std::string(Glob.header.playerName));
-    std::filesystem::create_directories(dir);
+    ProfileManager::EnsureProfileDirectory(GamePaths::Instance().UserDir(), std::string(Glob.header.playerName));
     return dir.c_str();
 }
 
@@ -161,6 +162,7 @@ static RString BaseDirectory;
 
 static RString BaseSubdirectory;
 static std::optional<float> CurrentMissionViewDistance;
+static bool UserMission = false;
 
 void UpdateCurrentMissionViewDistance()
 {
@@ -220,8 +222,37 @@ void CreatePath(RString path)
     }
 }
 
+static RString GetLegacyUserSaveDirectory()
+{
+    return GetUserDirectory() + RString("Saved/") + GetBaseDirectory() + GetBaseSubdirectory() +
+           RString(Glob.header.filenameReal) + RString(".") + RString(Glob.header.worldname) + RString("/");
+}
+
+static void CopyLegacyUserSaveFiles(RString destination)
+{
+    const RString source = GetLegacyUserSaveDirectory();
+    static const char* filenames[] = {"autosave.fps", "continue.fps", "save.fps", "weapons.cfg"};
+    for (const char* filename : filenames)
+    {
+        CopyFileUtf8(source + RString(filename), destination + RString(filename), true);
+    }
+}
+
 RString GetSaveDirectory()
 {
+    if (UserMission)
+    {
+        if (Glob.header.filenameReal.GetLength() == 0)
+        {
+            return GetTmpSaveDirectory();
+        }
+        RString dir = GetUserDirectory() + RString("UserSaved/") + GetBaseSubdirectory() +
+                      RString(Glob.header.filenameReal) + RString(".") + RString(Glob.header.worldname) + RString("/");
+        CreatePath(dir);
+        CopyLegacyUserSaveFiles(dir);
+        return dir;
+    }
+
     /*
         RString dir = GetUserDirectory() + RString("Saved");
         mkdir(dir, nullptr);
@@ -248,6 +279,7 @@ RString GetCampaignSaveDirectory(RString campaign)
 {
     if (campaign.GetLength() == 0)
     {
+        return GetTmpSaveDirectory();
     }
     RString dir = GetUserDirectory() + RString("Saved/campaigns/") + campaign + RString("/");
     return dir;
@@ -753,8 +785,9 @@ const ParamEntry* FindRscTitle(RString name)
 
 // campaign description.ext
 
-void SetBaseDirectory(RString dir)
+void SetBaseDirectory(bool userMission, RString dir)
 {
+    UserMission = userMission;
     BaseDirectory = dir;
     ExtParsCampaign.Clear();
     if (BaseDirectory.GetLength() > 0)
@@ -769,6 +802,16 @@ void SetBaseDirectory(RString dir)
             ExtParsCampaign.Parse(filename);
         }
     }
+}
+
+void SetBaseDirectory(RString dir)
+{
+    SetBaseDirectory(false, dir);
+}
+
+bool IsUserMission()
+{
+    return UserMission;
 }
 
 void SetBaseSubdirectory(RString dir)
@@ -846,6 +889,42 @@ void SetMission(RString world, RString mission, RString subdir)
     UpdateCurrentMissionViewDistance();
 }
 
+RString ResolveArcadeMissionSubdir(RString world, RString mission)
+{
+    // An arcade single mission may live unpacked under an active mod's missions/. Return the owning
+    // root's missions subdir so SetMission loads it from there; fall back to the base game's missions/.
+    struct Ctx
+    {
+        RString world;
+        RString mission;
+        RString result;
+    } ctx{world, mission, GetMissionsDir()};
+
+    ModSystem::EnumDirectories(
+        [](RStringB dir, void* context) -> bool
+        {
+            if (dir.GetLength() == 0)
+            {
+                return false;
+            }
+            auto* c = static_cast<Ctx*>(context);
+            const RString subdir = RString((const char*)dir) + RString("/") + GetMissionsDir();
+            const RString probe = subdir + c->mission + RString(".") + c->world;
+            _finddata_t info;
+            const intptr_t h = _findfirst(probe, &info);
+            if (h != -1)
+            {
+                _findclose(h);
+                c->result = subdir;
+                return true;
+            }
+            return false;
+        },
+        &ctx);
+
+    return ctx.result;
+}
+
 void SetMission(RString world, RString mission)
 {
     SetMission(world, mission, GetMissionsDir());
@@ -894,18 +973,70 @@ static bool FindMissionPboCallback(RStringB dir, void* ctx)
     return false;
 }
 
+struct FindCutsceneRootContext
+{
+    const char* rel; // "Anims\\<name>.<world>\\mission.sqm"
+    RString result;  // "<mod>\\Anims\\" subdir when a mod carries the cutscene
+};
+static bool FindCutsceneRootCallback(RStringB dir, void* ctx)
+{
+    auto* c = static_cast<FindCutsceneRootContext*>(ctx);
+    if (dir.GetLength() == 0)
+        return false; // base dir -> the anims/ bank is the fallback
+    char probe[1024];
+    snprintf(probe, sizeof(probe), "%s\\%s", (const char*)dir, c->rel);
+    if (!QIFStreamB::FileExist(probe))
+        return false;
+    char sub[1024];
+    snprintf(sub, sizeof(sub), "%s\\Anims\\", (const char*)dir);
+    c->result = sub;
+    return true;
+}
+
+RString ResolveCutsceneAnimsSubdir(RString world, RString name)
+{
+    // A "..\addons\..." cutscene is a packed-bank path resolved through the base anims/ mount; only a
+    // bare cutscene name lives in a mod's Anims/ folder, hosted like any other mission type.
+    if (strpbrk(name, "\\/"))
+        return GetAnimsDir();
+    char rel[512];
+    snprintf(rel, sizeof(rel), "Anims\\%s.%s\\mission.sqm", (const char*)name, (const char*)world);
+    FindCutsceneRootContext ctx;
+    ctx.rel = rel;
+    if (::EnumModDirectories(FindCutsceneRootCallback, &ctx))
+        return ctx.result;
+    return GetAnimsDir();
+}
+
 RString CreateSingleMissionBank(RString filename)
 {
     // suppose filename is without extension (.pbo)
 
-    // remove bank
+    // Remove the previously created __cur_sp bank(s). Match with CmpStartStr —
+    // the same separator- and case-insensitive prefix test AutoBank uses to
+    // resolve reads. A plain strnicmp here is separator-sensitive, and
+    // SetPrefix() stores the prefix with platform-native separators
+    // (backslash -> slash on POSIX): on Linux the literal backslash prefix never
+    // matched, so old banks leaked and every template resolved to the first
+    // stale __cur_sp bank.
     const char* prefix = "missions\\__cur_sp.";
-    int prefixLen = strlen(prefix);
     for (int i = 0; i < GFileBanks.Size();)
     {
         QFBank& bank = GFileBanks[i];
-        if (strnicmp(bank.GetPrefix(), prefix, prefixLen) == 0)
+        if (CmpStartStr(bank.GetPrefix(), prefix) == 0)
         {
+            if (GFileServer)
+            {
+                GFileServer->FlushBank(&bank);
+            }
+            if (GEngine && GEngine->TextBank())
+            {
+                GEngine->TextBank()->FlushBank(&bank);
+            }
+            if (GSoundsys)
+            {
+                GSoundsys->FlushBank(&bank);
+            }
             GFileBanks.Delete(i);
         }
         else
@@ -2119,9 +2250,10 @@ void StartRandomCutscene(RString world)
 
     RString name = cls[i];
 
-    SetMission(world, name, GetAnimsDir());
-    //	SetCampaign("");
+    // A mod that ships Anims/<name>.<world> hosts the cutscene from its own root; else the base
+    // anims/ bank. Clear the base dir first so SetMission's own reads resolve from the same place.
     SetBaseDirectory("");
+    SetMission(world, name, ResolveCutsceneAnimsSubdir(world, name));
 
     ParseIntro();
 

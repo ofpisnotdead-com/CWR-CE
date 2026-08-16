@@ -13,7 +13,6 @@
 #include <initializer_list>
 #include <Poseidon/Foundation/Framework/Log.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
-#include <Poseidon/Foundation/Types/Pointers.hpp>
 #include <Poseidon/Foundation/platform.hpp>
 #ifdef _WIN32
 #include <windows.h>
@@ -59,10 +58,8 @@ static bool ResolveFileInDir(RStringB dir, const char* name, RString& fullPath, 
     return false;
 }
 
-// ParamFile::Parse resolves #include directives relative to the current working directory,
-// so we chdir into the file's directory, parse the basename, and restore.
-// Always parse the basename — passing dir/file.cpp after chdir to dir would double
-// the prefix and silently parse nothing.
+// #include resolves against the cwd, so chdir into the file's dir and parse the basename;
+// the full path after chdir doubles the prefix and parses nothing.
 static bool ParseTextFileFromResolvedPath(ParamFile& target, RStringB fullPath, RStringB parseName)
 {
     LSError err = target.Parse(fullPath);
@@ -84,28 +81,28 @@ static bool ParseTextFileFromResolvedPath(ParamFile& target, RStringB fullPath, 
     return err == LSOK;
 }
 
-static SRef<ParamFile> s_deferredModConfig;
-
-// True when a mod's bin/resource won the resource enumeration (replaced the base
-// menu resource). Read by the main menu to keep the community addon's custom menu
-// (and hijack it) instead of flipping to the remaster menu, and by config init to
-// restore the base remaster UI resources the mod's resource shadowed.
+// A mod's bin/resource replaced the base menu resource; read to keep the mod's menu and to
+// restore the base remaster UI resources it shadowed.
 static bool s_menuOverriddenByMod = false;
+
+// A mod's bin/config replaced the base master config; read to restore the base config-extra
+// (CfgLanguages) it shadowed.
+static bool s_configOverriddenByMod = false;
 
 bool IsMenuOverriddenByMod()
 {
     return s_menuOverriddenByMod;
 }
 
+bool IsConfigOverriddenByMod()
+{
+    return s_configOverriddenByMod;
+}
+
 void MergeBaseResourceExtra()
 {
-    // The base game's resource-extra.cpp carries the remaster's UI additions
-    // (RscOptionsShell, RscDisplayMainRemaster, …) as new classes. The resource
-    // enumeration (ParseResource) stops at the first mod that ships a bin/resource
-    // — and Res.ParseBin clears Res on entry — so when a community mod replaces the
-    // menu resource the base extra is never reached, leaving the new Options screen
-    // empty and the Mods entry gone. Merge it on top of whatever the mod loaded so
-    // the remaster UI survives any resource override.
+    // ParseResource stops at the first mod's bin/resource and clears Res, so the base
+    // resource-extra.cpp (remaster Options/Mods UI) is never reached; merge it back on top.
     for (bool upperCase : {false, true})
     {
         RString binDir = MakeBinDir("", upperCase);
@@ -116,12 +113,33 @@ void MergeBaseResourceExtra()
             ParamFile extra;
             ParseTextFileFromResolvedPath(extra, extraFile, extraFileName);
             Res.Update(extra);
-            // Update copies array values verbatim, keeping their _file back-pointer aimed at the
-            // stack-local `extra`; re-point them at Res before `extra` dies, or a later
-            // string-expression GetFloat (e.g. a control's position/up/direction) derefs freed
-            // stack (stack-use-after-return opening the Mods screen).
+            // Update leaves array values' _file aimed at the stack-local `extra`; re-point at Res
+            // before it dies, else a later string-expression GetFloat derefs freed stack.
             Res.SetFile(&Res);
             LOG_INFO(Config, "MergeBaseResourceExtra: restored base {} over the mod resource", (const char*)extraFile);
+            return;
+        }
+    }
+}
+
+void MergeBaseConfigExtra()
+{
+    // Twin of MergeBaseResourceExtra: a config-replacing mod clears Pars and shadows the base
+    // config-extra.cpp (CfgLanguages); re-apply it on top.
+    for (bool upperCase : {false, true})
+    {
+        RString binDir = MakeBinDir("", upperCase);
+        RString extraFile;
+        RString extraFileName;
+        if (ResolveFileInDir(binDir, "config-extra.cpp", extraFile, extraFileName))
+        {
+            ParamFile extra;
+            ParseTextFileFromResolvedPath(extra, extraFile, extraFileName);
+            Pars.Update(extra);
+            // Re-point at Pars before the stack-local `extra` dies (stack-use-after-return), as
+            // in the resource-extra path.
+            Pars.SetFile(&Pars);
+            LOG_INFO(Config, "MergeBaseConfigExtra: restored base {} over the mod config", (const char*)extraFile);
             return;
         }
     }
@@ -160,39 +178,38 @@ bool ParseStringtable(RStringB dir, void* context)
 
 bool ParseConfig(RStringB dir, void* context)
 {
-    bool isMod = (dir.GetLength() > 0);
-    if (isMod)
-    {
-        for (bool upperCase : {false, true})
-        {
-            RString binDir = MakeBinDir(dir, upperCase);
-            SRef<ParamFile> modConfig = new ParamFile;
-            if (ParseConfigFromDir(binDir, *modConfig))
-            {
-                s_deferredModConfig = modConfig;
-                LOG_INFO(Config, "  Mod config found in {}, deferring merge", (const char*)binDir);
-                break;
-            }
-        }
-        return false;
-    }
-
+    // A mod's bin/config replaces the base outright: EnumDirectories stops at the first mod that
+    // returns true, so vanilla content the mod omits does not leak back in. Mirrors ParseResource.
+    s_configOverriddenByMod = false; // reset so a re-init with no mod config leaves it false
+    RString binDirUsed;
     for (bool upperCase : {false, true})
     {
         RString binDir = MakeBinDir(dir, upperCase);
         if (ParseConfigFromDir(binDir, Pars))
         {
-            if (s_deferredModConfig)
-            {
-                LOG_INFO(Config, "  Merging deferred mod config into base");
-                Pars.Update(*s_deferredModConfig);
-                s_deferredModConfig = nullptr;
-            }
-            return true;
+            binDirUsed = binDir;
+            break;
         }
     }
+    if (binDirUsed.GetLength() == 0)
+        return false;
 
-    return false;
+    // config-extra.cpp carries the remaster's CfgLanguages as new classes, merged via Update() so
+    // they apply without rebuilding CONFIG.BIN; a config-replacing mod's bin has none.
+    RString extraFile;
+    RString extraFileName;
+    if (ResolveFileInDir(binDirUsed, "config-extra.cpp", extraFile, extraFileName))
+    {
+        ParamFile extra;
+        ParseTextFileFromResolvedPath(extra, extraFile, extraFileName);
+        Pars.Update(extra);
+        Pars.SetFile(&Pars);
+        LOG_INFO(Config, "ParseConfig: merged {} into Pars", (const char*)extraFile);
+    }
+
+    // Non-empty dir means a mod's config won (enumeration stopped here).
+    s_configOverriddenByMod = (dir.GetLength() > 0);
+    return true;
 }
 
 bool ParseRemaster(RStringB dir, void* context)
@@ -241,10 +258,8 @@ bool ParseResource(RStringB dir, void* context)
     if (!ok)
         return false;
 
-    // Optional supplemental resources — resource-extra.cpp in the same bin/ directory
-    // is merged via Update() so it can add new displays/templates without rebuilding
-    // the pre-compiled RESOURCE.BIN. Parse + Update is required because ParamFile::Parse
-    // clears entries on entry (paramFile.cpp:3206).
+    // resource-extra.cpp adds displays/templates without rebuilding RESOURCE.BIN; Update() (not
+    // Parse, which clears entries) merges it on top.
     {
         RString extraFile;
         RString extraFileName;
@@ -253,16 +268,14 @@ bool ParseResource(RStringB dir, void* context)
             ParamFile extra;
             ParseTextFileFromResolvedPath(extra, extraFile, extraFileName);
             Res.Update(extra);
-            // Re-point merged array values at Res before the stack-local `extra` dies — Update
-            // leaves their _file aimed at the source. Otherwise a string-expression GetFloat
-            // (control position/up/direction) derefs freed stack (stack-use-after-return).
+            // Re-point at Res before the stack-local `extra` dies, else a later string-expression
+            // GetFloat derefs freed stack (stack-use-after-return).
             Res.SetFile(&Res);
             LOG_INFO(Config, "ParseResource: merged {} into Res", (const char*)extraFile);
         }
     }
 
-    // The winning resource (enumeration stops here) came from a mod when dir is
-    // non-empty — the base menu resource was replaced.
+    // Non-empty dir means a mod's resource won (enumeration stopped here).
     s_menuOverriddenByMod = (dir.GetLength() > 0);
     return true;
 }

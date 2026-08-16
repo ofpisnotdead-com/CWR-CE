@@ -270,8 +270,8 @@ void ControlsContainer::SetCursor(const char* name)
 
 void ControlsContainer::LoadControl(const ParamEntry& ctrlCls)
 {
-    int type = ctrlCls >> "type";
-    int idc = ctrlCls >> "idc";
+    int type = ResolveLegacyControlInt(ctrlCls >> "type");
+    int idc = ResolveLegacyControlInt(ctrlCls >> "idc");
     Control* ctrl = OnCreateCtrl(type, idc, ctrlCls);
     if (ctrl != nullptr)
     {
@@ -287,8 +287,8 @@ void ControlsContainer::LoadControl(const ParamEntry& ctrlCls)
 
 void ControlsContainer::LoadObject(const ParamEntry& ctrlCls)
 {
-    int type = ctrlCls >> "type";
-    int idc = ctrlCls >> "idc";
+    int type = ResolveLegacyControlInt(ctrlCls >> "type");
+    int idc = ResolveLegacyControlInt(ctrlCls >> "idc");
     ControlObject* ctrl = OnCreateObject(type, idc, ctrlCls);
     if (ctrl != nullptr)
     {
@@ -304,8 +304,8 @@ void ControlsContainer::LoadObject(const ParamEntry& ctrlCls)
 
 void ControlsContainer::LoadControlBackground(const ParamEntry& ctrlCls)
 {
-    int type = ctrlCls >> "type";
-    int idc = ctrlCls >> "idc";
+    int type = ResolveLegacyControlInt(ctrlCls >> "type");
+    int idc = ResolveLegacyControlInt(ctrlCls >> "idc");
     Control* ctrl = OnCreateCtrl(type, idc, ctrlCls);
     if (ctrl != nullptr)
     {
@@ -321,8 +321,8 @@ void ControlsContainer::LoadControlBackground(const ParamEntry& ctrlCls)
 
 void ControlsContainer::Load(const ParamEntry& clsEntry)
 {
-    _idd = clsEntry >> "idd";
-    int moving = clsEntry >> "movingEnable";
+    _idd = ResolveLegacyControlInt(clsEntry >> "idd");
+    int moving = ResolveLegacyControlInt(clsEntry >> "movingEnable");
     _movingEnable = moving != 0;
     const ParamEntry* cfg = clsEntry.FindEntry("controls");
     if (cfg)
@@ -1433,6 +1433,13 @@ bool ControlsContainer::SetFocus(ControlId& id, bool up, bool def)
         ctrl->OnSetFocus(up, def);
     }
     _indexFocused = id;
+    if (GEngine)
+    {
+        if (ctrl && ctrl->WantsTextInput())
+            GEngine->StartTextInput();
+        else
+            GEngine->StopTextInput();
+    }
     return true;
 }
 
@@ -1550,6 +1557,11 @@ void Display::DrawHUD(VehicleWithAI* vehicle, float alpha)
 
 void Display::SimulateHUD(VehicleWithAI* vehicle)
 {
+    if (GWorld)
+    {
+        GWorld->HandleVoiceChatShortcuts();
+    }
+
     ControlsContainer* ptr = this;
     while (ptr->Child())
     {
@@ -1651,7 +1663,6 @@ Poseidon::ControllerUiScene Display::GetControllerUiScene() const
         case IDD_PASSWORD:
         case IDD_IP_ADDRESS:
         case IDD_PORT:
-        case IDD_MODS_FILTER:
         case IDD_LOGIN:
         case IDD_NEW_USER:
             scene.kind = Poseidon::ControllerSceneKind::TextEntry;

@@ -31,6 +31,7 @@ class IdString
 class IdStringTable
 {
 	DynEnumCS _enum;
+	AutoArray<RStringB> _strings;
 
 	public:
 	IdStringTable();

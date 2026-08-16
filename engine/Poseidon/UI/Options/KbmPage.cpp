@@ -35,10 +35,7 @@ bool KbmPage::DeviceFilter(int packedCode) const
 
 bool KbmPage::IsActionVisible(UserAction action, ControlsCategory category) const
 {
-    if (category == ControlsCategoryOnFoot &&
-        (action == UAAimUp || action == UAAimDown || action == UAAimLeft || action == UAAimRight))
-        return false;
-    return BindingsPage::IsActionVisible(action, category);
+    return IsActionVisibleOnKeyboard(action, category);
 }
 
 std::unique_ptr<OptionsPage> KbmPage::MakeCaptureModal(std::string actionLabel, std::string slotName,

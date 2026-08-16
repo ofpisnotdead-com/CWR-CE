@@ -349,6 +349,19 @@ bool OptionsShell::OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
     return Display::OnKeyDown(nChar, nRepCnt, nFlags);
 }
 
+bool OptionsShell::DoControllerUiAction(ControllerUiAction action)
+{
+    // Y (Delete) clears the focused binding, reusing the keyboard clear path.
+    // Only the bindings list advertises CtrlDelete, so this is dispatched there.
+    if (action == ControllerUiAction::Delete)
+    {
+        if (auto* page = TopPage())
+            return page->OnKeyDown(*this, SDLK_DELETE);
+        return false;
+    }
+    return Display::DoControllerUiAction(action);
+}
+
 ControllerUiScene OptionsShell::GetControllerUiScene() const
 {
     if (m_stack.empty())

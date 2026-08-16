@@ -327,7 +327,6 @@ CMD_RADIO_CUSTOM_0
 #define IDD_MP_SETUP					70
 #define IDD_FILTER						71
 #define IDD_MODS							72
-#define IDD_MODS_FILTER				73
 #define IDD_MODS_DOWNLOAD			74
 #define IDD_JOIN_REQUIREMENTS		75
 
@@ -380,11 +379,31 @@ CMD_RADIO_CUSTOM_0
 #define IDC_MODS_ICON_STATE			119
 #define IDC_MODS_COL_SOURCE			120
 #define IDC_MODS_ICON_SOURCE			121
-#define IDC_MODS_SOURCE				122
 #define IDC_MODS_FILTER				123
-#define IDC_MODS_FILTER_NAME			124
 #define IDC_MODS_NOTEBOOK			106
 #define IDC_MODS_MASTER_SERVER			7000
+#define IDC_MODS_TAB_ALL			7001
+#define IDC_MODS_TAB_INSTALLED			7002
+#define IDC_MODS_TAB_WORKSHOP			7003
+#define IDC_MODS_TAB_LOCAL			7004
+#define IDC_MODS_TAB_ACTIVE			7009
+#define IDC_MODS_TAB_FILL_ALL			7005
+#define IDC_MODS_TAB_FILL_INSTALLED		7006
+#define IDC_MODS_TAB_FILL_WORKSHOP		7007
+#define IDC_MODS_TAB_FILL_LOCAL			7008
+#define IDC_MODS_PENDING			7010
+#define IDC_MODS_GUIDANCE			7011
+#define IDC_MODS_SEARCH_LABEL			7012
+#define IDC_MODS_COL_ACTION			7013
+#define IDC_MODS_ICON_ACTION			7014
+#define IDC_MODS_TAB_FILL_ACTIVE		7015
+#define IDC_MODS_TAB_SEPARATOR_1		7016
+#define IDC_MODS_TAB_SEPARATOR_2		7017
+#define IDC_MODS_TAB_SEPARATOR_3		7018
+#define IDC_MODS_TAB_SEPARATOR_4		7019
+#define IDC_MODS_COL_ACTIVE			109
+#define IDC_MODS_ICON_ACTIVE			107
+#define IDC_MODS_TOGGLE				122
 
 // Mods download dialog (RscDisplayModDownload) — opened from Apply when the
 // ticked set includes not-yet-downloaded (Available) mods.
@@ -398,6 +417,7 @@ CMD_RADIO_CUSTOM_0
 #define IDC_MODS_DL_OVERALL_TRACK		132
 #define IDC_MODS_DL_OVERALL_FILL		133
 #define IDC_MODS_DL_STATUS			134
+#define IDC_MODS_DOWNLOAD_KEEP			135
 
 // Join-requirements dialog (RscDisplayJoinRequirements)
 #define IDC_JOINREQ_TITLE			135
@@ -948,4 +968,3 @@ CMD_RADIO_CUSTOM_0
 // - load mission progress bar
 #define IDC_LOAD_MISSION_NAME					101
 #define IDC_LOAD_MISSION_DATE					102
-

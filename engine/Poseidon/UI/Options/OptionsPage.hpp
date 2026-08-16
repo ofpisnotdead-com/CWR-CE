@@ -29,6 +29,7 @@
 
 #include <Poseidon/UI/Controls/UIControls.hpp>
 #include <Poseidon/Input/ControllerUiScene.hpp>
+#include <Poseidon/Input/UserAction.hpp>
 
 #include <vector>
 
@@ -120,5 +121,7 @@ protected:
 
 	std::vector<int> m_mountedIdcs;
 };
+
+const char* ControlActionLabel(UserAction action);
 
 } // namespace Poseidon

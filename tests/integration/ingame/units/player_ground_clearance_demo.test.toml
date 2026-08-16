@@ -1,0 +1,7 @@
+tags = ["headless", "units", "terrain", "ci-host-blocked"]
+binary = "PoseidonGame"
+mission = "tests/integration/missions/bug-ground.Demo"
+data_dir = "packages/Demo"
+timeout = 60
+assert_timeout = 20
+extra_args = ["--dev", "--no-splash"]

@@ -1,0 +1,23 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 90
+
+tags = ["headful", "network", "issue74"]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "king-city-host-lin", "--log-format", "jsonl"]
+name = "host"
+type = "client"
+use_mission = false
+no_autotest = true
+machine_id = "trident:hosted_lan_king_city:host"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "king-city-joiner-lin", "--log-format", "jsonl"]
+name = "joiner"
+type = "client"
+use_mission = false
+no_autotest = true
+after = "host"
+start_delay_ms = 15000
+machine_id = "trident:hosted_lan_king_city:joiner"

@@ -1,0 +1,7 @@
+binary = "PoseidonGame"
+mission = "tests/integration/missions/command_menu_basic.Demo"
+data_dir = "packages/Demo"
+timeout = 90
+assert_timeout = 20
+# --mods-dir is relative to the game CWD (the data dir).
+extra_args = ["--mods-dir", "../../tests/fixtures/mods-handitem", "--mod", "@handitem"]

@@ -9,6 +9,7 @@
 #if defined _WIN32
 
 #include <Poseidon/IO/Streams/QBStream.hpp>
+#include <Poseidon/IO/Filesystem/FileOps.hpp>
 
 namespace Poseidon
 {
@@ -52,12 +53,7 @@ FileBufferMapped::FileBufferMapped(const char* name, int start, int size)
     {
         return; // zero sized - no data
     }
-    _fileHandle = ::CreateFile(name, GENERIC_READ,
-                               FILE_SHARE_READ, // enable reading
-                               nullptr,         // security
-                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
-                               nullptr // template
-    );
+    _fileHandle = OpenFileForRead(name);
     if (_fileHandle == INVALID_HANDLE_VALUE)
     {
         _fileHandle = nullptr;

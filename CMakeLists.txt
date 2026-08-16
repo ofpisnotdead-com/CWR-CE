@@ -166,7 +166,7 @@ find_package(enkiTS CONFIG REQUIRED)
 # dist/<preset>/{game,viewer,tools} - auto-create on build
 get_filename_component(PRESET_NAME "${CMAKE_BINARY_DIR}" NAME)
 set(DIST_PRESET_NAME "${PRESET_NAME}")
-if(DIST_PRESET_NAME MATCHES "^(win|linux)-([^-]+)(-(.*))?$")
+if(DIST_PRESET_NAME MATCHES "^(win|macos|linux)-([^-]+)(-(.*))?$")
     set(_dist_platform "${CMAKE_MATCH_1}")
     set(_dist_arch "${CMAKE_MATCH_2}")
     set(_dist_suffix "${CMAKE_MATCH_4}")
@@ -213,8 +213,7 @@ add_subdirectory(apps/tools/Tools)
 add_subdirectory(apps/tools/TcPbo)
 add_subdirectory(apps/tools/TcLister)
 add_subdirectory(apps/tools/Studio)
-# tests/unit/apps/Studio's ImGui-Test-Engine UI suite is quarantined under
-# License-restricted UI test sources are not part of this public tree.
+add_subdirectory(tests/unit/apps/Studio)
 add_subdirectory(apps/tetris/Tetris)
 add_subdirectory(tests/unit/apps/Tetris)
 

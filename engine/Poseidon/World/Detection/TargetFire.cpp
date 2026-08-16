@@ -96,11 +96,12 @@ int EntityAI::EstimateAttack(const Vector3& hPos, float height, const EntityAI* 
     Matrix4 transform; // predict what position will the vehicle have
 
     Vector3 hePos = hPos;
-    AIUnit* unit = CommanderUnit();
-    if (unit)
+    Ref<AIUnit> unit = CommanderUnit();
+    if (!unit)
     {
-        unit->FindNearestEmpty(hePos);
+        return 0;
     }
+    unit->FindNearestEmpty(hePos);
 
     float dx, dz;
     float posY = GLandscape->RoadSurfaceYAboveWater(hePos.X(), hePos.Z(), &dx, &dz);

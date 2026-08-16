@@ -1,0 +1,42 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 60
+
+tags = ["headful", "network"]
+
+# Classic dedicated lifecycle: config-Missions server, no --simulate. The first
+# client's ready-up launches the mission while the second client is still mid
+# connect handshake, which is the race this row pins: the late client must be
+# classified as JIP, get the join choreography instead of raw state broadcasts,
+# and reach playable state in the running mission.
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl", "--config", "${output}/server/user/server.cfg"]
+name = "server"
+type = "server"
+use_mission = false
+copy_files = [
+  { source = "server.cfg", target = "server.cfg" },
+  { source = "jip_basic.Demo.pbo", target = "content/MPMissions/jip_basic.Demo.pbo" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "client1", "--log-format", "jsonl"]
+name = "client1"
+type = "client"
+use_mission = false
+connect = "server"
+after = "server"
+start_delay_ms = 4000
+mp_assign = "WEST:1"
+machine_id = "trident:classic_lobby_second_join:client1"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "client2", "--log-format", "jsonl"]
+name = "client2"
+type = "client"
+use_mission = false
+connect = "server"
+after = "server"
+start_delay_ms = 4000
+mp_assign = "WEST:2"
+machine_id = "trident:classic_lobby_second_join:client2"

@@ -272,9 +272,6 @@ void Engine::SaveConfig()
     cfg.Add("brightness", _usrBrightness);
     cfg.Add("multitexturing", _multitexturing);
     cfg.Add("useWBuffer", IsWBuffer());
-    cfg.Add("fovTop", _aspectSettings.topFOV);
-    cfg.Add("fovLeft", _aspectSettings.leftFOV);
-
     cfg.Add("uiTopLeftX", _aspectSettings.uiTopLeftX);
     cfg.Add("uiTopLeftY", _aspectSettings.uiTopLeftY);
     cfg.Add("uiBottomRightX", _aspectSettings.uiBottomRightX);
@@ -293,9 +290,6 @@ void Engine::LoadConfig()
     {
         SetMultitexturing(cfg >> "multitexturing");
     }
-    _aspectSettings.topFOV = cfg.ReadValue("fovTop", 0.75f);
-    _aspectSettings.leftFOV = cfg.ReadValue("fovLeft", 1.0f);
-
     _aspectSettings.uiTopLeftX = cfg.ReadValue("uiTopLeftX", 0.0f);
     _aspectSettings.uiTopLeftY = cfg.ReadValue("uiTopLeftY", 0.0f);
     _aspectSettings.uiBottomRightX = cfg.ReadValue("uiBottomRightX", 1.0f);

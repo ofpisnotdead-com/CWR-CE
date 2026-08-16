@@ -2,7 +2,7 @@
 //! and publish a packed mod to a PapaBear master service.
 
 use std::fs;
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,6 +12,7 @@ use clap::{Args, Parser, Subcommand};
 use papa_bear_archive::Pbo;
 use papa_bear_client::codec::SessionResponse;
 use papa_bear_client::query::{query_server, ServerStatus};
+use sha2::{Digest, Sha256};
 use tempfile::NamedTempFile;
 
 /// Default game host port for a direct `query` probe when none is given.
@@ -64,6 +65,8 @@ enum Command {
     Info(InfoArgs),
     /// Publish a mod (a folder to pack, or an already-packed .pbo) to a workshop.
     Publish(PublishArgs),
+    /// Upload a new immutable revision of an existing workshop mod.
+    Update(UpdateArgs),
     /// List the mods on a remote workshop.
     List,
     /// Download + unpack mods from a workshop into a mods directory (for servers).
@@ -135,6 +138,38 @@ struct PublishArgs {
 }
 
 #[derive(Args, Debug)]
+struct UpdateArgs {
+    /// Stable workshop mod identifier to update.
+    mod_id: String,
+    /// A folder to pack, or an already-packed `.pbo` to upload as-is.
+    source: String,
+    /// Admin API key (also read from `PAPA_ADMIN_KEY`).
+    #[arg(long, env = "PAPA_ADMIN_KEY")]
+    admin_key: String,
+    /// Replacement display name; omitted values inherit the current metadata.
+    #[arg(long)]
+    name: Option<String>,
+    /// Replacement author-facing version.
+    #[arg(long)]
+    version: Option<String>,
+    /// Replacement short description.
+    #[arg(long)]
+    description: Option<String>,
+    /// Replacement author list.
+    #[arg(long = "author")]
+    authors: Vec<String>,
+    /// Replacement project homepage URL.
+    #[arg(long)]
+    homepage_url: Option<String>,
+    /// Replacement canonical install folder name.
+    #[arg(long)]
+    folder_name: Option<String>,
+    /// Addon prefix property baked into the PBO.
+    #[arg(long)]
+    prefix: Option<String>,
+}
+
+#[derive(Args, Debug)]
 struct InstallArgs {
     /// Mods to install: modIds (`papa list`), folder names, or unique prefixes —
     /// space- and/or `;`-separated. e.g. `csla-2.2`, `CSLA`, or `"CSLA;@DVDcrcti"`.
@@ -195,6 +230,7 @@ fn main() -> Result<()> {
         Command::Unpack(args) => run_unpack(args),
         Command::Info(args) => run_info(args),
         Command::Publish(args) => run_publish(args, &cli.master, cli.insecure),
+        Command::Update(args) => run_update(args, &cli.master, cli.insecure),
         Command::List => run_list(&cli.master, cli.insecure),
         Command::Install(args) => run_install(args, &cli.master, cli.insecure),
         Command::Query(args) => run_query(args),
@@ -245,6 +281,30 @@ fn run_info(args: &InfoArgs) -> Result<()> {
 }
 
 fn run_publish(args: &PublishArgs, master: &str, insecure: bool) -> Result<()> {
+    run_upload(args, None, master, insecure)
+}
+
+fn run_update(args: &UpdateArgs, master: &str, insecure: bool) -> Result<()> {
+    let publish = PublishArgs {
+        source: args.source.clone(),
+        admin_key: args.admin_key.clone(),
+        name: args.name.clone().unwrap_or_default(),
+        version: args.version.clone(),
+        description: args.description.clone(),
+        authors: args.authors.clone(),
+        homepage_url: args.homepage_url.clone(),
+        folder_name: args.folder_name.clone(),
+        prefix: args.prefix.clone(),
+    };
+    run_upload(&publish, Some(&args.mod_id), master, insecure)
+}
+
+fn run_upload(
+    args: &PublishArgs,
+    mod_id: Option<&str>,
+    master: &str,
+    insecure: bool,
+) -> Result<()> {
     let boundary = "----PapaBearCLIboundaryVqZ9k2bX7nMpL4tD";
     let prelude = build_multipart_prelude(boundary, args);
     let trailer = format!("\r\n--{boundary}--\r\n").into_bytes();
@@ -264,7 +324,10 @@ fn run_publish(args: &PublishArgs, master: &str, insecure: bool) -> Result<()> {
         .chain(Cursor::new(trailer));
 
     let base = master.trim_end_matches('/');
-    let url = format!("{base}/v1/mods");
+    let url = mod_id.map_or_else(
+        || format!("{base}/v1/mods"),
+        |mod_id| format!("{base}/v1/mods/{mod_id}/revisions"),
+    );
     let response = http_agent(insecure)?
         .post(&url)
         .set("x-api-key", &args.admin_key)
@@ -278,10 +341,17 @@ fn run_publish(args: &PublishArgs, master: &str, insecure: bool) -> Result<()> {
     match response {
         Ok(ok) => {
             let entry: serde_json::Value = ok.into_json().context("parsing publish response")?;
-            let mod_id = entry["modId"].as_str().unwrap_or("?");
+            let response_mod_id = entry["modId"].as_str().unwrap_or("?");
+            let version = entry["version"].as_str().unwrap_or("?");
+            let revision = entry["packageRevision"].as_u64().unwrap_or(1);
             let download = entry["downloadUrl"].as_str().unwrap_or("?");
+            let action = if mod_id.is_some() {
+                "updated"
+            } else {
+                "published"
+            };
             println!(
-                "published '{}' as {mod_id} ({artifact_len} bytes compressed) -> {base}{download}",
+                "{action} '{}' as {response_mod_id}, version {version}, package revision {revision} ({artifact_len} bytes compressed) -> {base}{download}",
                 args.name
             );
             Ok(())
@@ -481,6 +551,123 @@ fn write_installed_mod_manifest(entry: &serde_json::Value, dest: &Path) -> Resul
         .with_context(|| format!("writing installed mod manifest to {}", dest.display()))
 }
 
+fn package_revision(entry: &serde_json::Value) -> u64 {
+    entry["packageRevision"].as_u64().unwrap_or(1)
+}
+
+fn install_is_current(remote: &serde_json::Value, installed: &serde_json::Value) -> bool {
+    if package_revision(remote) != package_revision(installed) {
+        return false;
+    }
+    match (remote["sha256"].as_str(), installed["sha256"].as_str()) {
+        (Some(remote), Some(installed)) => remote.eq_ignore_ascii_case(installed),
+        _ => true,
+    }
+}
+
+fn replace_install(stage: &Path, dest: &Path) -> Result<()> {
+    let parent = dest
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("install destination has no parent"))?;
+    let folder = dest
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| anyhow::anyhow!("install destination has no folder name"))?;
+    let backup = parent.join(format!(".{folder}.papa-backup-{}", std::process::id()));
+    if backup.exists() {
+        bail!("backup path {} already exists", backup.display());
+    }
+
+    let had_previous = dest.exists();
+    if had_previous {
+        fs::rename(dest, &backup)
+            .with_context(|| format!("moving previous install {} to backup", dest.display()))?;
+    }
+    if let Err(error) = fs::rename(stage, dest) {
+        if had_previous {
+            let _ = fs::rename(&backup, dest);
+        }
+        return Err(error)
+            .with_context(|| format!("installing staged files to {}", dest.display()));
+    }
+    if had_previous {
+        fs::remove_dir_all(&backup)
+            .with_context(|| format!("removing install backup {}", backup.display()))?;
+    }
+    Ok(())
+}
+
+fn immutable_download_url(base: &str, entry: &serde_json::Value) -> String {
+    match entry["downloadUrl"].as_str() {
+        Some(url) if url.starts_with("http://") || url.starts_with("https://") => url.to_string(),
+        Some(url) if url.starts_with('/') => format!("{base}{url}"),
+        _ => format!(
+            "{base}/v1/mods/{}/revisions/{}/download",
+            entry_id(entry),
+            package_revision(entry)
+        ),
+    }
+}
+
+fn download_and_replace(
+    agent: &ureq::Agent,
+    url: &str,
+    entry: &serde_json::Value,
+    dest: &Path,
+    mods_dir: &Path,
+) -> Result<usize> {
+    let response = agent.get(url).call().map_err(|error| match error {
+        ureq::Error::Status(code, response) => anyhow::anyhow!(
+            "download HTTP {code}: {}",
+            response.into_string().unwrap_or_default().trim()
+        ),
+        error @ ureq::Error::Transport(_) => anyhow::anyhow!("download request failed: {error}"),
+    })?;
+    let mut compressed = NamedTempFile::new_in(mods_dir)
+        .with_context(|| format!("creating download in {}", mods_dir.display()))?;
+    let mut reader = response.into_reader();
+    let mut hasher = Sha256::new();
+    let mut size = 0u64;
+    let mut buffer = vec![0u8; 64 * 1024];
+    loop {
+        let read = reader.read(&mut buffer).context("reading download")?;
+        if read == 0 {
+            break;
+        }
+        compressed
+            .write_all(&buffer[..read])
+            .context("writing staged download")?;
+        hasher.update(&buffer[..read]);
+        size += read as u64;
+    }
+    if let Some(expected) = entry["sizeBytes"].as_u64() {
+        if expected != size {
+            bail!("download size mismatch: expected {expected}, got {size}");
+        }
+    }
+    if let Some(expected) = entry["sha256"].as_str() {
+        let actual = format!("{:x}", hasher.finalize());
+        if !actual.eq_ignore_ascii_case(expected) {
+            bail!("download SHA-256 mismatch: expected {expected}, got {actual}");
+        }
+    }
+    compressed.as_file_mut().seek(SeekFrom::Start(0))?;
+
+    let stage = tempfile::Builder::new()
+        .prefix(".papa-stage-")
+        .tempdir_in(mods_dir)
+        .with_context(|| format!("creating install stage in {}", mods_dir.display()))?;
+    let decoded = mods_dir.join(format!(".{}.pbo.decoded", entry_id(entry)));
+    let count = decode_and_unpack(compressed.reopen()?, &decoded, stage.path())?;
+    write_installed_mod_manifest(entry, stage.path())?;
+    let stage = stage.keep();
+    if let Err(error) = replace_install(&stage, dest) {
+        let _ = fs::remove_dir_all(&stage);
+        return Err(error);
+    }
+    Ok(count)
+}
+
 /// Download + unpack one or more mods into `<dir>/<folderName>` (server-side install).
 /// Accepts modIds, folder names, or unique prefixes, separated by spaces and/or `;`
 /// (so `papa install "CSLA;@DVDcrcti"` works). The install folder is the catalog's
@@ -528,23 +715,39 @@ fn run_install(args: &InstallArgs, master: &str, insecure: bool) -> Result<()> {
     fs::create_dir_all(&args.dir).with_context(|| format!("creating mods dir {}", args.dir))?;
     let mut installed_ids: Vec<String> = Vec::new();
     for (mod_id, folder, entry) in &mods {
+        if folder.is_empty()
+            || folder.contains('/')
+            || folder.contains('\\')
+            || folder == "."
+            || folder == ".."
+        {
+            bail!("catalog returned unsafe folder name '{folder}' for {mod_id}");
+        }
         let dest = Path::new(&args.dir).join(folder);
-
-        let dl_url = format!("{base}/v1/mods/{mod_id}/download");
-        let tmp = Path::new(&args.dir).join(format!(".{mod_id}.pbo.download"));
-        println!("installing {mod_id} -> {}", dest.display());
-        let count = match agent.get(&dl_url).call() {
-            Ok(ok) => decode_and_unpack(ok.into_reader(), &tmp, &dest)
-                .with_context(|| format!("installing {mod_id}"))?,
-            Err(ureq::Error::Status(code, r)) => {
-                bail!(
-                    "download HTTP {code}: {}",
-                    r.into_string().unwrap_or_default().trim()
-                )
+        let installed = fs::read(dest.join("mod.json"))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
+        if let Some(installed) = installed.as_ref() {
+            let local_revision = package_revision(installed);
+            let remote_revision = package_revision(entry);
+            if local_revision > remote_revision {
+                println!(
+                    "keeping {mod_id} package revision {local_revision}; catalog latest is {remote_revision}"
+                );
+                installed_ids.push(mod_id.clone());
+                continue;
             }
-            Err(error) => bail!("download request failed: {error}"),
-        };
-        write_installed_mod_manifest(entry, &dest)?;
+            if install_is_current(entry, installed) {
+                println!("{mod_id} package revision {remote_revision} is already installed");
+                installed_ids.push(mod_id.clone());
+                continue;
+            }
+        }
+
+        let dl_url = immutable_download_url(base, entry);
+        println!("installing {mod_id} -> {}", dest.display());
+        let count = download_and_replace(&agent, &dl_url, entry, &dest, Path::new(&args.dir))
+            .with_context(|| format!("installing {mod_id}"))?;
         println!("  done: {} ({count} entries)", dest.display());
         installed_ids.push(mod_id.clone());
     }
@@ -613,10 +816,9 @@ fn print_query_status(target: &str, status: &ServerStatus) {
 }
 
 fn format_version_tag(tag: Option<&str>) -> String {
-    match tag.map(str::trim).filter(|tag| !tag.is_empty()) {
-        Some(tag) => format!(" {tag}"),
-        None => String::new(),
-    }
+    tag.map(str::trim)
+        .filter(|tag| !tag.is_empty())
+        .map_or_else(String::new, |tag| format!(" {tag}"))
 }
 
 const fn yes_no(value: bool) -> &'static str {
@@ -897,7 +1099,10 @@ fn session_flags(s: &serde_json::Value) -> String {
 /// The multipart body up to (but excluding) the file bytes: the metadata fields plus the
 /// `file` part header. The caller streams the artifact bytes after this, then the trailer.
 fn build_multipart_prelude(boundary: &str, args: &PublishArgs) -> Vec<u8> {
-    let mut fields: Vec<(&str, &str)> = vec![("name", args.name.as_str())];
+    let mut fields: Vec<(&str, &str)> = Vec::new();
+    if !args.name.trim().is_empty() {
+        fields.push(("name", args.name.as_str()));
+    }
     if let Some(version) = &args.version {
         fields.push(("version", version));
     }
@@ -934,8 +1139,9 @@ fn build_multipart_prelude(boundary: &str, args: &PublishArgs) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::{
-        compress_artifact, decode_and_unpack, difficulty_flag_names, with_default_port,
-        write_installed_mod_manifest,
+        build_multipart_prelude, compress_artifact, decode_and_unpack, difficulty_flag_names,
+        install_is_current, replace_install, with_default_port, write_installed_mod_manifest,
+        PublishArgs,
     };
     use papa_bear_archive::Pbo;
     use std::io::Cursor;
@@ -1060,5 +1266,51 @@ mod tests {
         let saved: serde_json::Value = serde_json::from_str(&manifest).unwrap();
         assert_eq!(saved["modId"], "carwars-2.5");
         assert_eq!(saved["folderName"], "carwars2.5");
+    }
+
+    #[test]
+    fn update_multipart_omits_inherited_metadata() {
+        let args = PublishArgs {
+            source: "fixture.pbo".to_string(),
+            admin_key: "key".to_string(),
+            name: String::new(),
+            version: None,
+            description: None,
+            authors: Vec::new(),
+            homepage_url: None,
+            folder_name: None,
+            prefix: None,
+        };
+        let body = String::from_utf8(build_multipart_prelude("boundary", &args)).unwrap();
+        assert!(!body.contains("name=\"name\""));
+        assert!(body.contains("name=\"file\""));
+    }
+
+    #[test]
+    fn revision_comparison_defaults_to_one_and_checks_hashes() {
+        let remote = serde_json::json!({"packageRevision": 2, "sha256": "abcd"});
+        let same = serde_json::json!({"packageRevision": 2, "sha256": "ABCD"});
+        let corrupt = serde_json::json!({"packageRevision": 2, "sha256": "ffff"});
+        let legacy = serde_json::json!({});
+        assert!(install_is_current(&remote, &same));
+        assert!(!install_is_current(&remote, &corrupt));
+        assert!(install_is_current(&legacy, &legacy));
+        assert!(!install_is_current(&remote, &legacy));
+    }
+
+    #[test]
+    fn staged_replace_removes_stale_files() {
+        let root = tempdir().unwrap();
+        let dest = root.path().join("@fixture");
+        let stage = root.path().join("stage");
+        std::fs::create_dir_all(&dest).unwrap();
+        std::fs::create_dir_all(&stage).unwrap();
+        std::fs::write(dest.join("stale.txt"), b"old").unwrap();
+        std::fs::write(stage.join("current.txt"), b"new").unwrap();
+
+        replace_install(&stage, &dest).unwrap();
+
+        assert!(!dest.join("stale.txt").exists());
+        assert_eq!(std::fs::read(dest.join("current.txt")).unwrap(), b"new");
     }
 }

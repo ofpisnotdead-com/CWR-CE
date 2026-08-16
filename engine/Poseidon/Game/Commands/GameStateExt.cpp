@@ -396,7 +396,6 @@ GameValue ConfigListNames(const GameState* state);
 GameValue ConfigNew(const GameState* state);
 GameValue DayTime(const GameState* state);
 GameValue EnableEndDialog(const GameState* state);
-GameValue EndGame(const GameState* state);
 GameValue ForceEnd(const GameState* state);
 GameValue GameTime(const GameState* state);
 GameValue GetAcceleratedTime(const GameState* state);
@@ -883,7 +882,6 @@ static const GameNular* GetExtNular(int& count)
 
         GameNular(GameNothing, "enableEndDialog", EnableEndDialog),
         GameNular(GameNothing, "forceEnd", ForceEnd),
-        GameNular(GameNothing, "endGame", EndGame),
         GameNular(GameScalar, "musicVolume", GetMusicVolume),
         GameNular(GameScalar, "soundVolume", GetSoundVolume),
 

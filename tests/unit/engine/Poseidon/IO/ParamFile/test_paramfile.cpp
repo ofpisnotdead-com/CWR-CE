@@ -21,6 +21,9 @@
 #include <limits.h>
 #ifndef MAX_PATH
 #define MAX_PATH PATH_MAX
+#if __APPLE__
+#include <mach-o/dyld.h>
+#endif
 #endif
 #endif
 
@@ -50,7 +53,12 @@ static RString GetExecutableDirectory()
         GetModuleFileNameA(nullptr, exePath, MAX_PATH);
         char* lastSlash = strrchr(exePath, '\\');
 #else
+#if __APPLE__
+        uint32_t len = sizeof(exePath) - 1;
+        _NSGetExecutablePath(exePath, &len);
+#else
         ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+#endif
         if (len > 0)
             exePath[len] = '\0';
         else
@@ -549,6 +557,24 @@ TEST_CASE("ParamFile - Update from another class", "[paramfile][update]")
         REQUIRE(entry3 != nullptr);
         REQUIRE(std::string(entry3->GetValue().Data()) == "new3");
     }
+}
+
+TEST_CASE("ParamFile - Locked arrays do not stop add-only updates", "[paramfile][update]")
+{
+    ParamFile target;
+    ParamEntry* original = target.AddArray("vehicleClass");
+    original->AddValue("base");
+    target.SetAccessMode(PAReadAndCreate);
+
+    ParamFile source;
+    ParamEntry* replacement = source.AddArray("vehicleClass");
+    replacement->AddValue("mod");
+    source.AddClass("ConfigMergeFixUnit");
+
+    target.Update(source);
+
+    REQUIRE((target >> "vehicleClass")[0].GetValue() == RStringB("base"));
+    REQUIRE(target.FindEntry("ConfigMergeFixUnit") != nullptr);
 }
 
 // Test 13: Compact and Memory Management

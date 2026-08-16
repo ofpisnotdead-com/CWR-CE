@@ -20,6 +20,11 @@ TEST_CASE("CodepageForLanguage - Western European -> CP1252", "[codepage][mappin
     REQUIRE(CodepageForLanguage("Spanish") == Codepage::CP1252);
     REQUIRE(CodepageForLanguage("Dutch") == Codepage::CP1252);
     REQUIRE(CodepageForLanguage("Portuguese") == Codepage::CP1252);
+    REQUIRE(CodepageForLanguage("Danish") == Codepage::CP1252);
+    REQUIRE(CodepageForLanguage("Swedish") == Codepage::CP1252);
+    REQUIRE(CodepageForLanguage("Norwegian") == Codepage::CP1252);
+    REQUIRE(CodepageForLanguage("Finnish") == Codepage::CP1252);
+    REQUIRE(CodepageForLanguage("Icelandic") == Codepage::CP1252);
 }
 
 TEST_CASE("CodepageForLanguage - Central European -> CP1250", "[codepage][mapping]")
@@ -238,7 +243,19 @@ TEST_CASE("DecodeLegacyTextToUtf8 - modern UTF-8 is never double encoded", "[cod
                              "MOD - P\xC5\x99"
                              "iklad";
     REQUIRE(SelectLegacyTextCodepage(utf8, Codepage::CP1252) == Codepage::Utf8);
+    REQUIRE(SelectLegacyTextCodepage(utf8, Codepage::CP1250) == Codepage::Utf8);
     REQUIRE(DecodeLegacyTextToUtf8(utf8, Codepage::CP1252) == utf8);
+    REQUIRE(DecodeLegacyTextToUtf8(utf8, Codepage::CP1250) == utf8);
+}
+
+TEST_CASE("DecodeLegacyTextToUtf8 - CP1250 that is valid UTF-8 still follows Czech column codepage",
+          "[codepage][legacy][cp1250]")
+{
+    const std::string cp1250 = "NEM\xD9\x8E"
+                               "U";
+    REQUIRE(SelectLegacyTextCodepage(cp1250, Codepage::CP1250) == Codepage::CP1250);
+    REQUIRE(DecodeLegacyTextToUtf8(cp1250, Codepage::CP1250) == "NEM\xC5\xAE\xC5\xBD"
+                                                                "U");
 }
 
 TEST_CASE("DecodeLegacyTextToUtf8 - CP1252 Western accents stay Western", "[codepage][legacy][cp1252]")
@@ -269,6 +286,24 @@ TEST_CASE("DecodeLegacyTextToUtf8 - all supported language preferences repair Ce
     for (const char* language : languages)
     {
         REQUIRE(DecodeLegacyTextToUtf8(cp1250, CodepageForLanguage(language)) == expected);
+    }
+}
+
+TEST_CASE("DecodeLegacyTextToUtf8 - all supported language preferences repair Nordic mod names",
+          "[codepage][legacy][detect]")
+{
+    // A raw CfgWorlds description has no stringtable column to fall back on, so
+    // without å/æ evidence this would follow whichever codepage the active game
+    // language prefers -- misdecoding Swedish "Skärgården" as Czech under a
+    // Czech/Polish/Russian UI language (CP1250 byte 0xE5 is ĺ, not å).
+    const char* languages[] = {"English", "French", "Italian", "Spanish", "German", "Czech", "Polish", "Russian"};
+    const std::string cp1252 = "Sk\xE4rg\xE5rden"; // Skärgården (Swedish: "the archipelago")
+    const std::string expected = "Sk\xC3\xA4rg\xC3\xA5rden";
+
+    for (const char* language : languages)
+    {
+        REQUIRE(SelectLegacyTextCodepage(cp1252, CodepageForLanguage(language)) == Codepage::CP1252);
+        REQUIRE(DecodeLegacyTextToUtf8(cp1252, CodepageForLanguage(language)) == expected);
     }
 }
 
@@ -362,6 +397,25 @@ TEST_CASE("DecodeLegacyTextToRString - repairs user-facing CP1250 config literal
 {
     const RString decoded = DecodeLegacyTextToRString("Gener\xE1l Novotn\xFD - \xC8SLA", Codepage::CP1252);
     REQUIRE(std::string(decoded.Data()) == "Gener\xC3\xA1l Novotn\xC3\xBD - \xC4\x8CSLA");
+}
+
+TEST_CASE("DecodeLegacyTextToRString - repairs Western European place names in script chat",
+          "[codepage][decode][rstring]")
+{
+    const RString decoded = DecodeLegacyTextToRString("Warnem\xFCnde", Codepage::CP1250);
+    REQUIRE(std::string(decoded.Data()) == "Warnem\xC3\xBCnde");
+}
+
+// Real CfgWorlds `description` values pulled from long-published OFP community island
+// mods (Emsalo Lite by Instructor, Krono by Hornet85, Varmdolandet by Hornet85 -- see
+// https://ofp-faguss.com/islands), confirming actual legacy addon content -- not just
+// hand-built fixtures -- decodes correctly.
+TEST_CASE("DecodeLegacyTextToRString - repairs real-world island mod descriptions", "[codepage][decode][rstring]")
+{
+    REQUIRE(std::string(DecodeLegacyTextToRString("Emsal\xF6 Lite", Codepage::CP1252).Data()) == "Emsal\xC3\xB6 Lite");
+    REQUIRE(std::string(DecodeLegacyTextToRString("Kron\xF6", Codepage::CP1252).Data()) == "Kron\xC3\xB6");
+    REQUIRE(std::string(DecodeLegacyTextToRString("V\xE4rmd\xF6landet", Codepage::CP1252).Data()) ==
+            "V\xC3\xA4rmd\xC3\xB6landet");
 }
 
 TEST_CASE("TranscodeToUtf8 - Undefined codepage slot becomes U+FFFD", "[codepage][undefined]")

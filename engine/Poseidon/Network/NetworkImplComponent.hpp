@@ -221,7 +221,7 @@ class NetworkComponent : public INetworkComponent
 
     // File transfer
     // Split file into segments and send segments using standard messages.
-    void TransferFile(int to, RString dest, RString source);
+    void TransferFile(int to, RString dest, RString source, NetMsgFlags flags = NMFGuaranteed);
     // Transfer player's face from server to client
     void TransferFace(int to, int player);
     // Transfer player's custom radio messages from server to client
@@ -277,6 +277,7 @@ class NetworkComponent : public INetworkComponent
 
     // Called when file segment is received
     int ReceiveFileSegment(TransferFileMessage& msg);
+    bool HasReceivedFileSegment(const RString& path, int segment) const;
 };
 
 // Info about single type of update of network object

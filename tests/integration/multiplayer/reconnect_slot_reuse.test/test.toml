@@ -1,0 +1,37 @@
+mission = "tests/integration/missions/jip_basic.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 60
+
+tags = ["headful", "network"]
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl"]
+name = "server"
+type = "server"
+
+# First occupant of WEST:1. Its script ends with triEndTest, which _exit(0)s the
+# process without a network goodbye — the server must detect the dead peer and
+# free the slot.
+[[instances]]
+extra_args = ["--no-strict", "--name", "client1", "--log-format", "jsonl"]
+name = "client1"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:1"
+machine_id = "trident:reconnect_slot_reuse:client1"
+
+# Fresh profile that idles at the main menu, then joins via triMpJoin and takes
+# the exact slot client1 abandoned. triMpAssignSelfSlot retries until the server
+# releases the slot, so a stale-slot regression shows up as a scenario timeout.
+[[instances]]
+extra_args = ["--no-strict", "--name", "rejoiner", "--log-format", "jsonl"]
+name = "rejoiner"
+type = "client"
+use_mission = false
+no_autotest = true
+after = "server"
+wait_ngs = 13
+machine_id = "trident:reconnect_slot_reuse:rejoiner"

@@ -6,8 +6,10 @@
 #include <Poseidon/Foundation/Platform/FPUSetup.hpp>
 #include <Poseidon/Foundation/Platform/PoseidonInit.hpp>
 #include <Poseidon/Core/Config/Config.hpp>
+#include <Poseidon/Core/Config/UserConfig.hpp>
 #include <Poseidon/Foundation/Platform/AppConfig.hpp>
 #include <Poseidon/Foundation/Platform/GamePaths.hpp>
+#include <Poseidon/Foundation/Platform/StartupError.hpp>
 #include <Poseidon/Audio/AudioFactory.hpp>
 #include <Poseidon/Audio/Voice/VoiceBackend.hpp>
 #include <Poseidon/UI/Settings/GameSettingsConfig.hpp>
@@ -63,7 +65,8 @@ using namespace Poseidon;
 namespace Poseidon
 {
 void CreateClient(RString, int, RString);
-}
+RString GetUserParams();
+} // namespace Poseidon
 
 namespace Poseidon
 {
@@ -257,6 +260,12 @@ void ApplyAspectPolicy(DisplayConfig& cfg)
 
     const int w = GEngine->Width();
     const int h = GEngine->Height();
+    UserConfig& userConfig = USER_CONFIG;
+    if (Poseidon::Presentation::ConfigureUserFov(userConfig, w, h))
+    {
+        const RString userPath = Poseidon::GetUserParams();
+        userConfig.SaveToFile(userPath);
+    }
     const AspectRatio::Settings settings = Poseidon::Presentation::Apply(w, h);
 
     // Diagnostic — full resolved policy so log inspection makes
@@ -367,21 +376,26 @@ std::string GraphicsConfigPath()
 void LoadAndApplyGraphicsConfig()
 {
     const std::string path = GraphicsConfigPath();
+    const int refreshHz = GEngine ? GEngine->RefreshRate() : 0;
     GraphicsConfig cfg;
     if (!cfg.Load(path))
     {
-        // First boot: pick a tier from system RAM and stamp the
-        // four tier rows from that preset's bundle.  Per-user
-        // knobs (vsync / fpsCap / brightness / gamma) keep their
-        // class-default values.
+        // First boot autodetects from hardware.  vsync / brightness / gamma
+        // keep their class-default values.
         cfg.LoadDefaults();
         const int ramMB = SDL_GetSystemRAM();
         cfg.qualityPreset = GraphicsConfig::PickPresetFromRam(ramMB);
         cfg.ApplyPresetToTiers(cfg.qualityPreset);
+        cfg.fpsCap = GraphicsConfig::FpsCapForRefreshRate(refreshHz);
         cfg.Save(path);
-        LOG_INFO(Graphics, "LoadGraphicsConfig: autodetected preset={} (RAM={} MB), wrote '{}'", (int)cfg.qualityPreset,
-                 ramMB, path);
+        LOG_INFO(Graphics,
+                 "LoadGraphicsConfig: autodetected preset={} (RAM={} MB) fpsCap={} (display {} Hz), wrote '{}'",
+                 (int)cfg.qualityPreset, ramMB, cfg.fpsCap, refreshHz, path);
     }
+
+    if (cfg.Migrate(refreshHz) && cfg.Save(path))
+        LOG_INFO(Graphics, "LoadGraphicsConfig: migrated '{}' to version {} (fpsCap={}, display {} Hz)", path,
+                 GraphicsConfig::kVersion, cfg.fpsCap, refreshHz);
 
     LiveGraphicsEnv env;
     if (cfg.Normalize(env))
@@ -558,6 +572,7 @@ static std::unique_ptr<HarnessServer> CreateGameHarness()
 
     HarnessBuiltins::RegisterScreenshot(*hs);
     HarnessBuiltins::RegisterSqf(*hs);
+    HarnessBuiltins::RegisterHttpFixtures(*hs);
     // Multiplayer PTT tests (triHoldKey / triReleaseKey) drive VoN
     // transmission via these commands.
     HarnessBuiltins::RegisterKeyInjection(*hs);
@@ -617,14 +632,26 @@ int GameApplication::RunAfterArgumentParsing()
 {
     LOG_INFO(Core, "Game starting: version {}", (const char*)GetVersionString());
 
+    constexpr const char* kStartupErrorTitle = "Cold War Assault - Startup Error";
+
     if (!ReadConfiguration())
-        return 0;
+    {
+        Poseidon::Foundation::ShowStartupError(
+            kStartupErrorTitle, "Failed to load the game configuration.\nThe game data may be missing or invalid.");
+        return 1;
+    }
 
     if (!InitializeGraphicsEngine())
+    {
+        Poseidon::Foundation::ShowStartupError(kStartupErrorTitle, "Failed to initialize the graphics engine.");
         return 1;
+    }
 
     if (!CreateAndSetGraphicsEngine())
+    {
+        Poseidon::Foundation::ShowStartupError(kStartupErrorTitle, "Failed to create the graphics engine.");
         return 1;
+    }
 
     // Load display.cfg (eager-write defaults if missing) and apply
     // the persisted monitor / window-mode / resolution / refresh-rate
@@ -636,13 +663,22 @@ int GameApplication::RunAfterArgumentParsing()
     LoadAndApplyGraphicsConfig();
 
     if (!InitializeWorld())
+    {
+        Poseidon::Foundation::ShowStartupError(kStartupErrorTitle, "Failed to initialize the game world.");
         return 1;
+    }
 
     if (!InitializeSound())
+    {
+        Poseidon::Foundation::ShowStartupError(kStartupErrorTitle, "Failed to initialize sound.");
         return 1;
+    }
 
     if (!InitializeSubsystems())
+    {
+        Poseidon::Foundation::ShowStartupError(kStartupErrorTitle, "Failed to initialize a game subsystem.");
         return 1;
+    }
 
     ProgressFinish();
     EnableRendering();
@@ -1381,8 +1417,7 @@ void GameApplication::RunMainLoop()
         const bool missionReachedPlay = networkManager.WasServerPlaying() ||
                                         networkManager.GetServerState() >= NGSPlay ||
                                         networkManager.GetGameState() >= NGSPlay;
-        if (missionReachedPlay)
-            m_exitCode = 0;
+        m_exitCode = ResolveMultiplayerAutoTestExitCode(m_exitCode, missionReachedPlay, m_cleanTestEndRequested);
         networkManager.Close();
         Sleep(100);
         LOG_INFO(Core, "MP auto-test: exiting with code {}", m_exitCode);
@@ -1451,6 +1486,7 @@ void GameApplication::RegisterAudioBackends()
     Poseidon::RegisterTextAudioBackend();
     Poseidon::RegisterOpenALAudioBackend();
     Poseidon::RegisterOpenALVoiceBackend();
+    Poseidon::RegisterTestToneVoiceBackend();
 }
 
 void GameApplication::RegisterGraphicsBackends()
@@ -1745,6 +1781,7 @@ bool GameApplication::Remount(const char* newModPath)
     if (!CanRemount())
     {
         LOG_WARN(Core, "Re-mount refused: a mission is active");
+        Poseidon::DiscardStagedModInstalls(GApp->m_remountInstalls);
         return false;
     }
 
@@ -1776,6 +1813,23 @@ bool GameApplication::Remount(const char* newModPath)
         GEngine->ResetForRemount();
     }
 
+    std::string swapError;
+    if (!GApp->m_remountInstalls.empty() && !Poseidon::SwapStagedModInstalls(GApp->m_remountInstalls, &swapError))
+    {
+        LOG_ERROR(Core, "Re-mount install swap failed: {}", swapError);
+        Poseidon::ModSystem::SetModPath(prevModPath);
+        if (LoadGameData())
+        {
+            if (GWorld)
+                GWorld->StartIntro();
+            EnableRendering();
+        }
+        GApp->m_remountFailed = true;
+        Poseidon::DiscardStagedModInstalls(GApp->m_remountInstalls);
+        ProgressFinish();
+        return false;
+    }
+
     // Swap the active mod set, then reload everything from scratch.
     Poseidon::ModSystem::SetModPath(newModPath != nullptr ? newModPath : "");
 
@@ -1792,6 +1846,7 @@ bool GameApplication::Remount(const char* newModPath)
         {
             GEngine->ResetForRemount();
         }
+        Poseidon::RestoreStagedModInstalls(GApp->m_remountInstalls);
         Poseidon::ModSystem::SetModPath(prevModPath);
         if (LoadGameData())
         {
@@ -1806,6 +1861,7 @@ bool GameApplication::Remount(const char* newModPath)
             LOG_ERROR(Core, "Re-mount rollback also failed — rendering left disabled");
         }
         GApp->m_remountFailed = true; // the menu surfaces this once it is live again (AppIdle)
+        Poseidon::DiscardStagedModInstalls(GApp->m_remountInstalls);
         ProgressFinish();
         return false;
     }
@@ -1816,6 +1872,7 @@ bool GameApplication::Remount(const char* newModPath)
     }
 
     EnableRendering();
+    Poseidon::CommitStagedModInstalls(GApp->m_remountInstalls);
     ProgressFinish();
     LOG_INFO(Core, "Re-mount complete");
     return true;

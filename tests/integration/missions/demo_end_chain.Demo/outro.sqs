@@ -1,4 +1,4 @@
-_camera = "camera" camCreate [6519.040039,149.663788,6473.679199]
+_camera = "camera" camCreate [6710.527832,82.907585,5408.891602]
 _camera cameraEffect ["internal","back"]
 ~1
 uplkonec = true

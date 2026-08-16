@@ -6,6 +6,9 @@
 #include <SDL3/SDL_scancode.h>
 #include <catch2/catch_test_macros.hpp>
 
+#include "test_fixtures.hpp"
+
+#include <array>
 #include <filesystem>
 #include <random>
 #include <string>
@@ -63,6 +66,149 @@ TEST_CASE("ContextControlsConfig: Save then Load round-trips separate context pr
 
     CHECK(dst.profiles[(int)InputContext::Infantry].HasBinding(UAFire, InputCode::Key(SDL_SCANCODE_SPACE)));
     CHECK_FALSE(dst.profiles[(int)InputContext::CarDriver].HasBinding(UAFire, InputCode::Key(SDL_SCANCODE_SPACE)));
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("ContextControlsConfig: Save then Load preserves an empty positional slot",
+          "[Settings][ContextControlsConfig]")
+{
+    const std::string path = TmpPath("context_controls_empty_slot.cfg");
+    std::filesystem::remove(path);
+
+    // A cleared primary that keeps its alt: empty slot 0, a real binding in slot 1.
+    // The empty placeholder must survive the round-trip so the alt does not shift
+    // up into the primary on reload.
+    ContextControlsConfig src;
+    src.profiles[(int)InputContext::Infantry].Bind(UAMoveForward, InputBinding{});
+    src.profiles[(int)InputContext::Infantry].Bind(UAMoveForward, InputCode::Key(SDL_SCANCODE_UP));
+
+    REQUIRE(src.Save(path));
+
+    ContextControlsConfig dst;
+    REQUIRE(dst.Load(path));
+
+    const auto& move = dst.profiles[(int)InputContext::Infantry].GetBindingEntries(UAMoveForward);
+    REQUIRE(move.size() == 2);
+    CHECK_FALSE(move[0].code.valid());                      // empty primary slot kept
+    CHECK(move[1].code == InputCode::Key(SDL_SCANCODE_UP)); // alt still in slot 1
+
+    std::filesystem::remove(path);
+}
+
+// A real, full contextControls.cfg captured from a version-2 user profile, from
+// before several actions existed. Loading and copying the profiles is the path
+// InputSubsystem::LoadKeys runs: listed bindings are preserved, and actions the
+// file lacks are seeded with their defaults.
+TEST_CASE("ContextControlsConfig: an older config keeps its bindings and defaults new actions",
+          "[Settings][ContextControlsConfig]")
+{
+    REQUIRE_FIXTURE("cfg/contextControls_prior.cfg");
+
+    ContextControlsConfig cfg;
+    REQUIRE(cfg.Load(GET_FIXTURE("cfg/contextControls_prior.cfg")));
+    CHECK(cfg.migratedOnLoad);
+
+    // The array copy that used to fault when object files disagreed on UAN.
+    std::array<InputProfile, ContextControlsConfig::ContextCount> copy = cfg.profiles;
+
+    // Single keyboard binding.
+    const auto& von = copy[(int)InputContext::Infantry].GetBindingEntries(UAVoiceOverNet);
+    REQUIRE(von.size() == 1);
+    CHECK(von[0].code.toLegacy() == 57);
+
+    // Multi-binding action (keyboard + gamepad) round-trips both codes in order.
+    const auto& fire = copy[(int)InputContext::Infantry].GetBindingEntries(UAFire);
+    REQUIRE(fire.size() == 2);
+    CHECK(fire[0].code.toLegacy() == 224);
+    CHECK(fire[1].code.toLegacy() == 131079);
+
+    // A binding in a different context, to prove per-context separation held.
+    const auto& chat = copy[(int)InputContext::Chat].GetBindingEntries(UAChat);
+    REQUIRE(chat.size() == 1);
+    CHECK(chat[0].code.toLegacy() == 56);
+
+    // Push-to-talk was absent from the file; migration seeds its CapsLock default.
+    CHECK(
+        copy[(int)InputContext::Infantry].HasBinding(UAVoiceOverNetPushToTalk, InputCode::Key(SDL_SCANCODE_CAPSLOCK)));
+}
+
+// A complete version-2 config, as the current engine writes it minus the actions
+// added since (map zoom, cheat entry). It parses across every context; the actions
+// it lists are kept, the ones it predates are seeded to their defaults, and a save
+// then reload comes up current with the fill persisted.
+TEST_CASE("ContextControlsConfig: a full version-2 config parses and migrates to 3",
+          "[Settings][ContextControlsConfig]")
+{
+    REQUIRE_FIXTURE("cfg/contextControls_v2_full.cfg");
+    const int inf = (int)InputContext::Infantry;
+
+    ContextControlsConfig migrated;
+    REQUIRE(migrated.Load(GET_FIXTURE("cfg/contextControls_v2_full.cfg")));
+    CHECK(migrated.migratedOnLoad);
+
+    // Listed v2 actions parse and keep their values.
+    CHECK(migrated.profiles[inf].BindingCount(UAFire) > 0);
+    CHECK(migrated.profiles[inf].HasBinding(UAVoiceOverNetPushToTalk, InputCode::Key(SDL_SCANCODE_CAPSLOCK)));
+    // The Map-context optics ZoomIn (ctxMapZoomIn) is name-adjacent to the new
+    // MapZoomIn action but stays its own binding.
+    CHECK(migrated.profiles[(int)InputContext::Map].BindingCount(UAZoomIn) > 0);
+
+    // Actions the file predates are seeded to their defaults, including the cheat
+    // trigger's Shift + Numpad-Minus combo.
+    CHECK(migrated.profiles[inf].HasBinding(UAMapZoomIn, InputCode::Key(SDL_SCANCODE_KP_PLUS)));
+    CHECK(migrated.profiles[inf].HasBinding(UAMapZoomOut, InputCode::Key(SDL_SCANCODE_KP_MINUS)));
+    const auto& cheat = migrated.profiles[inf].GetBindingEntries(UACheatEntry);
+    REQUIRE(cheat.size() == 1);
+    CHECK(cheat[0].code == InputCode::Key(SDL_SCANCODE_KP_MINUS));
+    CHECK(cheat[0].modifier == InputCode::Key(SDL_SCANCODE_LSHIFT));
+
+    // Save the modernized config and reload it: now current, no second migration,
+    // seeded defaults still present.
+    const std::string path = TmpPath("context_controls_v2_full_migrated.cfg");
+    std::filesystem::remove(path);
+    REQUIRE(migrated.Save(path));
+
+    ContextControlsConfig reloaded;
+    REQUIRE(reloaded.Load(path));
+    CHECK_FALSE(reloaded.migratedOnLoad);
+    CHECK(reloaded.profiles[inf].HasBinding(UAMapZoomIn, InputCode::Key(SDL_SCANCODE_KP_PLUS)));
+    CHECK(reloaded.profiles[inf].HasBinding(UAVoiceOverNetPushToTalk, InputCode::Key(SDL_SCANCODE_CAPSLOCK)));
+
+    std::filesystem::remove(path);
+}
+
+// A version-1 config, older still: it predates push-to-talk as well as the newest
+// actions. Loading migrates it across the two-version gap, keeping its bindings and
+// seeding every action it lacks - push-to-talk, map zoom, and cheat entry.
+TEST_CASE("ContextControlsConfig: a full version-1 config parses and migrates", "[Settings][ContextControlsConfig]")
+{
+    REQUIRE_FIXTURE("cfg/contextControls_v1_full.cfg");
+    const int inf = (int)InputContext::Infantry;
+
+    ContextControlsConfig migrated;
+    REQUIRE(migrated.Load(GET_FIXTURE("cfg/contextControls_v1_full.cfg")));
+    CHECK(migrated.migratedOnLoad);
+
+    // A listed binding is kept.
+    CHECK(migrated.profiles[inf].BindingCount(UAFire) > 0);
+
+    // Every action the file predates is seeded to its default.
+    CHECK(migrated.profiles[inf].HasBinding(UAVoiceOverNetPushToTalk, InputCode::Key(SDL_SCANCODE_CAPSLOCK)));
+    CHECK(migrated.profiles[inf].HasBinding(UAMapZoomIn, InputCode::Key(SDL_SCANCODE_KP_PLUS)));
+    CHECK(migrated.profiles[inf].HasBinding(UAMapZoomOut, InputCode::Key(SDL_SCANCODE_KP_MINUS)));
+    CHECK(migrated.profiles[inf].BindingCount(UACheatEntry) == 1);
+
+    // Save and reload comes up current with the fill persisted.
+    const std::string path = TmpPath("context_controls_v1_full_migrated.cfg");
+    std::filesystem::remove(path);
+    REQUIRE(migrated.Save(path));
+
+    ContextControlsConfig reloaded;
+    REQUIRE(reloaded.Load(path));
+    CHECK_FALSE(reloaded.migratedOnLoad);
+    CHECK(reloaded.profiles[inf].HasBinding(UAVoiceOverNetPushToTalk, InputCode::Key(SDL_SCANCODE_CAPSLOCK)));
+    CHECK(reloaded.profiles[inf].HasBinding(UAMapZoomIn, InputCode::Key(SDL_SCANCODE_KP_PLUS)));
 
     std::filesystem::remove(path);
 }

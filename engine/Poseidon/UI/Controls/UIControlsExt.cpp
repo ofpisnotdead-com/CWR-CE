@@ -1,6 +1,7 @@
 
 #include <Poseidon/UI/Controls/UIControlsExtShared.hpp>
 #include <Poseidon/UI/Controls/HtmlTextWrap.hpp>
+#include <Poseidon/UI/Controls/HtmlBodyText.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/World/World.hpp>
 #include <ctype.h>
@@ -53,6 +54,13 @@ Texture* HTMLField::GetTexture()
     {
         return texture1;
     }
+}
+
+CHTMLContainer::CHTMLContainer()
+    : _currentSection(0), _activeField(-1), _sizeH1(1), _sizeH2(1), _sizeH3(1), _sizeH4(1), _sizeH5(1), _sizeH6(1),
+      _sizeP(1), _indent(0)
+{
+    Init();
 }
 
 CHTMLContainer::CHTMLContainer(const ParamEntry& cls)
@@ -988,7 +996,9 @@ static char ReadChar(QIStream& in)
     }
 }
 
-static RString ReadText(QIStream& in, int langID)
+namespace Poseidon
+{
+RString ReadHtmlBodyText(QIStream& in, int langID)
 {
     char buf[4 * 1024];
     int len = 0;
@@ -1016,7 +1026,11 @@ static RString ReadText(QIStream& in, int langID)
             }
             else if (c == '&')
             {
-                c = ReadChar(in);
+                // ReadChar decodes the entity to a Latin-1 codepoint; emit it as UTF-8
+                // so it composes with the surrounding already-UTF-8 body.
+                const unsigned char decoded = static_cast<unsigned char>(ReadChar(in));
+                len += Poseidon::Foundation::EncodeUtf8Codepoint(decoded, buf + len, sizeof(buf) - len);
+                goto ReadTextContinue;
             }
 
             if (len < sizeof(buf) - 1)
@@ -1031,6 +1045,7 @@ static RString ReadText(QIStream& in, int langID)
     buf[len] = 0;
     return buf;
 }
+} // namespace Poseidon
 
 static RString ConvertURL(RString src)
 {
@@ -1350,6 +1365,7 @@ void CHTMLContainer::LoadBuffer(const char* filenameHint, const char* utf8Text, 
 
     QIStream in;
     in.init(utf8Buf.data(), static_cast<int>(utf8Buf.size()));
+    const int langID = _fontP ? _fontP->GetLangID() : 0;
 
     HTMLStackItem item(HTMLNone, HALeft, HFP);
     HTMLStack stack;
@@ -1720,7 +1736,7 @@ void CHTMLContainer::LoadBuffer(const char* filenameHint, const char* utf8Text, 
         {
             // text
             in.unget();
-            RString text = ReadText(in, _fontP->GetLangID());
+            RString text = ReadHtmlBodyText(in, langID);
             switch (item.context)
             {
                 case HTMLNone:

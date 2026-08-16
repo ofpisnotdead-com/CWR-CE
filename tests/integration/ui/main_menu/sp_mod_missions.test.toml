@@ -1,0 +1,3 @@
+extra_args = ["--mods-dir", "../../tests/fixtures/mods-sp-missions", "--mod", "@trisp", "--no-menu-scene"]
+timeout = 120
+tags = ["headful"]
