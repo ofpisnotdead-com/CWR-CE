@@ -611,10 +611,11 @@ class World
 	void DestroyMap(int exitCode);
 	void DestroyChat(int exitCode);
 	void DestroyVoiceChat(int exitCode);
+	void HandleVoiceChatShortcuts();
 	void CreateMainOptions();
 	void CreateEndOptions(int mode);
 	void CreateChat();
-	void CreateVoiceChat();
+	void CreateVoiceChat(bool pushToTalk = false);
 	void CreateMainMap();
 	void CreateWarningMessage(RString text);
 	bool SetUserDialog(AbstractOptionsUI *dlg)

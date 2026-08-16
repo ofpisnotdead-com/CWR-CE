@@ -1,6 +1,8 @@
 
 #include <Poseidon/Foundation/Platform/InitBridge.hpp> // IsMenuOverriddenByMod (custom-menu hijack)
+#include <Poseidon/Foundation/Strings/Mbcs.hpp>
 #include <Poseidon/UI/Options/OptionsShell.hpp>
+#include <Poseidon/UI/Options/OptionsScrollList.hpp>
 using namespace Poseidon;
 #include <Poseidon/Core/Config/EngineConfig.hpp>
 #include <Poseidon/Core/Config/UserConfig.hpp>
@@ -13,6 +15,7 @@ using namespace Poseidon;
 
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/UI/Settings/GameSettingsConfig.hpp>
+#include <Poseidon/UI/Settings/Presentation.hpp>
 
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
 #include <Poseidon/Core/Progress.hpp>
@@ -30,7 +33,6 @@ using namespace Poseidon;
 #include <Poseidon/Game/Scripting/Scripts.hpp>
 
 #include <Poseidon/Foundation/Common/Win.h>
-#include <Poseidon/Foundation/Common/PlayerPrefs.hpp>
 #include <Poseidon/IO/Filesystem/FileOps.hpp>
 #include <Poseidon/Core/ModSystem.hpp>
 #include <Poseidon/Core/ModInstall.hpp>
@@ -56,6 +58,7 @@ using namespace Poseidon;
 #include <vector>
 #include <Poseidon/Foundation/Containers/Array.hpp>
 #include <Poseidon/Foundation/Framework/DebugLog.hpp>
+#include <Poseidon/Foundation/Framework/AppFrame.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 #include <Poseidon/Foundation/Types/LLinks.hpp>
 #include <Poseidon/Foundation/Types/Pointers.hpp>
@@ -77,7 +80,6 @@ using namespace Poseidon;
 
 #include <Poseidon/UI/Locale/StringtableExt.hpp>
 #include <Poseidon/UI/Locale/Languages.hpp>
-#include <Poseidon/Foundation/Strings/Mbcs.hpp>
 
 #include <Poseidon/Game/Commands/GameStateExt.hpp>
 
@@ -120,6 +122,8 @@ RString GetAppVersion()
 {
 #if defined(_M_X64) || defined(__x86_64__)
     const char* platform = "x64";
+#elif defined(__aarch64__)
+    const char* platform = "aarch64";
 #else
     const char* platform = "x86";
 #endif
@@ -381,10 +385,17 @@ void StartCampaign(RString campaign, Display* disp)
 
 static void UpdateUserProfile()
 {
+    const RString userPath = GetUserParams();
+    USER_CONFIG.LoadFromFile(userPath);
     InputSubsystem::Instance().LoadKeys();
     UserConfig_LoadDifficulties(USER_CONFIG);
 
     GEngine->LoadConfig();
+    const int width = GEngine->Width();
+    const int height = GEngine->Height();
+    if (Poseidon::Presentation::ConfigureUserFov(USER_CONFIG, width, height))
+        USER_CONFIG.SaveToFile(userPath);
+    Poseidon::Presentation::Apply(GEngine->Width(), GEngine->Height());
     GScene->LoadConfig();
     if (GSoundsys)
     {
@@ -605,6 +616,7 @@ void DisplayMain::OnChildDestroyed(int idd, int exit)
                 if (item->data.GetLength() == 0)
                 {
                     SetBaseDirectory("");
+                    SetMission(world, mission, ResolveArcadeMissionSubdir(world, mission));
                 }
                 else
                 {
@@ -613,8 +625,8 @@ void DisplayMain::OnChildDestroyed(int idd, int exit)
                     RString src = GetCampaignSaveDirectory(item->data) + RString("objects.sav");
                     RString dst = GetCampaignSaveDirectory("") + RString("objects.sav");
                     ::CopyFile(src, dst, FALSE);
+                    SetMission(world, mission);
                 }
-                SetMission(world, mission);
 
                 GStats.ClearAll();
                 Display::OnChildDestroyed(idd, exit);
@@ -654,6 +666,7 @@ void DisplayMain::OnChildDestroyed(int idd, int exit)
                 if (item->data.GetLength() == 0)
                 {
                     SetBaseDirectory("");
+                    SetMission(world, mission, ResolveArcadeMissionSubdir(world, mission));
                 }
                 else
                 {
@@ -662,8 +675,8 @@ void DisplayMain::OnChildDestroyed(int idd, int exit)
                     RString src = GetCampaignSaveDirectory(item->data) + RString("objects.sav");
                     RString dst = GetCampaignSaveDirectory("") + RString("objects.sav");
                     ::CopyFile(src, dst, FALSE);
+                    SetMission(world, mission);
                 }
-                SetMission(world, mission);
 
                 Display::OnChildDestroyed(idd, exit);
                 GLOB_WORLD->SwitchLandscape(GetWorldName(Glob.header.worldname));
@@ -733,6 +746,7 @@ void DisplayMain::OnChildDestroyed(int idd, int exit)
                 else
                 {
                     RString mission = lbox->GetData(sel);
+                    dir = ResolveSPMissionSubdir(disp->GetDirectory(), mission);
                     if (!ProcessTemplateName(mission, dir))
                     {
                         Display::OnChildDestroyed(idd, exit);
@@ -766,6 +780,7 @@ void DisplayMain::OnChildDestroyed(int idd, int exit)
                     }
                     else
                     {
+                        dir = ResolveSPMissionSubdir(disp->GetDirectory(), mission);
                         CurrentMissionViewDistance =
                             MissionLanguageDetector::DetectPreview(dir + mission + RString("\\")).missionViewDistance;
                     }
@@ -801,7 +816,7 @@ void DisplayMain::OnChildDestroyed(int idd, int exit)
                 CurrentCampaign = "";
                 CurrentBattle = "";
                 CurrentMission = "";
-                SetBaseDirectory(userDir);
+                SetBaseDirectory(true, userDir);
                 ::CreateDirectory(BaseDirectory + RString("missions"), nullptr);
                 SetMission(world, "");
 
@@ -1073,7 +1088,7 @@ void DisplayMain::OnChildDestroyed(int idd, int exit)
                 Glob.header.playerName = ctrl->GetText(index);
                 //				LoadHeader();
                 const char* name = Glob.header.playerName;
-                Foundation::prefsSetString(AppName, "PlayerName", name);
+                SaveActiveProfile(name);
                 Display::OnChildDestroyed(idd, exit);
 
                 // load info from identity
@@ -1128,7 +1143,7 @@ void DisplayMain::OnChildDestroyed(int idd, int exit)
                 }
 
                 //				LoadHeader();
-                Foundation::prefsSetString(AppName, "PlayerName", name);
+                SaveActiveProfile(name);
                 GetTmpSaveDirectory(); // only create directory
 
                 C3DListBox* ctrl = dynamic_cast<C3DListBox*>(_child->GetCtrl(IDC_NEW_USER_FACE));
@@ -1286,6 +1301,8 @@ static AutoArray<ModRow> ScanModRows()
             r.folderName = sm.folderName.c_str();
             r.name = sm.name.c_str();
             r.version = sm.version.c_str();
+            r.packageRevision = sm.packageRevision;
+            r.sha256 = sm.sha256.c_str();
             r.sizeBytes = sm.sizeBytes;
             r.source = source;
             const bool isActive = active.count(LowerStr(sm.folderName)) > 0;
@@ -1307,6 +1324,8 @@ Control* DisplayMods::OnCreateCtrl(int type, int idc, const ParamEntry& cls)
         list->SetRows(ScanModRows());
         return list;
     }
+    if (idc == IDC_MODS_FILTER)
+        return new C3DEdit(this, idc, cls);
     return Display::OnCreateCtrl(type, idc, cls);
 }
 
@@ -1316,37 +1335,13 @@ DisplayMods::DisplayMods(ControlsContainer* parent) : Display(parent)
     _exitWhenClose = -1;
     Load("RscDisplayMods");
 
-    if (ControlObjectContainer* notebook = dynamic_cast<ControlObjectContainer*>(GetCtrl(IDC_MODS_NOTEBOOK)))
-    {
-        ParamEntry* sourceCls = Res.FindEntry("RscDisplayMods")
-                                    ? (Res >> "RscDisplayMods" >> "Notebook").FindEntry("ButtonSource")
-                                    : nullptr;
-        if (sourceCls != nullptr && sourceCls->IsClass())
-        {
-            static ParamFile s_masterServerLabelCfg;
-            s_masterServerLabelCfg.Clear();
-            ParamClass* cls = s_masterServerLabelCfg.AddClass("ModsMasterServerAttribution");
-            cls->Add("type", CT_3DSTATIC);
-            cls->Add("idc", IDC_MODS_MASTER_SERVER);
-            cls->Add("style", ST_LEFT);
-            cls->Add("text", RString(""));
-            cls->Add("x", 0.025f);
-            cls->Add("y", 0.925f);
-            cls->Add("w", 0.95f);
-            cls->Add("h", 0.045f);
-            cls->Add("selection", RString("display"));
-            cls->Add("angle", 0.0f);
-            cls->SetBase(sourceCls->GetClassInterface());
-
-            Control* ctrl = notebook->LoadControl(*cls);
-            if (C3DStatic* text = dynamic_cast<C3DStatic*>(ctrl))
-            {
-                text->SetText(FormatNetworkMasterServerAttribution(GetNetworkMasterServer()));
-            }
-        }
-    }
+    if (C3DStatic* text = dynamic_cast<C3DStatic*>(GetCtrl(IDC_MODS_MASTER_SERVER)))
+        text->SetText(FormatNetworkMasterServerAttribution(GetNetworkMasterServer()));
 
     ApplyInitialSort();
+    FocusCtrl(IDC_MODS_LIST);
+    _guidanceText = LocalizeString("STR_DISP_MODS_GUIDANCE");
+    _guidanceMarqueeStart = Foundation::GlobalTickCount();
 }
 
 void DisplayMods::SeedTestMods(int count)
@@ -1375,6 +1370,7 @@ void DisplayMods::SeedTestMods(int count)
     // Keep the active sort + its caret consistent with the freshly-seeded rows.
     list->Sort(static_cast<ModsSortColumn>(_sortColumn), _sortAscending);
     UpdateSortCarets();
+    UpdateCatalogUi();
 }
 
 // libcurl download bridged to the agnostic DownloadFileFn. The C progress
@@ -1418,35 +1414,52 @@ static std::string BareModId(const RString& modId)
     return id;
 }
 
-// Download tasks for every ticked-but-not-downloaded row that carries a URL.
-// Each task downloads the zstd-wrapped mod artifact next to its install dir then unpacks it
-// into <root>/<folderName> (so GetModInstallStatus sees it installed). Returns true if any.
-static bool BuildCheckedDownloadTasks(CModsList* list, const std::string& root, std::vector<DownloadTask>& tasks)
+static bool BuildCheckedDownloadTasks(CModsList* list, const std::string& root, std::vector<DownloadTask>& tasks,
+                                      std::vector<StagedModInstall>& installs, bool& hasUpdates)
 {
     const AutoArray<ModRow>& rows = list->GetRows();
     for (int i = 0; i < rows.Size(); i++)
     {
         const ModRow& r = rows[i];
-        if (!r.checked || r.state != ModRowState::Missing || r.downloadUrl.GetLength() == 0)
+        if (!r.checked)
             continue;
         const std::string modId = BareModId(r.modId);
         const std::string folderName = (const char*)r.folderName;
         const std::string destDir = ModInstallDir(root, modId, folderName);
+        StagedModInstall preserved;
+        if (FindPreservedStagedModInstall(destDir, modId, r.packageRevision, (const char*)r.sha256, preserved))
+        {
+            installs.push_back(std::move(preserved));
+            continue;
+        }
+        if ((r.state != ModRowState::Missing && r.freshness != ModRowFreshness::UpdateAvailable) ||
+            r.downloadUrl.GetLength() == 0)
+            continue;
+        hasUpdates = hasUpdates || r.freshness == ModRowFreshness::UpdateAvailable;
+        StagedModInstall install = MakeStagedModInstall(destDir, modId);
+        const std::string stagingDir = install.stagingDir;
         DownloadTask t;
         t.label = (const char*)r.name;
         t.url = (const char*)r.downloadUrl;
-        t.destPath = destDir + ".pbo.zst";
+        t.destPath = stagingDir + ".pbo.zst";
         t.expectedBytes = r.sizeBytes;
-        t.postStep = [destDir, modId, name = std::string((const char*)r.name),
+        t.postStep = [stagingDir, modId, name = std::string((const char*)r.name),
                       version = std::string((const char*)r.version), folderName,
-                      downloadUrl = std::string((const char*)r.downloadUrl),
-                      sizeBytes = r.sizeBytes](const DownloadTask& task, std::string& error) -> bool
+                      downloadUrl = std::string((const char*)r.downloadUrl), sizeBytes = r.sizeBytes,
+                      packageRevision = r.packageRevision,
+                      sha256 = std::string((const char*)r.sha256)](const DownloadTask& task, std::string& error) -> bool
         {
-            if (!ModArchive::Unpack(task.destPath.c_str(), destDir.c_str(), &error))
+            if (!VerifyModArtifact(task.destPath, sizeBytes, sha256, &error))
                 return false;
-            return WriteInstalledModManifest(destDir, modId, name, version, folderName, downloadUrl, sizeBytes, &error);
+            std::error_code ec;
+            std::filesystem::remove_all(stagingDir, ec);
+            if (!ModArchive::Unpack(task.destPath.c_str(), stagingDir.c_str(), &error))
+                return false;
+            return WriteInstalledModManifest(stagingDir, modId, name, version, folderName, downloadUrl, sizeBytes,
+                                             &error, packageRevision, sha256);
         };
         tasks.push_back(std::move(t));
+        installs.push_back(std::move(install));
     }
     return !tasks.empty();
 }
@@ -1459,25 +1472,33 @@ static RString LocalizedDownloadUnitNoun(const char* unitNoun, int count)
     return LocalizeString(plural ? "STR_DISP_MODS_NOUN_ADDONS" : "STR_DISP_MODS_NOUN_ADDON");
 }
 
-// After a successful download, flip the now-installed rows off Missing so
-// BuildModPath mounts them. Preserves ticks (SetRows copies the rows back).
-static void RefreshInstalledStates(CModsList* list, const std::string& root)
+static void MarkCheckedDownloadsReady(CModsList* list, bool activateSelection)
 {
     AutoArray<ModRow> rows = list->GetRows();
-    bool changed = false;
-    for (int i = 0; i < rows.Size(); i++)
+    for (int i = 0; i < rows.Size(); ++i)
     {
-        if (rows[i].state != ModRowState::Missing)
+        if (!rows[i].checked ||
+            (rows[i].state != ModRowState::Missing && rows[i].freshness != ModRowFreshness::UpdateAvailable))
             continue;
-        const ModInstallStatus st = GetModInstallStatus(root, BareModId(rows[i].modId), (const char*)rows[i].version);
-        if (st != ModInstallStatus::NotInstalled)
-        {
+        if (rows[i].state == ModRowState::Missing)
             rows[i].state = ModRowState::Downloaded;
-            changed = true;
-        }
+        if (rows[i].freshness != ModRowFreshness::UpdateAvailable)
+            rows[i].freshness = ModRowFreshness::Current;
+        if (!activateSelection)
+            rows[i].checked = rows[i].state == ModRowState::Active;
     }
-    if (changed)
-        list->SetRows(rows);
+    list->SetRows(rows);
+}
+
+static constexpr int kModsTabIds[] = {IDC_MODS_TAB_ALL, IDC_MODS_TAB_ACTIVE, IDC_MODS_TAB_INSTALLED,
+                                      IDC_MODS_TAB_WORKSHOP, IDC_MODS_TAB_LOCAL};
+
+static int ModsSourceModeForTab(int idc)
+{
+    for (int i = 0; i < static_cast<int>(std::size(kModsTabIds)); ++i)
+        if (kModsTabIds[i] == idc)
+            return i;
+    return -1;
 }
 
 void DisplayMods::OnButtonClicked(int idc)
@@ -1493,50 +1514,53 @@ void DisplayMods::OnButtonClicked(int idc)
         return;
     }
 
+    const int sourceMode = ModsSourceModeForTab(idc);
+    if (sourceMode >= 0)
+    {
+        if (CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST)))
+        {
+            list->SetSourceMode(sourceMode);
+            UpdateCatalogUi();
+            FocusCtrl(IDC_MODS_LIST);
+        }
+        return;
+    }
+
+    if (idc == IDC_MODS_TOGGLE)
+    {
+        if (CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST)))
+        {
+            list->ToggleSelected();
+            UpdateCatalogUi();
+            FocusCtrl(IDC_MODS_LIST);
+        }
+        return;
+    }
+
     if (idc == IDC_MODS_APPLY)
     {
-        // Apply the ticked set: re-mount the game in place with exactly those mods
-        // (RequestRemountWithMods, serviced at the next AppIdle so the teardown runs
-        // between frames). Menu-only (GModeIntro) — a re-mount mid-mission would evict
-        // assets the simulation still references. An empty set re-mounts the base game.
+        // Remounts are deferred to AppIdle and restricted to the main menu.
         CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST));
         if (list == nullptr || GApp == nullptr || GWorld == nullptr || GWorld->GetMode() != GModeIntro)
             return;
 
-        // If any ticked mod isn't downloaded yet, gate the re-mount behind the
-        // download dialog; OnChildDestroyed(IDD_MODS_DOWNLOAD, IDC_OK) re-mounts
-        // once it reports success.
         std::vector<DownloadTask> tasks;
-        if (BuildCheckedDownloadTasks(list, WorkshopModsRoot(), tasks))
+        bool hasUpdates = false;
+        DiscardStagedModInstalls(_stagedInstalls);
+        if (BuildCheckedDownloadTasks(list, WorkshopModsRoot(), tasks, _stagedInstalls, hasUpdates))
         {
             std::string proxy = (const char*)GetNetworkProxy();
-            CreateChild(new DisplayModDownload(this, std::move(tasks), MakeMasterServerTransport(proxy)));
+            CreateChild(
+                new DisplayModDownload(this, std::move(tasks), MakeMasterServerTransport(proxy), "addon", {},
+                                       hasUpdates ? "STR_DISP_MODS_UPDATE_PROMPT" : "STR_DISP_MODS_DOWNLOAD_PROMPT"));
             return;
         }
 
         RString modPath = list->BuildModPath(LocalModsRoot().c_str(), WorkshopModsRoot().c_str());
-        GApp->RequestRemountWithMods((const char*)modPath);
-        return;
-    }
-
-    if (idc == IDC_MODS_SOURCE)
-    {
-        // Cycle the Source filter: All -> Workshop -> Local -> All.
-        if (CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST)))
-        {
-            int mode = (list->GetSourceMode() + 1) % 3;
-            list->SetSourceMode(mode);
-            UpdateSourceButton(mode);
-        }
-        return;
-    }
-
-    if (idc == IDC_MODS_FILTER)
-    {
-        // Open the name-filter dialog seeded with the current filter; OnChildDestroyed
-        // applies the result on OK.
-        CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST));
-        CreateChild(new DisplayModsFilter(this, list != nullptr ? list->GetNameFilter() : RString()));
+        if (_stagedInstalls.empty())
+            GApp->RequestRemountWithMods((const char*)modPath);
+        else
+            GApp->RequestRemountWithMods((const char*)modPath, std::move(_stagedInstalls));
         return;
     }
 
@@ -1560,6 +1584,12 @@ void DisplayMods::OnButtonClicked(int idc)
         case IDC_MODS_COL_SOURCE:
             col = MSCSource;
             break;
+        case IDC_MODS_COL_ACTIVE:
+            col = MSCActive;
+            break;
+        case IDC_MODS_COL_ACTION:
+            col = MSCAction;
+            break;
         default:
             Display::OnButtonClicked(idc);
             return;
@@ -1569,6 +1599,57 @@ void DisplayMods::OnButtonClicked(int idc)
     if (CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST)))
         list->Sort(col, _sortAscending);
     UpdateSortCarets();
+    FocusCtrl(IDC_MODS_LIST);
+}
+
+bool DisplayMods::OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
+{
+    CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST));
+    if (nChar == SDLK_TAB && list != nullptr)
+    {
+        const bool reverse = InputSubsystem::Instance().IsKeyDown(SDL_SCANCODE_LSHIFT) ||
+                             InputSubsystem::Instance().IsKeyDown(SDL_SCANCODE_RSHIFT);
+        const int delta = reverse ? 4 : 1;
+        OnButtonClicked(kModsTabIds[(list->GetSourceMode() + delta) % 5]);
+        return true;
+    }
+    if (list != nullptr && list->IsFocused())
+    {
+        if (nChar == SDLK_SPACE)
+        {
+            list->ToggleSelected();
+            UpdateCatalogUi();
+            return true;
+        }
+        if (nChar == SDLK_RETURN || nChar == SDLK_KP_ENTER)
+        {
+            OnButtonClicked(IDC_MODS_APPLY);
+            return true;
+        }
+    }
+    return Display::OnKeyDown(nChar, nRepCnt, nFlags);
+}
+
+void DisplayMods::OnLBDblClick(int idc, int curSel)
+{
+    if (idc == IDC_MODS_LIST)
+    {
+        if (CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST)))
+        {
+            list->SetCurSel(curSel, false);
+            list->ToggleSelected();
+            UpdateCatalogUi();
+        }
+        return;
+    }
+    Display::OnLBDblClick(idc, curSel);
+}
+
+void DisplayMods::OnLBSelChanged(int idc, int curSel)
+{
+    if (idc == IDC_MODS_LIST)
+        UpdateCatalogUi();
+    Display::OnLBSelChanged(idc, curSel);
 }
 
 bool DisplayMods::DoControllerUiAction(ControllerUiAction action)
@@ -1579,11 +1660,15 @@ bool DisplayMods::DoControllerUiAction(ControllerUiAction action)
             OnButtonClicked(IDC_MODS_APPLY);
             return true;
         case ControllerUiAction::Delete:
-            OnButtonClicked(IDC_MODS_FILTER);
+            FocusCtrl(IDC_MODS_FILTER);
             return true;
         case ControllerUiAction::PreviousTab:
         case ControllerUiAction::NextTab:
-            OnButtonClicked(IDC_MODS_SOURCE);
+            if (CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST)))
+            {
+                const int delta = action == ControllerUiAction::NextTab ? 1 : 4;
+                OnButtonClicked(kModsTabIds[(list->GetSourceMode() + delta) % 5]);
+            }
             return true;
         default:
             break;
@@ -1599,70 +1684,173 @@ void DisplayMods::ApplyInitialSort()
     if (list != nullptr)
         list->Sort(MSCName, _sortAscending);
     UpdateSortCarets();
-    UpdateSourceButton(list != nullptr ? list->GetSourceMode() : 0);
-    UpdateFilterButton();
-}
-
-void DisplayMods::UpdateSourceButton(int mode)
-{
-    C3DActiveText* btn = dynamic_cast<C3DActiveText*>(GetCtrl(IDC_MODS_SOURCE));
-    if (btn == nullptr)
-        return;
-    RString label = (mode == 1)   ? LocalizeString("STR_DISP_MODS_SOURCE_WORKSHOP")
-                    : (mode == 2) ? LocalizeString("STR_DISP_MODS_SOURCE_LOCAL")
-                                  : LocalizeString("STR_DISP_MODS_SOURCE_ALL");
-    btn->SetText(label);
+    UpdateCatalogUi();
 }
 
 void DisplayMods::UpdateFilterButton()
 {
-    C3DActiveText* btn = dynamic_cast<C3DActiveText*>(GetCtrl(IDC_MODS_FILTER));
-    if (btn == nullptr)
-        return;
     CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST));
-    RString f = list != nullptr ? list->GetNameFilter() : RString();
-    if (f.GetLength() > 0)
-        btn->SetText(Format(LocalizeString("STR_DISP_MODS_FILTER_ACTIVE"), (const char*)f));
-    else
-        btn->SetText(LocalizeString("STR_DISP_MODS_FILTER"));
+    C3DEdit* search = dynamic_cast<C3DEdit*>(GetCtrl(IDC_MODS_FILTER));
+    if (list != nullptr && search != nullptr)
+    {
+        _searchText = list->GetNameFilter();
+        search->SetText(_searchText);
+    }
+    UpdateCatalogUi();
+}
+
+void DisplayMods::UpdateCatalogUi()
+{
+    CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST));
+    ControlObjectContainer* notebook = dynamic_cast<ControlObjectContainer*>(GetCtrl(IDC_MODS_NOTEBOOK));
+    if (list == nullptr || notebook == nullptr)
+        return;
+
+    constexpr int fillIds[] = {IDC_MODS_TAB_FILL_ALL, IDC_MODS_TAB_FILL_ACTIVE, IDC_MODS_TAB_FILL_INSTALLED,
+                               IDC_MODS_TAB_FILL_WORKSHOP, IDC_MODS_TAB_FILL_LOCAL};
+    const int counts[] = {list->FilterRowCount(), list->CountActive(), list->CountInstalled(),
+                          list->CountSource(ModRowSource::Workshop), list->CountSource(ModRowSource::Local)};
+    const char* keys[] = {"STR_DISP_MODS_TAB_ALL", "STR_DISP_MODS_TAB_ACTIVE", "STR_DISP_MODS_TAB_INSTALLED",
+                          "STR_DISP_MODS_TAB_WORKSHOP", "STR_DISP_MODS_TAB_LOCAL"};
+    const PackedColor selectedBackground = PackedColor(Color(0.3f, 1.0f, 0.3f, 0.78f));
+    const PackedColor idleBackground = PackedColor(Color(0.01f, 0.04f, 0.01f, 0.85f));
+    const PackedColor selectedText = PackedColor(Color(0.01f, 0.04f, 0.01f, 1.0f));
+    const PackedColor idleText = PackedColor(Color(0.3f, 1.0f, 0.3f, 0.72f));
+    const int selectedTab = list->GetSourceMode();
+    std::array<RString, 5> tabLabels;
+    std::array<float, 5> tabUnits;
+    float totalTabUnits = 0.0f;
+    for (int i = 0; i < 5; ++i)
+    {
+        tabLabels[i] = Format("%s (%d)", (const char*)LocalizeString(keys[i]), counts[i]);
+        C3DActiveText* tab = dynamic_cast<C3DActiveText*>(GetCtrl(kModsTabIds[i]));
+        if (tab != nullptr)
+        {
+            tab->SetText(tabLabels[i]);
+            tabUnits[i] = tab->MeasureTextWidth(tabLabels[i]) + tab->MeasureTextWidth("    ");
+        }
+        else
+        {
+            tabUnits[i] = 1.0f;
+        }
+        tabUnits[i] = std::max(tabUnits[i], 0.001f);
+        totalTabUnits += tabUnits[i];
+    }
+
+    float tabLeft, listY, tabSpan, listH;
+    if (!notebook->GetSubControlPos(IDC_MODS_LIST, tabLeft, listY, tabSpan, listH))
+        return;
+    float tabX = tabLeft;
+    for (int i = 0; i < 5; ++i)
+    {
+        const bool selected = i == selectedTab;
+        const float tabWidth = tabSpan * tabUnits[i] / totalTabUnits;
+        float x, y, w, h;
+        if (C3DStatic* fill = dynamic_cast<C3DStatic*>(GetCtrl(fillIds[i])))
+        {
+            if (notebook->GetSubControlPos(fillIds[i], x, y, w, h))
+                notebook->SetSubControlPos(fillIds[i], tabX, y, tabWidth, h);
+            fill->SetBgColor(selected ? selectedBackground : idleBackground);
+        }
+        if (C3DActiveText* tab = dynamic_cast<C3DActiveText*>(GetCtrl(kModsTabIds[i])))
+        {
+            if (notebook->GetSubControlPos(kModsTabIds[i], x, y, w, h))
+                notebook->SetSubControlPos(kModsTabIds[i], tabX, y, tabWidth, h);
+            tab->SetColor(selected ? selectedText : idleText);
+            tab->SetActiveColor(selected ? selectedText : PackedColor(Color(0.3f, 1.0f, 0.3f, 1.0f)));
+            tab->SetFocusBgColor(PackedColor(0, 0, 0, 0));
+        }
+        tabX += tabWidth;
+        if (i < 4)
+        {
+            constexpr int separatorIds[] = {IDC_MODS_TAB_SEPARATOR_1, IDC_MODS_TAB_SEPARATOR_2,
+                                            IDC_MODS_TAB_SEPARATOR_3, IDC_MODS_TAB_SEPARATOR_4};
+            if (notebook->GetSubControlPos(separatorIds[i], x, y, w, h))
+                notebook->SetSubControlPos(separatorIds[i], tabX - 0.0005f, y, 0.001f, h);
+        }
+    }
+
+    constexpr int headerIds[] = {IDC_MODS_COL_ACTIVE, IDC_MODS_COL_NAME,  IDC_MODS_COL_VERSION,
+                                 IDC_MODS_COL_SOURCE, IDC_MODS_COL_STATE, IDC_MODS_COL_ACTION};
+    constexpr int caretIds[] = {IDC_MODS_ICON_ACTIVE, IDC_MODS_ICON_NAME,  IDC_MODS_ICON_VERSION,
+                                IDC_MODS_ICON_SOURCE, IDC_MODS_ICON_STATE, IDC_MODS_ICON_ACTION};
+    const char* headerKeys[] = {"STR_DISP_MODS_COL_ACTIVE", "STR_DISP_MODS_COL_NAME",  "STR_DISP_MODS_COL_VERSION",
+                                "STR_DISP_MODS_COL_SOURCE", "STR_DISP_MODS_COL_STATE", "STR_DISP_MODS_COL_ACTION"};
+    std::array<float, MTCCount> headerWidths;
+    for (int i = 0; i < MTCCount; ++i)
+    {
+        C3DActiveText* header = dynamic_cast<C3DActiveText*>(GetCtrl(headerIds[i]));
+        headerWidths[i] = header != nullptr ? header->MeasureTextWidth(LocalizeString(headerKeys[i])) : 0.0f;
+    }
+    list->UpdateColumnLayout(headerWidths);
+    const auto& widths = list->GetColumnWidths();
+    float listX, listW;
+    if (!notebook->GetSubControlPos(IDC_MODS_LIST, listX, listY, listW, listH))
+        return;
+    float columnX = listX;
+    const float contentWidth = listW * list->ContentWidthFraction();
+    for (int i = 0; i < MTCCount; ++i)
+    {
+        const float cellWidth = widths[i] * contentWidth;
+        const float textX = columnX + 0.008f;
+        float x, y, w, h;
+        float labelWidth = 0.0f;
+        if (C3DActiveText* header = dynamic_cast<C3DActiveText*>(GetCtrl(headerIds[i])))
+        {
+            if (notebook->GetSubControlPos(headerIds[i], x, y, w, h))
+            {
+                labelWidth = header->MeasureTextFraction(LocalizeString(headerKeys[i])) * w;
+                notebook->SetSubControlPos(headerIds[i], textX, y, std::max(cellWidth - 0.012f, 0.01f), h);
+            }
+        }
+        if (notebook->GetSubControlPos(caretIds[i], x, y, w, h))
+        {
+            const float offset = std::min(labelWidth, std::max(cellWidth - 0.020f, 0.0f));
+            notebook->SetSubControlPos(caretIds[i], textX + offset, y, w, h);
+        }
+        columnX += cellWidth;
+    }
+
+    const int pendingCount = list->PendingChangeCount();
+    if (C3DStatic* pending = dynamic_cast<C3DStatic*>(GetCtrl(IDC_MODS_PENDING)))
+        pending->SetText(pendingCount == 0 ? RString() : LocalizeString("STR_DISP_MODS_PENDING"));
+    if (CActiveText* toggle = dynamic_cast<CActiveText*>(GetCtrl(IDC_MODS_TOGGLE)))
+        toggle->SetText(LocalizeString(list->SelectedChecked() ? "STR_DISP_MODS_DISABLE" : "STR_DISP_MODS_ENABLE"));
+    if (CActiveText* apply = dynamic_cast<CActiveText*>(GetCtrl(IDC_MODS_APPLY)))
+        apply->SetText(LocalizeString("STR_DISP_MODS_LOAD"));
 }
 
 void DisplayMods::OnChildDestroyed(int idd, int exit)
 {
-    if (idd == IDD_MODS_FILTER && exit == IDC_OK)
+    if (idd == IDD_MODS_DOWNLOAD && exit == IDC_OK)
     {
-        C3DEdit* edit = dynamic_cast<C3DEdit*>(_child->GetCtrl(IDC_MODS_FILTER_NAME));
-        CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST));
-        if (edit != nullptr && list != nullptr)
-        {
-            list->SetNameFilter(edit->GetText());
-            UpdateFilterButton();
-        }
-    }
-    else if (idd == IDD_MODS_DOWNLOAD && exit == IDC_OK)
-    {
-        // The download dialog confirmed every ticked mod is now installed — flip
-        // their rows off Missing and run the re-mount Apply deferred to it.
         CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST));
         if (list != nullptr && GApp != nullptr && GWorld != nullptr && GWorld->GetMode() == GModeIntro)
         {
-            RefreshInstalledStates(list, WorkshopModsRoot());
+            MarkCheckedDownloadsReady(list, true);
             RString modPath = list->BuildModPath(LocalModsRoot().c_str(), WorkshopModsRoot().c_str());
-            GApp->RequestRemountWithMods((const char*)modPath);
+            GApp->RequestRemountWithMods((const char*)modPath, std::move(_stagedInstalls));
         }
     }
-    Display::OnChildDestroyed(idd, exit);
-}
-
-Control* DisplayModsFilter::OnCreateCtrl(int type, int idc, const ParamEntry& cls)
-{
-    if (idc == IDC_MODS_FILTER_NAME)
+    else if (idd == IDD_MODS_DOWNLOAD && exit == IDC_MODS_DOWNLOAD_KEEP)
     {
-        C3DEdit* edit = new C3DEdit(this, idc, cls);
-        edit->SetText(_filterName);
-        return edit;
+        std::string error;
+        if (PreserveStagedModInstalls(_stagedInstalls, &error))
+        {
+            if (CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST)))
+                MarkCheckedDownloadsReady(list, false);
+            UpdateCatalogUi();
+        }
+        else
+        {
+            DiscardStagedModInstalls(_stagedInstalls);
+        }
     }
-    return Display::OnCreateCtrl(type, idc, cls);
+    else if (idd == IDD_MODS_DOWNLOAD)
+    {
+        DiscardStagedModInstalls(_stagedInstalls);
+    }
+    Display::OnChildDestroyed(idd, exit);
 }
 
 // Background workshop-catalog fetch: a detached worker fills this; OnSimulate polls
@@ -1676,8 +1864,45 @@ struct ModsWorkshopFetch
     bool ok = false;
 };
 
+RString FormatModsGuidance(RString text, float measuredFraction, DWORD elapsedMs)
+{
+    if (measuredFraction <= 1.0f)
+        return text;
+    const int codepoints = Foundation::CountUtf8Codepoints(text);
+    const int visible = std::max(1, static_cast<int>(codepoints / measuredFraction));
+    char buffer[512];
+    OptionsScrollList::FormatCell((const char*)text, visible, true, elapsedMs, buffer, sizeof(buffer));
+    return RString(buffer);
+}
+
 void DisplayMods::OnSimulate(EntityAI* vehicle)
 {
+    if (C3DStatic* guidance = dynamic_cast<C3DStatic*>(GetCtrl(IDC_MODS_GUIDANCE)))
+    {
+        const RString localized = LocalizeString("STR_DISP_MODS_GUIDANCE");
+        if (strcmp(localized, _guidanceText) != 0)
+        {
+            _guidanceText = localized;
+            _guidanceMarqueeStart = Foundation::GlobalTickCount();
+        }
+        guidance->SetText(FormatModsGuidance(_guidanceText, guidance->MeasureTextFraction(_guidanceText),
+                                             Foundation::GlobalTickCount() - _guidanceMarqueeStart));
+    }
+
+    if (C3DEdit* search = dynamic_cast<C3DEdit*>(GetCtrl(IDC_MODS_FILTER)))
+    {
+        const RString text = search->GetText();
+        if (strcmp(text, _searchText) != 0)
+        {
+            _searchText = text;
+            if (CModsList* list = dynamic_cast<CModsList*>(GetCtrl(IDC_MODS_LIST)))
+            {
+                list->SetNameFilter(text);
+                UpdateCatalogUi();
+            }
+        }
+    }
+
     // Kick the remote catalog fetch once. Skipped under autotest so UI tests stay off
     // the network (workshop rows are exercised deterministically via triSeedWorkshopMods).
     if (!_workshopStarted && !AutoTest)
@@ -1735,41 +1960,65 @@ void DisplayMods::MergeWorkshopMods(const std::vector<MasterServerServiceModCata
 
     AutoArray<ModRow> rows;
     const AutoArray<ModRow>& current = list->GetRows();
-    std::set<std::string> existing; // lowercased catalog modId/folder id already in the list
     for (int i = 0; i < current.Size(); i++)
-    {
         rows.Add(current[i]);
-        existing.insert(LowerStr((const char*)current[i].modId));
-    }
 
     const std::string root = WorkshopModsRoot();
     for (const MasterServerServiceModCatalogEntry& e : catalog)
     {
         if (e.modId.empty())
             continue;
-        if (existing.count(LowerStr(e.modId)) > 0)
-            continue; // a local mod already shows this id — prefer the installed one
-        existing.insert(LowerStr(e.modId));
+
+        int existing = -1;
+        for (int i = 0; i < rows.Size(); ++i)
+        {
+            if (LowerStr((const char*)rows[i].modId) == LowerStr(e.modId))
+            {
+                existing = i;
+                break;
+            }
+        }
+        if (existing >= 0 && rows[existing].source == ModRowSource::Local)
+            continue;
 
         ModRow r;
         r.modId = e.modId.c_str();
         r.folderName = (e.folderName.empty() ? ("@" + e.modId) : e.folderName).c_str();
         r.name = e.name.empty() ? e.modId.c_str() : e.name.c_str();
         r.version = e.version.c_str();
+        r.packageRevision = e.packageRevision;
+        r.sha256 = e.sha256.c_str();
         r.sizeBytes = e.sizeBytes;
         r.source = ModRowSource::Workshop;
         r.downloadUrl = e.downloadUrl.c_str();
-        const ModInstallStatus st = GetModInstallStatus(root, e.modId, e.version);
+        const ModInstallStatus st = GetModInstallStatus(root, e.modId, e.version, e.packageRevision, e.sha256);
         r.state = (st == ModInstallStatus::NotInstalled) ? ModRowState::Missing : ModRowState::Downloaded;
-        r.checked = false; // shown only — not activated/downloaded for now
-        rows.Add(r);
+        r.freshness =
+            st == ModInstallStatus::UpdateAvailable
+                ? ModRowFreshness::UpdateAvailable
+                : (st == ModInstallStatus::InstalledAhead ? ModRowFreshness::Ahead : ModRowFreshness::Current);
+        StagedModInstall preserved;
+        const std::string destination = ModInstallDir(root, e.modId, (const char*)r.folderName);
+        if (st == ModInstallStatus::NotInstalled &&
+            FindPreservedStagedModInstall(destination, e.modId, e.packageRevision, e.sha256, preserved))
+            r.state = ModRowState::Downloaded;
+        if (existing >= 0)
+        {
+            r.checked = rows[existing].checked;
+            if (rows[existing].state == ModRowState::Active)
+                r.state = ModRowState::Active;
+            rows[existing] = r;
+        }
+        else
+        {
+            rows.Add(r);
+        }
     }
 
     list->SetRows(rows);
     list->Sort(static_cast<ModsSortColumn>(_sortColumn), _sortAscending);
     UpdateSortCarets();
-    UpdateSourceButton(list->GetSourceMode());
-    UpdateFilterButton();
+    UpdateCatalogUi();
 }
 
 void DisplayMods::UpdateSortCarets()
@@ -1783,12 +2032,15 @@ void DisplayMods::UpdateSortCarets()
     UpdateSortCaret(GetCtrl(IDC_MODS_ICON_VERSION), _sortColumn == MSCVersion, _sortAscending, up, down);
     UpdateSortCaret(GetCtrl(IDC_MODS_ICON_SIZE), _sortColumn == MSCSize, _sortAscending, up, down);
     UpdateSortCaret(GetCtrl(IDC_MODS_ICON_STATE), _sortColumn == MSCState, _sortAscending, up, down);
+    UpdateSortCaret(GetCtrl(IDC_MODS_ICON_ACTIVE), _sortColumn == MSCActive, _sortAscending, up, down);
+    UpdateSortCaret(GetCtrl(IDC_MODS_ICON_ACTION), _sortColumn == MSCAction, _sortAscending, up, down);
 }
 
 // DisplayModDownload — the download-progress dialog (agnostic)
 
 DisplayModDownload::DisplayModDownload(ControlsContainer* parent, std::vector<DownloadTask> tasks,
-                                       DownloadFileFn transport, const char* unitNoun, std::function<double()> now)
+                                       DownloadFileFn transport, const char* unitNoun, std::function<double()> now,
+                                       const char* promptKey)
     : Display(parent), _tasks(std::move(tasks)), _worker(std::move(transport), std::move(now)),
       _unitNoun(unitNoun != nullptr ? unitNoun : "addon"), _phase(PhasePrompt), _started(false)
 {
@@ -1800,8 +2052,10 @@ DisplayModDownload::DisplayModDownload(ControlsContainer* parent, std::vector<Do
         total += (t.expectedBytes > 0 ? t.expectedBytes : 0);
     const int count = static_cast<int>(_tasks.size());
     RString noun = LocalizedDownloadUnitNoun((const char*)_unitNoun, count);
-    _prompt = Format(LocalizeString("STR_DISP_MODS_DOWNLOAD_PROMPT"), count, (const char*)noun,
-                     DownloadProgress::FormatBytes(total).c_str());
+    const RString prompt = strcmp(promptKey, "STR_DISP_MODS_UPDATE_PROMPT") == 0
+                               ? RString(LocalizeStringWithFallback(promptKey, "Update %d %s (%s)."))
+                               : LocalizeString(promptKey);
+    _prompt = Format((const char*)prompt, count, (const char*)noun, DownloadProgress::FormatBytes(total).c_str());
     SetNotebookText(IDC_MODS_DL_PROMPT, _prompt);
 }
 
@@ -1824,6 +2078,8 @@ void DisplayModDownload::StartDownload()
         btn->SetText(LocalizeString("STR_DISP_MODS_DOWNLOAD"));
         btn->EnableCtrl(false); // dimmed while the worker runs; Cancel still active
     }
+    if (CActiveText* cancel = dynamic_cast<CActiveText*>(GetCtrl(IDC_CANCEL)))
+        cancel->SetText(LocalizeString("STR_DISP_CANCEL"));
 }
 
 void DisplayModDownload::ApplyView()
@@ -1834,7 +2090,23 @@ void DisplayModDownload::ApplyView()
     else if (s.done)
         _phase = PhaseDone;
 
-    DownloadDialogView v = BuildDownloadDialogView(s, (const char*)_unitNoun);
+    // Hold the localized labels in locals so the view's const char* fields stay valid
+    // for the BuildDownloadDialogView call.
+    RString lblComplete = LocalizeString("STR_DISP_MODS_DL_COMPLETE");
+    RString lblCancelled = LocalizeString("STR_DISP_MODS_DL_CANCELLED");
+    RString lblStarting = LocalizeString("STR_DISP_MODS_DL_STARTING");
+    RString lblFailed = LocalizeString("STR_DISP_MODS_DL_FAILED");
+    DownloadDialogLabels labels;
+    labels.complete = lblComplete;
+    labels.cancelled = lblCancelled;
+    labels.starting = lblStarting;
+    labels.failed = lblFailed;
+    DownloadDialogView v = BuildDownloadDialogView(s, (const char*)_unitNoun, labels);
+    if (s.postProcessing)
+    {
+        const RString unpacking = LocalizeString("STR_DISP_MODS_DL_UNPACKING");
+        v.statusLine = FormatAnimatedActivity((const char*)unpacking, Foundation::GlobalTickCount());
+    }
     SetNotebookText(IDC_MODS_DL_CURRENT_LABEL, v.currentLine.c_str());
     SetNotebookText(IDC_MODS_DL_OVERALL_LABEL, v.overallLine.c_str());
     SetNotebookText(IDC_MODS_DL_STATUS, v.statusLine.c_str());
@@ -1854,6 +2126,8 @@ void DisplayModDownload::ApplyView()
         {
             btn->SetText(LocalizeString("STR_DISP_MODS_CONTINUE"));
             btn->EnableCtrl(true);
+            if (CActiveText* cancel = dynamic_cast<CActiveText*>(GetCtrl(IDC_CANCEL)))
+                cancel->SetText(LocalizeString("STR_DISP_CLOSE"));
         }
         else if (_phase == PhaseFailed)
         {
@@ -1877,6 +2151,11 @@ void DisplayModDownload::OnButtonClicked(int idc)
     }
     if (idc == IDC_CANCEL)
     {
+        if (_phase == PhaseDone)
+        {
+            Exit(IDC_MODS_DOWNLOAD_KEEP);
+            return;
+        }
         _worker.Cancel();
         Display::OnButtonClicked(idc); // base exits with IDC_CANCEL
         return;

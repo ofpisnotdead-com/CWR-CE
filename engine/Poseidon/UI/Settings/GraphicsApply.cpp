@@ -13,12 +13,9 @@ namespace Poseidon
 {
 using Poseidon::gUserFpsCap;
 
-namespace
+float TerrainGridForTier(GraphicsConfig::Tier tier)
 {
-// Tier → grid metres (Terrain Detail).
-float TerrainTierToGrid(GraphicsConfig::Tier t)
-{
-    switch (t)
+    switch (tier)
     {
         case GraphicsConfig::TierLow:
             return 50.0f;
@@ -28,11 +25,15 @@ float TerrainTierToGrid(GraphicsConfig::Tier t)
             return 12.5f;
         case GraphicsConfig::TierUltra:
             return 6.25f;
+        case GraphicsConfig::TierExtreme:
+            return 3.125f;
         default:
             return 6.25f;
     }
 }
 
+namespace
+{
 // Tier → projected-screen-size multiplier for LOD selection.  Low
 // halves the apparent size (picks coarser LOD); Ultra doubles
 // (picks finer LOD).  Range matches Scene::SetObjectLODBias clamp
@@ -74,7 +75,7 @@ void ApplyGraphicsConfigToEngine(const GraphicsConfig& cfg)
 {
     if (GScene)
     {
-        GScene->SetPreferredTerrainGrid(TerrainTierToGrid(cfg.terrainDetail));
+        GScene->SetPreferredTerrainGrid(TerrainGridForTier(cfg.terrainDetail));
         GScene->SetObjectLODBias(ObjectLodTierToBias(cfg.objectLod));
         // Shadow tier — Off → both off; Low+ → both on.  Low/Med/High
         // discrimination is UI-only until a shadow-distance bias hook
@@ -94,6 +95,7 @@ void ApplyGraphicsConfigToEngine(const GraphicsConfig& cfg)
         GEngine->SetAlphaToCoverage(cfg.alphaToCoverage);
         GEngine->SetRenderScale(cfg.renderScale);
         GEngine->SetMsaaSamples(cfg.msaaSamples);
+        GEngine->SetMultitexturing(cfg.multitexturing);
     }
     gUserFpsCap = cfg.fpsCap;
 }

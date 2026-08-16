@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Component, Path};
 
 use anyhow::{bail, Context, Result};
 use walkdir::WalkDir;
@@ -262,7 +262,20 @@ impl Pbo {
         let dest = dest.as_ref();
         for entry in &self.entries {
             let bytes = self.entry_data(entry)?;
-            let path = dest.join(&entry.name);
+            let relative = Path::new(&entry.name);
+            if relative.is_absolute()
+                || relative
+                    .components()
+                    .any(|component| !matches!(component, Component::Normal(_) | Component::CurDir))
+                || entry
+                    .name
+                    .split('/')
+                    .next()
+                    .is_some_and(|component| component.ends_with(':'))
+            {
+                bail!("archive entry '{}' escapes the destination", entry.name);
+            }
+            let path = dest.join(relative);
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent)
                     .with_context(|| format!("creating {}", parent.display()))?;
@@ -440,5 +453,21 @@ mod tests {
             parsed.read("data/note.txt").unwrap().unwrap(),
             b"hello pbo\n"
         );
+    }
+
+    #[test]
+    fn unpack_rejects_parent_and_absolute_entries() {
+        let mut pbo = Pbo::read_path(fixture("addon_fixture.pbo")).unwrap();
+        let dest = tempfile::tempdir().unwrap();
+
+        pbo.entries[0].name = "../escape.bin".to_string();
+        assert!(pbo.unpack_to_dir(dest.path()).is_err());
+        assert!(!dest.path().parent().unwrap().join("escape.bin").exists());
+
+        pbo.entries[0].name = "/absolute.bin".to_string();
+        assert!(pbo.unpack_to_dir(dest.path()).is_err());
+
+        pbo.entries[0].name = "c:/windows.bin".to_string();
+        assert!(pbo.unpack_to_dir(dest.path()).is_err());
     }
 }

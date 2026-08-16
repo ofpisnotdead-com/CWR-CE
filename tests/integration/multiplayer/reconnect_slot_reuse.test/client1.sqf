@@ -1,0 +1,4 @@
+triAssertNgsClient 14
+triAssertMissionPlayable
+triScreenshot "client1_playable_before_drop"
+triEndTest

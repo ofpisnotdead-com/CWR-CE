@@ -1,0 +1,15 @@
+data_dir = "packages/Demo"
+timeout = 45
+assert_timeout = 10
+
+tags = ["headful", "exclusive"]
+
+[[instances]]
+name = "client"
+type = "client"
+use_mission = false
+no_autotest = true
+extra_args = ["--no-strict", "--name", "client"]
+copy_files = [
+  { source = "UserInfo.cfg", target = "Users/client/UserInfo.cfg" },
+]

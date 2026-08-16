@@ -1,0 +1,57 @@
+version=11;
+class Mission
+{
+	randomSeed=4310043;
+	class Intel
+	{
+		startWeather=0.300000;
+		forecastWeather=0.300000;
+		hour=12.000000;
+	};
+	class Groups
+	{
+		items=1;
+		class Item0
+		{
+			side="WEST";
+			class Vehicles
+			{
+				items=1;
+				class Item0
+				{
+					position[]={6710.527832,82.907585,5408.891602};
+					id=0;
+					side="WEST";
+					vehicle="SoldierWB";
+					player="PLAYER COMMANDER";
+					leader=1;
+					skill=0.600000;
+					text="driverUnit";
+					init="this moveInDriver turboCar";
+				};
+			};
+		};
+	};
+	class Vehicles
+	{
+		items=1;
+		class Item0
+		{
+			position[]={6715.527832,82.907585,5413.891602};
+			azimut=0.000000;
+			id=10;
+			side="EMPTY";
+			vehicle="Jeep";
+			skill=0.500000;
+			text="turboCar";
+			markers[]={};
+		};
+	};
+	class Markers
+	{
+		items=0;
+	};
+};
+class Intro { randomSeed=4310044; class Intel {}; };
+class OutroWin { randomSeed=4310045; class Intel {}; };
+class OutroLoose { randomSeed=4310046; class Intel {}; };

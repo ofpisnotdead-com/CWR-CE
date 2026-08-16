@@ -3,8 +3,6 @@
 #include <Poseidon/UI/Options/OptionsShell.hpp>
 
 #include <Poseidon/Core/resincl.hpp>
-#include <Poseidon/Input/UserActionDesc.hpp>
-#include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Input/InputDeviceConstants.hpp>
 
 #include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
@@ -23,14 +21,6 @@ extern RString GetKeyName(int dikCode);
 
 namespace
 {
-const char* ActionLabel(UserAction a)
-{
-    if (a < 0 || a >= UAN)
-        return "";
-    UserActionDesc* descs = InputSubsystem::GetUserActionDesc();
-    return LocalizeString(descs[a].desc);
-}
-
 constexpr unsigned long kCaptureDoubleTapWindowMs = 400;
 } // namespace
 
@@ -178,6 +168,30 @@ bool CapturePage::TryUpgradeToDoubleTap(OptionsShell& shell, int packedCode, int
     return true;
 }
 
+bool CapturePage::TryUpgradeToCombo(OptionsShell& shell, int packedCode, int modifier)
+{
+    if (m_resolved || m_state != Captured || packedCode < 0)
+        return false;
+    // Only a modifier captured on its own, with no qualifier of its own, can
+    // absorb a following key.
+    if (m_capturedModifier >= 0 || !IsBareModifierCode(m_capturedCode))
+        return false;
+    // The following key must be a real key still qualified by the modifier we
+    // captured; a different or missing one means it was released (a fresh press).
+    if (IsBareModifierCode(packedCode) || modifier != m_capturedCode)
+        return false;
+
+    m_capturedModifier = m_capturedCode;
+    m_capturedCode = packedCode;
+    m_capturedAtMs = Foundation::GlobalTickCount();
+    RefreshConflict();
+    RefreshTitle(shell);
+    RefreshStatus(shell);
+    if (auto* save = dynamic_cast<C3DActiveText*>(shell.GetCtrl(m_idcs.save)))
+        save->SetText(LocalizeString(m_conflictAction == UAN ? "STR_DISP_OPT_CAP_SAVE" : "STR_DISP_OPT_CAP_REPLACE"));
+    return true;
+}
+
 void CapturePage::Resolve(OptionsShell& shell, bool save)
 {
     if (m_resolved)
@@ -197,7 +211,7 @@ void CapturePage::RefreshConflict()
         return;
     }
     m_conflictAction = m_onConflict(m_capturedCode, m_capturedModifier);
-    m_conflictActionLabel = (m_conflictAction != UAN) ? ActionLabel(m_conflictAction) : "";
+    m_conflictActionLabel = (m_conflictAction != UAN) ? ControlActionLabel(m_conflictAction) : "";
 }
 
 void CapturePage::RefreshTitle(OptionsShell& shell)

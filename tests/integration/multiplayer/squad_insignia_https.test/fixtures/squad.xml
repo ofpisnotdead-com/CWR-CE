@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<squad nick="CWR">
+  <name>CWR Test</name>
+  <email>test@example.invalid</email>
+  <web>https://squad.test/</web>
+  <picture>synthetic_grid.paa</picture>
+  <title>CWR Test</title>
+  <member id="2227712454512799032" nick="client1">
+    <name>Client One</name>
+    <email>client1@example.invalid</email>
+    <remark>HTTP fixture member</remark>
+  </member>
+</squad>

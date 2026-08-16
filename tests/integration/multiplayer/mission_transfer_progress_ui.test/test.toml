@@ -1,0 +1,28 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 90
+
+tags = ["headful", "network", "exclusive"]
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl", "--config", "${output}/server/user/server.cfg"]
+name = "server"
+type = "server"
+use_mission = false
+env = [
+  { name = "POSEIDON_TEST_MISSION_TRANSFER_SEGMENT_DELAY_MS", value = "1200" },
+]
+copy_files = [
+  { source = "server.cfg", target = "server.cfg" },
+  { source = "jip_basic.Demo.pbo", target = "content/MPMissions/jip_basic.Demo.pbo" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "client", "--log-format", "jsonl", "--lang", "English"]
+name = "client"
+type = "client"
+use_mission = false
+connect = "server"
+after = "server"
+start_delay_ms = 4000
+machine_id = "trident:mission_transfer_progress_ui:client"

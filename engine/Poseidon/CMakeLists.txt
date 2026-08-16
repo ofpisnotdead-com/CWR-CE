@@ -92,6 +92,7 @@ set(MERGED_SUPPORT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Math/Statistics.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Strings/StrFormat.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Strings/Mbcs.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Strings/LocaleCollate.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Types/LLinks.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Threads/PoCritical.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Threads/PoSemaphore.cpp
@@ -101,7 +102,6 @@ set(MERGED_SUPPORT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Enums/EnumNames.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/Platform.cpp
     $<IF:$<PLATFORM_ID:Windows>,${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/PlatformPaths_win.cpp,${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/PlatformPaths_posix.cpp>
-    ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/PlayerPrefs.cpp
     $<IF:$<PLATFORM_ID:Windows>,${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/ConsoleUtils_win.cpp,${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/ConsoleUtils_posix.cpp>
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/GamePaths.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Framework/AppFrame.cpp
@@ -152,6 +152,7 @@ add_custom_target(PoseidonBuildInfo
     COMMAND ${CMAKE_COMMAND}
         -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
         -DOUTPUT_FILE=${POSEIDON_BUILD_INFO_HEADER}
+        -DBUILD_TYPE=${CMAKE_BUILD_TYPE}
         -P ${CMAKE_SOURCE_DIR}/cmake/GenerateBuildInfo.cmake
     DEPENDS ${CMAKE_SOURCE_DIR}/cmake/GenerateBuildInfo.cmake
     BYPRODUCTS "${POSEIDON_BUILD_INFO_HEADER}"
@@ -163,6 +164,12 @@ set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/Core/Version.cpp" PROPE
 )
 set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Platform/AppConfig.cpp" PROPERTIES
     OBJECT_DEPENDS "${POSEIDON_BUILD_INFO_HEADER}"
+)
+set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/Game/Scripting/ExpressExt.cpp" PROPERTIES
+    OBJECT_DEPENDS "${POSEIDON_BUILD_INFO_HEADER}"
+)
+set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/UI/Locale/StringtableExt.cpp" PROPERTIES
+    OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/IO/Serialization/StringIds.hpp"
 )
 
 # Precompiled header: PoseidonPCH.hpp is the engine-wide prelude the bulk of TUs

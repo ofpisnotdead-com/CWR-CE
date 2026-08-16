@@ -489,6 +489,7 @@ void AssignMasterServerServiceSessionInfo(const MasterServerServiceSession& sour
                                   source.requiredVersion, source.versionTag.c_str(), source.password, source.gameState,
                                   source.ping, source.numPlayers, source.maxPlayers, source.timeLeft,
                                   source.mod.c_str(), source.equalModRequired);
+    session.modPackages = &source.modPackages;
 }
 
 const char* GetMasterServerServiceSessionStringValue(const MasterServerServiceSession& session, const char* key,
@@ -524,6 +525,9 @@ std::string BuildMasterServerServiceListUrl(const char* masterServerHost, const 
 
     bool hasQuery = false;
     AppendMasterServerServiceQueryParameter(url, hasQuery, "app", UrlEncodeMasterServerServiceValue(APP_NAME_SHORT));
+    // The directory hides passworded servers by default; the in-game browser must
+    // list them (with the lock marker) or private servers are unjoinable from the UI.
+    AppendMasterServerServiceQueryParameter(url, hasQuery, "includePasswordedServers", "true");
     VisitMasterServerBrowserFilterTerms(
         filter,
         [&](const MasterServerBrowserFilterTerm& term)
@@ -661,6 +665,14 @@ std::string BuildMasterServerServiceRegistrationJson(const MasterServerServiceRe
     cJSON_AddNumberToObject(root, MasterServerFieldMaxPlayers, registration.maxPlayers);
     cJSON_AddBoolToObject(root, MasterServerFieldPassword, registration.password);
     cJSON_AddStringToObject(root, MasterServerFieldMod, registration.mod.c_str());
+    cJSON* modPackages = cJSON_AddArrayToObject(root, "modPackages");
+    for (const MasterServerServiceModPackage& package : registration.modPackages)
+    {
+        cJSON* item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "modId", package.modId.c_str());
+        cJSON_AddNumberToObject(item, "packageRevision", static_cast<double>(package.packageRevision));
+        cJSON_AddItemToArray(modPackages, item);
+    }
     cJSON_AddBoolToObject(root, MasterServerFieldEqualModRequired, registration.equalModRequired);
     cJSON_AddStringToObject(root, MasterServerFieldImplementation, registration.transportImplementation.c_str());
     cJSON_AddStringToObject(root, MasterServerFieldPlatform, registration.platform.c_str());
@@ -710,6 +722,20 @@ bool TryParseMasterServerServiceSession(const cJSON* object, MasterServerService
                                      GetMasterServerServiceJsonBool(object, MasterServerFieldEqualModRequired, false));
     session.app = GetMasterServerServiceJsonString(object, "app");
     session.stateElapsedSeconds = GetMasterServerServiceJsonInt(object, MasterServerFieldStateElapsed, 0);
+    const cJSON* modPackages = GetMasterServerServiceJsonItem(object, "modPackages");
+    if (cJSON_IsArray(modPackages))
+    {
+        const int count = cJSON_GetArraySize(modPackages);
+        for (int i = 0; i < count; ++i)
+        {
+            const cJSON* item = cJSON_GetArrayItem(modPackages, i);
+            const std::string modId = GetMasterServerServiceJsonString(item, "modId");
+            if (!modId.empty())
+            {
+                session.modPackages.push_back({modId, GetMasterServerServiceJsonInt64(item, "packageRevision", 1)});
+            }
+        }
+    }
     return true;
 }
 
@@ -728,6 +754,9 @@ bool TryParseMasterServerServiceModCatalogEntry(const cJSON* object, MasterServe
     entry.compatible = GetMasterServerServiceJsonBool(object, "compatible", false);
     entry.name = GetMasterServerServiceJsonString(object, "name");
     entry.version = GetMasterServerServiceJsonString(object, "version");
+    entry.packageRevision = GetMasterServerServiceJsonInt64(object, "packageRevision", 1);
+    entry.sha256 = GetMasterServerServiceJsonString(object, "sha256");
+    entry.publishedUnixMs = GetMasterServerServiceJsonInt64(object, "publishedUnixMs", 0);
     entry.folderName = GetMasterServerServiceJsonString(object, "folderName");
     entry.description = GetMasterServerServiceJsonString(object, "description");
     entry.homepageUrl = GetMasterServerServiceJsonString(object, "homepageUrl");
@@ -1180,13 +1209,9 @@ void StoreIssuedServerToken(const std::string& token)
     }
     std::lock_guard<std::mutex> lock(g_serverTokenMutex);
     g_serverToken = token;
-    if (!g_serverTokenPath.empty())
+    if (!g_serverTokenPath.empty() && !StoreMasterServerServiceTokenFile(g_serverTokenPath, token))
     {
-        std::ofstream output(g_serverTokenPath, std::ios::trunc);
-        if (output)
-        {
-            output << g_serverToken;
-        }
+        LOG_WARN(Network, "Master server token could not be persisted to '{}'", g_serverTokenPath);
     }
 }
 
@@ -1200,6 +1225,31 @@ void CaptureIssuedServerToken(const std::string& responseBody)
     }
 }
 } // namespace
+
+bool StoreMasterServerServiceTokenFile(const std::string& path, const std::string& token)
+{
+    const std::string tempPath = path + ".tmp";
+    {
+        std::ofstream output(tempPath, std::ios::binary | std::ios::trunc);
+        output.write(token.data(), static_cast<std::streamsize>(token.size()));
+        output.flush();
+        if (!output)
+        {
+            remove(tempPath.c_str());
+            return false;
+        }
+    }
+#if defined(_WIN32)
+    if (!MoveFileExA(tempPath.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+#else
+    if (rename(tempPath.c_str(), path.c_str()) != 0)
+#endif
+    {
+        remove(tempPath.c_str());
+        return false;
+    }
+    return true;
+}
 
 void SetMasterServerServiceTokenStore(const char* tokenFilePath)
 {
@@ -1228,8 +1278,9 @@ bool PublishMasterServerServiceRegistration(const char* masterServerHost, const 
     }
     else
     {
-        LOG_WARN(Network, "Master server service {} failed: url='{}' status={}",
-                 GetMasterServerServicePublishAction(heartbeat), request.url, statusCode);
+        LOG_WARN(Network, "Master server service {} failed: url='{}' status={} response='{}'",
+                 GetMasterServerServicePublishAction(heartbeat), request.url, statusCode,
+                 SanitizeMasterServerServiceError(responseBody));
     }
     return ok;
 }
@@ -1249,7 +1300,8 @@ bool UnregisterMasterServerService(const char* masterServerHost, const char* pro
                                                           SendMasterServerServiceRequest);
     if (!ok && !IsIgnorableMasterServerServiceUnregisterStatus(statusCode))
     {
-        LOG_WARN(Network, "Master server service unregister failed: url='{}' status={}", request.url, statusCode);
+        LOG_WARN(Network, "Master server service unregister failed: url='{}' status={} response='{}'", request.url,
+                 statusCode, SanitizeMasterServerServiceError(responseBody));
     }
     return ok || IsIgnorableMasterServerServiceUnregisterStatus(statusCode);
 }

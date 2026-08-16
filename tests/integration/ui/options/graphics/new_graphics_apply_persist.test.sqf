@@ -27,7 +27,7 @@ triSimFrames 5;
 // One Down → Terrain Detail (row 1).
 triSendKey 81;
 triSimFrames 1;
-// Right wraps the 4-entry stepper from idx 3 (Ultra) to idx 0 (Low).
+// Right advances from Ultra to the manual Extreme tier.
 triSendKey 79;
 triSimFrames 2;
 

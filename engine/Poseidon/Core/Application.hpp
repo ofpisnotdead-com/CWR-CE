@@ -3,6 +3,9 @@
 
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
+#include <Poseidon/Core/ModInstall.hpp>
 #include <Poseidon/Foundation/Logging/Logging.hpp> // Need full definition for unique_ptr<LoggingSystem>
 #include <Poseidon/Core/Config/Configuration.hpp>  // Need full definition for unique_ptr<ConfigurationSystem>
 
@@ -17,9 +20,6 @@ namespace Poseidon
 struct GraphicsEngineParams;
 }
 using Poseidon::GraphicsEngineParams;
-
-// Application display name; defined in Application.cpp.
-extern const char* AppName;
 
 // Forward declarations for Windows types (Linux gets these from PoseidonBase platform headers)
 #ifdef _WIN32
@@ -78,9 +78,10 @@ class Application
     HWND m_hwnd = 0;
 
     // Quit/close state (public for backwards compatibility shim)
-    bool m_validateQuit = false; // User really wants to quit (not accidental ESC)
-    bool m_closeRequest = false; // Close has been requested
-    int m_exitCode = 0;          // Exit code for process termination
+    bool m_validateQuit = false;          // User really wants to quit (not accidental ESC)
+    bool m_closeRequest = false;          // Close has been requested
+    int m_exitCode = 0;                   // Exit code for process termination
+    bool m_cleanTestEndRequested = false; // triEndTest initiated shutdown before any failure did
 
     // Application state (public for backwards compatibility shim)
     bool m_appActive = false;
@@ -100,6 +101,7 @@ class Application
     bool m_remountHasModPath = false; // false → reload with the current mod set
     std::string m_remountModPath;     // explicit mod set when m_remountHasModPath ("" = base game)
     bool m_remountFailed = false;     // a Remount rolled back; the menu shows a message + clears this
+    std::vector<Poseidon::StagedModInstall> m_remountInstalls;
 
     // Queue an in-process re-mount for the next AppIdle (the only safe point). Both are safe
     // to call mid-frame / from an ImGui handler — they only set state; the teardown+reload
@@ -114,6 +116,11 @@ class Application
         m_remountModPath = modPath ? modPath : "";
         m_remountHasModPath = true;
         m_remountRequested = true;
+    }
+    void RequestRemountWithMods(const char* modPath, std::vector<Poseidon::StagedModInstall> installs)
+    {
+        m_remountInstalls = std::move(installs);
+        RequestRemountWithMods(modPath);
     }
 
     // Graphics engine creation hook — apps override to provide real backends.
@@ -173,6 +180,25 @@ inline bool ShouldReportInGameplayForWindowClose(bool hasWorld, bool introMode, 
                                                  bool startupProgressActive)
 {
     return hasWorld && !introMode && uiEnabled && !startupProgressActive;
+}
+
+inline int ResolveMultiplayerAutoTestExitCode(int exitCode, bool missionReachedPlay, bool cleanTestEndRequested)
+{
+    // Auto-assign uses 2 while waiting for play. Only an explicit clean harness end may
+    // consume that sentinel; real failure codes remain authoritative.
+    constexpr int pendingMissionExitCode = 2;
+    if (exitCode == pendingMissionExitCode && missionReachedPlay && cleanTestEndRequested)
+        return 0;
+    return exitCode;
+}
+
+inline int ResolveMultiplayerAutomationExitCode(int exitCode, bool shutdownAlreadyRequested, bool successfulOutcome)
+{
+    // Auto-assign starts at 2 while waiting for play. A new outcome may replace that
+    // sentinel, but a path reached after shutdown was requested must preserve its result.
+    if (shutdownAlreadyRequested)
+        return exitCode;
+    return successfulOutcome ? 0 : 2;
 }
 
 // Global application pointer (like Unreal's GEngine, CryEngine's gEnv)

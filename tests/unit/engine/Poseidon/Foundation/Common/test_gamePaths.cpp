@@ -77,6 +77,40 @@ TEST_CASE("GamePaths: not initialized before Initialize()", "[gamePaths]")
     CHECK(gp.TempDir().empty());
 }
 
+TEST_CASE("GamePaths: ResolveUserDir honours POSEIDON_USER_DIR before Initialize", "[gamePaths]")
+{
+#ifndef _WIN32
+    ScopedEnv env("POSEIDON_USER_DIR", "/tmp/cwr_resolve_test");
+    CHECK(GamePaths::ResolveUserDir("CWR") == "/tmp/cwr_resolve_test/");
+#endif
+}
+
+TEST_CASE("GamePaths: ResolveUserDir falls back to the platform user dir", "[gamePaths]")
+{
+#ifndef _WIN32
+    ScopedEnv env("POSEIDON_USER_DIR", "");
+    const std::string dir = GamePaths::ResolveUserDir("CWR");
+    CHECK(dir.find("/CWR") != std::string::npos);
+    REQUIRE_FALSE(dir.empty());
+    CHECK(dir.back() == '/');
+#endif
+}
+
+TEST_CASE("GamePaths: ResolveUserContentDir honours its overrides before Initialize", "[gamePaths]")
+{
+#ifndef _WIN32
+    {
+        ScopedEnv content("POSEIDON_USER_CONTENT_DIR", "/tmp/cwr_content_test");
+        CHECK(GamePaths::ResolveUserContentDir("CWR", "Cold War Assault") == "/tmp/cwr_content_test/");
+    }
+    {
+        ScopedEnv content("POSEIDON_USER_CONTENT_DIR", "");
+        ScopedEnv user("POSEIDON_USER_DIR", "/tmp/cwr_sandbox");
+        CHECK(GamePaths::ResolveUserContentDir("CWR", "Cold War Assault") == "/tmp/cwr_sandbox/content/");
+    }
+#endif
+}
+
 TEST_CASE("GamePaths: Initialize sets codename and cfg name", "[gamePaths]")
 {
     auto& gp = GamePaths::Instance();

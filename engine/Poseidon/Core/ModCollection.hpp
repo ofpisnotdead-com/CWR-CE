@@ -27,6 +27,8 @@ struct Mod
     std::string catalogId; ///< mod.json "modId" from PapaBear/workshop installs, else ""
     std::string name;      ///< display name: mod.json "name", else id with a leading '@' trimmed
     std::string version;   ///< mod.json "version", else ""
+    int64_t packageRevision = 1;
+    std::string sha256;
     std::string path;      ///< absolute folder path, mounted onto the engine mod path
     int64_t sizeBytes = 0; ///< total bytes on disk (recursive), 0 if unknown
     ModSource source = ModSource::Local;

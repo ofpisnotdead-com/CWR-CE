@@ -1,0 +1,48 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 75
+
+tags = ["headful", "network"]
+
+# Voice-over-network round trip on a dedicated server: client1 emits a test tone
+# after both reach play, client2 must observe von_received events. Only a hosted
+# stress test covered VoN before; this pins the dedicated path. The clients join
+# and coordinate slots from script so one side cannot start while the other is
+# still connecting.
+[[instances]]
+extra_args = [
+  "--no-strict",
+  "--log-format",
+  "jsonl",
+  "--mp-auto-start",
+  "2",
+  "--config",
+  "${output}/server/user/server.cfg",
+]
+name = "server"
+type = "server"
+use_mission = false
+copy_files = [
+  { source = "server.cfg", target = "server.cfg" },
+  { source = "jip_basic.Demo.pbo", target = "content/MPMissions/jip_basic.Demo.pbo" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "speaker", "--log-format", "jsonl"]
+name = "speaker"
+type = "client"
+use_mission = false
+no_autotest = true
+after = "server"
+start_delay_ms = 4000
+machine_id = "trident:von_dedicated:speaker"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "listener", "--log-format", "jsonl"]
+name = "listener"
+type = "client"
+use_mission = false
+no_autotest = true
+after = "server"
+start_delay_ms = 4000
+machine_id = "trident:von_dedicated:listener"

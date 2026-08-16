@@ -3,6 +3,7 @@ using namespace Poseidon;
 #include <Poseidon/World/World.hpp>
 #include <Poseidon/Foundation/Logging/Logging.hpp>
 #include <Poseidon/Core/Application.hpp>
+#include <Poseidon/Core/Game/GameLoop.hpp>
 #include <Poseidon/UI/UITestEngine.hpp>
 #include <Poseidon/UI/UIActiveDisplay.hpp>
 #include <Poseidon/UI/Controls/UIControls.hpp>
@@ -12,6 +13,7 @@ using namespace Poseidon;
 #include <Poseidon/Graphics/Shared/PNGWriter.hpp>
 #include <Poseidon/World/Scene/Scene.hpp>
 #include <Poseidon/Network/Network.hpp>
+#include <Poseidon/Network/NetworkConfig.hpp>
 #include <Poseidon/Input/KeyInput.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Audio/IAudioSystem.hpp>
@@ -23,11 +25,14 @@ using namespace Poseidon;
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
 #include <Poseidon/Graphics/Cursor/ICursorOverlay.hpp>
 #include <Poseidon/UI/Map/UIMap.hpp>
-#include <Poseidon/Core/resincl.hpp>    // IDC_* used by DisplayUI.hpp (not self-contained)
-#include <Poseidon/UI/DisplayUI.hpp>    // DisplayMultiplayer / DisplayMods for the seed verbs
-#include <Poseidon/Core/ModSystem.hpp>  // GetModList for triAssertActiveMod
+#include <Poseidon/Core/resincl.hpp>   // IDC_* used by DisplayUI.hpp (not self-contained)
+#include <Poseidon/UI/DisplayUI.hpp>   // DisplayMultiplayer / DisplayMods for the seed verbs
+#include <Poseidon/Core/ModSystem.hpp> // GetModList for triAssertActiveMod
+#include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <Poseidon/IO/ParamFileExt.hpp> // global Pars for triAssertConfigClass
 #include <sstream>
+#include <chrono>
+#include <thread>
 #include <Poseidon/Network/MasterServerServiceClient.hpp> // catalog entry for triSeedWorkshopMods
 #include <Poseidon/Graphics/Rendering/Draw/FontMapping.hpp>
 #include <Poseidon/Dev/Debug/DebugOverlay.hpp>
@@ -55,6 +60,8 @@ extern unsigned GTriNetSoundsReceived;
 #include <array>
 #include <cctype>
 #include <functional>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -420,6 +427,19 @@ GameValue TriSeedSessions(const GameState* state, GameValuePar arg)
     return GameValue(true);
 }
 
+/// triSessionPing <row> - return the currently visible MP browser row ping.
+GameValue TriSessionPing(const GameState* state, GameValuePar arg)
+{
+    int row = static_cast<int>(static_cast<GameScalarType>(arg));
+    DisplayMultiplayer* mp = dynamic_cast<DisplayMultiplayer*>(GetActiveDisplayForSQF());
+    if (mp == nullptr)
+    {
+        LOG_ERROR(Core, "[tri] triSessionPing: MP server browser is not the active display");
+        return GameValue(static_cast<GameScalarType>(-1));
+    }
+    return GameValue(static_cast<GameScalarType>(mp->GetVisibleSessionPingForTest(row)));
+}
+
 /// triSeedMods <n> — inject n fake catalog rows into the active MODS table.
 GameValue TriSeedMods(const GameState* state, GameValuePar arg)
 {
@@ -473,9 +493,27 @@ GameValue TriModsVisibleCount(const GameState* /*state*/)
     return GameValue(static_cast<float>(list->GetSize()));
 }
 
-/// triModsSetFilter "text" — set the MODS name filter directly (bypassing the
-/// Filter dialog) and refresh the Filter button label. Lets a test pin the name
-/// filtering deterministically without driving the 3D edit field. Returns true.
+GameValue TriModsFreshness(const GameState* /*state*/, GameValuePar arg)
+{
+    const int row = static_cast<int>(static_cast<GameScalarType>(arg));
+    DisplayMods* mods = dynamic_cast<DisplayMods*>(GetActiveDisplayForSQF());
+    if (mods == nullptr)
+        return GameValue("");
+    CModsList* list = dynamic_cast<CModsList*>(mods->GetCtrl(IDC_MODS_LIST));
+    if (list == nullptr || row < 0 || row >= list->GetRows().Size())
+        return GameValue("");
+    switch (list->GetRows()[row].freshness)
+    {
+        case ModRowFreshness::UpdateAvailable:
+            return GameValue("update");
+        case ModRowFreshness::Ahead:
+            return GameValue("ahead");
+        default:
+            return GameValue("current");
+    }
+}
+
+/// triModsSetFilter "text" sets the MODS name filter directly.
 GameValue TriModsSetFilter(const GameState* /*state*/, GameValuePar arg)
 {
     GameStringType text = static_cast<GameStringType>(arg);
@@ -582,11 +620,44 @@ GameValue TriSeedWorkshopMods(const GameState* /*state*/, GameValuePar arg)
     return GameValue(true);
 }
 
-/// triOpenModDownload <n> — open the download dialog (RscDisplayModDownload) as a
-/// child of the current display with n synthetic tasks and a FAKE in-process
-/// transport (no network/disk). Exercises the live dialog — two bars, speed/ETA,
-/// completion — offline. Click idc 125 (Download) to start, then again (relabeled
-/// "Continue") to dismiss on success. Returns true.
+GameValue TriFetchWorkshopMods(const GameState* /*state*/)
+{
+    DisplayMods* mods = dynamic_cast<DisplayMods*>(GetActiveDisplayForSQF());
+    if (mods == nullptr)
+        return GameValue(false);
+    std::vector<MasterServerServiceModCatalogEntry> catalog;
+    if (!FetchMasterServerServiceModList(GetNetworkMasterServer(), nullptr, nullptr, catalog))
+        return GameValue(false);
+    mods->MergeWorkshopMods(catalog);
+    return GameValue(true);
+}
+
+GameValue TriReadWorkshopFile(const GameState* /*state*/, GameValuePar arg)
+{
+    const GameArrayType& values = arg;
+    if (values.Size() != 2)
+        return GameValue("");
+    const std::string modId = (const char*)static_cast<GameStringType>(values[0]);
+    const std::filesystem::path relative((const char*)static_cast<GameStringType>(values[1]));
+    if (modId.empty() || modId.find_first_of("/\\") != std::string::npos || modId == ".." || relative.empty() ||
+        relative.is_absolute())
+        return GameValue("");
+    for (const auto& component : relative)
+    {
+        if (component == "..")
+            return GameValue("");
+    }
+    const std::filesystem::path installDir =
+        std::filesystem::path(Foundation::GamePaths::Instance().WorkshopDir()) / ("@" + modId);
+    std::ifstream input(installDir / relative, std::ios::binary);
+    if (!input)
+        return GameValue("");
+    std::ostringstream contents;
+    contents << input.rdbuf();
+    return GameValue(contents.str().c_str());
+}
+
+/// triOpenModDownload <n> opens the download dialog with deterministic fake tasks.
 GameValue TriOpenModDownload(const GameState* /*state*/, GameValuePar arg)
 {
     int n = static_cast<int>(static_cast<GameScalarType>(arg));
@@ -603,6 +674,11 @@ GameValue TriOpenModDownload(const GameState* /*state*/, GameValuePar arg)
         t.label = "@wsmod" + std::to_string(i + 1);
         t.url = "test://" + t.label;
         t.expectedBytes = static_cast<int64_t>(i + 1) * 4 * 1024 * 1024;
+        t.postStep = [](const DownloadTask&, std::string&) -> bool
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(300));
+            return true;
+        };
         tasks.push_back(std::move(t));
     }
     // Fake transport: stream the file in two halves in-process, no I/O.
@@ -617,25 +693,31 @@ GameValue TriOpenModDownload(const GameState* /*state*/, GameValuePar arg)
     return GameValue(true);
 }
 
-/// triOpenJoinRequirements — open the join-requirements dialog
+/// triOpenJoinRequirements <0|1> — open the join-requirements dialog
 /// (RscDisplayJoinRequirements, idd 75) with a synthetic mod diff + password field as
-/// a child of the current display. Exercises the live dialog offline; idc 1 = Download
-/// & Join, idc 2 = Cancel. Returns true.
-GameValue TriOpenJoinRequirements(const GameState* /*state*/, GameValuePar /*arg*/)
+/// a child of the current display. Exercises the live dialog offline; mode 0 shows
+/// Download & Join, mode 1 shows Set up & Join. idc 1 = OK, idc 2 = Cancel.
+/// Returns true.
+GameValue TriOpenJoinRequirements(const GameState* /*state*/, GameValuePar arg)
 {
     ControlsContainer* display = GetActiveDisplayForSQF();
     if (display == nullptr)
         return GameValue(false);
+    const bool setupOnly = static_cast<int>(static_cast<GameScalarType>(arg)) != 0;
     const RString title = Format(LocalizeString("STR_DISP_MODS_JOIN_TITLE"), "Pristar's CSLA Server");
     std::string diff = (const char*)LocalizeString("STR_DISP_MODS_JOIN_REQUIRES");
     diff += "\n  [ok] @csla   ";
     diff += (const char*)LocalizeString("STR_DISP_MODS_JOIN_INSTALLED");
-    diff += "\n  [dl] CSLA Sounds   ";
-    diff += (const char*)LocalizeString("STR_DISP_MODS_JOIN_DOWNLOAD");
-    diff += " 12 MB\n";
+    if (!setupOnly)
+    {
+        diff += "\n  [dl] CSLA Sounds   ";
+        diff += (const char*)LocalizeString("STR_DISP_MODS_JOIN_DOWNLOAD");
+        diff += " 12 MB\n";
+    }
     diff += (const char*)LocalizeString("STR_DISP_MODS_JOIN_DISABLED");
     diff += "\n  [x] @ffur1985\n";
-    display->CreateChild(new DisplayJoinRequirements(display, title, RString(diff.c_str()), ""));
+    const RString okText = LocalizeString(setupOnly ? "STR_DISP_MODS_SETUP_JOIN" : "STR_DISP_MODS_DOWNLOAD_JOIN");
+    display->CreateChild(new DisplayJoinRequirements(display, title, RString(diff.c_str()), "", okText));
     return GameValue(true);
 }
 
@@ -665,6 +747,35 @@ GameValue TriAssertControlLineStarts(const GameState* /*state*/, GameValuePar ar
             return GameValue(RString("OK"));
     }
     return GameValue(Format("FAIL:no line starts with '%s' (%d lines)", prefix.c_str(), s->GetLineCount()));
+}
+
+/// triAssertControlLinesExclude [idc, "needle"] - assert no rendered line of the
+/// active display's C3DStatic (idc) contains needle. Useful for catching explicit
+/// line-break delimiters that split lines but still leak into the drawn substring.
+GameValue TriAssertControlLinesExclude(const GameState* /*state*/, GameValuePar arg)
+{
+    const GameArrayType& a = arg;
+    if (a.Size() < 2)
+        return GameValue(RString("FAIL:triAssertControlLinesExclude needs [idc, needle]"));
+    const int idc = static_cast<int>(static_cast<GameScalarType>(a[0]));
+    std::string needle = (const char*)static_cast<RString>(a[1]);
+    if (needle == "\\n")
+        needle = "\n";
+    else if (needle == "\\r")
+        needle = "\r";
+    ControlsContainer* display = GetActiveDisplayForSQF();
+    if (display == nullptr)
+        return GameValue(RString("FAIL:no active display"));
+    C3DStatic* s = dynamic_cast<C3DStatic*>(display->GetCtrl(idc));
+    if (s == nullptr)
+        return GameValue(Format("FAIL:no C3DStatic with idc %d", idc));
+    for (int i = 0; i < s->GetLineCount(); i++)
+    {
+        std::string line = (const char*)s->GetLine(i);
+        if (line.find(needle) != std::string::npos)
+            return GameValue(Format("FAIL:line %d contains excluded text", i));
+    }
+    return GameValue(RString("OK"));
 }
 
 /// triClickText "text" — find control by text content and click it. Returns true on success.
@@ -1066,6 +1177,23 @@ GameValue TriSelectListByData(const GameState* /*state*/, GameValuePar arg)
     return GameValue(false);
 }
 
+GameValue TriRemoveNestedControl(const GameState* /*state*/, GameValuePar arg)
+{
+    const int idc = static_cast<int>(static_cast<GameScalarType>(arg));
+    auto* display = GetActiveDisplayForSQF();
+    if (!display)
+        return GameValue(false);
+
+    const auto& objects = display->GetObjects();
+    for (int i = 0; i < objects.Size(); ++i)
+    {
+        auto* container = dynamic_cast<ControlObjectContainer*>(objects[i].operator->());
+        if (container && container->GetCtrl(idc))
+            return GameValue(container->RemoveControl(idc));
+    }
+    return GameValue(false);
+}
+
 static GameValue TriSendKeyImpl(int sc, int mods)
 {
     LOG_INFO(Core, "[tri] triSendKey scancode=0x{:x} mods=0x{:x}", sc, mods);
@@ -1412,6 +1540,62 @@ GameValue TriMissionPlayerReady(const GameState* /*state*/)
     return GameValue("OK");
 }
 
+/// triAssertMissionPlayable — assert a client is past MP briefing/map states and
+/// actually controls a live unit in an advancing mission.
+GameValue TriAssertMissionPlayable(const GameState* /*state*/)
+{
+    if (!GWorld)
+        return GameValue("FAIL:no_world");
+
+    auto* display = GetActiveDisplayForSQF();
+    const int idd = display ? display->IDD() : -1;
+    if (idd != 46)
+    {
+        char buf[96];
+        snprintf(buf, sizeof(buf), "FAIL:display=%d,expected=46", idd);
+        return GameValue(buf);
+    }
+
+    if (!GApp || !GApp->IsInGameplay())
+    {
+        char buf[96];
+        snprintf(buf, sizeof(buf), "FAIL:not_in_gameplay,display=%d", idd);
+        return GameValue(buf);
+    }
+
+    Person* player = GWorld->GetRealPlayer();
+    if (!player || !player->Brain())
+        return GameValue("FAIL:no_player");
+    if (player->IsDammageDestroyed())
+        return GameValue("FAIL:player_destroyed");
+    if (GWorld->PlayerOn() != player)
+        return GameValue("FAIL:player_not_active");
+    if (!player->Brain()->GetVehicle())
+        return GameValue("FAIL:no_vehicle");
+
+    const int beforeTime = Glob.time.toInt();
+    const uint32_t beforeFrame = GEngine ? GEngine->GetFrameCounter() : 0;
+    for (int i = 0; i < 5; ++i)
+        Poseidon::AppIdle();
+    const int afterTime = Glob.time.toInt();
+    const uint32_t afterFrame = GEngine ? GEngine->GetFrameCounter() : 0;
+
+    if (afterFrame <= beforeFrame)
+    {
+        char buf[96];
+        snprintf(buf, sizeof(buf), "FAIL:frames_not_advancing,before=%u,after=%u", beforeFrame, afterFrame);
+        return GameValue(buf);
+    }
+    if (afterTime <= beforeTime)
+    {
+        char buf[96];
+        snprintf(buf, sizeof(buf), "FAIL:sim_time_not_advancing,before=%d,after=%d", beforeTime, afterTime);
+        return GameValue(buf);
+    }
+
+    return GameValue("OK");
+}
+
 /// triControlText <idc> — return the current text carried by a control, or ""
 /// if the control does not exist / has no text-bearing type.
 GameValue TriControlText(const GameState* state, GameValuePar arg)
@@ -1424,7 +1608,23 @@ GameValue TriControlText(const GameState* state, GameValuePar arg)
     if (!ctrl)
         return GameValue("");
     std::string text = UITestEngine::GetControlText(ctrl);
+    if (text.empty())
+        text = UITestEngine::GetHtmlText(ctrl); // mission/overview HTML preview
     return GameValue(text.c_str());
+}
+
+/// triControlDisplayText <idc>: the on-screen text of a control (clipped or
+/// marquee'd), where triControlText returns the semantic test value.
+GameValue TriControlDisplayText(const GameState* /*state*/, GameValuePar arg)
+{
+    int idc = static_cast<int>(static_cast<GameScalarType>(arg));
+    auto* display = GetActiveDisplayForSQF();
+    if (!display)
+        return GameValue("");
+    IControl* ctrl = display->GetCtrl(idc);
+    if (!ctrl)
+        return GameValue("");
+    return GameValue(UITestEngine::GetControlDisplayText(ctrl).c_str());
 }
 
 /// triAssertControlLeftOf [innerIdc, anchorIdc, maxGap] — assert the inner control
@@ -1497,6 +1697,47 @@ GameValue TriVisibleTexts(const GameState* state)
         out += text;
     }
     return GameValue(out.c_str());
+}
+
+/// triMpSetupMessage - return DisplayMultiplayerSetup's immediate-mode wait text.
+GameValue TriMpSetupMessage(const GameState* state)
+{
+    auto* display = GetActiveDisplayForSQF();
+    auto* setup = dynamic_cast<DisplayMultiplayerSetup*>(display);
+    if (!setup)
+    {
+        return GameValue("");
+    }
+    return GameValue((const char*)setup->GetMessageForTest());
+}
+
+/// triMpTransferOverlayShows - return how many times the current multiplayer
+/// setup entered the mission-transfer overlay.
+GameValue TriMpTransferOverlayShows(const GameState* /*state*/)
+{
+    for (ControlsContainer* display = GetActiveDisplayForSQF(); display; display = display->Parent())
+    {
+        auto* setup = dynamic_cast<DisplayMultiplayerSetup*>(display);
+        if (setup)
+        {
+            return GameValue(static_cast<float>(setup->GetTransferOverlayShowsForTest()));
+        }
+    }
+    return GameValue(-1.0f);
+}
+
+/// triMpTransferStats - return [receivedBytes,totalBytes] from the MP transfer model.
+GameValue TriMpTransferStats(const GameState* state)
+{
+    int curBytes = 0;
+    int totBytes = 0;
+    GetNetworkManager().GetTransferStats(curBytes, totBytes);
+
+    GameValue value = state->CreateGameValue(GameArray);
+    GameArrayType& array = value;
+    array.Add(GameValue(static_cast<float>(curBytes)));
+    array.Add(GameValue(static_cast<float>(totBytes)));
+    return value;
 }
 
 /// triActiveMods - return the active mod mount path list.
@@ -1673,8 +1914,6 @@ GameValue TriResetErrorCount(const GameState* /*state*/)
     LoggingSystem::ResetErrorCount();
     return GameValue("OK");
 }
-
-#include <Poseidon/Core/Game/GameLoop.hpp>
 
 /// triWaitFrames <n> — pump N render frames (clear + present).
 /// Keeps the window alive and advances the GPU pipeline without

@@ -74,6 +74,54 @@
         "VCPKG_TARGET_TRIPLET": "x64-linux-clang-tsan",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-x64-clang-tsan.cmake"
       }
+    },
+    {
+      "name": "macos-clang-sanitizer",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "macos-arm64-clang-san",
+      "displayName": "macOS arm64 Clang ASan+UBSan",
+      "inherits": "macos-clang-sanitizer",
+      "binaryDir": "${sourceDir}/build/macos-arm64-clang-san",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-macos-clang-san",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/macos-arm64-clang-san.cmake"
+      }
+    },
+    {
+      "name": "macos-arm64-clang-tsan",
+      "displayName": "macOS arm64 Clang TSan",
+      "inherits": "macos-clang-sanitizer",
+      "binaryDir": "${sourceDir}/build/macos-arm64-clang-tsan",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-macos-clang-tsan",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/macos-arm64-clang-tsan.cmake"
+      }
+    },
+    {
+      "name": "macos-x64-clang-san",
+      "displayName": "macOS x64 Clang ASan+UBSan",
+      "inherits": "macos-clang-sanitizer",
+      "binaryDir": "${sourceDir}/build/macos-x64-clang-san",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-macos-clang-san",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/macos-x64-clang-san.cmake"
+      }
+    },
+    {
+      "name": "macos-x64-clang-tsan",
+      "displayName": "macOS x64 Clang TSan",
+      "inherits": "macos-clang-sanitizer",
+      "binaryDir": "${sourceDir}/build/macos-x64-clang-tsan",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-macos-clang-tsan",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/macos-x64-clang-tsan.cmake"
+      }
     }
   ]
 }

@@ -1,0 +1,12 @@
+data_dir = "packages/Demo"
+timeout = 30
+
+[[http_fixtures]]
+url = "https://fixtures.test/payload.txt?variant=full"
+file = "payload.txt"
+min_requests = 1
+
+[[instances]]
+name = "client"
+type = "client"
+extra_args = ["--no-strict"]

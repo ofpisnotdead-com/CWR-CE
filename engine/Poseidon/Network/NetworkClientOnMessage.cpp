@@ -15,7 +15,10 @@ using namespace Poseidon;
 // #include "strIncl.hpp"
 #include <Poseidon/UI/Locale/StringtableExt.hpp>
 #include <Poseidon/Foundation/Platform/GamePaths.hpp>
+#include <Poseidon/IO/Filesystem/FileOps.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <Poseidon/Network/NetworkMissionTransfer.hpp>
+#include <Poseidon/Network/NetworkServerAuth.hpp>
 
 #include <Poseidon/AI/ArcadeTemplate.hpp>
 #include <Poseidon/AI/AI.hpp>
@@ -205,23 +208,13 @@ int MaxCustomFileSize = 128 * 1024;
 
 static int FileSize(const char* name)
 {
-#ifdef _WIN32
-    struct stat st;
-    if (stat(name, &st))
-    {
+    HANDLE file = OpenFileForRead(name);
+    if (file == INVALID_HANDLE_VALUE)
         return INT_MAX;
-    }
-#else
-    LocalPath(fn, name);
-    struct stat st;
-    if (stat(fn, &st))
-        return INT_MAX;
-#endif
-    if (st.st_size > INT_MAX)
-    {
-        return INT_MAX;
-    }
-    return st.st_size;
+
+    const int size = GetOpenFileSize(file);
+    CloseHandle(file);
+    return size < 0 ? INT_MAX : size;
 }
 
 static NetworkObject* ResolveClientNetworkObject(void* context, const NetworkId& id)
@@ -251,6 +244,258 @@ static void ExecuteNamedRemoteExec(GameState* gstate, RString name, GameValuePar
     gstate->EndContext();
 }
 
+void NetworkClient::ApplySquadIdentity(int player, Person* person)
+{
+    const PlayerIdentity* identity = FindIdentity(player);
+    if (!identity || !person)
+        return;
+
+    AIUnitInfo& info = person->GetInfo();
+    info._squadTitle = RString();
+    info._squadPicture = nullptr;
+    if (identity->squad)
+    {
+        info._squadTitle = identity->squad->title;
+        if (identity->squad->picture.GetLength() > 0)
+        {
+            const RString picture = Poseidon::FindNetworkSquadPicturePath(
+                Poseidon::GetUserDirectory(), identity->squad->nick, identity->squad->picture,
+                [](const RString& path) { return Poseidon::FileExistsUtf8(path); });
+            if (picture.GetLength() > 0)
+                info._squadPicture = GlobLoadTexture(picture);
+        }
+    }
+}
+
+bool NetworkClient::TryApplySelectPlayer(const SelectPlayerMessage& pl, bool allowPending)
+{
+    NET_ERROR(pl.player == _player);
+    NetworkId person = pl.person;
+    NetworkObject* object = GetObject(person);
+    Person* veh = dynamic_cast<Person*>(object);
+    if (!veh)
+    {
+        if (allowPending)
+        {
+            _pendingSelectPlayer = true;
+            _pendingSelectPlayerMessage = pl;
+            LOG_DEBUG(Network, "SelectPlayer: pending player={} person={}:{}", pl.player, pl.person.creator,
+                      pl.person.id);
+        }
+        else
+        {
+            RptF("Client: Player (%d) is not vehicle with brain (%x)", (int)pl.player, pl.person.id);
+        }
+        return false;
+    }
+    AIUnit* unit = veh->Brain();
+    if (!unit || unit->GetLifeState() == AIUnit::LSDead)
+    {
+        if (allowPending)
+        {
+            _pendingSelectPlayer = true;
+            _pendingSelectPlayerMessage = pl;
+            LOG_DEBUG(Network, "SelectPlayer: pending player={} person={}:{} brain={}", pl.player, pl.person.creator,
+                      pl.person.id, unit != nullptr);
+            return false;
+        }
+        LOG_WARN(Network, "SelectPlayer: person {}:{} has no living brain", pl.person.creator, pl.person.id);
+        return false;
+    }
+    LLink<Person> selectedPerson(veh);
+    EntityAI* selectedVehicle = unit->GetVehicle();
+    LOG_DEBUG(Network, "SelectPlayer: player={} person={}:{} respawn={} vehicle='{}'", pl.player, pl.person.creator,
+              pl.person.id, pl.respawn, selectedVehicle ? (const char*)selectedVehicle->GetDebugName() : "<none>");
+    GWorld->SwitchCameraTo(selectedVehicle, CamInternal);
+    GWorld->SetPlayerManual(true);
+    GWorld->SwitchPlayerTo(veh);
+    GWorld->SetRealPlayer(veh);
+    if (GWorld->UI())
+    {
+        GWorld->UI()->ResetVehicle(selectedVehicle);
+    }
+    if (pl.respawn)
+    {
+        RString name = "onPlayerResurrect.sqs";
+        if (QIFStreamB::FileExist(RString("scripts\\") + name))
+        {
+            Person* scriptPerson = selectedPerson.GetLink();
+            if (!scriptPerson)
+            {
+                LOG_WARN(Network, "SelectPlayer: selected person disappeared before resurrect script");
+                return false;
+            }
+            GameArrayType arguments;
+            arguments.Add(GameValueExt(scriptPerson));
+            Script* script = new Script(name, GameValue(arguments));
+            GWorld->StartCameraScript(script);
+        }
+    }
+    _pendingSelectPlayer = false;
+    return true;
+}
+
+void NetworkClient::TryApplyPendingSelectPlayer(NetworkId id)
+{
+    if (!_pendingSelectPlayer)
+    {
+        return;
+    }
+    if (_pendingSelectPlayerMessage.person == id || GetObject(_pendingSelectPlayerMessage.person))
+    {
+        TryApplySelectPlayer(_pendingSelectPlayerMessage, true);
+    }
+}
+
+bool NetworkClient::TryApplyChangeOwner(const ChangeOwnerMessage& co, bool allowPending)
+{
+    NetworkLocalObjectInfo* knownLocal = GetLocalObjectInfo(const_cast<NetworkId&>(co.object));
+    NetworkRemoteObjectInfo* knownRemote = GetRemoteObjectInfo(const_cast<NetworkId&>(co.object));
+    NetworkObject* knownObject = knownLocal ? knownLocal->object : (knownRemote ? knownRemote->object : nullptr);
+    LOG_INFO(Network,
+             "ChangeOwner: received object {}:{} owner={} localPlayer={} knownLocal={} knownRemote={} objectLocal={}",
+             co.object.creator, co.object.id, co.owner, _player, knownLocal != nullptr, knownRemote != nullptr,
+             knownObject ? knownObject->IsLocal() : false);
+
+    if (!knownObject)
+    {
+        if (!allowPending)
+        {
+            return false;
+        }
+        for (int i = 0; i < _pendingChangeOwners.Size(); i++)
+        {
+            if (_pendingChangeOwners[i].object == co.object)
+            {
+                _pendingChangeOwners[i] = co;
+                LOG_INFO(Network, "ChangeOwner: updated pending object {}:{} owner={}", co.object.creator, co.object.id,
+                         co.owner);
+                return false;
+            }
+        }
+        _pendingChangeOwners.Add(co);
+        LOG_INFO(Network, "ChangeOwner: pending object {}:{} owner={}", co.object.creator, co.object.id, co.owner);
+        return false;
+    }
+
+    if (co.owner == _player)
+    {
+        NetworkObject* object = nullptr;
+        for (int i = 0; i < _remoteObjects.Size(); i++)
+        {
+            NetworkRemoteObjectInfo& info = _remoteObjects[i];
+            if (info.id == co.object)
+            {
+                object = info.object;
+                _remoteObjects.Delete(i);
+                break;
+            }
+        }
+        if (!object)
+        {
+            LOG_INFO(Network, "ChangeOwner: local target object {}:{} missing at apply time", co.object.creator,
+                     co.object.id);
+            RptF("Client: Remote object %d:%d not found", co.object.creator, co.object.id);
+            return false;
+        }
+
+        object->SetLocal(true);
+#if CHECK_MSG
+        CheckLocalObjects();
+#endif
+        int index = _localObjects.Add();
+        NetworkLocalObjectInfo& localObject = _localObjects[index];
+        localObject.id = co.object;
+        localObject.object = object;
+        for (int j = NMCUpdateFirst; j < NMCUpdateN; j++)
+        {
+            NetworkUpdateInfo& info = localObject.updates[j];
+            info.lastCreatedMsg = nullptr;
+            info.lastCreatedMsgId = 0xFFFFFFFF;
+            info.lastCreatedMsgTime = 0;
+        }
+        if (DiagLevel >= 1)
+        {
+            DiagLogF("Client: object %d:%d is now local", localObject.id.creator, localObject.id.id);
+        }
+        LOG_INFO(Network, "ChangeOwner: applied local object {}:{} localObjects={} remoteObjects={}",
+                 localObject.id.creator, localObject.id.id, _localObjects.Size(), _remoteObjects.Size());
+#if CHECK_MSG
+        CheckLocalObjects();
+#endif
+        return true;
+    }
+
+#if CHECK_MSG
+    CheckLocalObjects();
+#endif
+    NetworkObject* object = nullptr;
+    for (int i = 0; i < _localObjects.Size(); i++)
+    {
+        NetworkLocalObjectInfo& info = _localObjects[i];
+        if (info.id == co.object)
+        {
+            object = info.object;
+            _localObjects.Delete(i);
+            break;
+        }
+    }
+#if CHECK_MSG
+    CheckLocalObjects();
+#endif
+    if (!object)
+    {
+        LOG_INFO(Network, "ChangeOwner: remote target object {}:{} missing at apply time", co.object.creator,
+                 co.object.id);
+        RptF("Client: Local object %d:%d not found", co.object.creator, co.object.id);
+        return false;
+    }
+
+    object->SetLocal(false);
+    int index = _remoteObjects.Add();
+    NetworkRemoteObjectInfo& info = _remoteObjects[index];
+    info.id = co.object;
+    info.object = object;
+    if (DiagLevel >= 1)
+    {
+        DiagLogF("Client: object %d:%d is now remote", info.id.creator, info.id.id);
+    }
+    LOG_INFO(Network, "ChangeOwner: applied remote object {}:{} localObjects={} remoteObjects={}", info.id.creator,
+             info.id.id, _localObjects.Size(), _remoteObjects.Size());
+    return true;
+}
+
+void NetworkClient::TryApplyPendingChangeOwner(NetworkId id)
+{
+    for (int i = 0; i < _pendingChangeOwners.Size();)
+    {
+        if (_pendingChangeOwners[i].object != id)
+        {
+            i++;
+            continue;
+        }
+        ChangeOwnerMessage co = _pendingChangeOwners[i];
+        _pendingChangeOwners.Delete(i);
+        TryApplyChangeOwner(co, true);
+    }
+}
+
+void NetworkClient::TryApplyPendingChangeOwners()
+{
+    for (int i = 0; i < _pendingChangeOwners.Size();)
+    {
+        NetworkId id = _pendingChangeOwners[i].object;
+        if (!GetObject(id))
+        {
+            i++;
+            continue;
+        }
+        ChangeOwnerMessage co = _pendingChangeOwners[i];
+        _pendingChangeOwners.Delete(i);
+        TryApplyChangeOwner(co, true);
+    }
+}
+
 void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType type)
 {
     if (_serverState == NGSNone)
@@ -274,11 +519,13 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
     }
 #endif
 
+#ifndef NDEBUG
     bool validBefore = true;
     if (_state == NGSPlay)
     {
         validBefore = AssertAIValid();
     }
+#endif
 
     switch (type)
     {
@@ -288,12 +535,15 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
 
             int index;
             ctx.IdxTransfer(IndicesMsgFormatGetIndex(ctx.GetIndices()), index);
-            if (index >= NMTN)
+            if (index < NMTFirstVariant || index >= NMTN)
             {
-                break; // unknown message
+                LOG_WARN(Network, "Ignoring invalid remote message format index {} (valid dynamic range {}..{})", index,
+                         static_cast<int>(NMTFirstVariant), static_cast<int>(NMTN) - 1);
+                break;
             }
             int pos = index - NMTFirstVariant;
             _formats.Access(pos);
+            _formats[pos].Clear();
             _formats[pos].TransferMsg(ctx);
             _formats[pos].Init(GMsgFormats[index]->GetIndices()->Clone());
         }
@@ -457,20 +707,22 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             if (stricmp(identity.face, "custom") == 0)
             {
                 RString srcDir = GetUserDirectory();
-                RString dstDir = Poseidon::BuildNetworkPlayerAssetTmpDir(identity.dpnid);
+                RString relativeDstDir = Poseidon::BuildNetworkPlayerAssetTmpDir(identity.dpnid);
+                RString dstDir = Poseidon::GetUserDirectory() + relativeDstDir;
                 RString serverDir = Poseidon::BuildNetworkServerPlayerUploadDir(GetServerTmpDir(), identity.dpnid);
-                if (dstDir.GetLength() > 0 && serverDir.GetLength() > 0)
+                if (relativeDstDir.GetLength() > 0 && serverDir.GetLength() > 0)
                 {
-                    CreatePath(dstDir);
+                    Poseidon::CreateDirectoryUtf8(dstDir);
                     if (!transfer)
                     {
-                        CreatePath(serverDir);
+                        Poseidon::CreateDirectoryUtf8(serverDir);
                     }
                     RString src = srcDir + RString("face.paa");
                     if (QIFStream::FileExists(src) && FileSize(src) <= MaxCustomFaceSize)
                     {
-                        RString dst = Poseidon::BuildNetworkPlayerAssetTmpPath(identity.dpnid, RString("face.paa"));
-                        ::CopyFile(src, dst, FALSE);
+                        RString dst = Poseidon::GetUserDirectory() +
+                                      Poseidon::BuildNetworkPlayerAssetTmpPath(identity.dpnid, RString("face.paa"));
+                        Poseidon::CopyFileUtf8(src, dst, false);
                         RString server = Poseidon::BuildNetworkServerPlayerAssetUploadPath(
                             GetServerTmpDir(), identity.dpnid, RString("face.paa"));
                         if (transfer)
@@ -479,7 +731,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                         }
                         else
                         {
-                            ::CopyFile(src, server, FALSE);
+                            Poseidon::CopyFileUtf8(src, server, false);
                         }
                     }
                     else
@@ -487,8 +739,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                         src = srcDir + RString("face.jpg");
                         if (QIFStream::FileExists(src) && FileSize(src) <= MaxCustomFaceSize)
                         {
-                            RString dst = Poseidon::BuildNetworkPlayerAssetTmpPath(identity.dpnid, RString("face.jpg"));
-                            ::CopyFile(src, dst, FALSE);
+                            RString dst = Poseidon::GetUserDirectory() +
+                                          Poseidon::BuildNetworkPlayerAssetTmpPath(identity.dpnid, RString("face.jpg"));
+                            Poseidon::CopyFileUtf8(src, dst, false);
                             RString server = Poseidon::BuildNetworkServerPlayerAssetUploadPath(
                                 GetServerTmpDir(), identity.dpnid, RString("face.jpg"));
                             if (transfer)
@@ -497,7 +750,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                             }
                             else
                             {
-                                ::CopyFile(src, server, FALSE);
+                                Poseidon::CopyFileUtf8(src, server, false);
                             }
                         }
                     }
@@ -508,31 +761,45 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             if (GWorld->UI())
             {
                 const AutoArray<RString>& sounds = GWorld->UI()->GetCustomRadio();
+                LOG_DEBUG(Network, "[CustomSoundUpload] {} custom radio sound(s)", sounds.Size());
                 if (sounds.Size() > 0)
                 {
-                    RString srcDir = Poseidon::GetUserDirectory() + RString("sound/");
-                    RString dstDir = Poseidon::BuildNetworkPlayerSoundTmpDir(identity.dpnid);
+                    RString srcDir = Poseidon::GetUserDirectory() + RString("Sound/");
+                    RString relativeDstDir = Poseidon::BuildNetworkPlayerSoundTmpDir(identity.dpnid);
+                    RString dstDir = Poseidon::GetUserDirectory() + relativeDstDir;
                     RString serverDir =
                         Poseidon::BuildNetworkServerPlayerSoundUploadDir(GetServerTmpDir(), identity.dpnid);
-                    if (dstDir.GetLength() > 0 && serverDir.GetLength() > 0)
+                    if (relativeDstDir.GetLength() > 0 && serverDir.GetLength() > 0)
                     {
-                        CreatePath(dstDir);
+                        Poseidon::CreateDirectoryUtf8(dstDir);
                         if (!transfer)
                         {
-                            CreatePath(serverDir);
+                            Poseidon::CreateDirectoryUtf8(serverDir);
                         }
                         for (int i = 0; i < sounds.Size(); i++)
                         {
-                            RString dst = Poseidon::BuildNetworkPlayerSoundTmpPath(identity.dpnid, sounds[i]);
+                            RString relativeDst = Poseidon::BuildNetworkPlayerSoundTmpPath(identity.dpnid, sounds[i]);
+                            RString dst = Poseidon::GetUserDirectory() + relativeDst;
                             RString relative = Poseidon::BuildNetworkPlayerSoundRelativePath(identity.dpnid, sounds[i]);
-                            if (dst.GetLength() == 0 || relative.GetLength() == 0)
+                            if (relativeDst.GetLength() == 0 || relative.GetLength() == 0)
                             {
+                                LOG_DEBUG(Network, "[CustomSoundUpload] rejected unsafe sound '{}'",
+                                          (const char*)sounds[i]);
                                 continue;
                             }
                             RString src = srcDir + sounds[i];
-                            if (FileSize(src) < MaxCustomSoundSize)
+                            if (!QIFStream::FileExists(src))
                             {
-                                ::CopyFile(src, dst, FALSE);
+                                src = Poseidon::GetUserDirectory() + RString("sound/") + sounds[i];
+                            }
+                            const int soundSize = FileSize(src);
+                            if (soundSize < MaxCustomSoundSize)
+                            {
+                                LOG_DEBUG(Network, "[CustomSoundUpload] uploading '{}' ({} B)", (const char*)sounds[i],
+                                          soundSize);
+                                const bool copiedLocal = Poseidon::CopyFileUtf8(src, dst, false);
+                                LOG_DEBUG(Network, "[CustomSoundUpload] local copy '{}' -> '{}' result={}",
+                                          (const char*)src, (const char*)dst, copiedLocal);
                                 RString server = Poseidon::BuildNetworkServerPlayerSoundUploadPath(
                                     GetServerTmpDir(), identity.dpnid, sounds[i]);
                                 if (transfer)
@@ -541,8 +808,13 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                                 }
                                 else
                                 {
-                                    ::CopyFile(src, server, FALSE);
+                                    Poseidon::CopyFileUtf8(src, server, false);
                                 }
+                            }
+                            else
+                            {
+                                LOG_DEBUG(Network, "[CustomSoundUpload] skipping '{}' size={} limit={}",
+                                          (const char*)sounds[i], soundSize, MaxCustomSoundSize);
                             }
                         }
                     }
@@ -591,10 +863,19 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             int index = _squads.Add(new SquadIdentity());
             SquadIdentity* squad = _squads[index];
             squad->TransferMsg(ctx);
+            for (int i = 0; i < _identities.Size(); i++)
+            {
+                PlayerIdentity& identity = _identities[i];
+                if (identity.squadId == squad->id)
+                {
+                    identity.squad = squad;
+                }
+            }
         }
         break;
         case NMTMissionHeader:
         {
+            _missionTransferHeaderStatsLogged = false;
             _missionHeader.TransferMsg(ctx);
             if (_missionHeader.updateOnly)
             {
@@ -672,35 +953,14 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             SelectPlayerMessage pl;
             pl.TransferMsg(ctx);
-            NET_ERROR(pl.player == _player);
-            NetworkObject* object = GetObject(pl.person);
-            Person* veh = dynamic_cast<Person*>(object);
-            if (!veh)
-            {
-                RptF("Client: Player (%d) is not vehicle with brain (%x)", (int)pl.player, pl.person.id);
-                break;
-            }
-            GWorld->SwitchCameraTo(veh->Brain()->GetVehicle(), CamInternal);
-            GWorld->SetPlayerManual(true);
-            GWorld->SwitchPlayerTo(veh);
-            GWorld->SetRealPlayer(veh);
-            if (pl.respawn)
-            {
-                RString name = "onPlayerResurrect.sqs";
-                if (QIFStreamB::FileExist(RString("scripts\\") + name))
-                {
-                    GameArrayType arguments;
-                    arguments.Add(GameValueExt(veh));
-                    Script* script = new Script(name, GameValue(arguments));
-                    GWorld->StartCameraScript(script);
-                }
-            }
+            TryApplySelectPlayer(pl, true);
         }
         break;
         case NMTTransferFile:
         {
             TransferFileMessage transfer;
             transfer.TransferMsg(ctx);
+            const RString wirePath = transfer.path;
             const size_t maxTransferSize =
                 Poseidon::NetworkTransferredAssetMaxSize(transfer.path, static_cast<size_t>(MaxCustomFileSize));
             if (!Poseidon::ShouldAcceptNetworkTransferredAsset(transfer.path, static_cast<size_t>(transfer.totSize),
@@ -717,21 +977,32 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 }
                 break;
             }
-            ReceiveFileSegment(transfer);
+            transfer.path = Poseidon::GetUserDirectory() + transfer.path;
+            const int ret = ReceiveFileSegment(transfer);
+            if (ret > 0)
+            {
+                LOG_INFO(Network, "[NMTTransferFile] completed receive path='{}' bytes={} segments={}",
+                         (const char*)wirePath, transfer.totSize, transfer.totSegments);
+            }
         }
         break;
         case NMTTransferMissionFile:
         {
             TransferMissionFileMessage transfer;
             transfer.TransferMsg(ctx);
+            const RString wirePath = transfer.path;
 
             // Rewrite transfer path to use client's own cache dir
             // (server embeds its absolute CacheDir which differs per-instance)
             transfer.path = Poseidon::BuildNetworkMissionTransferCachePboPath(_missionHeader.fileName);
             if (transfer.path.GetLength() == 0)
             {
-                LOG_WARN(Network, "[NMTTransferMissionFile] rejected unsafe mission file name '{}'",
-                         (const char*)_missionHeader.fileName);
+                transfer.path = Poseidon::BuildNetworkMissionTransferCachePboPathFromTransferPath(wirePath);
+            }
+            if (transfer.path.GetLength() == 0)
+            {
+                LOG_WARN(Network, "[NMTTransferMissionFile] rejected unsafe mission file name '{}' transfer path '{}'",
+                         (const char*)_missionHeader.fileName, (const char*)wirePath);
                 break;
             }
 
@@ -752,6 +1023,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 CreateMPMissionBank(path, _missionHeader.island);
 
                 _missionFileValid = true;
+                AskMissionFileMessage ask(true);
+                LOG_DEBUG(Network, "[NMTTransferMissionFile] completed, sending AskMissionFile valid=true");
+                SendMsg(&ask, NMFGuaranteed);
                 NET_ERROR(!_parent->IsServer());
                 /*
                           if (PrepareGame())
@@ -767,6 +1041,11 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 if (_state == NGSTransferMission && PrepareGame())
                 {
                     _state = NGSLoadIsland;
+                    if (_jip && _missionHeader.joinInProgress)
+                    {
+                        _state = NGSBriefing;
+                        ClientReady(NGSBriefing);
+                    }
                 }
             }
             else if (ret < 0)
@@ -1346,89 +1625,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             ChangeOwnerMessage co;
             co.TransferMsg(ctx);
-            if (co.owner == _player)
-            {
-                // object becomes local
-                NetworkObject* object = nullptr;
-                for (int i = 0; i < _remoteObjects.Size(); i++)
-                {
-                    NetworkRemoteObjectInfo& info = _remoteObjects[i];
-                    if (info.id == co.object)
-                    {
-                        object = info.object;
-                        _remoteObjects.Delete(i);
-                        break;
-                    }
-                }
-                if (object)
-                {
-                    object->SetLocal(true);
-#if CHECK_MSG
-                    CheckLocalObjects();
-#endif
-                    // add to local objects
-                    int index = _localObjects.Add();
-                    NetworkLocalObjectInfo& localObject = _localObjects[index];
-                    localObject.id = co.object;
-                    localObject.object = object;
-                    for (int j = NMCUpdateFirst; j < NMCUpdateN; j++)
-                    {
-                        NetworkUpdateInfo& info = localObject.updates[j];
-                        info.lastCreatedMsg = nullptr;
-                        info.lastCreatedMsgId = 0xFFFFFFFF;
-                        info.lastCreatedMsgTime = 0;
-                    }
-                    if (DiagLevel >= 1)
-                    {
-                        DiagLogF("Client: object %d:%d is now local", localObject.id.creator, localObject.id.id);
-                    }
-#if CHECK_MSG
-                    CheckLocalObjects();
-#endif
-                }
-                else
-                {
-                    RptF("Client: Remote object %d:%d not found", co.object.creator, co.object.id);
-                }
-            }
-            else
-            {
-                // object becomes remote
-#if CHECK_MSG
-                CheckLocalObjects();
-#endif
-                NetworkObject* object = nullptr;
-                for (int i = 0; i < _localObjects.Size(); i++)
-                {
-                    NetworkLocalObjectInfo& info = _localObjects[i];
-                    if (info.id == co.object)
-                    {
-                        object = info.object;
-                        _localObjects.Delete(i);
-                        break;
-                    }
-                }
-#if CHECK_MSG
-                CheckLocalObjects();
-#endif
-                if (object)
-                {
-                    object->SetLocal(false);
-                    // add to remote objects
-                    int index = _remoteObjects.Add();
-                    NetworkRemoteObjectInfo& info = _remoteObjects[index];
-                    info.id = co.object;
-                    info.object = object;
-                    if (DiagLevel >= 1)
-                    {
-                        DiagLogF("Client: object %d:%d is now remote", info.id.creator, info.id.id);
-                    }
-                }
-                else
-                {
-                    RptF("Client: Local object %d:%d not found", co.object.creator, co.object.id);
-                }
-            }
+            TryApplyChangeOwner(co, true);
         }
         break;
         case NMTPlaySound:
@@ -1636,7 +1833,9 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 AIUnitInfo& info = copy._from->GetInfo();
                 saturateMax(info._experience, info._initExperience);
+                copy._to->SetRemotePlayer(copy._from->GetRemotePlayer());
                 copy._to->SetInfo(info);
+                ApplySquadIdentity(copy._to->GetRemotePlayer(), copy._to);
                 copy._to->SetFace(info._face, info._name);
                 copy._to->SetGlasses(info._glasses);
             }
@@ -1795,7 +1994,10 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     if (_soundBuffers[i].player == message.player)
                     {
                         _soundBuffers[i].buffer = nullptr;
-                        _soundBuffers[i].object->SetRandomLip(false);
+                        if (_soundBuffers[i].object)
+                        {
+                            _soundBuffers[i].object->SetRandomLip(false);
+                        }
                         _soundBuffers.Delete(i);
                         break;
                     }
@@ -1807,6 +2009,17 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
         {
             ChangeGameState gs;
             gs.TransferMsg(ctx);
+            // Stale join-time leftovers are pre-load states that can arrive reordered
+            // while this JIP client is still between mission transfer and play; they must not
+            // roll the join back. Once the client is in play, lower states are real
+            // transitions (mission end, #restart cycling to debriefing/lobby) and must apply.
+            if (!_parent->IsServer() && _missionHeader.joinInProgress && _state >= NGSTransferMission &&
+                _state < NGSPlay && gs.gameState <= NGSDebriefingOK)
+            {
+                LOG_DEBUG(Network, "[NMTGameState] ignoring stale JIP state {} while clientState={}", (int)gs.gameState,
+                          (int)_state);
+                break;
+            }
             _serverState = gs.gameState;
             if (gs.gameState >= NGSPlay)
                 _serverReachedPlay = true;
@@ -1839,7 +2052,8 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                 case NGSTransferMission:
                     LOG_DEBUG(Network, "[NMTGameState] NGSTransferMission: _state={} role={} missionValid={}",
                               (int)_state, GetMyPlayerRole() != nullptr, _missionFileValid);
-                    if (GetMyPlayerRole() || IsDedicatedServer())
+                    if (Poseidon::ClientShouldAcceptTransferState(_state, NGSLoadIsland) &&
+                        (GetMyPlayerRole() || IsDedicatedServer()))
                     {
                         _state = NGSTransferMission;
                     }
@@ -1855,7 +2069,11 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                         }
                         else
                         {
-                            if (_missionFileValid && PrepareGame())
+                            if (!Poseidon::ClientShouldPrepareLoadIsland(_state, NGSLoadIsland))
+                            {
+                                _state = NGSLoadIsland;
+                            }
+                            else if (_missionFileValid && PrepareGame())
                             {
                                 _state = NGSLoadIsland;
                             }
@@ -1903,18 +2121,29 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     _respawnQueue.Clear();
                     if (_state >= NGSLoadIsland)
                     {
+                        TryApplyPendingChangeOwners();
                         _state = NGSBriefing;
+                        TryApplyPendingSelectPlayer(NetworkId::Null());
                     }
                     break;
                 case NGSPlay:
                     LOG_DEBUG(Network, "[NMTGameState] NGSPlay: _state={} worldMode={}", (int)_state,
                               GWorld ? (int)GWorld->GetMode() : -1);
-                    if (_state == NGSBriefing)
+                    if (_state == NGSBriefing || (_jip && _missionHeader.joinInProgress && _state >= NGSLoadIsland))
                     {
+                        if (_state != NGSBriefing)
+                        {
+                            LOG_INFO(Network, "JIP: accepting NGSPlay from client state {}", (int)_state);
+                            _respawnQueue.Clear();
+                        }
+                        TryApplyPendingChangeOwners();
+                        TryApplyPendingSelectPlayer(NetworkId::Null());
                         // Register client info as network object
                         CreateLocalObject(_clientInfo);
 
                         _state = NGSPlay;
+                        if (_jip)
+                            ApplySquadIdentity(_player, GWorld ? GWorld->GetRealPlayer() : nullptr);
 
                         // Run client-side init scripts for JIP players
                         if (_jip)
@@ -1974,15 +2203,15 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 DeleteCommandMessage dc;
                 dc.TransferMsg(ctx);
+                if (dc.subgrp)
+                {
+                    dc.subgrp->DeleteCommand(dc.object);
+                }
                 for (int i = 0; i < _remoteObjects.Size(); i++)
                 {
                     NetworkRemoteObjectInfo& info = _remoteObjects[i];
                     if (info.id == dc.object)
                     {
-                        if (dc.subgrp && info.object)
-                        {
-                            dc.subgrp->DeleteCommand(dc.index, dynamic_cast<Command*>(info.object.GetLink()));
-                        }
                         if (DiagLevel >= 1)
                         {
                             DiagLogF("Client: remote command destroyed %d:%d", dc.object.creator, dc.object.id);
@@ -2101,7 +2330,11 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                          NetworkMessageTypeNames[type]);
                     break;
                 }
+                Person* person = dynamic_cast<Person*>(object);
+                const int previousPlayer = person ? person->GetRemotePlayer() : AI_PLAYER;
                 object->TransferMsg(ctx);
+                if (person && person->GetRemotePlayer() != previousPlayer)
+                    ApplySquadIdentity(person->GetRemotePlayer(), person);
                 if (DiagLevel >= 4)
                 {
                     DiagLogF("Client: object %d:%d updated", id.creator, id.id);
@@ -2195,6 +2428,7 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             break;
     }
 
+#ifndef NDEBUG
     if (_state == NGSPlay && validBefore)
     {
         bool validAfter = AssertAIValid();
@@ -2204,4 +2438,5 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             ctx.LogMessage(4, "\t");
         }
     }
+#endif
 }

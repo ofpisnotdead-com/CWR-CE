@@ -17,10 +17,11 @@ UAMoveForward, UAMoveBack, UATurnLeft, UATurnRight, UAMoveUp, UAMoveDown, UAMove
     UACompass, UAWatch, UAMap, UAHelp, UATimeInc, UATimeDec, UAOptics, UAPersonView, UATacticalView, UAZoomIn,
     UAZoomOut, UALookAround, UALookAroundToggle, UALookLeftDown, UALookDown, UALookRightDown, UALookLeft, UALookCenter,
     UALookRight, UALookLeftUp, UALookUp, UALookRightUp, UAPrevChannel, UANextChannel, UAChat, UAVoiceOverNet,
-    UANetworkStats, UANetworkPlayers, UASelectAll, UATurbo, UASlow,
+    UAVoiceOverNetPushToTalk, UANetworkStats, UANetworkPlayers, UASelectAll, UATurbo, UASlow,
 
     UAAxisTurn, UAAxisDive, UAAxisRudder, UAAxisThrust,
     UAAimUp, UAAimDown, UAAimLeft, UAAimRight,
+    UAMapZoomIn, UAMapZoomOut, UACheatEntry,
 #if _ENABLE_CHEATS
     UACheat1, UACheat2,
 #endif

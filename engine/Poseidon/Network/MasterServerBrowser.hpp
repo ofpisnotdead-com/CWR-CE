@@ -2,6 +2,9 @@
 
 #include <type_traits>
 #include <utility>
+#include <cstdint>
+#include <string>
+#include <vector>
 
 #include <Poseidon/Network/MasterServerProtocol.hpp>
 
@@ -9,6 +12,12 @@
 
 namespace Poseidon
 {
+
+struct MasterServerServiceModPackage
+{
+    std::string modId;
+    int64_t packageRevision = 1;
+};
 
 struct MasterServerBrowser;
 
@@ -37,6 +46,7 @@ struct MasterServerSessionInfo
     int maxPlayers = 0;
     int timeLeft = 15;
     const char* mod = "";
+    const std::vector<MasterServerServiceModPackage>* modPackages = nullptr;
     bool equalModRequired = false;
 };
 

@@ -375,6 +375,37 @@ void InGameUI::RefreshActionsMenu()
                                   LocalizeString(IDS_MENU_BACKSPACE), CMD_BACK));
 }
 
+bool InGameUI::PlayCustomRadio(int index)
+{
+    if (index < 0 || index >= _customRadio.Size())
+    {
+        return false;
+    }
+
+    AIUnit* unit = GWorld->FocusOn();
+    if (!unit)
+    {
+        return false;
+    }
+
+    RString name = RString("#") + _customRadio[index];
+    ChatChannel channel = CCGroup;
+    if (GWorld->GetMode() == GModeNetware)
+    {
+        channel = ActualChatChannel();
+    }
+
+    RadioChannel* radio = FindChannel(unit, channel);
+    if (!radio)
+    {
+        return false;
+    }
+
+    radio->Say(name, unit, "", "", 2.0);
+    SendRadioChatWave(channel, name, unit, "");
+    return true;
+}
+
 void InGameUI::ProcessMenu(const Camera& camera, EntityAI* vehicle)
 {
     AIUnit* unit = GWorld->FocusOn();
@@ -1488,20 +1519,8 @@ void InGameUI::ProcessMenu(const Camera& camera, EntityAI* vehicle)
                     case CMD_RADIO_CUSTOM_8:
                     case CMD_RADIO_CUSTOM_9:
                     case CMD_RADIO_CUSTOM_0:
-                    {
-                        RString name = RString("#") + _customRadio[item->_cmd - CMD_RADIO_CUSTOM_1];
-                        ChatChannel channel = CCGroup;
-                        if (GWorld->GetMode() == GModeNetware)
-                        {
-                            channel = ActualChatChannel();
-                        }
-
-                        RadioChannel* radio = FindChannel(unit, channel);
-
-                        radio->Say(name, unit, "", "", 2.0);
-                        SendRadioChatWave(channel, name, unit, "");
-                    }
-                    break;
+                        PlayCustomRadio(item->_cmd - CMD_RADIO_CUSTOM_1);
+                        break;
                     default:
                         if (item->_submenu)
                         {

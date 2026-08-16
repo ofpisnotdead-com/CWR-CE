@@ -1,0 +1,31 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 75
+
+tags = ["headful", "network", "ci-host-blocked"]
+
+# Listen-server VoN regression: host creates a LAN game, a second client joins,
+# and repeated PTT bursts from the joiner must reach the host while still in the
+# hosted MP setup screen. Dedicated-server VoN coverage is separate.
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "hosted-von-host", "--log-format", "jsonl"]
+name = "host"
+type = "client"
+use_mission = false
+no_autotest = true
+machine_id = "trident:von_hosted_lobby:host"
+copy_files = [
+  { source = "hosted-von.Demo/description.ext", target = "content/MPMissions/hosted-von.Demo/description.ext" },
+  { source = "hosted-von.Demo/mission.sqm", target = "content/MPMissions/hosted-von.Demo/mission.sqm" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "hosted-von-joiner", "--log-format", "jsonl"]
+name = "joiner"
+type = "client"
+use_mission = false
+no_autotest = true
+after = "host"
+start_delay_ms = 3000
+machine_id = "trident:von_hosted_lobby:joiner"

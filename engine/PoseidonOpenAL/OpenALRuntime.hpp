@@ -33,6 +33,7 @@ namespace OpenALRuntime
     X(alGenSources)                                                                                                     \
     X(alGetError)                                                                                                       \
     X(alGetSourcef)                                                                                                     \
+    X(alGetSource3f)                                                                                                    \
     X(alGetSourcei)                                                                                                     \
     X(alListener3f)                                                                                                     \
     X(alListenerf)                                                                                                      \
@@ -142,6 +143,13 @@ inline bool TryLoadModule()
         SetError("OpenAL32.dll is not available");
         return false;
     }
+#elif __APPLE__
+    ModuleHandle() = dlopen("libopenal.dylib", RTLD_NOW | RTLD_LOCAL);
+    if (ModuleHandle() == nullptr)
+    {
+        SetError("libopenal.dylib is not available");
+        return false;
+    }
 #else
     ModuleHandle() = dlopen("libopenal.so.1", RTLD_NOW | RTLD_LOCAL);
     if (ModuleHandle() == nullptr)
@@ -228,6 +236,7 @@ inline const Api& GetApi()
 #define alGenSources OpenALRuntime::GetApi().alGenSources
 #define alGetError OpenALRuntime::GetApi().alGetError
 #define alGetSourcef OpenALRuntime::GetApi().alGetSourcef
+#define alGetSource3f OpenALRuntime::GetApi().alGetSource3f
 #define alGetSourcei OpenALRuntime::GetApi().alGetSourcei
 #define alListener3f OpenALRuntime::GetApi().alListener3f
 #define alListenerf OpenALRuntime::GetApi().alListenerf

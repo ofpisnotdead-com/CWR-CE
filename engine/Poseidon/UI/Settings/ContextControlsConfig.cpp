@@ -4,16 +4,15 @@
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Input/UserActionDesc.hpp>
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
+#include <Poseidon/UI/Settings/SettingsFile.hpp>
 
-#include <filesystem>
-#include <system_error>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 
 namespace Poseidon
 {
 namespace
 {
-constexpr int kContextControlsVersion = 2;
+constexpr int kContextControlsVersion = 3;
 constexpr int kGamepadButtonA = 0;
 constexpr int kGamepadButtonB = 1;
 constexpr int kGamepadButtonX = 2;
@@ -198,6 +197,11 @@ void ApplyContextDefaults(InputContext ctx, InputProfile& profile)
             ApplyDriverGamepadDefaults(profile);
             ApplyDirectFreelookDefaults(profile);
             break;
+        case InputContext::Map:
+        case InputContext::Menu:
+            BindButton(profile, UAMapZoomIn, kGamepadButtonRB);
+            BindButton(profile, UAMapZoomOut, kGamepadButtonLB);
+            break;
         default:
             break;
     }
@@ -215,31 +219,37 @@ void ContextControlsConfig::LoadDefaults()
 
 bool ContextControlsConfig::Load(const std::string& path)
 {
-    std::error_code ec;
-    if (!std::filesystem::exists(path, ec))
-        return false;
-
     ParamFile cfg;
-    cfg.Parse(RString(path.c_str()));
+    if (!ReadSettingsFile(path, cfg))
+        return false;
 
     int version = 0;
     if (auto* e = cfg.FindEntry("contextControlsVersion"))
         version = (int)*e;
-    (void)version;
 
-    for (InputProfile& profile : profiles)
-        profile.ClearAll();
+    // A file written before newer actions existed has no entries for them. Seed
+    // each profile with defaults first so those actions come up bound, then let
+    // the file override the actions it does list.
+    const bool seedDefaults = version < kContextControlsVersion;
+    migratedOnLoad = seedDefaults;
 
     UserActionDesc* descs = InputSubsystem::GetUserActionDesc();
     for (int c = 0; c < ContextCount; ++c)
     {
         InputContext ctx = static_cast<InputContext>(c);
         InputProfile& profile = profiles[c];
+        profile.ClearAll();
+        if (seedDefaults)
+        {
+            profile.LoadDefaults();
+            ApplyContextDefaults(ctx, profile);
+        }
         for (int a = 0; a < UAN; ++a)
         {
             const ParamEntry* entry = cfg.FindEntry(BindingName(ctx, descs[a]));
             if (!entry)
                 continue;
+            profile.ClearBindings(static_cast<UserAction>(a));
 
             const ParamEntry* modEntry = cfg.FindEntry(ModifierName(ctx, descs[a]));
             const ParamEntry* scaleEntry = cfg.FindEntry(ScaleName(ctx, descs[a]));
@@ -248,7 +258,12 @@ bool ContextControlsConfig::Load(const std::string& path)
             {
                 InputCode code = InputCode::FromLegacy((int)(*entry)[i]);
                 if (!code.valid())
+                {
+                    // Preserve an empty positional slot (a cleared primary that
+                    // keeps its alt): gameplay skips it, the controls page shows a dash.
+                    profile.Bind(static_cast<UserAction>(a), InputBinding{});
                     continue;
+                }
 
                 int modRaw = -1;
                 if (modEntry && i < modEntry->GetSize())
@@ -269,11 +284,6 @@ bool ContextControlsConfig::Load(const std::string& path)
 
 bool ContextControlsConfig::Save(const std::string& path) const
 {
-    std::error_code ec;
-    std::filesystem::path p(path);
-    if (p.has_parent_path())
-        std::filesystem::create_directories(p.parent_path(), ec);
-
     ParamFile cfg;
     cfg.Add("contextControlsVersion", kContextControlsVersion);
 
@@ -304,7 +314,6 @@ bool ContextControlsConfig::Save(const std::string& path) const
         }
     }
 
-    cfg.Save(RString(path.c_str()));
-    return std::filesystem::exists(path, ec);
+    return WriteSettingsFile(path, cfg);
 }
 } // namespace Poseidon

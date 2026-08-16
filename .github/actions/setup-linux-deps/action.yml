@@ -11,6 +11,8 @@ runs:
         sudo apt-get install -y \
           autoconf \
           autoconf-archive \
+          gettext \
+          autopoint \
           automake \
           clang \
           libtool \

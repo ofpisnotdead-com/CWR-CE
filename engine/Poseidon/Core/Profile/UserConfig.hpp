@@ -24,6 +24,11 @@ class UserConfig
     void InitDefaults();
     void InitDifficulties();
 
+    bool HasCustomFov() const { return _customFov; }
+    bool MigrateFov(float automaticLeft, float automaticTop);
+    void SetCustomFov(float left, float top);
+    void SetAutomaticFov();
+
     /// Whether the toggle is enabled in the current difficulty mode. A server
     /// override (set in multiplayer) takes precedence over the local profile.
     bool IsEnabled(DifficultyType type) const;
@@ -43,12 +48,16 @@ class UserConfig
     bool easyMode = true;  // true = cadet, false = veteran
 
     // --- Aspect / FOV ---
-    float fovTop = 0.75f; // Vertical FOV multiplier (default 4:3)
-    float fovLeft = 1.0f; // Horizontal FOV multiplier (widescreen = higher)
+    float fovTop;  // Vertical FOV multiplier (default 4:3)
+    float fovLeft; // Horizontal FOV multiplier (widescreen = higher)
 
   private:
     void LoadFromParamFile(const ParamFile& cfg);
     void SaveToParamFile(ParamFile& cfg) const;
+
+    bool _customFov = false;
+    bool _fovMigrationPending = false;
+    int _loadedVersion = 0;
 
     // Server difficulty pushed by the host in multiplayer (session-local, not persisted).
     bool _serverDifficultyActive = false;

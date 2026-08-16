@@ -18,6 +18,11 @@ if(WIN32)
         comctl32
         legacy_stdio_definitions.lib
     )
+elseif(APPLE)
+    target_link_libraries(PoseidonServerTests PRIVATE
+        Poseidon
+        pthread dl
+    )
 else()
     target_link_libraries(PoseidonServerTests PRIVATE
         -Wl,--start-group

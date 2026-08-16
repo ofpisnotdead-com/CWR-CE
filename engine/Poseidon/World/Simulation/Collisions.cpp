@@ -1012,7 +1012,7 @@ void Landscape::ExplosionDammageEffects(EntityAI* owner, Shot* shot, Object* dir
                 LODShapeWithShadow* shape = GLOB_SCENE->Preloaded(CraterShell);
                 // small/big explosion
 
-                Vector3 offset = transform.Rotate(shape->BoundingCenter());
+                Vector3 offset = shape ? transform.Rotate(shape->BoundingCenter()) : VZero;
                 transform.SetPosition(Vector3(pos[0], surfY, pos[2]) + offset);
 
                 float timeToLive = scale * 60;

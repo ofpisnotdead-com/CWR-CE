@@ -755,9 +755,28 @@ void WaveOAL::Unload()
     if (!_loaded)
         return;
 
+    if (_isStreamed)
+    {
+        _streaming.aborted.store(true, std::memory_order_release);
+        while (_streaming.decodeInFlight.load(std::memory_order_acquire))
+            std::this_thread::yield();
+    }
+
+    std::lock_guard<std::recursive_mutex> lk(_sys->_audioMutex);
+
     if (_alSource)
     {
         alSourceStop(_alSource);
+        if (_isStreamed)
+        {
+            ALint queued = 0;
+            alGetSourcei(_alSource, AL_BUFFERS_QUEUED, &queued);
+            while (queued-- > 0)
+            {
+                ALuint buffer = 0;
+                alSourceUnqueueBuffers(_alSource, 1, &buffer);
+            }
+        }
         alDeleteSources(1, &_alSource);
         _alSource = 0;
     }
@@ -765,6 +784,17 @@ void WaveOAL::Unload()
     {
         alDeleteBuffers(1, &_alBuffer);
         _alBuffer = 0;
+    }
+    if (_isStreamed && _streaming.alBuffers[0] != 0)
+    {
+        alDeleteBuffers(::Poseidon::Audio::StreamingBuffers::kNumBuffers, _streaming.alBuffers);
+        std::fill(std::begin(_streaming.alBuffers), std::end(_streaming.alBuffers), 0);
+        _streaming.freeBuffers.clear();
+        _streaming.queue.Clear();
+        _streaming.buffersInFlight = 0;
+        _streaming.decodeOffsetBytes.store(0, std::memory_order_release);
+        _streaming.consumedBytes.store(0, std::memory_order_release);
+        _streaming.eofReached.store(false, std::memory_order_release);
     }
     _loaded = false;
     _loadState.store(static_cast<int>(LoadState::NotStarted), std::memory_order_release);

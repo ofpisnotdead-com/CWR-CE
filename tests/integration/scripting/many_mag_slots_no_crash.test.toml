@@ -1,5 +1,5 @@
-# Mounts the @manymags fixture (weapon BadManyMags with 11 modes = 11 magazine
-# slots) and loads a mission so the test can equip it during gameplay.
+# Mounts the @manymags addon fixture (weapon BadManyMags with 11 modes = 11
+# magazine slots) and loads a mission so the test can equip it during gameplay.
 binary = "PoseidonGame"
 mission = "tests/integration/missions/action_menu_weapon.Demo"
 extra_args = ["--mods-dir", "../../tests/fixtures/mods-manymags", "--mod", "@manymags"]

@@ -2,6 +2,7 @@
 
 #include <Poseidon/Foundation/Strings/RString.hpp>
 #include <string>
+#include <vector>
 
 // Forward declaration for CLI11
 namespace CLI {
@@ -26,6 +27,11 @@ public:
     bool HasParseFatalError() const { return _parseFatalExitCode != 0; }
     int GetParseFatalExitCode() const { return _parseFatalExitCode; }
     const std::string& GetParseFatalError() const { return _parseFatalError; }
+
+    static std::string DescribeLaunchError(const std::string& cliError, int argc, const char* const* argv);
+    // Args tolerated by allow_extras() but matched to no option; reported so a typo'd
+    // launch flag isn't silently dropped.
+    const std::vector<std::string>& GetUnrecognizedArgs() const { return _unrecognizedArgs; }
 
     /// Apply parsed config values to process-wide globals.
     void ApplyToLegacyGlobals();
@@ -129,6 +135,9 @@ public:
     
     /// Auto-assign client to side:slot (--mp-assign WEST:1), empty=disabled
     const std::string& GetMPAssign() const { return _mpAssign; }
+
+    /// Print the exact MP compatibility tuple and exit before opening a window.
+    bool PrintMPVersion() const { return _printMPVersion; }
     
     // Audio
 
@@ -245,7 +254,7 @@ public:
     /// Simulate mode (--simulate): headless mission execution without players
     bool IsSimulateMode() const { return _simulateMode; }
     
-    /// Simulation duration in seconds (--duration N, 0 = run until endGame or Ctrl+C)
+    /// Simulation duration in seconds (--duration N, 0 = run until triEndGame or Ctrl+C)
     int GetSimulateDuration() const { return _simulateDuration; }
     
     bool LogFileOps() const { return _logFileOps; }
@@ -288,6 +297,9 @@ public:
 
 	/// Log file path (--log-file), empty = no file logging
 	const std::string& GetLogFile() const { return _logFile; }
+
+	/// True when --no-log-file disables the automatic per-run log file.
+	bool NoLogFile() const { return _noLogFile; }
 
 	/// Chrome trace JSON output path (--perf-trace), empty = disabled.
 	/// File loads in https://ui.perfetto.dev/ or chrome://tracing.
@@ -379,6 +391,7 @@ private:
     int _mpAutoStart = 0;
     bool _forceJIP = false;
     std::string _mpAssign;
+    bool _printMPVersion = false;
     
     // Audio
     bool _noSound = false;
@@ -438,6 +451,7 @@ private:
 	std::string _appTag = "";        // App identifier tag for log lines (--app-tag)
 	bool _legacyLogs = false;         // Show legacy bridge logs (--legacy-logs)
 	std::string _logFile = "";        // Log file path (--log-file), empty = no file
+	bool _noLogFile = false;          // Disable the automatic per-run log file (--no-log-file)
 	std::string _perfTracePath = "";  // Chrome trace JSON path (--perf-trace), empty = disabled
     // Mission file
     std::string _missionFile;
@@ -464,6 +478,7 @@ private:
     bool _parsed = false;
     int _parseFatalExitCode = 0;
     std::string _parseFatalError;
+    std::vector<std::string> _unrecognizedArgs;
 };
 
 } // namespace Poseidon::Foundation

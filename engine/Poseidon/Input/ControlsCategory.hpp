@@ -44,5 +44,12 @@ bool IsActionInControlsCategory(UserAction action, ControlsCategory cat);
 // fallback; the UI layer is responsible for going through LocalizeString
 // when a stringtable entry exists.
 const char* GetControlsCategoryName(ControlsCategory cat);
+
+// Whether an action's row is shown on the Keyboard & Mouse / Gamepad controls page.
+// Both pages share the category lists; these encode the intentional per-device
+// differences (analog-stick group folding on gamepad, on-foot aim = mouse on KB&M).
+// The KbmPage / GamepadPage IsActionVisible overrides delegate here.
+bool IsActionVisibleOnKeyboard(UserAction action, ControlsCategory cat);
+bool IsActionVisibleOnGamepad(UserAction action, ControlsCategory cat);
 } // namespace Poseidon
 

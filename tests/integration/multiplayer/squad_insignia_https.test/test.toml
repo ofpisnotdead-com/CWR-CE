@@ -1,7 +1,18 @@
-mission = "tests/integration/missions/jip_basic.Demo"
+mission = "tests/integration/multiplayer/squad_insignia_https.test/squad-insignia.Demo"
+data_dir = "packages/Demo"
 game_port = 0
 
-tags = ["headful", "network", "exclusive"]
+tags = ["network"]
+
+[[http_fixtures]]
+url = "https://squad.test/squad.xml"
+file = "fixtures/squad.xml"
+min_requests = 1
+
+[[http_fixtures]]
+url = "https://squad.test/synthetic_grid.paa"
+file = "fixtures/synthetic_grid.paa"
+min_requests = 1
 
 [[instances]]
 extra_args = ["--no-strict"]
@@ -28,6 +39,7 @@ type = "client"
 connect = "server"
 after = "server"
 wait_ngs = 13
+start_delay_ms = 12000
 mp_assign = "WEST:2"
 machine_id = "trident:squad_insignia_https:client2"
 copy_files = [

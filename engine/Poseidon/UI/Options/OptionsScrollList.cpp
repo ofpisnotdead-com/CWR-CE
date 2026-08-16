@@ -207,6 +207,21 @@ void OptionsScrollList::FormatMarquee(const char* val, int offset, int innerChar
     *o = '\0';
 }
 
+void OptionsScrollList::FormatCell(const char* val, int innerChars, bool marquee, DWORD elapsedMs, char* out,
+                                   size_t outsz)
+{
+    const int cpLen = Utf8Length(val);
+    if (marquee && cpLen > innerChars)
+    {
+        int offset = MarqueeOffset(elapsedMs, cpLen, innerChars);
+        FormatMarquee(val, offset, innerChars, out, outsz);
+    }
+    else
+    {
+        FormatTruncated(val, innerChars, out, outsz);
+    }
+}
+
 int OptionsScrollList::RowLabelInnerChars(int row) const
 {
     Kind kind = m_provider.RowKind(row);
@@ -240,6 +255,17 @@ bool OptionsScrollList::FocusedStepperValueNeedsMarquee() const
     int idx = m_provider.RowValue(m_rowFocus) % row.count;
     const char* val = (row.options && row.count > 0) ? row.options[idx] : "";
     return Utf8Length(val) > kInnerChars;
+}
+
+bool OptionsScrollList::FocusedBindingCellNeedsMarquee() const
+{
+    if (m_rowFocus < 0 || m_rowFocus >= m_provider.RowCount())
+        return false;
+    if (m_provider.RowKind(m_rowFocus) != KindBinding)
+        return false;
+    const char* primary = m_provider.BindingPrimary(m_rowFocus);
+    const char* alt = m_provider.BindingAlt(m_rowFocus);
+    return (primary && Utf8Length(primary) > kInnerChars) || (alt && Utf8Length(alt) > kBindingAltInnerChars);
 }
 
 // Control-update helpers.
@@ -314,6 +340,9 @@ void OptionsScrollList::SetStaticColors(int idc, PackedColor color, PackedColor 
 namespace
 {
 const PackedColor kRowColorRed = PackedColor(Color(0.95f, 0.30f, 0.30f, 1.0f));
+// Matches OPT_C_HINT (the hint line's muted gold), reused to mark the binding
+// cell the next capture will edit on the focused row.
+const PackedColor kBindingSelectedColor = PackedColor(Color(0.85f, 0.78f, 0.50f, 1.0f));
 } // namespace
 
 void OptionsScrollList::SetSliderBar(int fillIdc, int percent, float trackX, float trackY, float trackH,
@@ -464,18 +493,8 @@ void OptionsScrollList::RenderSlot(int slot, int logicalRow)
     if (!label)
         label = "";
     const int labelInnerChars = RowLabelInnerChars(logicalRow);
-    const int labelCpLen = Utf8Length(label);
     char labelBuf[128];
-    if (focused && labelCpLen > labelInnerChars)
-    {
-        DWORD elapsed = GlobalTickCount() - m_marqueeStartMs;
-        int offset = MarqueeOffset(elapsed, labelCpLen, labelInnerChars);
-        FormatMarquee(label, offset, labelInnerChars, labelBuf, sizeof(labelBuf));
-    }
-    else
-    {
-        FormatTruncated(label, labelInnerChars, labelBuf, sizeof(labelBuf));
-    }
+    FormatCell(label, labelInnerChars, focused, GlobalTickCount() - m_marqueeStartMs, labelBuf, sizeof(labelBuf));
     SetRowValue(idcLabel, labelBuf, label);
 
     if (isBinding)
@@ -487,12 +506,33 @@ void OptionsScrollList::RenderSlot(int slot, int logicalRow)
         const char* alt = m_provider.BindingAlt(logicalRow);
         const char* primaryDisplay = (primary && *primary) ? primary : "—";
         const char* altDisplay = (alt && *alt) ? alt : "—";
-        SetRowValue(idcValStep, primaryDisplay);
-        SetRowValue(idcValBar, altDisplay);
+        // Long key names marquee on the focused row and clip otherwise. The
+        // semantic text stays the full value so tests read the real binding.
+        const DWORD marqueeElapsed = GlobalTickCount() - m_marqueeStartMs;
+        char primaryBuf[80];
+        char altBuf[80];
+        FormatCell(primaryDisplay, kInnerChars, focused, marqueeElapsed, primaryBuf, sizeof(primaryBuf));
+        FormatCell(altDisplay, kBindingAltInnerChars, focused, marqueeElapsed, altBuf, sizeof(altBuf));
+        SetRowValue(idcValStep, primaryBuf, primaryDisplay);
+        SetRowValue(idcValBar, altBuf, altDisplay);
 
-        // Highlight the slot Enter will target on the focused row.
+        // Tint the cell the next capture will edit (Left/Right switch it) on the
+        // focused row, so the two slots and the current selection are visible.
         PackedColor primaryColor = isDisabled ? disabledValueStepColor : valueStepColor;
         PackedColor altColor = isDisabled ? disabledValueBarColor : valueBarColor;
+        if (focused && !isDisabled)
+        {
+            if (m_bindingSlot == 1)
+            {
+                altColor = kBindingSelectedColor;
+                primaryColor = ModAlpha(primaryColor, 60);
+            }
+            else
+            {
+                primaryColor = kBindingSelectedColor;
+                altColor = ModAlpha(altColor, 60);
+            }
+        }
         SetLabelColor(idcValStep, primaryColor);
         SetLabelColor(idcValBar, altColor);
 
@@ -537,17 +577,7 @@ void OptionsScrollList::RenderSlot(int slot, int logicalRow)
         int idx = (row.count > 0) ? (m_provider.RowValue(logicalRow) % row.count) : 0;
         const char* val = (row.options && row.count > 0) ? row.options[idx] : "";
         char buf[80];
-        int valCpLen = Utf8Length(val);
-        if (isStepper && focused && valCpLen > kInnerChars)
-        {
-            DWORD elapsed = GlobalTickCount() - m_marqueeStartMs;
-            int offset = MarqueeOffset(elapsed, valCpLen, kInnerChars);
-            FormatMarquee(val, offset, kInnerChars, buf, sizeof(buf));
-        }
-        else
-        {
-            FormatTruncated(val, kInnerChars, buf, sizeof(buf));
-        }
+        FormatCell(val, kInnerChars, isStepper && focused, GlobalTickCount() - m_marqueeStartMs, buf, sizeof(buf));
         SetRowValue(idcValStep, buf, val);
         SetRowValue(idcValBar, "");
     }
@@ -954,6 +984,44 @@ bool OptionsScrollList::PollPointerActionClick()
     return false;
 }
 
+void OptionsScrollList::PollPointerRightClick()
+{
+    if (!m_notebook)
+        return;
+    auto& in = InputSubsystem::Instance();
+    // Track the press edge off the level state (IsMouseRightDown), so it fires
+    // once per click and works for both real SDL clicks and the test harness.
+    const bool down = in.IsMouseRightDown();
+    const bool pressed = down && !m_pointerRightWasDown;
+    m_pointerRightWasDown = down;
+    if (!pressed)
+        return;
+
+    float mouseX = 0.5f + in.GetCursorX() * 0.5f;
+    float mouseY = 0.5f + in.GetCursorY() * 0.5f;
+    IControl* hovered = m_notebook->GetCtrl(mouseX, mouseY);
+    if (!hovered || hovered == m_notebook)
+        return;
+    int idc = hovered->IDC();
+    int slot = SlotForControlIdc(idc);
+    if (slot < 0)
+        return;
+    int rowIdx = RowAtSlot(slot);
+    if (rowIdx < 0)
+        return;
+    if (!CanRowOpenBinding(m_provider.RowKind(rowIdx), m_provider.IsDisabled(rowIdx)))
+        return;
+
+    // Cell picked the same way a left click does: the BarClick overlay (5N7)
+    // covers the alt cell, anything else on the row is the primary.
+    int bindingSlot = (idc - (500 + slot * 10) == 7) ? 1 : 0;
+    m_rowFocus = rowIdx;
+    m_bindingSlot = bindingSlot;
+    FocusFocusedRow();
+    m_provider.OnBindingCleared(rowIdx, bindingSlot);
+    RenderPage();
+}
+
 void OptionsScrollList::UpdateHoverFocus()
 {
     auto& in = InputSubsystem::Instance();
@@ -1063,7 +1131,7 @@ void OptionsScrollList::UpdateMarquee()
         m_marqueeRowPrev = m_rowFocus;
         m_marqueeStartMs = GlobalTickCount();
     }
-    if (!RowLabelNeedsMarquee(m_rowFocus) && !FocusedStepperValueNeedsMarquee())
+    if (!RowLabelNeedsMarquee(m_rowFocus) && !FocusedStepperValueNeedsMarquee() && !FocusedBindingCellNeedsMarquee())
         return;
     int slot = SlotForRow(m_rowFocus);
     if (slot < 0)
@@ -1082,6 +1150,7 @@ void OptionsScrollList::OnSimulate()
 
     UpdateMeter();
     UpdateHoverFocus();
+    PollPointerRightClick();
     if (PollPointerActionClick())
         return;
     PollScrollbarDrag();
@@ -1131,6 +1200,18 @@ bool OptionsScrollList::OnKeyDown(unsigned nChar)
             }
             CycleFocusedRowValue(+1);
             return true;
+        case SDLK_BACKSPACE:
+        case SDLK_DELETE:
+            if (kind == KindBinding)
+            {
+                if (CanRowOpenBinding(kind, m_provider.IsDisabled(m_rowFocus)))
+                {
+                    m_provider.OnBindingCleared(m_rowFocus, m_bindingSlot);
+                    RenderPage();
+                }
+                return true;
+            }
+            return false;
         case SDLK_RETURN:
         case SDLK_KP_ENTER:
             if (kind == KindAction)

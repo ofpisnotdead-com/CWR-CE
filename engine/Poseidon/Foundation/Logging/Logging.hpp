@@ -39,6 +39,16 @@ public:
 	/// Generates a tag like "app-1a2b" using PID. CLI --app-tag overrides.
 	void InitializeFromConfig(const char* appPrefix);
 
+	/// Attach a file sink to every logger after Initialize (the per-run log, once the
+	/// user dir is known). No-op if uninitialized, path empty, or already attached.
+	void AttachFileSink(const char* path);
+
+	/// Absolute path of the attached log file, or "" if none.
+	static const char* GetLogFilePath() { return m_logFilePath; }
+
+	/// Why the --log-file sink could not be opened; "" if it opened or none was asked for.
+	const std::string& GetFileSinkError() const { return m_fileSinkError; }
+
 	/// Shutdown logging (flushes buffers)
 	void Shutdown();
 	
@@ -87,6 +97,9 @@ public:
 	static const char* GetColoredCategoryTag(Category category);
 	static const char* GetFormattedLevel(spdlog::level::level_enum level);
 	static const char* GetLevelName(spdlog::level::level_enum level);
+	// Plain (no ANSI) variants for file sinks; a log file must never carry colour codes.
+	static const char* GetPlainCategoryTag(Category category);
+	static const char* GetPlainLevel(spdlog::level::level_enum level);
 
 private:
 	std::shared_ptr<spdlog::logger> m_logger;
@@ -96,10 +109,24 @@ private:
 	bool m_hasFileSink;
 	bool m_categoryFilter[static_cast<int>(LogCategory::_Count)];
 	bool m_filterActive;
+	std::string m_fileSinkError;
 	static char m_appTag[20];
 	static char m_appTagRaw[12];
+	static char m_logFilePath[1024];
 };
 
 // LOG_* macros live in Poseidon/Foundation/Framework/Log.hpp.
+
+/// Build a per-run log filename like "<prefix>_YYYY-MM-DD_HH-MM-SS.log" from the
+/// local time. Chronological, so a lexical or mtime sort orders runs.
+std::string MakeTimestampedLogName(const char* prefix);
+
+/// True when the per-run log file is wanted: no --log-file was given, or the one
+/// that was could not be opened. --no-log-file suppresses it either way.
+bool WantsRunLogFile(bool logFileRequested, bool logFileOpened, bool noLogFile);
+
+/// Keep the newest `keepN` `dir` files matching `prefix`*`ext`; delete the rest,
+/// oldest first. Swallows all filesystem errors; never throws.
+void WipeOldFiles(const std::string& dir, const char* prefix, const char* ext, int keepN);
 
 } // namespace Poseidon::Foundation

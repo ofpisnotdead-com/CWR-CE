@@ -39,6 +39,13 @@ runs:
       if: runner.os == 'Linux'
       uses: ./.github/actions/setup-linux-deps
 
+    - name: Install macOS homebrew packages
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        brew install \
+          clang-format
+
     - name: Setup LLVM and Clang
       if: runner.os == 'Windows'
       uses: KyleMayes/install-llvm-action@v2
@@ -52,11 +59,13 @@ runs:
       uses: hendrikmuhs/ccache-action@v1.2.23
       with:
         variant: ccache
-        key: ${{ runner.os }}-${{ inputs.preset }}-pch
+        key: ${{ runner.os }}-${{ inputs.preset }}-pch-${{ hashFiles('engine/Poseidon/Foundation/PoseidonPCH.hpp', 'engine/Poseidon/Foundation/platform.hpp') }}
         max-size: 1G
 
     - name: Setup CMake and Ninja
       uses: lukka/get-cmake@latest
+      with:
+        cmakeVersion: '4.4.0'
 
     - name: Restore vcpkg binary cache
       if: inputs.use-vcpkg-binary-cache == 'true'
@@ -98,6 +107,7 @@ runs:
       shell: pwsh
       env:
         CTEST_EXCLUDE: ${{ inputs.ctest-exclude }}
+        ALSOFT_DRIVERS: "null"
       run: |
         if ("$env:CTEST_EXCLUDE") {
           ctest --test-dir '${{ inputs.build-dir }}' --output-on-failure -E "$env:CTEST_EXCLUDE"

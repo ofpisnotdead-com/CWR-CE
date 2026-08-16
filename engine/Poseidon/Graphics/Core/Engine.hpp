@@ -154,12 +154,12 @@ struct Char3DContext
 struct AspectSettings
 {
     //@{ wide screen settings (ratio world to screen)
-    float leftFOV;
-    float topFOV;
+    float leftFOV = 1.0f;
+    float topFOV = 0.75f;
     //}@
     //@{ 2D UI region settings (0..1 range)
-    float uiTopLeftX, uiTopLeftY;
-    float uiBottomRightX, uiBottomRightY;
+    float uiTopLeftX = 0.0f, uiTopLeftY = 0.0f;
+    float uiBottomRightX = 1.0f, uiBottomRightY = 1.0f;
     //@}
     //@{ 3D world render rect as fractions of the full window.  Default
     // (0,0,1,1) = full window.  A centered sub-rect crops the world

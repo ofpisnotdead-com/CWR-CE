@@ -16,7 +16,7 @@ double DefaultMonotonicSeconds()
 
 void RunDownloadJobs(const std::vector<DownloadTask>& tasks, DownloadProgress& progress, std::mutex& mtx,
                      const DownloadFileFn& download, const std::function<double()>& now,
-                     const std::atomic<bool>& cancel)
+                     const std::atomic<bool>& cancel, std::atomic<bool>* postProcessing)
 {
     {
         std::lock_guard<std::mutex> g(mtx);
@@ -60,13 +60,19 @@ void RunDownloadJobs(const std::vector<DownloadTask>& tasks, DownloadProgress& p
 
         if (task.postStep)
         {
+            if (postProcessing != nullptr)
+                postProcessing->store(true);
             std::string postError;
             if (!task.postStep(task, postError))
             {
+                if (postProcessing != nullptr)
+                    postProcessing->store(false);
                 std::lock_guard<std::mutex> g(mtx);
                 progress.SetFailed(postError.empty() ? "install failed" : postError);
                 return;
             }
+            if (postProcessing != nullptr)
+                postProcessing->store(false);
         }
 
         {
@@ -116,7 +122,7 @@ void DownloadWorker::Start(std::vector<DownloadTask> tasks)
         [session]()
         {
             RunDownloadJobs(session->tasks, session->progress, session->mtx, session->download, session->now,
-                            session->cancel);
+                            session->cancel, &session->postProcessing);
             session->active.store(false);
         });
 }
@@ -157,6 +163,7 @@ DownloadSnapshot DownloadWorker::Poll() const
     s.done = p.IsDone();
     s.failed = p.IsFailed();
     s.cancelled = _session->cancel.load() && !p.IsDone() && !p.IsFailed();
+    s.postProcessing = _session->postProcessing.load();
     s.error = p.Error();
     return s;
 }

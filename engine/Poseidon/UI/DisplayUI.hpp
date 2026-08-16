@@ -5,6 +5,8 @@
 #include <Poseidon/UI/GameModule.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Core/DownloadWorker.hpp>
+#include <Poseidon/Core/ModInstall.hpp>
+#include <array>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -125,11 +127,8 @@ class DisplayCustomArcade : public Display
     void ShowButtons();
 };
 
-// Top-level MODS screen (v1: an empty notebook — header + Close only).
-// DisplayMultiplayer: animate the notebook shut, then Exit when it finishes
-// (OnCtrlClosed). Registered as GameModuleId::Mods via ModsModule::Register().
-// Background workshop-catalog fetch state (defined in OptionsUIApp.cpp): a
-// detached worker fills it, DisplayMods::OnSimulate merges it in when ready.
+// Top-level MODS screen. The notebook closes before the display exits.
+// A detached worker fills the workshop catalog state and OnSimulate merges it.
 struct ModsWorkshopFetch;
 
 class DisplayMods : public Display
@@ -141,43 +140,35 @@ class DisplayMods : public Display
     bool _workshopMerged = false;
     int _sortColumn = 0; // active sort (ModsSortColumn); header click toggles dir
     bool _sortAscending = true;
+    RString _searchText;
+    RString _guidanceText;
+    DWORD _guidanceMarqueeStart = 0;
+    std::vector<Poseidon::StagedModInstall> _stagedInstalls;
 
   public:
     DisplayMods(ControlsContainer* parent);
 
-    // Builds the catalog list as a CModsList (5-column DrawItem) and seeds it.
-    // Out-of-line in OptionsUIApp.cpp where CModsList is fully visible.
     Control* OnCreateCtrl(int type, int idc, const ParamEntry& cls) override;
 
-    // Test-only (triSeedMods): replace the catalog rows with count fake mods.
     void SeedTestMods(int count);
 
-    // Default Name-ascending sort + caret, applied once after Load.
     void ApplyInitialSort();
-    // Reflect _sortColumn/_sortAscending on the four header carets (shared
-    // UpdateSortCaret helper), mirroring the MP browser's UpdateIcons.
     void UpdateSortCarets();
-    // Set the Source cycling-button label for the given mode (0=All/1=Workshop/2=Local).
-    void UpdateSourceButton(int mode);
-    // Set the Filter button label to reflect the active name filter ("Filter" /
-    // "Filter: <text>"). Reads the current filter from the list.
     void UpdateFilterButton();
-    // When the name-filter dialog (IDD_MODS_FILTER) closes on OK, read its edit
-    // and apply it as the list name filter. Out-of-line (needs CModsList).
     void OnChildDestroyed(int idd, int exit) override;
 
-    // Workshop (remote) catalog: OnSimulate kicks a one-shot background fetch from
-    // the master server (papa-bear.cz / --master-server) and merges the result into
-    // the list as Workshop rows (shown only; never activated/downloaded for now).
-    // Skipped under autotest. MergeWorkshopMods is reused by triSeedWorkshopMods.
+    // OnSimulate starts one workshop catalog request and merges it when ready.
+    // Autotest fixtures inject catalog rows through MergeWorkshopMods.
     void OnSimulate(EntityAI* vehicle) override;
     void StartWorkshopFetch();
     void MergeWorkshopMods(const std::vector<MasterServerServiceModCatalogEntry>& catalog);
 
-    // Cancel closes the notebook; column-header clicks sort the catalog list.
-    // Out-of-line in OptionsUIApp.cpp (needs the full CModsList type).
     void OnButtonClicked(int idc) override;
+    bool OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags) override;
+    void OnLBDblClick(int idc, int curSel) override;
+    void OnLBSelChanged(int idc, int curSel) override;
     bool DoControllerUiAction(ControllerUiAction action) override;
+    void UpdateCatalogUi();
 
     void OnCtrlClosed(int idc) override
     {
@@ -188,33 +179,9 @@ class DisplayMods : public Display
     }
 };
 
-// Name-filter dialog for the MODS catalog (RscDisplayModsFilter). One edit
-// field seeded with the current filter; the parent (DisplayMods) reads it back
-// on OK via OnChildDestroyed, like the MP browser's DisplayPort. OnCreateCtrl is
-// out-of-line in OptionsUIApp.cpp (where C3DEdit is in scope).
-class DisplayModsFilter : public Display
-{
-  protected:
-    RString _filterName;
-
-  public:
-    DisplayModsFilter(ControlsContainer* parent, RString current) : Display(parent)
-    {
-        _enableSimulation = false;
-        _filterName = current;
-        Load("RscDisplayModsFilter");
-    }
-    Control* OnCreateCtrl(int type, int idc, const ParamEntry& cls) override;
-};
-
-// Download-progress dialog (RscDisplayModDownload). Agnostic: given a list of
-// DownloadTasks and a transport, it runs a background DownloadWorker and shows
-// two bars — the current file on top, the whole job below — plus a speed/ETA
-// status line. Opened by DisplayMods from Apply when the ticked set includes
-// not-yet-downloaded mods; the same dialog serves the MP single-mission
-// transfer (one task, no post-step). On success it Exits IDC_OK so the opener
-// can proceed; Cancel and an unrecovered failure Exit IDC_CANCEL.
-// Out-of-line in OptionsUIApp.cpp (needs the download/control types).
+// Runs DownloadTasks in the background and reports current and overall progress.
+// DisplayMods uses it before loading missing packages, and multiplayer uses it
+// for single-mission transfers.
 class DisplayModDownload : public Display
 {
   protected:
@@ -232,7 +199,6 @@ class DisplayModDownload : public Display
     Phase _phase;
     bool _started;
 
-    // Set a 3D notebook static/active-text by idc (no-op if absent/mismatched).
     void SetNotebookText(int idc, RString text);
     // (Re)start the worker over _tasks and switch to the running phase.
     void StartDownload();
@@ -241,7 +207,8 @@ class DisplayModDownload : public Display
 
   public:
     DisplayModDownload(ControlsContainer* parent, std::vector<DownloadTask> tasks, DownloadFileFn transport,
-                       const char* unitNoun = "addon", std::function<double()> now = std::function<double()>());
+                       const char* unitNoun = "addon", std::function<double()> now = std::function<double()>(),
+                       const char* promptKey = "STR_DISP_MODS_DOWNLOAD_PROMPT");
 
     void OnButtonClicked(int idc) override;
     void OnSimulate(EntityAI* vehicle) override;
@@ -255,6 +222,19 @@ enum SortColumn
     SCPlayers,
     SCPing
 };
+
+struct MultiplayerSessionRowLayout
+{
+    float primaryTop;
+    float primarySize;
+    float secondaryTop;
+    float secondarySize;
+};
+
+constexpr MultiplayerSessionRowLayout GetMultiplayerSessionRowLayout()
+{
+    return {0.05f, 0.4f, 0.5f, 0.4f};
+}
 
 class CSessions : public C3DListBox
 {
@@ -296,18 +276,57 @@ enum class ModRowState
     Active,     // installed + in the active set
 };
 
+enum class ModRowFreshness
+{
+    Current,
+    UpdateAvailable,
+    Ahead,
+};
+
+enum class ModRowAction
+{
+    None,
+    DownloadAndLoad,
+    UpdateAndLoad,
+    Load,
+    Unload,
+};
+
+RString FormatModsGuidance(RString text, float measuredFraction, DWORD elapsedMs);
+
 struct ModRow
 {
-    bool checked = false; // selection tick -> drives the active set on Apply
+    bool checked = false;
     RString modId;
     RString folderName;
     RString name;
     RString version;
+    int64_t packageRevision = 1;
+    RString sha256;
     int64_t sizeBytes = 0;
     ModRowState state = ModRowState::Missing;
+    ModRowFreshness freshness = ModRowFreshness::Current;
     ModRowSource source = ModRowSource::Workshop;
     RString downloadUrl; // Workshop rows: PBO URL from the catalog (empty for local)
 };
+
+inline bool IsModRowActive(const ModRow& row)
+{
+    return row.state == ModRowState::Active;
+}
+
+inline ModRowAction GetModRowAction(const ModRow& row)
+{
+    if (!row.checked)
+        return row.state == ModRowState::Active ? ModRowAction::Unload : ModRowAction::None;
+    if (row.freshness == ModRowFreshness::UpdateAvailable)
+        return ModRowAction::UpdateAndLoad;
+    if (row.state == ModRowState::Missing)
+        return ModRowAction::DownloadAndLoad;
+    if (row.state == ModRowState::Downloaded)
+        return ModRowAction::Load;
+    return ModRowAction::None;
+}
 
 // Sortable columns for the MODS catalog table (CModsList::Sort).
 enum ModsSortColumn
@@ -316,68 +335,82 @@ enum ModsSortColumn
     MSCVersion,
     MSCSize,
     MSCState,
-    MSCSource, // appended last: Name/Version/Size/State keep indices 0-3
+    MSCSource, // appended after the original columns to preserve indices 0-3
+    MSCActive,
+    MSCAction,
 };
 
-// Catalog table - a 3D notebook listbox whose DrawItem renders the columns
-// (checkbox / Name / Version / Size / State), mirroring CSessions on the MP
-// browser. Implemented in DisplayUIMultiplayer.cpp (same 3D draw stack).
+enum ModsTableColumn
+{
+    MTCActive,
+    MTCName,
+    MTCVersion,
+    MTCSource,
+    MTCState,
+    MTCAction,
+    MTCCount,
+};
+
 class CModsList : public C3DListBox
 {
   protected:
     AutoArray<ModRow> _modRows;
-    int _sourceMode = 0; // Source filter: 0=All, 1=Workshop, 2=Local
-    RString _nameFilter; // name search (Filter dialog); empty = no name filter
+    int _sourceMode = 0; // Tab filter: 0=All, 1=Active, 2=Installed, 3=Workshop, 4=Local
+    RString _nameFilter; // inline name search; empty = no name filter
+    std::array<float, MTCCount> _columnWidths = {
+        1.0f / static_cast<float>(MTCCount), 1.0f / static_cast<float>(MTCCount), 1.0f / static_cast<float>(MTCCount),
+        1.0f / static_cast<float>(MTCCount), 1.0f / static_cast<float>(MTCCount), 1.0f / static_cast<float>(MTCCount)};
 
   public:
     CModsList(ControlsContainer* parent, int idc, const ParamEntry& cls) : C3DListBox(parent, idc, cls) {}
 
     int GetSize() override { return VisibleCount(); }
     int FilterRowCount() const override { return _modRows.Size(); }
-    // Row passes when it matches the Source filter AND its name contains the
-    // (case-insensitive) name filter. Both empty/All -> every row visible.
     bool FilterRowVisible(int actualRow) const override
     {
         const ModRow& m = _modRows[actualRow];
-        if (_sourceMode == 1 && m.source != ModRowSource::Workshop)
+        if (_sourceMode == 1 && m.state != ModRowState::Active)
             return false;
-        if (_sourceMode == 2 && m.source != ModRowSource::Local)
+        if (_sourceMode == 2 && m.state == ModRowState::Missing)
+            return false;
+        if (_sourceMode == 3 && m.source != ModRowSource::Workshop)
+            return false;
+        if (_sourceMode == 4 && m.source != ModRowSource::Local)
             return false;
         if (_nameFilter.GetLength() > 0 && !ContainsNoCase(m.name, _nameFilter))
             return false;
         return true;
     }
-    // Case-insensitive substring test (empty needle matches anything).
+    // Empty queries match every name.
     static bool ContainsNoCase(const char* hay, const char* needle);
     RString GetData(int i) override { return _modRows[VisibleRow(i)].modId; }
     RString GetText(int i) override { return _modRows[VisibleRow(i)].name; }
     void Sort(ModsSortColumn column, bool ascending);
     void DrawItem(Vector3Par position, Vector3Par down, int i, float alpha) override;
+    static std::array<float, MTCCount> AllocateColumnWidths(const std::array<float, MTCCount>& desiredWidths,
+                                                            ModsTableColumn mainColumn, float availableWidth);
+    void UpdateColumnLayout(const std::array<float, MTCCount>& headerWidths);
+    const std::array<float, MTCCount>& GetColumnWidths() const { return _columnWidths; }
 
-    // Selection -> mod set (drives Apply). CheckedModIds joins the checked rows'
-    // @modId by ',' ("" if none, harness-readable); BuildModPath prefixes each with
-    // its source's root (local vs workshop) and joins by ';' for the re-mount.
     RString CheckedModIds() const;
     RString BuildModPath(const char* localRoot, const char* workshopRoot) const;
 
-    // Source filter (0=All, 1=Workshop, 2=Local). Re-derives the visible rows.
+    // Tab order matches the resource control order.
     void SetSourceMode(int mode)
     {
         _sourceMode = mode;
         ApplyFilters();
     }
     int GetSourceMode() const { return _sourceMode; }
-    // Name search (Filter dialog). Re-derives the visible rows.
     void SetNameFilter(RString f)
     {
         _nameFilter = f;
         ApplyFilters();
     }
     RString GetNameFilter() const { return _nameFilter; }
-    // Recompute the visible set after rows or the filter change; reset the cursor.
     void ApplyFilters()
     {
-        SetFilterActive(_sourceMode != 0 || _nameFilter.GetLength() > 0);
+        SetFilterActive(true);
         SetCurSel(VisibleCount() > 0 ? 0 : -1, false);
     }
     const AutoArray<ModRow>& GetRows() const { return _modRows; }
@@ -386,21 +419,54 @@ class CModsList : public C3DListBox
         _modRows = rows;
         ApplyFilters();
     }
-    // The checkbox is the leftmost column; its width (fraction of the list) is
-    // shared with DrawItem so the click target lines up with what is drawn.
-    static constexpr float kCheckboxColumnWidth = 0.07f;
+    int CountInstalled() const
+    {
+        int count = 0;
+        for (int i = 0; i < _modRows.Size(); ++i)
+            if (_modRows[i].state != ModRowState::Missing)
+                ++count;
+        return count;
+    }
+    int CountActive() const
+    {
+        int count = 0;
+        for (int i = 0; i < _modRows.Size(); ++i)
+            if (_modRows[i].state == ModRowState::Active)
+                ++count;
+        return count;
+    }
+    int CountSource(ModRowSource source) const
+    {
+        int count = 0;
+        for (int i = 0; i < _modRows.Size(); ++i)
+            if (_modRows[i].source == source)
+                ++count;
+        return count;
+    }
+    static bool HasPendingChange(const ModRow& row) { return GetModRowAction(row) != ModRowAction::None; }
+    int PendingChangeCount() const
+    {
+        int count = 0;
+        for (int i = 0; i < _modRows.Size(); ++i)
+            if (HasPendingChange(_modRows[i]))
+                ++count;
+        return count;
+    }
+    bool SelectedChecked()
+    {
+        const int actual = VisibleRow(GetCurSel());
+        return actual >= 0 && actual < _modRows.Size() && _modRows[actual].checked;
+    }
+    void ToggleSelected() { ToggleChecked(GetCurSel()); }
+    // Shared by drawing and hit testing.
+    static constexpr float kCheckboxColumnWidth = 0.16f;
     void ToggleChecked(int displayIdx)
     {
         int a = VisibleRow(displayIdx);
         if (a >= 0 && a < _modRows.Size())
             _modRows[a].checked = !_modRows[a].checked;
     }
-    // Toggle the tick ONLY when the click lands in the small checkbox column of a
-    // REAL row. u,v are the click position within the list (Control3D _u/_v,
-    // 0..1): u gates the checkbox column, v picks the row under the cursor. The
-    // row comes from v, never from GetCurSel() — at button-down the selection
-    // still holds the PREVIOUS row, so toggling it un-ticked a different line when
-    // you clicked between rows. A click below the last row toggles nothing.
+    // Button-down selection still points at the previous row, so derive the row from v.
     void HandleRowClick(float u, float v)
     {
         if (u < 0.0f || u >= kCheckboxColumnWidth)
@@ -489,6 +555,8 @@ class DisplayMultiplayer : public Display
     bool _refresh;
 
     bool _refreshing;
+    bool _internetPingProbe = false;
+    int _internetPingProbeFrames = 0;
 
     // Test-only (triSeedSessions): once set, UpdateServerList is a no-op so a
     // LAN/master refresh can't wipe the seeded rows.
@@ -500,8 +568,10 @@ class DisplayMultiplayer : public Display
     RString _joinTargetIp;
     int _joinTargetPort = 0;
     RString _joinServerMod;
+    std::vector<std::pair<std::string, int64_t>> _joinServerPackages;
     bool _joinServerEqualMod = false;
-    std::vector<DownloadTask> _joinTasks; // missing mods to fetch before the join (may be empty)
+    std::vector<DownloadTask> _joinTasks;
+    std::vector<Poseidon::StagedModInstall> _joinStagedInstalls;
 
   public:
     DisplayMultiplayer(ControlsContainer* parent);
@@ -520,6 +590,7 @@ class DisplayMultiplayer : public Display
     // Test-only (triSeedSessions): replace the browser list with count fake
     // sessions so the table's rows/sort can be characterized in the harness.
     void SeedTestSessions(int count);
+    int GetVisibleSessionPingForTest(int row) const;
 
   protected:
     // Join a server that requires mods: resolve the required set against the catalog,
@@ -533,6 +604,7 @@ class DisplayMultiplayer : public Display
     void UpdatePassword(RString password);
     void UpdateSessions();
     void UpdateServerList();
+    void UpdateInternetSessionPings();
     int GetPort();
     void SetPort(int port);
     void SetSource(BrowsingSource source);
@@ -561,17 +633,19 @@ class DisplayPassword : public Display
 
 // One-screen "join a modded server" approval: shows the server name, the mod diff
 // (already formatted by the caller from a ServerModResolution), and a password field.
-// Download & Join exits IDC_OK; the parent reads the password back and proceeds.
+// IDC_OK exits; the parent reads the password back and proceeds.
 class DisplayJoinRequirements : public Display
 {
   protected:
     RString _title;
     RString _diff;
     RString _password;
+    RString _okText;
 
   public:
-    DisplayJoinRequirements(ControlsContainer* parent, RString title, RString diff, RString password)
-        : Display(parent), _title(title), _diff(diff), _password(password)
+    DisplayJoinRequirements(ControlsContainer* parent, RString title, RString diff, RString password,
+                            RString okText = RString())
+        : Display(parent), _title(title), _diff(diff), _password(password), _okText(okText)
     {
         _enableSimulation = false;
         Load("RscDisplayJoinRequirements");
@@ -719,6 +793,8 @@ class DisplayMultiplayerSetup : public Display
 
     bool _init;
     bool _transferMission;
+    bool _transferOverlayVisible;
+    unsigned _transferOverlayShows;
     bool _loadIsland;
     bool _play;
 
@@ -747,6 +823,8 @@ class DisplayMultiplayerSetup : public Display
 
   public:
     DisplayMultiplayerSetup(ControlsContainer* parent);
+    RString GetMessageForTest() const { return _message; }
+    unsigned GetTransferOverlayShowsForTest() const { return _transferOverlayShows; }
     Control* OnCreateCtrl(int type, int idc, const ParamEntry& cls) override;
 
     void OnButtonClicked(int idc) override;
@@ -791,6 +869,7 @@ class DisplayClientGetReady : public DisplayGetReady
     DisplayClientGetReady(ControlsContainer* parent);
     void Destroy() override;
     void OnButtonClicked(int idc) override;
+    void OnDraw(EntityAI* vehicle, float alpha) override;
     void OnSimulate(EntityAI* vehicle) override;
 };
 
@@ -1054,6 +1133,9 @@ RString GetBaseDirectory();
 RString GetBaseSubdirectory();
 void SetBaseDirectory(RString dir);
 void SetMission(RString world, RString mission);
+
+std::vector<RString> GetSPMissionLookupDirs(const RString& subDir);
+AutoArray<RString> CollectArcadeWorldMissions(RString world);
 
 bool ProcessTemplateName(RString name);
 bool ProcessTemplateName(RString name, RString dir);

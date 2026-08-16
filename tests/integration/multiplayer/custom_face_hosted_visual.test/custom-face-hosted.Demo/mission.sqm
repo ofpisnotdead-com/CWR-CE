@@ -1,0 +1,42 @@
+version=11;
+class Mission
+{
+    randomSeed=20260802;
+    class Intel
+    {
+        briefingName="custom-face-hosted";
+        briefingDescription="custom-face-hosted";
+        startWeather=0;
+        forecastWeather=0;
+        year=1985;
+        month=8;
+        day=2;
+        hour=12;
+        minute=0;
+    };
+    class Groups
+    {
+        items=2;
+        class Item0
+        {
+            side="WEST";
+            class Vehicles
+            {
+                items=1;
+                class Item0 { position[]={6710.527832,82.907585,5408.891602}; id=0; side="WEST"; vehicle="SoldierWB"; player="PLAYER COMMANDER"; leader=1; skill=0.600000; init="this setUnitPos ""UP"""; };
+            };
+        };
+        class Item1
+        {
+            side="WEST";
+            class Vehicles
+            {
+                items=1;
+                class Item0 { position[]={6719.004883,82.311951,5419.918457}; id=1; side="WEST"; vehicle="SoldierWB"; player="PLAYER COMMANDER"; leader=1; skill=0.600000; init="this setUnitPos ""UP"""; };
+            };
+        };
+    };
+};
+class Intro { randomSeed=20260803; class Intel {}; };
+class OutroWin { randomSeed=20260804; class Intel {}; };
+class OutroLoose { randomSeed=20260805; class Intel {}; };

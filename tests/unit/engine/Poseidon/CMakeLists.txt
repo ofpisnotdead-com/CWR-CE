@@ -11,12 +11,14 @@ endif()
 
 set(POSEIDON_CORE_TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/Support/test_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/Asset/Addon/test_config_replace.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/Asset/Formats/Common/test_format_detector.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/UI/Locale/Stringtable/test_stringtable.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/UI/Locale/Stringtable/test_codepage_transcode.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/UI/Locale/Stringtable/test_stringtable_encoding.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/UI/Locale/Stringtable/test_stringtable_switch.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/UI/Locale/Stringtable/test_localized_date.cpp
+    ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/UI/Locale/test_mission_template_catalog.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/Foundation/Time/test_clock_timeofday.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/IO/PreprocC/test_preprocC.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/IO/Streams/test_findbank_x64.cpp
@@ -46,6 +48,8 @@ set(POSEIDON_CORE_TEST_SOURCES
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/Network/test_decode_robustness.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/Network/test_network_predicate_parity.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/Network/test_master_server_browser.cpp
+    ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/Network/test_net_transport_termination.cpp
+    ${CMAKE_SOURCE_DIR}/tests/unit/engine/Poseidon/Network/test_net_server_teardown.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Evaluator/test_evaluator_complex.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Evaluator/test_evaluator_data.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/engine/Evaluator/test_evaluator_edge.cpp
@@ -101,6 +105,8 @@ set(FIXTURES_ROOT ${CMAKE_SOURCE_DIR}/tests/fixtures)
 add_custom_command(TARGET PoseidonCoreTests POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:PoseidonCoreTests>/fixtures/pbo
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:PoseidonCoreTests>/fixtures/qstream
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:PoseidonCoreTests>/fixtures/config-replace
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${FIXTURES_ROOT}/config-replace $<TARGET_FILE_DIR:PoseidonCoreTests>/fixtures/config-replace
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${FIXTURES_ROOT}/config      $<TARGET_FILE_DIR:PoseidonCoreTests>/fixtures
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${FIXTURES_ROOT}/xml         $<TARGET_FILE_DIR:PoseidonCoreTests>/fixtures
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${FIXTURES_ROOT}/stringtable $<TARGET_FILE_DIR:PoseidonCoreTests>/fixtures
@@ -156,6 +162,7 @@ set(POSEIDON_TEST_SOURCES
     Graphics/test_ubo_restore_guards.cpp
     Graphics/test_shader_named_outputs.cpp
     Graphics/test_jpg_import.cpp
+    Graphics/test_custom_face_texture_cache.cpp
     Graphics/test_window_metrics.cpp
     Graphics/test_window_placement.cpp
 )
@@ -170,6 +177,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     # Core tests
     UI/Locale/test_supported_languages.cpp
     Core/test_engine_config.cpp
+    Core/test_application_exit.cpp
     Core/test_window_close.cpp
     Core/test_user_config.cpp
     Core/test_user_config_serialization.cpp
@@ -209,6 +217,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     # World/Model tests (new architecture)
     World/Model/test_shape_adapter_papauto.cpp
     World/Model/test_shape_adapter_odol_animation.cpp
+    World/Model/test_shape_adapter_proxy.cpp
 
 
     # P3D format tests
@@ -258,6 +267,7 @@ list(APPEND POSEIDON_TEST_SOURCES
 
     # World tests (batch-08)
     World/test_terrain.cpp
+    World/test_landscape_object_ids.cpp
     World/test_occlusion_contour.cpp
     World/test_occlusion_sphere_edge.cpp
     World/test_landscape_layout.cpp
@@ -286,6 +296,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     Audio/test_audio_cache_audit.cpp
     Audio/Voice/test_von_codec.cpp
     Audio/Voice/test_von_capture.cpp
+    Audio/Voice/test_von_openal_speaker.cpp
     Audio/Voice/test_von_net.cpp
     Audio/Voice/test_von_buffer.cpp
     Audio/Voice/test_von_app.cpp
@@ -461,14 +472,18 @@ list(APPEND POSEIDON_TEST_SOURCES
     UI/test_gamepad_page.cpp
     UI/test_gamepad_tuning_page.cpp
     UI/test_graphics_page.cpp
+    UI/test_html_body_text.cpp
     UI/test_html_text_wrap.cpp
     UI/test_kbm_page.cpp
     UI/test_meter_widget.cpp
     UI/Locale/test_mission_language_detector.cpp
     UI/test_mouse_page.cpp
+    UI/test_mp_version_message_localization.cpp
     UI/test_main_menu_layout.cpp
     UI/test_notebook_theme.cpp
     UI/test_optionsUI.cpp
+    UI/test_addon_content.cpp
+    UI/test_profile_squad_audit.cpp
     UI/test_press_button_page.cpp
     UI/test_press_key_page.cpp
     UI/test_ui_zbias_staircase.cpp
@@ -482,6 +497,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     World/test_world.cpp
     World/test_world_serialization.cpp
     World/test_segment_cache_lod.cpp
+    World/test_effect_shape_guards_audit.cpp
     World/test_sky_load_or_keep_audit.cpp
     World/test_gamestate_vars_roundtrip.cpp
 
@@ -548,6 +564,11 @@ if(WIN32)
         version     # Version info
         comctl32    # Common controls
         legacy_stdio_definitions.lib  # Legacy CRT functions (swprintf, etc.)
+    )
+elseif(APPLE)
+    target_link_libraries(PoseidonTests PRIVATE
+        PoseidonGL33 Poseidon PoseidonOpenAL
+        pthread dl
     )
 else()
     target_link_libraries(PoseidonTests PRIVATE

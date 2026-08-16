@@ -1,0 +1,11 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 30
+
+tags = ["network"]
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl"]
+name = "server"
+type = "server"
+use_mission = false

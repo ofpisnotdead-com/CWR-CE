@@ -114,6 +114,13 @@ struct MagicPacket
 
 } PACKED;
 
+struct RawMagicMessage
+{
+    int from = 0;
+    int magic = 0;
+    AutoArray<char> data;
+};
+
 // Enumeration request (will be sent through network).
 struct EnumPacket : public MagicPacket
 {
@@ -359,6 +366,7 @@ class NetClient : public NetTranspClient
 
     // Linked list of received messages (can be nullptr). Sorted by serial number.
     Ref<NetMessage> received;
+    AutoArray<RawMagicMessage> rawMagicReceived;
 
     // Inserts a new received message into 'received' sorted list..
     void insertReceived(NetMessage* msg);
@@ -386,6 +394,7 @@ class NetClient : public NetTranspClient
 
     // Linked list of sent messages (can be nullptr).
     Ref<NetMessage> sent;
+    unsigned32 rawMagicSerial;
 
     // Critical section for sent.
     PoCriticalSection sndCs;
@@ -416,6 +425,9 @@ class NetClient : public NetTranspClient
     VoNSystem _vonSystem;
     std::unordered_map<int, bool> _vonPlaying; // player → playing state
     std::unordered_map<uint32_t, std::unique_ptr<VoNSpeaker>> _vonSpeakers;
+    std::unordered_map<uint32_t, VoNChatChannel> _vonSpeakerChannels;
+    DWORD _lastVoicePumpTime = 0;
+    void PumpVoiceSpeakers();
 
   public:
     // Does virtually no initialization.
@@ -436,13 +448,16 @@ class NetClient : public NetTranspClient
     bool InitVoice() override;
     bool IsVoicePlaying(int player) override;
     bool IsVoiceRecording() override;
+    void GetVoiceSpeakers(AutoArray<NetVoiceSpeakerInfo, Poseidon::Foundation::MemAllocSA>& speakers) override;
     NetTranspSound3DBuffer* Create3DSoundBuffer(int player) override;
     void SetVoiceChannel(int channel) override;
     void SetVoiceTransmit(bool on) override;
     int SendVoiceTestTone(int frames, int amplitude) override;
+    int GetVoiceTransmitHealth() override;
 
     // Sends the given user (raw) message to server.
     bool SendMsg(BYTE* buffer, int bufferSize, DWORD& msgID, NetMsgFlags flags) override;
+    bool SendRawMagic(int magic, BYTE* buffer, int bufferSize) override;
 
     // Gets actual send-queue statistics.
     void GetSendQueueInfo(int& nMsg, int& nBytes, int& nMsgG, int& nBytesG) override;
@@ -471,6 +486,7 @@ class NetClient : public NetTranspClient
 
     // Processes received user messages.
     void ProcessUserMessages(UserMessageClientCallback* callback, void* context) override;
+    void ProcessRawMagicMessages(RawMagicClientCallback* callback, void* context) override;
 
     // Removes all received user messages.
     void RemoveUserMessages() override;
@@ -575,6 +591,7 @@ class NetServer : public NetTranspServer
 
     // Linked list of received messages (can be nullptr). Sorted by serial number.
     Ref<NetMessage> received;
+    AutoArray<RawMagicMessage> rawMagicReceived;
 
     // Inserts a new received message into 'received' sorted list..
     void insertReceived(NetMessage* msg);
@@ -593,6 +610,7 @@ class NetServer : public NetTranspServer
 
     // Linked list of sent messages (can be nullptr).
     Ref<NetMessage> sent;
+    unsigned32 rawMagicSerial;
 
     // Critical section for sent.
     PoCriticalSection sndCs;
@@ -680,6 +698,7 @@ class NetServer : public NetTranspServer
     RString GetSessionName() override { return sessionName; }
 
     bool SendMsg(int to, BYTE* buffer, int bufferSize, DWORD& msgID, NetMsgFlags flags) override;
+    bool SendRawMagic(int to, int magic, BYTE* buffer, int bufferSize) override;
 
     void CancelAllMessages() override;
 
@@ -687,11 +706,11 @@ class NetServer : public NetTranspServer
 
     bool GetConnectionInfo(int to, int& latencyMS, int& throughputBPS) override;
 
-    // Last received message's age in seconds (used to eliminate "disconnect cheat")
-    float GetLastMsgAgeReliable(int player) override;
-
     // Sets internal params for underlying NetChannel object.
     void SetNetworkParams(const ParamEntry& cfg) override;
+
+    // Last received message's age in seconds (used to eliminate "disconnect cheat")
+    float GetLastMsgAgeReliable(int player) override;
 
     void UpdateSessionDescription(int state, RString mission) override;
 
@@ -699,8 +718,10 @@ class NetServer : public NetTranspServer
 
     void KickOff(int player, NetTerminationReason reason) override;
     RString GetPlayerHostIP(int player) override;
+    bool GetPlayerHostIP(int player, char* buffer, int bufferSize) override;
 
     void ProcessUserMessages(UserMessageServerCallback* callback, void* context) override;
+    void ProcessRawMagicMessages(RawMagicServerCallback* callback, void* context) override;
 
     void RemoveUserMessages() override;
 

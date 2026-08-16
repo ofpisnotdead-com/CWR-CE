@@ -5,6 +5,8 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     autoconf-archive \
+    gettext \
+    autopoint \
     cargo \
     clang-format \
     libltdl-dev \

@@ -14,10 +14,12 @@
 #include <Poseidon/Core/ModId.hpp>
 #include <Poseidon/Core/ServerModResolve.hpp>
 
+using Poseidon::InstalledModPackage;
 using Poseidon::ModCatalog;
 using Poseidon::ModCatalogEntry;
 using Poseidon::ModDownload;
 using Poseidon::ModId;
+using Poseidon::MpJoinBlockReason;
 using Poseidon::ServerModList;
 using Poseidon::ServerModResolver;
 
@@ -208,4 +210,43 @@ TEST_CASE("ServerModResolver - empty server requirement -> nothing to do", "[mod
     const auto res2 = r.Resolve(ServerModList("", true), Catalog());
     REQUIRE(res2.ToDisable().size() == 1);
     REQUIRE(res2.ToDisable()[0] == ModId("csla"));
+}
+
+TEST_CASE("ServerModResolver - exact package revisions never downgrade", "[mods][resolve][revision]")
+{
+    ModCatalog catalog;
+    catalog.Add(
+        ModCatalogEntry(ModId("stable"), "Stable", "https://example.invalid/stable", 42, "@stable", 3, "abcd", "1.0"));
+
+    const std::vector<InstalledModPackage> oldInstall = {{ModId("stable"), 2}};
+    const ServerModResolver oldClient(oldInstall, Ids({"stable"}));
+    const auto update = oldClient.Resolve(ServerModList({{"stable", 3}}, false), catalog);
+    REQUIRE(update.ToDownload().size() == 1);
+    REQUIRE(update.ToDownload()[0].packageRevision == 3);
+
+    const std::vector<InstalledModPackage> latestInstall = {{ModId("stable"), 3}};
+    const ServerModResolver latestClient(latestInstall, Ids({"stable"}));
+    const auto oldServer = latestClient.Resolve(ServerModList({{"stable", 2}}, false), catalog);
+    REQUIRE_FALSE(oldServer.CanProceed());
+    REQUIRE(oldServer.ToDownload().empty());
+    REQUIRE(oldServer.BlockReason() == MpJoinBlockReason::ServerOutdated);
+
+    const auto alreadyOld = oldClient.Resolve(ServerModList({{"stable", 2}}, false), catalog);
+    REQUIRE_FALSE(alreadyOld.CanProceed());
+    REQUIRE(alreadyOld.BlockReason() == MpJoinBlockReason::ServerOutdated);
+
+    const auto futureServer = latestClient.Resolve(ServerModList({{"stable", 4}}, false), catalog);
+    REQUIRE_FALSE(futureServer.CanProceed());
+    REQUIRE(futureServer.BlockReason() == MpJoinBlockReason::RevisionUnavailable);
+
+    const ModCatalog unreachable;
+    const auto exactInstalled = latestClient.Resolve(ServerModList({{"stable", 3}}, false), unreachable);
+    REQUIRE(exactInstalled.CanProceed());
+    REQUIRE(exactInstalled.Satisfied().size() == 1);
+
+    ModCatalog reachableWithoutPackage;
+    reachableWithoutPackage.MarkReachable();
+    const auto unavailable = latestClient.Resolve(ServerModList({{"stable", 3}}, false), reachableWithoutPackage);
+    REQUIRE_FALSE(unavailable.CanProceed());
+    REQUIRE(unavailable.BlockReason() == MpJoinBlockReason::RevisionUnavailable);
 }

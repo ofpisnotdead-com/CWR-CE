@@ -16,6 +16,7 @@ clap = { version = "4", features = ["derive", "env"] }
 papa-bear-archive = { path = "../Archive" }
 papa-bear-client = { path = "../Client" }
 serde_json = "1"
+sha2 = "0.10"
 # native-tls so HTTPS honours the OS trust store (openssl on Linux, schannel on
 # Windows) — unlike rustls' bundled Mozilla roots, this trusts internal CAs that
 # are installed system-wide. -k/--insecure flips on danger_accept_invalid_certs.

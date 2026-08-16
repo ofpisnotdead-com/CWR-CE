@@ -1,0 +1,38 @@
+mission = "tests/integration/missions/jip_basic.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 120
+render = "dummy"
+
+tags = ["headful", "network"]
+
+# The server role asserts its own runtime ban count via triServerBanCount, a
+# direct positive observable of the #ban mechanism (0 -> 1 when the admin bans),
+# so the row can't pass vacuously the way a client-side roster/display check can.
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl", "--config", "${output}/server/user/server.cfg"]
+name = "server"
+type = "server"
+copy_files = [
+  { source = "server.cfg", target = "server.cfg" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "admin", "--log-format", "jsonl"]
+name = "admin"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:1"
+machine_id = "trident:admin_ban:admin"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "bannee", "--log-format", "jsonl"]
+name = "bannee"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:2"
+machine_id = "trident:admin_ban:bannee"

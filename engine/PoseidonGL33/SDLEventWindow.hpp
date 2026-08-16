@@ -46,7 +46,8 @@ class SDLEventWindow
         {
             if (_mouseGrab)
                 SDL_SetWindowRelativeMouseMode(_sdlWindow, true);
-            SDL_StartTextInput(_sdlWindow);
+            // Baseline off; ControlsContainer::SetFocus arms it per focused control.
+            SDL_StopTextInput(_sdlWindow);
         }
 
         extern void SetMouseAcquired(bool acquired);

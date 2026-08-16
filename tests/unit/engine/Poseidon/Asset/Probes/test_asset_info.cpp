@@ -220,13 +220,19 @@ TEST_CASE("InspectModel returns invalid for non-existent file", "[tools][model]"
 
 // Terrain Inspection
 
-TEST_CASE("InspectTerrain rejects synthetic placeholder WRP", "[tools][terrain]")
+TEST_CASE("InspectTerrain returns fixture terrain details", "[tools][terrain]")
 {
     const char* path = GET_FIXTURE("wrp/test_world.wrp");
     REQUIRE(path != nullptr);
 
     TerrainInfo info = InspectTerrain(path);
-    CHECK_FALSE(info.valid);
+    REQUIRE(info.valid);
+    CHECK(info.formatName == "RVW v4");
+    CHECK(info.gridX == 4);
+    CHECK(info.gridZ == 4);
+    CHECK(info.heightmapSize == 16);
+    CHECK(info.textureCount == 1);
+    CHECK(info.objectCount == 3);
 }
 
 TEST_CASE("InspectTerrain returns invalid for non-existent file", "[tools][terrain]")

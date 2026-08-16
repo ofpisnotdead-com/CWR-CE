@@ -7,9 +7,9 @@
 //   - PromptVerb()    : "key" / "button" / etc. — displayed in the title.
 //   - InterpretKey()  : turns an SDL keycode into either a packed
 //                       INPUT_DEVICE_*|code value (Result::Main) or a
-//                       reject (Result::Refused).  Modifier-only keys
-//                       (Ctrl/Shift/Alt) return Refused — they are
-//                       still polled but never bound on their own.
+//                       reject (Result::Refused).  A modifier-only key
+//                       captures standalone; a following key while it is
+//                       held upgrades to a combo via TryUpgradeToCombo.
 //   - Idcs            : the IDC range from the modal's resource bundle.
 //
 // Caller wiring: pushes the page with two callbacks:
@@ -85,9 +85,14 @@ class CapturePage : public OptionsPage
     // capture time (or -1 for none).
     virtual Result InterpretKey(unsigned nChar, int& outPackedCode, int& outModifier) const = 0;
 
+    // True when packedCode is a lone-captured modifier that can still absorb a
+    // following key into a combo. Keyboard-only; other devices keep the default.
+    virtual bool IsBareModifierCode(int /*packedCode*/) const { return false; }
+
     bool IsListening() const { return m_state == Listening; }
     bool TryCapture(OptionsShell& shell, int packedCode, int modifier);
     bool TryUpgradeToDoubleTap(OptionsShell& shell, int packedCode, int modifier);
+    bool TryUpgradeToCombo(OptionsShell& shell, int packedCode, int modifier);
 
   private:
     enum State

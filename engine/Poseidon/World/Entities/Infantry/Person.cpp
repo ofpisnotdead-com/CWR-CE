@@ -4,7 +4,9 @@
 #include <Poseidon/World/Entities/Infantry/Person.hpp>
 #include <Poseidon/World/World.hpp>
 #include <Poseidon/Network/Network.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <Poseidon/Game/UiActions.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 
 #include <Poseidon/Foundation/Enums/EnumNames.hpp>
 #include <Poseidon/Foundation/Containers/Array.hpp>
@@ -12,6 +14,8 @@
 
 namespace Poseidon
 {
+RString GetUserDirectory();
+
 using namespace Foundation;
 DEFINE_CASTING(Person)
 Person::Person(VehicleType* name, bool fullCreate) : base(name, fullCreate), _sensorRowID(-1), _remotePlayer(1)
@@ -26,6 +30,58 @@ Person::~Person() {}
 void Person::SetBrain(AIUnit* brain)
 {
     _brain = brain;
+}
+
+void Person::ApplyIdentity()
+{
+    if (_remotePlayer == AI_PLAYER)
+    {
+        _info._squadTitle = RString();
+        _info._squadPicture = nullptr;
+        SetFace(_info._face, _info._name);
+        SetGlasses(_info._glasses);
+        if (_brain)
+            _brain->SetSpeaker(_info._speaker, _info._pitch);
+        return;
+    }
+
+    const PlayerIdentity* identity = GetNetworkManager().FindIdentity(_remotePlayer);
+    if (!identity)
+        return;
+
+    _info._identityContext = RString();
+    _info._name = identity->name;
+    _info._face = identity->face;
+    _info._glasses = identity->glasses;
+    _info._speaker = identity->speaker;
+    _info._pitch = identity->pitch;
+    _info._squadTitle = RString();
+    _info._squadPicture = nullptr;
+    if (identity->squad)
+    {
+        _info._squadTitle = identity->squad->title;
+        if (identity->squad->picture.GetLength() > 0)
+        {
+            const RString picture =
+                FindNetworkSquadPicturePath(GetUserDirectory(), identity->squad->nick, identity->squad->picture,
+                                            [](const RString& path) { return FileExistsUtf8(path); });
+            if (picture.GetLength() > 0)
+                _info._squadPicture = GlobLoadTexture(picture);
+        }
+    }
+    SetFace(_info._face, PlayerIdentityKey{_info._name, identity->dpnid});
+    SetGlasses(_info._glasses);
+    if (_brain)
+        _brain->SetSpeaker(_info._speaker, _info._pitch);
+}
+
+void Person::SetRemotePlayer(int player)
+{
+    if (_remotePlayer == player)
+        return;
+
+    _remotePlayer = player;
+    ApplyIdentity();
 }
 
 LODShapeWithShadow* Person::GetOpticsModel(Person* person)
@@ -103,6 +159,11 @@ bool Person::QIsManual() const
 }
 
 void Person::SetFace(RString name, RString player) {}
+
+void Person::SetFace(RString name, const PlayerIdentityKey& player)
+{
+    SetFace(name, player.name);
+}
 
 float Person::GetLegPhase() const
 {
@@ -450,10 +511,16 @@ TMError Person::TransferMsg(NetworkMessageContext& ctx)
                 {
                     if (this == GWorld->GetRealPlayer())
                     {
-                        _remotePlayer = GetNetworkManager().GetPlayer();
+                        SetRemotePlayer(GetNetworkManager().GetPlayer());
                     }
+                    ITRANSF(remotePlayer)
                 }
-                ITRANSF(remotePlayer)
+                else
+                {
+                    int remotePlayer;
+                    TMCHECK(ctx.IdxTransfer(indices->remotePlayer, remotePlayer))
+                    SetRemotePlayer(remotePlayer);
+                }
             }
             break;
         default:

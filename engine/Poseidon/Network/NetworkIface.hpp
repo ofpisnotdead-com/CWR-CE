@@ -177,6 +177,8 @@ public:
 //	virtual void GetSessions(AutoArray<SessionInfo, MemAllocSA> &sessions) = 0;
 	// Retrieve list of sessions
 	virtual void GetSessions(AutoArray<SessionInfo> &sessions) = 0;
+	// Probe known remote hosts and refresh session metadata such as ping.
+	virtual bool ProbeRemoteHosts(AutoArray<RemoteHostAddress> &hosts, int port) = 0;
 	// Transfer IP address and port into DirectPlay URL address
 	virtual RString IPToGUID(RString ip, int port) = 0;
 	// Create multiplayer game (server + client)
@@ -269,6 +271,11 @@ public:
 	virtual NetworkGameState GetPlayerState(int dpid) = 0;
 	// Return name for given player
 	virtual RString GetPlayerName(int dpid) = 0;
+	// Return remote VoN speakers currently tracked by the local client.
+	virtual void GetVoiceSpeakers(AutoArray<NetVoiceSpeakerInfo, Poseidon::Foundation::MemAllocSA> &speakers) = 0;
+	// Local transmit pipeline health, Poseidon::VoNTransmitHealth as int
+	// (0 = Off / voice not initialized).
+	virtual int GetVoiceTransmitHealth() = 0;
 	// Return camera position for given player
 	virtual Vector3 GetCameraPosition(int dpid) = 0;
 	// Return object by id

@@ -492,6 +492,8 @@ void InputSubsystem::ComputeMovementState()
     GInput.keyboard.cheat2 = cheat2;
 #endif
 
+    GInput.keyboard.cheatEntryTrigger = GetAction(UACheatEntry, false) > 0.0f;
+
     moveLeft_ = 0;
     moveRight_ = 0;
     moveUp_ = 0;
@@ -610,6 +612,20 @@ bool InputSubsystem::GetActionToDo(UserAction action, bool reset, bool checkFocu
     if (idx < 0 || idx >= kNumContexts)
         return false;
     return QueryProfileActionToDo(GInput, profiles_[idx], action, actionDoneByContext_[idx][action], reset, checkFocus);
+}
+
+float InputSubsystem::GetMoveForward(InputContext ctx) const
+{
+    // Turbo held promotes MoveForward into fast-forward, so bare forward is zero.
+    return GetAction(ctx, UATurbo) > 0 ? 0.0f : GetAction(ctx, UAMoveForward);
+}
+
+float InputSubsystem::GetMoveFastForward(InputContext ctx) const
+{
+    float fast = GetAction(ctx, UAMoveFastForward);
+    if (GetAction(ctx, UATurbo) > 0)
+        fast += GetAction(ctx, UAMoveForward);
+    return fast;
 }
 
 bool InputSubsystem::IsKeyDown(SDL_Scancode sc) const
@@ -1030,6 +1046,10 @@ void InputSubsystem::LoadKeys()
         contextControls.LoadDefaults();
         contextControls.Save(contextControlsPath);
     }
+    else if (contextControls.migratedOnLoad)
+    {
+        contextControls.Save(contextControlsPath);
+    }
     profiles_ = contextControls.profiles;
 
     // GInput.userKeys is no longer a persistence source. Keep it empty so
@@ -1158,7 +1178,11 @@ void InputSubsystem::ResetCategoryDefaults(ControlsCategory cat)
         for (int j = 0; j < defaultKeys.Size(); j++)
         {
             if (!GamepadConfig::IsGamepadCode(defaultKeys[j]))
-                defaultBindings.push_back(InputBinding(InputCode::FromLegacy(defaultKeys[j])));
+            {
+                int mod = DefaultModifierForDefaultKey(static_cast<UserAction>(idx), defaultKeys[j]);
+                InputCode modCode = mod >= 0 ? InputCode::FromLegacy(mod) : InputCode{};
+                defaultBindings.push_back(InputBinding(InputCode::FromLegacy(defaultKeys[j]), modCode));
+            }
         }
 
         for (int c = 0; c < contexts.count; ++c)
@@ -1227,7 +1251,8 @@ UserActionDesc* InputSubsystem::GetUserActionDesc()
         UserActionDesc("PrevChannel", IDS_USRACT_PREV_CHANNEL, SDL_SCANCODE_COMMA, -1),
         UserActionDesc("NextChannel", IDS_USRACT_NEXT_CHANNEL, SDL_SCANCODE_PERIOD, -1),
         UserActionDesc("Chat", IDS_USRACT_CHAT, SDL_SCANCODE_SLASH, -1),
-        UserActionDesc("VoiceOverNet", IDS_USRACT_VOICE_OVER_NET, SDL_SCANCODE_CAPSLOCK, -1),
+        UserActionDesc("VoiceOverNet", IDS_USRACT_VOICE_OVER_NET, -1),
+        UserActionDesc("VoiceOverNetPushToTalk", IDS_USRACT_VOICE_OVER_NET_PUSH_TO_TALK, SDL_SCANCODE_CAPSLOCK, -1),
         UserActionDesc("NetworkStats", IDS_USRACT_NETWORK_STATS, SDL_SCANCODE_I, -1),
         UserActionDesc("NetworkPlayers", IDS_USRACT_NETWORK_PLAYERS, SDL_SCANCODE_P, -1),
         UserActionDesc("SelectAll", IDS_USRACT_SELECT_ALL, SDL_SCANCODE_GRAVE, -1),
@@ -1242,11 +1267,19 @@ UserActionDesc* InputSubsystem::GetUserActionDesc()
         UserActionDesc("AimDown", IDS_USRACT_AIM_DOWN, -1),
         UserActionDesc("AimLeft", IDS_USRACT_AIM_LEFT, -1),
         UserActionDesc("AimRight", IDS_USRACT_AIM_RIGHT, -1),
+        UserActionDesc("MapZoomIn", IDS_USRACT_MAP_ZOOM_IN, SDL_SCANCODE_KP_PLUS, -1),
+        UserActionDesc("MapZoomOut", IDS_USRACT_MAP_ZOOM_OUT, SDL_SCANCODE_KP_MINUS, -1),
+        UserActionDesc("CheatEntry", IDS_USRACT_CHEAT_ENTRY, SDL_SCANCODE_KP_MINUS, -1),
 #if _ENABLE_CHEATS
         UserActionDesc("Cheat1", IDS_USRACT_CHEAT_1, SDL_SCANCODE_RGUI, -1),
         UserActionDesc("Cheat2", IDS_USRACT_CHEAT_2, SDL_SCANCODE_RALT, -1),
 #endif
     };
+    // The table is indexed by UserAction, and per-action arrays (bindings, KeyList
+    // userKeys[UAN]) are sized by UAN. If a new action is added to the enum without
+    // a matching row here, indexing runs off the end. Keep them one-to-one.
+    static_assert(std::size(userActionDesc) == UAN,
+                  "UserActionDesc table must have exactly one entry per UserAction (UAN)");
     return userActionDesc;
 }
 

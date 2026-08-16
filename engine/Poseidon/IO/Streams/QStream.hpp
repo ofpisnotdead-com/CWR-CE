@@ -150,7 +150,9 @@ class QIStream
         }
         else
         {
-            _readFrom = static_cast<int>(nPos), _fail = false;
+            _readFrom = static_cast<int>(nPos);
+            _fail = false;
+            _eof = false;
         }
     }
     bool fail() const { return _fail; }

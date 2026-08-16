@@ -33,6 +33,9 @@ struct MouseState
     float sensitivityX = 1.0f;
     float sensitivityY = 1.0f;
 
+    // Reference aspect ratio (4:3) the cursor scales were tuned for
+    static constexpr float kBaseAspectRatio = 4.0f / 3.0f;
+
     // Config
     bool reverseY = false;
     bool buttonsReversed = false;
@@ -68,8 +71,14 @@ struct MouseState
     // Process buffered input into state. Writes cursor/aim to shared accumulator.
     // Returns true if mouse turn was active AND lookAround was enabled
     // (caller should mark keyboard turn active in that case — cross-device concern).
+    // cursorAspectRatio scales the 2D cursor (its coordinates are relative to
+    // the HUD region); aimAspectRatio scales the 3D aim (uses the full window).
+    // These aspect ratios differ only when the HUD width limit shrinks the UI on
+    // a wide screen.
     bool Update(CursorAccum& cursor, int gameFocusLost, bool lookAroundEnabled,
-                Foundation::UITime currentTime, const CursorClamp* clamp);
+                Foundation::UITime currentTime, const CursorClamp* clamp,
+                float cursorAspectRatio = kBaseAspectRatio,
+                float aimAspectRatio = kBaseAspectRatio);
 
     // Flush buffered input and reset per-frame deltas.
     void FlushAndReset();
@@ -101,7 +110,9 @@ struct MouseState
   private:
     static constexpr int kButtonBufferSize = 16;
     static constexpr int kDoubleClickWindowMs = 400;
-    static constexpr float kCursorScaleX = 1.0f / 200.0f;
+    // The original game assumes a 4:3 aspect ratio for mouse input, with default scales of X / 200 and Y / 150.
+    // To maintain roughly the same speed while adjusting for the actual aspect ratio, we keep the Y scale fixed
+    // and derive the X scale from it and the aspect ratios passed to Update() (see Update for the cursor/aim split).
     static constexpr float kCursorScaleY = 1.0f / 150.0f;
     static constexpr float kCursorLimitX = 0.6f;
     static constexpr float kCursorLimitY = 0.4f;

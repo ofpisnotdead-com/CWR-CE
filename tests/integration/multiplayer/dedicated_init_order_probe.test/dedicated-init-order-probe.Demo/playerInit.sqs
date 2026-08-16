@@ -1,0 +1,9 @@
+probePlayerInitDuplicate = format ["%1", probePlayerInitSeen] == "1"
+probePlayerInitSeen = 1
+
+@ (format ["%1", probeServerToken] == "7303")
+probeServerTokenSeen = probeServerToken
+player setPos [6600,6400,0]
+probeInitAction = player addAction ["MP initialized", "probeAction.sqs"]
+probePlayerInitComplete = 1
+exit

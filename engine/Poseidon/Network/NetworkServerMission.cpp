@@ -169,6 +169,22 @@ using Poseidon::Foundation::Time;
 const float LogErrorLimit = 1.0f;
 extern const char* GameStateNames[];
 
+// Add an MPMissions root plus its immediate subfolders, so a mod grouping missions one level down
+// (MPMissions/<Category>/<mission>.pbo) is found by name. Root added even when absent, as before.
+static void AppendMissionDirWithSubfolders(std::vector<std::string>& dirs, const std::filesystem::path& base)
+{
+    dirs.push_back(base.string());
+    std::error_code ec;
+    for (std::filesystem::directory_iterator it(base, ec), end; !ec && it != end; it.increment(ec))
+    {
+        std::error_code dec;
+        if (it->is_directory(dec))
+        {
+            dirs.push_back(it->path().string());
+        }
+    }
+}
+
 std::vector<std::string> Poseidon::GetMPMissionLookupDirectories()
 {
     std::vector<std::string> dirs;
@@ -185,20 +201,21 @@ std::vector<std::string> Poseidon::GetMPMissionLookupDirectories()
                 return false;
             }
             auto* active = static_cast<ActiveModMissionDirs*>(context);
-            active->dirs->push_back((std::filesystem::path((const char*)dir) / GameDirs::MPMissions).string());
-            active->dirs->push_back((std::filesystem::path((const char*)dir) / "mpmissions").string());
+            AppendMissionDirWithSubfolders(*active->dirs,
+                                           std::filesystem::path((const char*)dir) / GameDirs::MPMissions);
+            AppendMissionDirWithSubfolders(*active->dirs, std::filesystem::path((const char*)dir) / "mpmissions");
             return false;
         },
         &ctx);
 
-    dirs.emplace_back((const char*)GetMPMissionsDir());
+    AppendMissionDirWithSubfolders(dirs, std::filesystem::path((const char*)GetMPMissionsDir()));
 
     if (!AppConfig::Instance().IsSimulateMode())
     {
         const std::string userDir = GamePaths::Instance().MPMissionsDir();
         if (!userDir.empty() && std::find(dirs.begin(), dirs.end(), userDir) == dirs.end())
         {
-            dirs.emplace_back(userDir);
+            AppendMissionDirWithSubfolders(dirs, std::filesystem::path(userDir));
         }
     }
     return dirs;
@@ -695,6 +712,7 @@ void NetworkServer::ChangeOwner(NetworkId& id, int from, int to)
         return;
     }
     oInfo->owner = to;
+    LOG_DEBUG(Network, "ChangeOwner: object {}:{} from={} to={}", id.creator, id.id, from, to);
 
     NetworkPlayerInfo* pInfo = GetPlayerInfo(to);
     if (pInfo)
@@ -869,11 +887,6 @@ void NetworkServer::SendMissionInfo(int to, bool onlyPlayers)
     if (!onlyPlayers)
     {
         SendMsg(to, &_missionHeader, NMFGuaranteed);
-
-        MissionParamsMessage msg;
-        msg._param1 = _param1;
-        msg._param2 = _param2;
-        SendMsg(to, &msg, NMFGuaranteed);
     }
 
     for (int i = 0; i < _playerRoles.Size(); i++)
@@ -902,6 +915,14 @@ void NetworkServer::SendMissionInfo(int to, bool onlyPlayers)
 
         // send message
         NetworkComponent::SendMsg(to, msg, type, NMFGuaranteed);
+    }
+
+    if (!onlyPlayers)
+    {
+        MissionParamsMessage msg;
+        msg._param1 = _param1;
+        msg._param2 = _param2;
+        SendMsg(to, &msg, NMFGuaranteed);
     }
 }
 
@@ -1215,6 +1236,26 @@ void NetworkServer::SetGameState(NetworkGameState state)
     if (state == NGSPlay)
     {
         _missionHeader.start = GlobalTickCount();
+
+        // A player whose connect handshake spanned the lobby/transfer/briefing phases
+        // was created with jip=false (the flag is only computed at creation, against
+        // the state at that moment). Once the mission is running, any roleless human
+        // is effectively a join-in-progress client: without the flag every role
+        // request is rejected and the client is stuck roleless until mission end.
+        if (_missionHeader.joinInProgress)
+        {
+            for (int i = 0; i < _players.Size(); i++)
+            {
+                NetworkPlayerInfo& p = _players[i];
+                if (p.jip || p.dpid == _botClient || FindPlayerRole(p.dpid) != nullptr)
+                {
+                    continue;
+                }
+                p.jip = true;
+                p.state = NGSCreate;
+                LOG_INFO(Network, "Player {} reclassified as JIP at mission start", (const char*)p.name);
+            }
+        }
     }
 
     if (_state == NGSPlay && state == NGSDebriefing)
@@ -1300,6 +1341,15 @@ void NetworkServer::SetGameState(NetworkGameState state)
     {
         NetworkPlayerInfo& info = _players[i];
         if (info.state < NGSCreate)
+        {
+            continue;
+        }
+        // Roleless peers stay in role selection until delayed-role catch-up starts
+        // their transfer. JIP peers then cross load and briefing through that same
+        // per-player choreography before global progression is safe again.
+        const bool missionParticipant = FindPlayerRole(info.dpid) != nullptr || IsDedicatedBotClient(info.dpid);
+        if (!Poseidon::ShouldBroadcastNetworkMissionState(state, info.jip, info.state, missionParticipant,
+                                                          NGSTransferMission, NGSLoadIsland, NGSBriefing, NGSPlay))
         {
             continue;
         }
@@ -1532,9 +1582,9 @@ void NetworkServer::Ban(int dpnid)
     // Capture the IP before KickOff tears the channel down.
     if ((_banMode == Poseidon::BanMode::Ip || _banMode == Poseidon::BanMode::Both) && _server)
     {
-        const RString ipStr = _server->GetPlayerHostIP(dpnid);
+        char ipStr[24] = {};
         uint32_t ip = 0;
-        if (ipStr.GetLength() > 0 && Poseidon::ParseIPv4(static_cast<const char*>(ipStr), ip))
+        if (_server->GetPlayerHostIP(dpnid, ipStr, sizeof(ipStr)) && Poseidon::ParseIPv4(ipStr, ip))
         {
             _banListIPLocal.AddUnique(ip);
             Poseidon::SaveIpBanList(Poseidon::GetUserDirectory() + RString("ipban.txt"), _banListIPLocal);
@@ -2412,15 +2462,38 @@ int NetworkServer::AddPersonUnitPair(NetworkId& person, NetworkId& unit)
 
 void NetworkServer::SendMissionFile()
 {
+    SendMissionFileTo(NO_PLAYER);
+}
+
+static int GetTestMissionTransferSegmentDelayMs()
+{
+    const char* value = getenv("POSEIDON_TEST_MISSION_TRANSFER_SEGMENT_DELAY_MS");
+    if (value == nullptr || value[0] == 0)
+    {
+        return 0;
+    }
+    int delayMs = atoi(value);
+    saturate(delayMs, 0, 5000);
+    return delayMs;
+}
+
+void NetworkServer::SendMissionFileTo(int player)
+{
+    const NetworkGameState minimumTransferState =
+        Poseidon::GetNetworkMissionFileSendMinimumState(player, NO_PLAYER, NGSCreate, NGSTransferMission);
     bool found = false;
     for (int i = 0; i < _players.Size(); i++)
     {
         NetworkPlayerInfo& info = _players[i];
+        if (player != NO_PLAYER && info.dpid != player)
+        {
+            continue;
+        }
         if (info.dpid == _botClient)
         {
             continue;
         }
-        if (info.state < NGSCreate)
+        if (info.state < minimumTransferState)
         {
             continue;
         }
@@ -2449,17 +2522,41 @@ void NetworkServer::SendMissionFile()
     }
 
     AutoArray<int, MemAllocSA> recipients;
-    Poseidon::CollectNetworkMissionFileRecipients(
-        _players.Size(), [this](int index) -> const NetworkPlayerInfo& { return _players[index]; }, _botClient,
-        NGSCreate, [&recipients](int dpid) { recipients.Add(dpid); });
+    if (player != NO_PLAYER)
+    {
+        recipients.Add(player);
+    }
+    else
+    {
+        Poseidon::CollectNetworkMissionFileRecipients(
+            _players.Size(), [this](int index) -> const NetworkPlayerInfo& { return _players[index]; }, _botClient,
+            minimumTransferState, [&recipients](int dpid) { recipients.Add(dpid); });
+    }
+    if (recipients.Size() <= 0)
+    {
+        return;
+    }
+
+    const int testSegmentDelayMs = GetTestMissionTransferSegmentDelayMs();
+    if (testSegmentDelayMs > 0)
+    {
+        SendMessages();
+    }
 
     const auto result = Poseidon::SendCurrentNetworkMissionFile<TransferMissionFileMessage>(
         _missionHeader.fileName, source.data, source.totalSize, recipients.Size(),
         [&recipients](int index) { return recipients[index]; }, _botClient,
-        [this](int dpid, TransferMissionFileMessage& msg) { SendMsg(dpid, &msg, NMFGuaranteed); }, _players.Size(),
-        [this](int index) -> NetworkPlayerInfo& { return _players[index]; }, NGSCreate);
-    LOG_DEBUG(Network, "[SendMissionFile] sent {} segments to {} player recipients, marked {}", result.segmentCount,
-              result.sentCount, result.markedCount);
+        [this, testSegmentDelayMs](int dpid, TransferMissionFileMessage& msg)
+        {
+            if (testSegmentDelayMs > 0)
+            {
+                Sleep(testSegmentDelayMs);
+            }
+            SendMsg(dpid, &msg, Poseidon::NetworkMissionTransferSendFlags);
+        },
+        _players.Size(), [this](int index) -> NetworkPlayerInfo& { return _players[index]; }, minimumTransferState);
+    LOG_INFO(Network, "[SendMissionFile] queued {} guaranteed segments for {} player(s)", result.segmentCount,
+             recipients.Size());
 }
 
 namespace Poseidon

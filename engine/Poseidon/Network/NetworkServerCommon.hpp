@@ -93,6 +93,8 @@ void LoadBanList(RString filename, FindArray<__int64>& list);
 void SaveBanList(RString filename, const FindArray<__int64>& list);
 // Dynamic (runtime) ban-entry count on the local server, or -1 if not a server.
 int GetServerBanCount();
+// First runtime id-ban entry as a decimal string on the local server, or "" if none / not a server.
+RString GetServerFirstBanId();
 // Whether the local server session is locked (rejecting new connections).
 bool GetServerLocked();
 void AddMissionList(NetworkCommandMessage& answer);

@@ -52,13 +52,17 @@ TEST_CASE("PreviewTexture returns invalid for bad file", "[tools-preview][textur
 
 // Terrain Preview
 
-TEST_CASE("PreviewTerrain rejects synthetic placeholder WRP", "[tools-preview][terrain]")
+TEST_CASE("PreviewTerrain renders fixture heightmap", "[tools-preview][terrain]")
 {
     const char* path = GET_FIXTURE("wrp/test_world.wrp");
     REQUIRE(path != nullptr);
 
     auto preview = PreviewTerrain(path);
-    CHECK_FALSE(preview.valid());
+    REQUIRE(preview.valid());
+    CHECK(preview.width == 4);
+    CHECK(preview.height == 4);
+    CHECK(preview.channels == 4);
+    CHECK(preview.data.size() == 64);
 }
 
 TEST_CASE("PreviewTerrain returns invalid for bad file", "[tools-preview][terrain]")

@@ -1,0 +1,5 @@
+# @triintro (tests/fixtures/mods-intro) ships a one-soldier Anims/ intro for the menu world.
+# Game CWD under tri is the data dir, so ../../tests/fixtures/mods-intro resolves to the repo fixture.
+extra_args = ["--mods-dir", "../../tests/fixtures/mods-intro", "--mod", "@triintro"]
+timeout = 120
+tags = ["headful"]

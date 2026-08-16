@@ -10,6 +10,7 @@
 #include <Poseidon/Foundation/Logging/Logging.hpp>
 #include <Poseidon/Core/Config/Config.hpp>
 #include <Poseidon/Network/NetworkImpl.hpp>
+#include <Poseidon/Network/NetworkMissionTransfer.hpp>
 #include <Poseidon/Core/Global.hpp>
 // #include "strIncl.hpp"
 #include <Poseidon/UI/Locale/StringtableExt.hpp>
@@ -704,7 +705,19 @@ void NetworkServer::SimulateDS()
                 SendMissionFile();
 
                 LOG_INFO(Network, "Roles assigned");
-
+            }
+            break;
+            case NGSTransferMission:
+            {
+                int tracked = 0;
+                if (!Poseidon::AreTrackedNetworkMissionFilesValid(
+                        _players.Size(), [this](int index) -> const NetworkPlayerInfo& { return _players[index]; },
+                        _botClient, NGSTransferMission, [this](int dpid) { return FindPlayerRole(dpid) != nullptr; },
+                        tracked))
+                {
+                    break;
+                }
+                LOG_INFO(Network, "Mission file transfer complete for {} player(s)", tracked);
                 SetGameState(NGSLoadIsland);
                 loadIsland = true;
             }

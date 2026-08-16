@@ -193,7 +193,7 @@ TEST_CASE("ProfileService never persists the server profile as last-used", "[pro
 
 TEST_CASE("ProfileService self-heals a persisted server profile name", "[profile]")
 {
-    // A legacy prefs value points last-used at the server profile (the bug being guarded).
+    // The persisted value points at the reserved server profile.
     TempDirGuard tmp;
     REQUIRE(ProfileManager::CreateProfile(tmp.path, "Alice"));
     fs::create_directories(fs::path(tmp.path) / "Users" / ProfileManager::kServerProfileName);

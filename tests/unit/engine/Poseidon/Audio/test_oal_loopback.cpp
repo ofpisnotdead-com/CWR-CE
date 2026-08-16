@@ -197,6 +197,79 @@ TEST_CASE("OpenAL streamed speech primes audio on first commit", "[Audio][integr
     delete sys;
 }
 
+TEST_CASE("OpenAL focus mute keeps background playback active", "[Audio][focus][integration]")
+{
+    auto* sys = dynamic_cast<SoundSystemOAL*>(CreateSoundSystemOAL());
+    if (!sys)
+    {
+        SKIP("default OpenAL output device unavailable");
+    }
+
+    const std::string wav = GET_FIXTURE("audio/tone.wav");
+    auto* wave = static_cast<WaveOAL*>(sys->CreateWave(wav.c_str(), false, true));
+    if (!wave)
+    {
+        delete sys;
+        SKIP("cannot create wave from fixture WAV");
+    }
+
+    wave->Play();
+    sys->Commit();
+    REQUIRE(wave->State() == WaveState::Playing);
+
+    sys->SetWaveVolume(5.f);
+    sys->SetSpeechVolume(5.f);
+    sys->SetCDVolume(5.f);
+    float focusedGain = sys->ListenerGainForTest();
+    REQUIRE(focusedGain > 0.f);
+
+    sys->Activate(false);
+    float backgroundGain = sys->ListenerGainForTest();
+    CHECK(backgroundGain == Approx(0.f));
+    CHECK(wave->State() == WaveState::Playing);
+
+    auto* backgroundWave = static_cast<WaveOAL*>(sys->CreateWave(wav.c_str(), false, true));
+    REQUIRE(backgroundWave);
+    backgroundWave->Play();
+    REQUIRE(backgroundWave->State() == WaveState::WaitingDeferred);
+    sys->Commit();
+    CHECK(backgroundWave->State() == WaveState::Playing);
+
+    sys->Activate(true);
+    float restoredGain = sys->ListenerGainForTest();
+    CHECK(restoredGain == Approx(focusedGain));
+
+    backgroundWave->Release();
+    wave->Release();
+    delete sys;
+}
+
+TEST_CASE("OpenAL background suspension follows simulation state", "[Audio][focus][integration]")
+{
+    auto* sys = dynamic_cast<SoundSystemOAL*>(CreateSoundSystemOAL());
+    if (!sys)
+    {
+        SKIP("default OpenAL output device unavailable");
+    }
+
+    CHECK_FALSE(sys->ContextSuspendedForTest());
+
+    sys->Activate(false);
+    CHECK_FALSE(sys->ContextSuspendedForTest());
+
+    sys->SetSimulationRunning(false);
+    CHECK(sys->ContextSuspendedForTest());
+
+    sys->SetSimulationRunning(true);
+    CHECK_FALSE(sys->ContextSuspendedForTest());
+
+    sys->Activate(true);
+    sys->SetSimulationRunning(false);
+    CHECK_FALSE(sys->ContextSuspendedForTest());
+
+    delete sys;
+}
+
 TEST_CASE("OpenAL loopback: play WAV fixture produces signal", "[Audio][integration]")
 {
     LoopbackDevice dev;

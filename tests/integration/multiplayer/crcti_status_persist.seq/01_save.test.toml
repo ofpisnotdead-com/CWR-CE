@@ -1,0 +1,5 @@
+binary = "PoseidonGame"
+mission = "tests/integration/multiplayer/crcti_status_persist.seq/loadout.Demo"
+data_dir = "packages/Demo"
+timeout = 120
+assert_timeout = 30

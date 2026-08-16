@@ -35,6 +35,29 @@ namespace Model
 namespace ShapeAdapter
 {
 
+ProxyModelName normalizeProxyModelName(const std::string& selectionName)
+{
+    constexpr const char* proxyPrefix = "proxy:";
+    constexpr size_t proxyPrefixLen = 6;
+
+    std::string modelName = selectionName;
+    if (modelName.rfind(proxyPrefix, 0) == 0)
+    {
+        modelName.erase(0, proxyPrefixLen);
+    }
+
+    int id = -1;
+    size_t dot = modelName.find('.');
+    if (dot != std::string::npos)
+    {
+        std::string idText = modelName.substr(dot + 1);
+        modelName.erase(dot);
+        id = atoi(idText.c_str());
+    }
+
+    return {modelName, id};
+}
+
 static int convertFaceFlagsToSpecial(FaceFlags flags)
 {
     int spec = 0;
@@ -615,7 +638,8 @@ LODShapeWithShadow* convertToLODShape(const Poseidon::Model::Model& model, bool 
                 for (size_t pi = 0; pi < lodLevel.mesh.proxies.size(); pi++)
                 {
                     const auto& proxy = lodLevel.mesh.proxies[pi];
-                    RString modelName(proxy.name.c_str());
+                    ProxyModelName proxyName = normalizeProxyModelName(proxy.name);
+                    RString modelName(proxyName.modelName.c_str());
 
                     Ref<ProxyObject> po = new ProxyObject;
                     if (GReplaceProxies)
@@ -631,8 +655,8 @@ LODShapeWithShadow* convertToLODShape(const Poseidon::Model::Model& model, bool 
                     if (!po->obj)
                         continue;
 
-                    po->name = proxy.name.c_str();
-                    po->id = proxy.id;
+                    po->name = modelName;
+                    po->id = proxy.id >= 0 ? proxy.id : proxyName.id;
                     po->selection = static_cast<int>(proxy.selectionIndex);
 
                     const auto& m = proxy.transform.m;

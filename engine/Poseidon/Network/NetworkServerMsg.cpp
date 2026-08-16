@@ -222,22 +222,17 @@ void NetworkServer::OnSendComplete(DWORD msgID, bool ok)
 
 void NetworkServer::OnCreatePlayer(int player, bool botClient, const char* name)
 {
-    if (_state >= NGSTransferMission && !_missionHeader.joinInProgress)
+    if (_sessionLocked)
     {
-        // Game is loading or in progress and JIP is not enabled — reject late joiners
-        LOG_INFO(Network, "Rejecting player {} — game in progress without JIP (state={})", name, (int)_state);
-        _server->KickOff(player, NTRKicked);
-        return;
-    }
-    if (_sessionLocked && !_missionHeader.joinInProgress)
-    {
-        // session is locked and JIP is not enabled
         _server->KickOff(player, NTRKicked);
         return;
     }
 
-    // Check if player is joining mid-game (JIP)
-    bool isJip = _state >= NGSPlay && _missionHeader.joinInProgress;
+    // Check if player is joining mid-game (JIP). Transfer/load/briefing count as
+    // mid-game: the lobby role broadcast is over, so a player created here only
+    // receives the mission and role data through the JIP bootstrap — without it the
+    // client waits forever in the setup screen with an empty role list.
+    bool isJip = _state >= NGSTransferMission && _missionHeader.joinInProgress;
 
     if (botClient)
     {
@@ -251,6 +246,7 @@ void NetworkServer::OnCreatePlayer(int player, bool botClient, const char* name)
     }
 
     NetworkPlayerInfo* pInfo = OnPlayerCreate(player, name);
+    pInfo->waitingForMission = _state >= NGSTransferMission && !_missionHeader.joinInProgress;
 
     if (isJip)
     {
@@ -624,8 +620,6 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
         SendMsg(identity.dpnid, squad, NMFGuaranteed);
     }
 
-    bool hasCustomFace = stricmp(identity.face, "custom") == 0;
-
     for (int i = 0; i < _identities.Size(); i++)
     {
         PlayerIdentity& player = _identities[i];
@@ -634,19 +628,13 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
             // send all faces and sounds to new player
             //						if (notBotClient)
             {
-                if (stricmp(player.face, "custom") == 0)
-                {
-                    TransferFace(identity.dpnid, player.dpnid);
-                }
+                TransferFace(identity.dpnid, player.dpnid);
                 TransferCustomRadio(identity.dpnid, player.dpnid);
             }
             // send new face and sound to all players
             //						if (!client || client->GetPlayer() != player.dpnid)
             {
-                if (hasCustomFace)
-                {
-                    TransferFace(player.dpnid, identity.dpnid);
-                }
+                TransferFace(player.dpnid, identity.dpnid);
                 TransferCustomRadio(player.dpnid, identity.dpnid);
             }
             // send all identities to new player
@@ -691,11 +679,8 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
             info->state = NGSPrepareSide;
             info->missionFileValid = false;
         }
-        // Send state to client. Cap at NGSPrepareRole for clients joining
-        // during loading/play — sending NGSPlay would skip role selection UI
-        // and the client would never detect occupied slots.
         NetworkGameState stateToSend = _state;
-        if (stateToSend > NGSPrepareRole)
+        if (!info->waitingForMission && stateToSend > NGSPrepareRole)
         {
             stateToSend = NGSPrepareRole;
         }
@@ -753,18 +738,8 @@ void NetworkServer::CreateIdentity(PlayerIdentity& ident, Ref<SquadIdentity> squ
         // temporary: enable 1.47 server checking config of 146 client
         if (ver != MP_VERSION_ACTUAL && (ver != 146 || MP_VERSION_ACTUAL < 147 || MP_VERSION_ACTUAL > 149))
         {
-            // never check
+            _server->KickOff(info->dpid, NTRVersion);
             info->integrityCheckNext = UINT_MAX;
-            char buf[256];
-            if (ver)
-            {
-                snprintf(buf, sizeof(buf), "%d.%02d", ver / 100, ver % 100);
-            }
-            else
-            {
-                snprintf(buf, sizeof(buf), "%s", (const char*)"1.40..1.42");
-            }
-            OnIntegrityCheckFailed(info->dpid, IQTConfig, buf, true);
         }
         else
         {

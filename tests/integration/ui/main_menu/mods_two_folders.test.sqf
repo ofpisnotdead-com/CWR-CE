@@ -19,19 +19,19 @@ _all = triModsVisibleCount
 if (_all != 2) exitWith { format ["FAIL:rows=%1 (want 1 local + 1 workshop)", _all] }
 triScreenshot "01_two_folders"
 
-// Source filter proves classification by location (no catalog involved).
-triClick 122                       // Source: All -> Workshop
-triAssertIncludes [(triVisibleTexts), "Source: Workshop"]
+// Tabs prove classification by location (no catalog involved).
+triClick 7003                      // Workshop
+triAssertIncludes [(triVisibleTexts), "Workshop (1)"]
 _ws = triModsVisibleCount
 if (_ws != 1) exitWith { format ["FAIL:workshop=%1 (want 1)", _ws] }
 
-triClick 122                       // -> Local
-triAssertIncludes [(triVisibleTexts), "Source: Local"]
+triClick 7004                      // Local
+triAssertIncludes [(triVisibleTexts), "Local (1)"]
 _lo = triModsVisibleCount
 if (_lo != 1) exitWith { format ["FAIL:local=%1 (want 1)", _lo] }
 
-triClick 122                       // -> back to All
-triAssertIncludes [(triVisibleTexts), "Source: All"]
+triClick 7002                      // back to Installed
+triAssertIncludes [(triVisibleTexts), "Installed (2)"]
 
 // Both are downloaded-on-disk, so ticking either mounts it (each from its own
 // root). Name-sorted rows: 0=Fixture Mod, 1=Workshop Fixture.

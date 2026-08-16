@@ -18,6 +18,8 @@
 #include <Poseidon/World/Entities/Infantry/MoveActions.hpp>
 #include <Poseidon/World/Entities/Infantry/ManActs.hpp>
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
 #include <Poseidon/Core/resincl.hpp>
 #include <ctype.h>
 #include <stdint.h>
@@ -1601,51 +1603,41 @@ void InGameUI::InitMenu()
     WireMovementCommandMenu(_menuMain);
 
     AUTO_STATIC_ARRAY(RString, sounds, 32);
-    _finddata_t info;
-    intptr_t h = _findfirst(Poseidon::GetUserDirectory() + RString("Sound/*.*"), &info);
-    if (h != -1)
+    const RString soundDir = Poseidon::GetUserDirectory() + RString("Sound/");
+    for (const Poseidon::DirectoryEntryUtf8& entry : Poseidon::ListDirectoryEntriesUtf8(soundDir))
     {
-        do
+        if (!entry.isDirectory)
         {
-            if ((info.attrib & _A_SUBDIR) == 0)
+            if (entry.size <= static_cast<unsigned>(MaxCustomSoundSize))
             {
-                // ignore sounds larger than 40 KB
-                if (info.size <= static_cast<unsigned>(MaxCustomSoundSize)) // info.size is unsigned (_fsize_t)
-                {
-                    sounds.Add(info.name);
-                }
+                sounds.Add(entry.name.c_str());
             }
-        } while (0 == _findnext(h, &info));
-        _findclose(h);
+        }
     }
     int n = sounds.Size();
     if (n > 0)
     {
         QSort(sounds.Data(), n, CmpStringI);
         saturateMin(n, 10);
-        MenuItem* item = _menuMain->Find(CMD_RADIO_CUSTOM, false);
-        PoseidonAssert(item);
+        MenuItem* item = _menuMain->Find(CMD_RADIO_CUSTOM, true);
+        if (!item || !item->_submenu)
+        {
+            LOG_WARN(UI, "InGameUI::InitMenu: RscMainMenu has no custom radio submenu — skipping custom sounds");
+            return;
+        }
         Menu* menuRadio = item->_submenu;
-        PoseidonAssert(menuRadio);
         _customRadio.Realloc(n);
         _customRadio.Resize(n);
         for (int i = 0; i < n; i++)
         {
             _customRadio[i] = sounds[i];
-            char buffer[256];
-            strncpy(buffer, sounds[i], 256);
-            buffer[255] = 0;
-            char* ext = strrchr(buffer, '.');
-            if (ext)
-            {
-                *ext = 0;
-            }
+            const RString menuText = Poseidon::BuildNetworkCustomRadioMenuText(sounds[i]);
             int key = SDL_SCANCODE_1 + i;
             int cmd = CMD_RADIO_CUSTOM_1 + i;
             char ch[2];
             ch[0] = i == 9 ? '0' : '1' + i;
             ch[1] = 0;
-            menuRadio->_items.Insert(i, new MenuItem(buffer, key, ch, (Menu*)nullptr, cmd));
+            menuRadio->_items.Insert(i, new MenuItem(menuText, key, ch, (Menu*)nullptr, cmd));
             menuRadio->NotifySubmenuCommandAdded(cmd);
         }
     }

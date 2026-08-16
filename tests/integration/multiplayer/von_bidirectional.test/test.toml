@@ -1,0 +1,40 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 75
+
+tags = ["headful", "network", "ci-host-blocked"]
+
+# Bidirectional VoN on a dedicated server: both clients speak once both are ready
+# and each must observe the other's tone. von_dedicated only covered one
+# direction; this pins that the relay carries voice both ways at once.
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl", "--config", "${output}/server/user/server.cfg"]
+name = "server"
+type = "server"
+use_mission = false
+copy_files = [
+  { source = "server.cfg", target = "server.cfg" },
+  { source = "jip_basic.Demo.pbo", target = "content/MPMissions/jip_basic.Demo.pbo" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "alice", "--log-format", "jsonl"]
+name = "alice"
+type = "client"
+use_mission = false
+connect = "server"
+after = "server"
+start_delay_ms = 4000
+mp_assign = "WEST:1"
+machine_id = "trident:von_bidirectional:alice"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "bob", "--log-format", "jsonl"]
+name = "bob"
+type = "client"
+use_mission = false
+connect = "server"
+after = "server"
+start_delay_ms = 4000
+mp_assign = "WEST:2"
+machine_id = "trident:von_bidirectional:bob"

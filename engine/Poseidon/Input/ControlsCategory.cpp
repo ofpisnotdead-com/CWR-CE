@@ -27,11 +27,15 @@ const UserAction kOnFoot[] = {
     // HUD
     UABinocular, UANightVision, UAN};
 
-const UserAction kVehicles[] = {UAMoveForward,  UAMoveBack,      UATurnLeft,         UATurnRight,   UATurbo,
-                                UAFire,         UALockTarget,    UALockTargets,      UAAction,      UAZoomIn,
-                                UAZoomOut,      UALookAround,    UALookAroundToggle, UALookCenter,  UALookLeft,
-                                UALookRight,    UALookUp,        UALookDown,         UALookLeftUp,  UALookRightUp,
-                                UALookLeftDown, UALookRightDown, UAHeadlights,       UANightVision, UAN};
+const UserAction kVehicles[] = {UAMoveForward,     UAMoveBack,     UAMoveFastForward,
+                                UAMoveSlowForward, UATurbo,        UATurnLeft,
+                                UATurnRight,       UAFire,         UALockTarget,
+                                UALockTargets,     UAAction,       UAZoomIn,
+                                UAZoomOut,         UALookAround,   UALookAroundToggle,
+                                UALookCenter,      UALookLeft,     UALookRight,
+                                UALookUp,          UALookDown,     UALookLeftUp,
+                                UALookRightUp,     UALookLeftDown, UALookRightDown,
+                                UAHeadlights,      UANightVision,  UAN};
 
 const UserAction kPilot[] = {
     UAMoveForward,      UAMoveBack,     UATurnLeft,      UATurnRight,   UAMoveLeft, UAMoveRight, UAMoveUp,
@@ -39,30 +43,23 @@ const UserAction kPilot[] = {
     UALookAroundToggle, UALookCenter,   UALookLeft,      UALookRight,   UALookUp,   UALookDown,  UALookLeftUp,
     UALookRightUp,      UALookLeftDown, UALookRightDown, UAHeadlights,  UAN};
 
-const UserAction kGunner[] = {
-    UAFire,       UAReloadMagazine,   UAToggleWeapons, UALockTarget,   UALockTargets,   UAOptics,
-    UAZoomIn,     UAZoomOut,          UAAimUp,         UAAimDown,      UAAimLeft,       UAAimRight,
-    UALookAround, UALookAroundToggle, UALookCenter,    UALookLeft,     UALookRight,     UALookUp,
-    UALookDown,   UALookLeftUp,       UALookRightUp,   UALookLeftDown, UALookRightDown, UAN};
+const UserAction kGunner[] = {UAFire,       UAReloadMagazine, UAToggleWeapons, UALockTarget,    UALockTargets,
+                              UAAction,     UAOptics,         UAZoomIn,        UAZoomOut,       UAAimUp,
+                              UAAimDown,    UAAimLeft,        UAAimRight,      UALookAround,    UALookAroundToggle,
+                              UALookCenter, UALookLeft,       UALookRight,     UALookUp,        UALookDown,
+                              UALookLeftUp, UALookRightUp,    UALookLeftDown,  UALookRightDown, UAN};
 
-const UserAction kCommon[] = {UAPrevAction,
-                              UANextAction,
-                              UAPersonView,
-                              UATacticalView,
-                              UAMap,
-                              UACompass,
-                              UAWatch,
-                              UAHelp,
-                              UATimeInc,
-                              UATimeDec,
-                              UASelectAll,
-                              UAChat,
-                              UAVoiceOverNet,
-                              UAPrevChannel,
-                              UANextChannel,
-                              UANetworkStats,
-                              UANetworkPlayers,
-                              UAN};
+const UserAction kCommon[] = {UAPrevAction,   UANextAction,
+                              UAPersonView,   UATacticalView,
+                              UAMap,          UACompass,
+                              UAWatch,        UAHelp,
+                              UATimeInc,      UATimeDec,
+                              UASelectAll,    UAChat,
+                              UAVoiceOverNet, UAVoiceOverNetPushToTalk,
+                              UAPrevChannel,  UANextChannel,
+                              UANetworkStats, UANetworkPlayers,
+                              UAMapZoomIn,    UAMapZoomOut,
+                              UACheatEntry,   UAN};
 
 const UserAction* const kCategoryTable[ControlsCategoryCount] = {
     kOnFoot, kVehicles, kPilot, kGunner, kCommon,
@@ -115,5 +112,34 @@ const char* GetControlsCategoryName(ControlsCategory cat)
         default:
             return "";
     }
+}
+
+bool IsActionVisibleOnKeyboard(UserAction action, ControlsCategory cat)
+{
+    // On-foot aim is the mouse on keyboard, so the four aim rows are hidden there.
+    if (cat == ControlsCategoryOnFoot &&
+        (action == UAAimUp || action == UAAimDown || action == UAAimLeft || action == UAAimRight))
+        return false;
+    return true;
+}
+
+bool IsActionVisibleOnGamepad(UserAction action, ControlsCategory cat)
+{
+    // Analog-stick group heads (movement / aim / freelook) are always shown.
+    const bool movementHead = cat == ControlsCategoryOnFoot && action == UAMoveForward;
+    const bool aimHead = (cat == ControlsCategoryOnFoot || cat == ControlsCategoryGunner) && action == UAAimRight;
+    const bool freelookHead = action == UALookAround;
+    if (movementHead || aimHead || freelookHead)
+        return true;
+    // Direction rows folded into a stick head are hidden on gamepad.
+    if (cat == ControlsCategoryOnFoot && (action == UAMoveBack || action == UAMoveLeft || action == UAMoveRight ||
+                                          action == UAAimUp || action == UAAimDown || action == UAAimLeft))
+        return false;
+    if (cat == ControlsCategoryGunner && (action == UAAimUp || action == UAAimDown || action == UAAimLeft))
+        return false;
+    if (action == UALookLeft || action == UALookRight || action == UALookUp || action == UALookDown ||
+        action == UALookLeftUp || action == UALookRightUp || action == UALookLeftDown || action == UALookRightDown)
+        return false;
+    return true;
 }
 } // namespace Poseidon

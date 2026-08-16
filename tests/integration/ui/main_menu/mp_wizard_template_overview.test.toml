@@ -1,0 +1,4 @@
+data_dir = "packages/Demo"
+timeout = 120
+assert_timeout = 30
+tags = ["headful", "ci-host-blocked"]

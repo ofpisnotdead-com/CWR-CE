@@ -1,10 +1,9 @@
 #include <Poseidon/UI/Settings/DisplayConfig.hpp>
 
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
+#include <Poseidon/UI/Settings/SettingsFile.hpp>
 
 #include <algorithm>
-#include <filesystem>
-#include <system_error>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 
 namespace Poseidon
@@ -119,12 +118,9 @@ bool DisplayConfig::Normalize(const Environment& env)
 
 bool DisplayConfig::Load(const std::string& path)
 {
-    std::error_code ec;
-    if (!std::filesystem::exists(path, ec))
-        return false;
-
     ParamFile cfg;
-    cfg.Parse(RString(path.c_str()));
+    if (!ReadSettingsFile(path, cfg))
+        return false;
 
     // Forward-compat: each field optional, missing keys keep current value.
     if (auto* e = cfg.FindEntry("monitor"))
@@ -172,11 +168,6 @@ bool DisplayConfig::Load(const std::string& path)
 
 bool DisplayConfig::Save(const std::string& path) const
 {
-    std::error_code ec;
-    std::filesystem::path p(path);
-    if (p.has_parent_path())
-        std::filesystem::create_directories(p.parent_path(), ec);
-
     ParamFile cfg;
     cfg.Add("monitor", monitor);
     cfg.Add("windowMode", static_cast<int>(windowMode));
@@ -186,8 +177,7 @@ bool DisplayConfig::Save(const std::string& path) const
     cfg.Add("displayStyle", static_cast<int>(displayStyle));
     cfg.Add("ultrawideClamp", static_cast<int>(ultrawideClamp));
 
-    cfg.Save(RString(path.c_str()));
-    return std::filesystem::exists(path, ec);
+    return WriteSettingsFile(path, cfg);
 }
 
 } // namespace Poseidon

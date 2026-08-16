@@ -15,7 +15,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <Poseidon/Graphics/Rendering/Draw/FontMapping.hpp>
+#include <Poseidon/Core/ModSystem.hpp>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <random>
+#include <string>
 
 using Poseidon::FindFontMapping;
 
@@ -120,4 +125,35 @@ TEST_CASE("FindFontMapping returns nullptr for unknown prefix", "[font][mapping]
 {
     CHECK(FindFontMapping("nonexistentfont") == nullptr);
     CHECK(FindFontMapping("") == nullptr);
+}
+
+TEST_CASE("A mod's Fonts/ TTF overrides the base font path", "[font][mapping][mod]")
+{
+    namespace fs = std::filesystem;
+    // A mod that ships Fonts\<name>.ttf wins over the base loose font.
+    std::random_device rd;
+    fs::path root = fs::temp_directory_path() / ("cwr_fontmod_" + std::to_string(rd()) + "_" + std::to_string(rd()));
+    fs::path modDir = root / "@fontmod";
+    fs::create_directories(modDir / "Fonts");
+    // A unique name that is never present in any base data, so a positive result
+    // can only come from the mod.
+    std::ofstream(modDir / "Fonts" / "cwr_test_probe.ttf") << "TTF-BYTES";
+
+    const char* mapped = "Fonts\\cwr_test_probe.ttf";
+
+    Poseidon::ModSystem::SetModPath("");
+    CHECK(Poseidon::ResolveMappedFontPath(mapped).empty());
+
+    Poseidon::ModSystem::SetModPath(modDir.string().c_str());
+    std::string resolved = Poseidon::ResolveMappedFontPath(mapped);
+    REQUIRE_FALSE(resolved.empty());
+    CHECK(fs::exists(resolved));
+    CHECK(resolved.find("@fontmod") != std::string::npos);
+
+    // A font the mod does not ship still falls through to the base (empty here).
+    CHECK(Poseidon::ResolveMappedFontPath("Fonts\\cwr_test_absent.ttf").empty());
+
+    Poseidon::ModSystem::SetModPath("");
+    std::error_code ec;
+    fs::remove_all(root, ec);
 }

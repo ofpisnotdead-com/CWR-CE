@@ -2,7 +2,56 @@
 #include <Poseidon/AI/ArcadeTemplate.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <string>
+
 using namespace Poseidon;
+
+namespace
+{
+std::string ReadTextFile(const std::filesystem::path& path)
+{
+    std::ifstream input(path);
+    REQUIRE(input);
+    return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+}
+
+std::filesystem::path SourcePath(const std::filesystem::path& path)
+{
+    return std::filesystem::path(TESTS_ROOT_DIR).parent_path() / path;
+}
+
+class TestAISubgroup : public AISubgroup
+{
+  public:
+    TestAISubgroup() { SetLocal(false); }
+
+    void SeedRemoteCommandStackWithPlaceholder(NetworkId queuedId, NetworkId currentId)
+    {
+        _stack.Resize(3);
+        _stack[0]._task = CreateCommand(queuedId);
+        _stack[0]._fsm = CreateFSM(Command::NoCommand);
+        _stack[2]._task = CreateCommand(currentId);
+        _stack[2]._fsm = CreateFSM(Command::NoCommand);
+    }
+
+    NetworkId CurrentCommandId() const { return GetCurrent()->_task->GetNetworkId(); }
+
+    void OnTaskDeleted(int, Command&) override {}
+
+  private:
+    static Command* CreateCommand(NetworkId id)
+    {
+        Command* command = new Command();
+        command->SetNetworkId(id);
+        command->SetLocal(false);
+        return command;
+    }
+};
+} // namespace
+
 TEST_CASE("arcadeTemplate compiles", "[ai]")
 {
     REQUIRE(sizeof(ArcadeTemplate) > 0);
@@ -32,4 +81,85 @@ TEST_CASE("ExperienceForDestroyedCost covers the top-bucket band (no zero gap)",
     REQUIRE(ExperienceForDestroyedCost(99999.0f) == 3.0f); // far above -> catch-all
 
     ExperienceDestroyTable = saved;
+}
+
+TEST_CASE("supply completion releases state before its synchronous transition", "[ai][supply]")
+{
+    const std::string source = ReadTextFile(SourcePath("engine/Poseidon/AI/AISubgroupFSMSupply.inc"));
+    const size_t finish = source.find("auto finish =");
+    REQUIRE(finish != std::string::npos);
+    const size_t clearPlan = source.find("subgrp->ClearPlan()", finish);
+    const size_t unallocate = source.find("transport->SetAllocSupply(nullptr)", finish);
+    const size_t report = source.find("ReportStatus(subgrp->Leader(), cmd->_message)", finish);
+    const size_t transition = source.find("context->_fsm->SetState(state, context)", finish);
+
+    REQUIRE(clearPlan != std::string::npos);
+    REQUIRE(unallocate != std::string::npos);
+    REQUIRE(report != std::string::npos);
+    REQUIRE(transition != std::string::npos);
+    CHECK(clearPlan < transition);
+    CHECK(unallocate < transition);
+    CHECK(report < transition);
+}
+
+TEST_CASE("remote command deletion resolves the subgroup task by network id", "[ai][network]")
+{
+    const std::string subgroup = ReadTextFile(SourcePath("engine/Poseidon/AI/AISubgroup.cpp"));
+    const size_t deletion = subgroup.find("void AISubgroup::DeleteCommand(NetworkId id)");
+    REQUIRE(deletion != std::string::npos);
+    CHECK(subgroup.find("task && task->GetNetworkId() == id", deletion) != std::string::npos);
+
+    const std::string client = ReadTextFile(SourcePath("engine/Poseidon/Network/NetworkClientOnMessage.cpp"));
+    const size_t message = client.find("case NMTDeleteCommand:");
+    REQUIRE(message != std::string::npos);
+    const size_t nextMessage = client.find("case NMTCreateObject:", message);
+    REQUIRE(nextMessage != std::string::npos);
+    const std::string deleteCommandCase = client.substr(message, nextMessage - message);
+    CHECK(deleteCommandCase.find("dc.subgrp->DeleteCommand(dc.object)") != std::string::npos);
+    CHECK(deleteCommandCase.find("dynamic_cast<Command*>") == std::string::npos);
+}
+
+TEST_CASE("attack estimation retains its commander", "[ai][attack]")
+{
+    const std::string source = ReadTextFile(SourcePath("engine/Poseidon/World/Detection/TargetFire.cpp"));
+    const size_t estimate = source.find("int EntityAI::EstimateAttack(");
+    REQUIRE(estimate != std::string::npos);
+    const size_t overload =
+        source.find("int EntityAI::EstimateAttack(const Vector3& hPos, float height) const", estimate);
+    REQUIRE(overload != std::string::npos);
+    const std::string function = source.substr(estimate, overload - estimate);
+
+    CHECK(function.find("Ref<AIUnit> unit = CommanderUnit();") != std::string::npos);
+}
+
+TEST_CASE("remote command deletion removes only the matched stack task", "[ai][network]")
+{
+    NetworkId queuedId(7, 11);
+    NetworkId currentId(7, 12);
+    TestAISubgroup subgroup;
+    subgroup.SeedRemoteCommandStackWithPlaceholder(queuedId, currentId);
+
+    SECTION("current command")
+    {
+        subgroup.DeleteCommand(currentId);
+
+        REQUIRE(subgroup.StackSize() == 1);
+        CHECK(subgroup.CurrentCommandId() == queuedId);
+    }
+
+    SECTION("queued command")
+    {
+        subgroup.DeleteCommand(queuedId);
+
+        REQUIRE(subgroup.StackSize() == 2);
+        CHECK(subgroup.CurrentCommandId() == currentId);
+    }
+
+    SECTION("unknown command")
+    {
+        subgroup.DeleteCommand(NetworkId(7, 13));
+
+        REQUIRE(subgroup.StackSize() == 3);
+        CHECK(subgroup.CurrentCommandId() == currentId);
+    }
 }

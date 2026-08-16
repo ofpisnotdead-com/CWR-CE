@@ -64,6 +64,11 @@ bool InitLanguageAndConfig()
     // Parse config files from all mod directories
     DoVerify(ModSystem::EnumDirectories(ParseConfig, nullptr));
 
+    // A config-replacing mod shadows the base config-extra (CfgLanguages); restore it, as the live
+    // ConfigurationSystem path does.
+    if (IsConfigOverriddenByMod())
+        MergeBaseConfigExtra();
+
     // Calculate max groups from config
     MaxGroups = (Pars >> "CfgWorlds" >> "GroupNameList" >> "letters").GetSize() *
                 (Pars >> "CfgWorlds" >> "GroupColorList" >> "colors").GetSize();

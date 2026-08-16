@@ -1,5 +1,8 @@
 #include <Poseidon/UI/Settings/Presentation.hpp>
 
+#include <optional>
+
+#include <Poseidon/Core/Profile/UserConfig.hpp>
 #include <Poseidon/Graphics/Core/Engine.hpp>
 
 namespace Poseidon
@@ -10,6 +13,12 @@ namespace
 {
 AspectRatio::DisplayStyle s_style = AspectRatio::Modern;
 AspectRatio::UltrawideClamp s_clamp = AspectRatio::Clamp21x9;
+struct UserFov
+{
+    float left;
+    float top;
+};
+std::optional<UserFov> s_userFov;
 } // namespace
 
 void SetPolicy(AspectRatio::DisplayStyle style, AspectRatio::UltrawideClamp clamp)
@@ -19,6 +28,8 @@ void SetPolicy(AspectRatio::DisplayStyle style, AspectRatio::UltrawideClamp clam
     AspectRatio::SetPillarboxBarsEnabled(style == AspectRatio::Modern);
 }
 
+namespace
+{
 AspectRatio::PolicyInput CurrentPolicy(int viewportWidth, int viewportHeight)
 {
     AspectRatio::PolicyInput input;
@@ -29,11 +40,36 @@ AspectRatio::PolicyInput CurrentPolicy(int viewportWidth, int viewportHeight)
     return input;
 }
 
+AspectRatio::Settings ResolveAutomatic(int viewportWidth, int viewportHeight)
+{
+    return AspectRatio::ResolvePolicy(CurrentPolicy(viewportWidth, viewportHeight)).settings;
+}
+} // namespace
+
+bool ConfigureUserFov(UserConfig& config, int viewportWidth, int viewportHeight)
+{
+    const AspectRatio::Settings automatic = ResolveAutomatic(viewportWidth, viewportHeight);
+    const bool migrated = config.MigrateFov(automatic.leftFOV, automatic.topFOV);
+    if (!config.HasCustomFov())
+    {
+        s_userFov.reset();
+        return migrated;
+    }
+    s_userFov = UserFov{config.fovLeft, config.fovTop};
+    return migrated;
+}
+
 AspectRatio::Settings Resolve(int viewportWidth, int viewportHeight)
 {
     if (AspectRatio::Live().overrideEnabled)
         return AspectRatio::ResolveLive(AspectRatio::Live(), viewportWidth, viewportHeight);
-    return AspectRatio::ResolvePolicy(CurrentPolicy(viewportWidth, viewportHeight)).settings;
+    AspectRatio::Settings settings = ResolveAutomatic(viewportWidth, viewportHeight);
+    if (s_userFov)
+    {
+        settings.leftFOV = s_userFov->left;
+        settings.topFOV = s_userFov->top;
+    }
+    return settings;
 }
 
 AspectRatio::Settings Apply(int viewportWidth, int viewportHeight)
