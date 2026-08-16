@@ -1363,6 +1363,89 @@ GameValue VehTarget(const GameState* state, GameValuePar oper1, GameValuePar ope
 
 DEFINE_COMMAND(Target)
 
+namespace
+{
+bool checkAndProcessSpecialAction(EntityAI *veh, UIAction& action, const GameArrayType& array)
+{
+    GameStringType type = array[0];
+    UIActionType actType = GetEnumValue<UIActionType>((const char*)type);
+    if (actType == INT_MIN)
+    {
+        actType = ATNone;
+    }
+    
+    if (actType == ATLoadMagazine)
+    {
+        if (array.Size() != 7)
+        {
+            return false;
+        }
+
+        // format: unit action ["LoadMagazine", target, magazineCreator, number1, number2, weaponName, muzzleName]
+
+        // in OFP magazineCreator, number1, number2 are not used, but they are present in the sequel Arma 3, so we keep them for compatibility
+
+        // https://community.bistudio.com/wiki/ArmA:_Armed_Assault:_Actions
+        // https://community.bistudio.com/wiki/Arma_3:_Actions
+
+        action.target = dyn_cast<EntityAI>(GetObject(array[1]));
+        EntityAI* object = action.target;
+        if (!object)
+        {
+            return false;
+        }
+
+        RString weaponName = array[5];
+        RString magName = array[6];
+
+        int iSlot = -1;
+        for (int i = 0; i < object->NMagazineSlots(); i++)
+        {
+            const MagazineSlot &slot = object->GetMagazineSlot(i);
+            if (stricmp(slot._weapon->GetName(), weaponName) == 0)
+            {
+                iSlot = i;
+                break;
+            }
+        }
+        if (iSlot < 0)
+        {
+            return false;
+        }
+        const MagazineSlot &slot = object->GetMagazineSlot(iSlot);
+
+        bool found = false;
+        for (int i = 0; i < object->NMagazines(); i++)
+        {
+            const Magazine *mag = object->GetMagazine(i);
+            if (stricmp(mag->_type->GetName(), magName) == 0)
+            {
+                int best = object->FindBestMagazine(mag->_type, 0);
+                if (best >= 0)
+                {
+                    const Magazine *bestMag = object->GetMagazine(best);
+                    RString muzzleID = slot._weapon->GetName() + RString("|") + slot._muzzle->GetName();
+                    action.param = bestMag->_creator;
+                    action.param2 = bestMag->_id;
+                    action.param3 = muzzleID;
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if (!found)
+        {
+            return false;
+        }
+
+        action.type = actType;
+        veh->StartActionProcessing(action, veh->CommanderUnit());
+        return true;
+    }
+    return false;
+}
+} // (anonymous)
+
 GameValue VehProcessAction(const GameState* state, GameValuePar oper1, GameValuePar oper2)
 {
     EntityAI* veh = dyn_cast<EntityAI>(GetObject(oper1));
@@ -1383,6 +1466,16 @@ GameValue VehProcessAction(const GameState* state, GameValuePar oper1, GameValue
 
     const GameArrayType& array = oper2;
     int n = array.Size();
+
+    // Most actions have no more than 3 parameters, even though the sequel Arma 3 is included
+    // We take Arma 3 into account for compatibility. If we intend to introduce an action that
+    // is also present in the sequel, then its usage in OFP should match the way it is used in the sequel.
+    // Any exceptions with more parameters are dealt with individually.
+    if (checkAndProcessSpecialAction(veh, action, array))
+    {
+        return NOTHING;
+    }
+
     switch (n)
     {
         case 5:

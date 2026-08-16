@@ -449,7 +449,7 @@ RString UIAction::GetDisplayName(AIUnit* unit) const
                 }
                 else
                 {
-                    RptF("Load magazine action - bad magazine %d:%d", param, param2);
+                    RptF("Loadmagazine action - bad magazine %d:%d", param, param2);
                 }
             }
         }
