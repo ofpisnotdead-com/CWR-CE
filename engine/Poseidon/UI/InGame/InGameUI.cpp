@@ -2396,7 +2396,10 @@ void InGameUI::SendKilled(AIUnit* unit, PackedBoolArray list)
     {
         if (list.Get(i))
         {
-            grp->SendUnitDown(unit, grp->UnitWithID(i + 1));
+            if (AIUnit* down = grp->UnitWithID(i + 1))
+            {
+                grp->SendUnitDown(unit, down);
+            }
         }
     }
 }
