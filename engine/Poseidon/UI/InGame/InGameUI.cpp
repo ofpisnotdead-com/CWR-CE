@@ -1284,7 +1284,7 @@ void InGameUI::ResetVehicle(EntityAI* vehicle)
     int weapon = vehicle->FirstWeapon();
     weapon = ValidateWeapon(vehicle, weapon);
     // if the weapon is not weapon, but rather special item, do not select it
-    if (weapon >= 0)
+    if (weapon >= 0 && weapon < vehicle->NMagazineSlots())
     {
         const MagazineSlot& slot = vehicle->GetMagazineSlot(weapon);
         const WeaponType* type = slot._weapon;

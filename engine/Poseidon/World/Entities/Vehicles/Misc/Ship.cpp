@@ -1628,6 +1628,11 @@ bool Ship::FireWeapon(int weapon, TargetType* target)
 
 void Ship::FireWeaponEffects(int weapon, const Magazine* magazine, EntityAI* target)
 {
+    if (weapon < 0 || weapon >= NMagazineSlots())
+    {
+        return;
+    }
+
     const MagazineSlot& slot = GetMagazineSlot(weapon);
     if (!magazine || slot._magazine != magazine)
     {
@@ -1677,6 +1682,10 @@ bool Ship::AimWeapon(int weapon, Vector3Par direction)
             return false;
         }
         weapon = 0;
+    }
+    else if (weapon >= NMagazineSlots())
+    {
+        return false;
     }
     SelectWeapon(weapon);
     Vector3 relDir(VMultiply, DirWorldToModel(), direction);

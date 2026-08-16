@@ -1292,6 +1292,10 @@ void NetworkClient::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             {
                 break;
             }
+            if (ask.weapon < 0 || ask.weapon >= ask.vehicle->NMagazineSlots())
+            {
+                break;
+            }
             Magazine* state = ask.vehicle->GetMagazineSlot(ask.weapon)._magazine;
             if (!state)
             {

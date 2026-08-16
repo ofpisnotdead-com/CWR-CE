@@ -86,6 +86,11 @@ void Man::AimWeaponAI(int weapon, Vector3Par direction, float deltaT)
     SelectWeapon(weapon);
     Vector3 relDir(VMultiply, DirWorldToModel(), direction);
 
+    if (weapon < 0 || weapon >= NMagazineSlots())
+    {
+        return;
+    }
+
     const Magazine* magazine = GetMagazineSlot(weapon)._magazine;
     if (!magazine)
     {
@@ -326,7 +331,7 @@ bool Man::AimWeaponForceFire(int weapon)
 
 bool Man::CalculateAimWeapon(int weapon, Vector3& dir, Target* target)
 {
-    if (weapon < 0)
+    if (weapon < 0 || weapon >= NMagazineSlots())
     {
         return false;
     }
@@ -1635,9 +1640,9 @@ void Soldier::AIPilot(float deltaT, SimulationImportance prec)
     {
         speedWanted = 0;
     }
-    else if (_fire._fireMode >= 0 && (!_fire._firePrepareOnly || !unit->IsKeepingFormation()) &&
-             _fireState != FireDone && _fire._fireTarget && _fire._fireTarget->IsKnownBy(unit) &&
-             _fire._fireTarget->idExact && // ???
+    else if (_fire._fireMode >= 0 && _fire._fireMode < NMagazineSlots() &&
+             (!_fire._firePrepareOnly || !unit->IsKeepingFormation()) && _fireState != FireDone && _fire._fireTarget &&
+             _fire._fireTarget->IsKnownBy(unit) && _fire._fireTarget->idExact && // ???
              unit->IsFireEnabled(_fire._fireTarget) && GetMagazineSlot(_fire._fireMode)._magazine &&
              GetMagazineSlot(_fire._fireMode)._magazine->_reloadMagazine <= 1)
     {
