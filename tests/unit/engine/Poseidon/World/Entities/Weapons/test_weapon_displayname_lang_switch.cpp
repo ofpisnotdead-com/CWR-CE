@@ -3,8 +3,10 @@
 
 #include <Poseidon/IO/ParamFile/InitLibraryElement.hpp>
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
+#include <Poseidon/IO/ParamFileExt.hpp>
 #include <Poseidon/IO/Streams/QStream.hpp>
 #include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
+#include <Poseidon/World/Entities/Weapons/Recoil.hpp>
 #include <Poseidon/World/Entities/Weapons/Weapons.hpp>
 
 #include <cstring>
@@ -128,4 +130,30 @@ TEST_CASE("Muzzle display name follows runtime language switch", "[weapons][loca
 
     REQUIRE(Poseidon::SetLanguage("English"));
     REQUIRE(std::string(muzzle.GetDisplayName().Data()) == "Hand grenade");
+}
+
+TEST_CASE("Recoil lookup does not follow an expired inherited config", "[weapons][recoil][crash14192]")
+{
+    struct ParsReset
+    {
+        ParsReset() { Pars.Clear(); }
+        ~ParsReset() { Pars.Clear(); }
+    } reset;
+
+    ParamClass* cfgRecoils = Pars.AddClass("CfgRecoils");
+
+    {
+        ParamFile temporary;
+        ParamClass* base = temporary.AddClass("TemporaryRecoils");
+        ParamEntry* inherited = base->AddArray("temporaryRecoil");
+        inherited->AddValue(0.05f);
+        inherited->AddValue(0.02f);
+        inherited->AddValue(0.04f);
+        cfgRecoils->SetBase(base);
+    }
+
+    RecoilFunction recoil("temporaryRecoil");
+
+    REQUIRE(recoil.GetName() == RStringB("temporaryRecoil"));
+    REQUIRE(recoil.GetTerminated(0));
 }

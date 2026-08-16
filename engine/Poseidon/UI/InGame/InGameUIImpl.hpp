@@ -389,6 +389,7 @@ class InGameUI: public AbstractUI
 	void Init() override;
 
 	const AutoArray<RString> &GetCustomRadio() const override {return _customRadio;}
+	bool PlayCustomRadio(int index) override;
 
 	// Wire RscMainMenu's movement command sub-menu. Static + public so the null path
 	// (a broken RscMainMenu, where FindMenu returns null) is unit-testable without a

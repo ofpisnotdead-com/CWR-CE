@@ -254,9 +254,11 @@ void TextBankGL33::InitDetailTextures()
 
 void TextBankGL33::FlushTextures()
 {
-    // No-op: callers (SwitchLandscape, worldInit teardown) expect "drop
-    // UNREFERENCED textures" semantics this backend does not provide.
-    // F5 hot-reload uses ForceReloadAll() directly.
+    Compact();
+    while (_freeTextures.Size() > 0)
+    {
+        DeleteLastReleased();
+    }
 }
 
 void TextBankGL33::ForceReloadAll()

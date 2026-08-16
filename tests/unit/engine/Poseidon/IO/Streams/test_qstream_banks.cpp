@@ -119,6 +119,46 @@ TEST_CASE("QIFStreamB - ClearBanks cleanup", "[qstream][bank][streamb]")
     REQUIRE(true);
 }
 
+TEST_CASE("Intro/anim cutscene path resolves from a packed addon bank", "[qstream][bank][cutscene]")
+{
+    // An island's CfgWorlds cutscene path ("anims/..\addons\<island>\intro.<world>\mission.sqm")
+    // must resolve from the island's mounted .pbo, not require a loose on-disk folder.
+    REQUIRE_FIXTURE("pbo/triisl.pbo");
+    const std::string full = GetTestFixturePath("pbo/triisl.pbo");
+    const std::string dir = full.substr(0, full.size() - std::string("triisl.pbo").size());
+
+    const bool prevBanks = GUseFileBanks;
+    GUseFileBanks = true;
+    QIFStreamB::ClearBanks();
+    GFileBanks.Load(RString(dir.c_str()), RString(""), RString("triisl"), true);
+    REQUIRE(GFileBanks.Size() >= 1);
+
+    // Sanity: the direct bank-namespace path resolves.
+    CHECK(QIFStreamB::FileExist("triisl\\intro.abel\\mission.sqm"));
+
+    // Root-relative island paths normalize "<seg>/.." and strip "addons\" before bank lookup.
+    CHECK(QIFStreamB::FileExist("anims/..\\addons\\triisl\\intro.abel\\mission.sqm"));
+
+    // Community configs are Windows-authored with uppercase "ADDONS", mixed-case island names, and a
+    // ".<worldName>" suffix the engine appends, so the on-disk case rarely matches. Resolution must be
+    // case-insensitive across every component or these intros silently fail on a case-sensitive filesystem.
+    CHECK(QIFStreamB::FileExist("anims/..\\ADDONS\\TriIsl\\intro.Abel\\mission.sqm"));
+
+    // Control: an unknown island stays unresolved (the fallback must not resolve arbitrary paths).
+    CHECK_FALSE(QIFStreamB::FileExist("anims/..\\addons\\nosuch\\intro.abel\\mission.sqm"));
+
+    // The "..\addons" fallback must honour the caller's bank-access policy, else a denied bank is
+    // reachable as "x/..\addons\<bank>\...". A deny-all context must report not-found.
+    struct DenyAll : Poseidon::IQFBankContext
+    {
+        bool IsAccessible(Poseidon::QFBank*) const override { return false; }
+    } denyAll;
+    CHECK_FALSE(QIFStreamB::FileExist("anims/..\\addons\\triisl\\intro.abel\\mission.sqm", &denyAll));
+
+    QIFStreamB::ClearBanks();
+    GUseFileBanks = prevBanks;
+}
+
 TEST_CASE("QIFStreamB - Fallback to file system", "[qstream][bank][streamb]")
 {
     REQUIRE_FIXTURE("pbo/mission_fixture.Intro.pbo");

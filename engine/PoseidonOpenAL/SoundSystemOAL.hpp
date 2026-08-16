@@ -23,6 +23,9 @@ class SoundSystemOAL : public IAudioSystem
     void* _device = nullptr;  // ALCdevice*
     void* _context = nullptr; // ALCcontext*
     bool _soundReady = false; // DX8:2098 — guards Commit/CreateWave until Init succeeds
+    bool _outputActive = true;
+    bool _simulationRunning = true;
+    bool _contextSuspended = false;
 
     std::vector<WaveOAL*> _waves;
 
@@ -60,6 +63,7 @@ class SoundSystemOAL : public IAudioSystem
     float _volumeAdjustEffect = 1.0f;
     float _volumeAdjustSpeech = 1.0f;
     float _volumeAdjustMusic = 1.0f;
+    float _listenerGain = 0.0f;
 
     // Decoded-PCM LRU cache — WaveOAL::DecodePcm consults and populates
     // it; PreloadWave fills it from the mission manifest off the main
@@ -127,6 +131,8 @@ class SoundSystemOAL : public IAudioSystem
     int _pausedThisFrame = 0;
 
     void UpdateMixer();
+    void ApplyListenerGain();
+    void UpdateContextState();
     void ProcessPreview();
 
     // EFX internals (1:1 port of DX8 InitEAX/DeinitEAX/DoSetEAXEnvironment)
@@ -153,7 +159,10 @@ class SoundSystemOAL : public IAudioSystem
     Vector3 GetListenerPosition() const override { return _listenerPos; }
     void Commit() override;
     void Activate(bool active) override;
+    void SetSimulationRunning(bool running) override;
     void SetEnvironment(const SoundEnvironment& env) override;
+    float ListenerGainForTest() const { return _listenerGain; }
+    bool ContextSuspendedForTest() const { return _contextSuspended; }
 
     float GetCDVolume() const override { return _cdVolume; }
     void SetCDVolume(float v) override;
@@ -178,11 +187,7 @@ class SoundSystemOAL : public IAudioSystem
     void SetVoiceBudgetCounters(int evictedThisFrame, int pausedThisFrame) override;
     void FlushBank(QFBank*) override {}
 
-    bool EnableHWAccel(bool v) override
-    {
-        _hwAccel = v;
-        return false;
-    }
+    bool EnableHWAccel(bool v) override;
     bool EnableEAX(bool val) override;
     bool GetEAX() const override { return _eaxEnabled; }
     bool ApplyEFXByName(const char* presetName, float size) override;

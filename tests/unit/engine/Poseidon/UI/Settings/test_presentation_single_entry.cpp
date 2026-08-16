@@ -105,3 +105,25 @@ TEST_CASE("Presentation: aspect resolvers have no callers outside the module", "
             REQUIRE(IsAllowed(generic, allowed));
         });
 }
+
+TEST_CASE("Presentation: profile FOV migration has one production caller", "[Settings][Presentation][boundary]")
+{
+    const std::vector<std::string> allowed = {
+        "engine/Poseidon/Core/Profile/UserConfig.hpp",
+        "engine/Poseidon/Core/Profile/UserConfig.cpp",
+        "engine/Poseidon/UI/Settings/Presentation.cpp",
+    };
+    int sites = 0;
+    ForEachProductionCpp(
+        [&](const std::filesystem::path& p)
+        {
+            const std::string body = ReadStripped(p);
+            if (body.find("MigrateFov(") == std::string::npos)
+                return;
+            const std::string generic = std::filesystem::relative(p, RepoRoot()).generic_string();
+            INFO(generic << " calls UserConfig::MigrateFov");
+            REQUIRE(IsAllowed(generic, allowed));
+            ++sites;
+        });
+    REQUIRE(sites == 3);
+}

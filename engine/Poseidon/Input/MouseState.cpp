@@ -34,7 +34,7 @@ void MouseState::DiscardBuffered()
 }
 
 bool MouseState::Update(CursorAccum& cursor, int gameFocusLost, bool lookAroundEnabled, UITime currentTime,
-                        const CursorClamp* clamp)
+                        const CursorClamp* clamp, float cursorAspectRatio, float aimAspectRatio)
 {
     // Reset per-frame edge state
     leftToDo = false;
@@ -129,16 +129,22 @@ bool MouseState::Update(CursorAccum& cursor, int gameFocusLost, bool lookAroundE
     rightToDo = buttonsToDo[1];
     middleToDo = buttonsToDo[2];
 
-    // Cursor movement (matches Windows logic)
-    float moveX = deltaX * kCursorScaleX;
+    // Scale horizontal movement by aspect ratio so it feels consistent with
+    // vertical. Aim and the cursor use different aspect ratios because they
+    // measure width differently: aiming spans the full window, but the cursor's
+    // coordinates are relative to the HUD region (even though it can move past
+    // it), so it must use the HUD region's aspect ratio to stay uniform on both axes.
+    float aimMoveX = deltaX * (kCursorScaleY / aimAspectRatio);
+    float cursorMoveX = deltaX * (kCursorScaleY / cursorAspectRatio);
     float moveY = deltaY * kCursorScaleY;
 
-    saturate(moveX, -kCursorLimitX, +kCursorLimitX);
+    saturate(aimMoveX, -kCursorLimitX, +kCursorLimitX);
+    saturate(cursorMoveX, -kCursorLimitX, +kCursorLimitX);
     saturate(moveY, -kCursorLimitY, +kCursorLimitY);
 
     if (gameFocusLost <= 0)
     {
-        cursor.aimDeltaX += moveX;
+        cursor.aimDeltaX += aimMoveX;
         if (reverseY)
             cursor.aimDeltaY -= moveY;
         else
@@ -146,7 +152,7 @@ bool MouseState::Update(CursorAccum& cursor, int gameFocusLost, bool lookAroundE
     }
     // The menu cursor can be scaled independently of look (menuCursorScale 1.0
     // == classic: cursor and aim move together).
-    cursor.cursorX += moveX * tuning.menuCursorScale;
+    cursor.cursorX += cursorMoveX * tuning.menuCursorScale;
     cursor.cursorY += moveY * tuning.menuCursorScale;
 
     cursor.aimDeltaZ += kWheelToCursorScale * deltaZ;

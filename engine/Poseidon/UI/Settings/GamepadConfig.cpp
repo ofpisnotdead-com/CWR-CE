@@ -3,10 +3,9 @@
 #include <Poseidon/Input/InputDeviceConstants.hpp>
 
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
+#include <Poseidon/UI/Settings/SettingsFile.hpp>
 
 #include <algorithm>
-#include <filesystem>
-#include <system_error>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 
 namespace Poseidon
@@ -62,12 +61,9 @@ bool GamepadConfig::Normalize()
 
 bool GamepadConfig::Load(const std::string& path)
 {
-    std::error_code ec;
-    if (!std::filesystem::exists(path, ec))
-        return false;
-
     ParamFile cfg;
-    cfg.Parse(RString(path.c_str()));
+    if (!ReadSettingsFile(path, cfg))
+        return false;
 
     if (auto* e = cfg.FindEntry("enabled"))
         enabled = (bool)*e;
@@ -91,11 +87,6 @@ bool GamepadConfig::Load(const std::string& path)
 
 bool GamepadConfig::Save(const std::string& path) const
 {
-    std::error_code ec;
-    std::filesystem::path p(path);
-    if (p.has_parent_path())
-        std::filesystem::create_directories(p.parent_path(), ec);
-
     ParamFile cfg;
     cfg.Add("enabled", enabled);
     cfg.Add("reverseYStick", reverseYStick);
@@ -103,8 +94,7 @@ bool GamepadConfig::Save(const std::string& path) const
     cfg.Add("deadzoneTrigger", deadzoneTrigger);
     cfg.Add("lookSensitivity", lookSensitivity);
 
-    cfg.Save(RString(path.c_str()));
-    return std::filesystem::exists(path, ec);
+    return WriteSettingsFile(path, cfg);
 }
 
 } // namespace Poseidon

@@ -42,6 +42,18 @@ TEST_CASE("idString: table construction and lookup", "[core][idString]")
     REQUIRE(table.GetString(0) == RStringB("foo"));
 }
 
+TEST_CASE("idString: reverse lookup preserves table order", "[core][idString]")
+{
+    RStringB strings[] = {"objectId", "objectPosition", "objectCreator", "vehicle", "name", "id"};
+    Poseidon::IdStringTable table(strings, 6);
+
+    REQUIRE(table.GetId("name") == 4);
+    REQUIRE(table.GetId("id") == 5);
+    REQUIRE(table.GetString(4) == RStringB("name"));
+    REQUIRE(table.GetString(5) == RStringB("id"));
+    REQUIRE(table.GetString(6) == RStringB());
+}
+
 TEST_CASE("idString: GetIdString round-trip", "[core][idString]")
 {
     RStringB strings[] = {"alpha", "beta"};

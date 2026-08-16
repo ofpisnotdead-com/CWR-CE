@@ -680,8 +680,8 @@ void AirplaneAuto::KeyboardPilot(AIUnit* unit, float deltaT)
 
         Vector3Val relSpeed = ModelSpeed();
 
-        float forward = input.GetAction(ctx, UAMoveForward) * 0.5f + input.GetAction(ctx, UAMoveFastForward) -
-                        input.GetAction(ctx, UAMoveBack) * 0.5f;
+        float forward =
+            input.GetMoveForward(ctx) * 0.5f + input.GetMoveFastForward(ctx) - input.GetAction(ctx, UAMoveBack) * 0.5f;
 
         if (forward < 0.1)
         {

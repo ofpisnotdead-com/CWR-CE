@@ -1,11 +1,29 @@
 #include <Poseidon/Core/Profile/UserConfig.hpp>
+#include <Poseidon/Core/SaveVersion.hpp>
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 
 namespace Poseidon
 {
+namespace
+{
+constexpr float kDefaultFovLeft = 1.0f;
+constexpr float kDefaultFovTop = 0.75f;
+
+bool ValidFov(float left, float top)
+{
+    return std::isfinite(left) && std::isfinite(top) && left > 0.0f && top > 0.0f;
+}
+
+bool SameFov(float leftA, float topA, float leftB, float topB)
+{
+    constexpr float tolerance = 0.0001f;
+    return std::abs(leftA - leftB) <= tolerance && std::abs(topA - topB) <= tolerance;
+}
+} // namespace
 
 UserConfig::UserConfig()
 {
@@ -22,8 +40,7 @@ void UserConfig::InitDefaults()
     }
     easyMode = true;
     showTitles = true;
-    fovTop = 0.75f;
-    fovLeft = 1.0f;
+    SetAutomaticFov();
 }
 
 void UserConfig::LoadFromFile(const char* filepath)
@@ -74,13 +91,32 @@ void UserConfig::LoadFromParamFile(const ParamFile& cfg)
     if (entry)
         easyMode = *entry;
 
-    entry = cfg.FindEntry("fovTop");
+    _loadedVersion = 0;
+    entry = cfg.FindEntry("version");
     if (entry)
-        fovTop = (float)*entry;
+        _loadedVersion = (int)*entry;
 
-    entry = cfg.FindEntry("fovLeft");
-    if (entry)
-        fovLeft = (float)*entry;
+    const ParamEntry* topEntry = cfg.FindEntry("fovTop");
+    const ParamEntry* leftEntry = cfg.FindEntry("fovLeft");
+    const bool hasBoth = topEntry && leftEntry;
+    const float loadedTop = topEntry ? (float)*topEntry : 0.0f;
+    const float loadedLeft = leftEntry ? (float)*leftEntry : 0.0f;
+    const bool validPair = hasBoth && ValidFov(loadedLeft, loadedTop);
+    if (validPair)
+    {
+        fovTop = loadedTop;
+        fovLeft = loadedLeft;
+    }
+    _customFov = validPair;
+
+    if (_loadedVersion >= UserInfoVersion)
+    {
+        _fovMigrationPending = (topEntry || leftEntry) && !validPair;
+    }
+    else
+    {
+        _fovMigrationPending = true;
+    }
 }
 
 void UserConfig::SaveToParamFile(ParamFile& cfg) const
@@ -96,8 +132,60 @@ void UserConfig::SaveToParamFile(ParamFile& cfg) const
     }
     cfg.Add("showTitles", showTitles);
     cfg.Add("easyMode", easyMode);
-    cfg.Add("fovTop", fovTop);
-    cfg.Add("fovLeft", fovLeft);
+    cfg.Add("version", _fovMigrationPending ? _loadedVersion : UserInfoVersion);
+    if (_customFov)
+    {
+        cfg.Add("fovTop", fovTop);
+        cfg.Add("fovLeft", fovLeft);
+    }
+    else
+    {
+        cfg.Delete("fovTop");
+        cfg.Delete("fovLeft");
+    }
+}
+
+bool UserConfig::MigrateFov(float automaticLeft, float automaticTop)
+{
+    if (!_fovMigrationPending)
+        return false;
+
+    if (_loadedVersion < UserInfoVersion && _customFov)
+    {
+        _customFov = !SameFov(fovLeft, fovTop, kDefaultFovLeft, kDefaultFovTop) &&
+                     !SameFov(fovLeft, fovTop, automaticLeft, automaticTop);
+    }
+    if (!_customFov)
+    {
+        SetAutomaticFov();
+        return true;
+    }
+    _fovMigrationPending = false;
+    _loadedVersion = UserInfoVersion;
+    return true;
+}
+
+void UserConfig::SetCustomFov(float left, float top)
+{
+    if (!ValidFov(left, top))
+    {
+        SetAutomaticFov();
+        return;
+    }
+    fovLeft = left;
+    fovTop = top;
+    _customFov = true;
+    _fovMigrationPending = false;
+    _loadedVersion = UserInfoVersion;
+}
+
+void UserConfig::SetAutomaticFov()
+{
+    fovLeft = kDefaultFovLeft;
+    fovTop = kDefaultFovTop;
+    _customFov = false;
+    _fovMigrationPending = false;
+    _loadedVersion = UserInfoVersion;
 }
 
 void UserConfig::InitDifficulties()

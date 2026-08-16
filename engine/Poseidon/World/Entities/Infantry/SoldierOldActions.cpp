@@ -257,12 +257,10 @@ void Soldier::KeyboardPilot(float deltaT, SimulationImportance prec)
         }
         else
         {
-            Ref<WeaponType> binocular = WeaponTypes.New("Binocular");
-            PoseidonAssert(binocular);
             for (int i = 0; i < _magazineSlots.Size(); i++)
             {
                 const WeaponType* type = _magazineSlots[i]._weapon;
-                if (type == binocular)
+                if (type && type->IsBinocular())
                 {
                     SelectWeapon(i);
                     break;

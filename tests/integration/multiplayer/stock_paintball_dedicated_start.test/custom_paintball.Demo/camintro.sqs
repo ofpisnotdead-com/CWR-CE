@@ -1,0 +1,11 @@
+? isNull player : exit
+@ A0 == 1
+_cam = "camera" camCreate getpos player
+_cam camSetTarget player
+_cam camSetRelPos [0, -8, 3]
+_cam cameraEffect ["internal", "back"]
+_cam camCommit 0
+@ A2 == 1
+player cameraEffect ["terminate", "back"]
+camDestroy _cam
+exit

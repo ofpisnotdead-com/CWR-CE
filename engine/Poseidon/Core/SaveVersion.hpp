@@ -9,7 +9,7 @@ const int WorldSerializeVersion = 13;
 const int MissionsVersion = 11;
 
 // UserInfo.cfg file
-const int UserInfoVersion = 1;
+const int UserInfoVersion = 2;
 
 // Campaign history
 const int CampaignVersion = 3;

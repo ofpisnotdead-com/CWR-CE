@@ -82,6 +82,13 @@ std::string UITestEngine::GetControlText(IControl* ctrl)
         return {};
     if (ctrl->HasSemanticTestText())
         return std::string((const char*)ctrl->GetSemanticTestText());
+    return GetControlDisplayText(ctrl);
+}
+
+std::string UITestEngine::GetControlDisplayText(IControl* ctrl)
+{
+    if (!ctrl)
+        return {};
 
     // Try each known text-bearing type (RString has operator const char*)
     if (auto* b = dynamic_cast<CButton*>(ctrl))
@@ -104,6 +111,35 @@ std::string UITestEngine::GetControlText(IControl* ctrl)
     if (auto* a3 = dynamic_cast<C3DActiveText*>(ctrl))
         return std::string((const char*)a3->GetText());
     return {};
+}
+
+std::string UITestEngine::GetHtmlText(IControl* ctrl)
+{
+    auto* html = dynamic_cast<CHTMLContainer*>(ctrl);
+    if (!html)
+        return {};
+
+    return GetHtmlText(*html);
+}
+
+std::string UITestEngine::GetHtmlText(const CHTMLContainer& html)
+{
+    const int currentSection = html.CurrentSection();
+    if (currentSection < 0 || currentSection >= html.NSections())
+        return {};
+
+    std::string text;
+    const HTMLSection& section = html.GetSection(currentSection);
+    for (int f = 0; f < section.fields.Size(); ++f)
+    {
+        const char* fieldText = section.fields[f].text;
+        if (!fieldText || !*fieldText)
+            continue;
+        if (!text.empty())
+            text += ' ';
+        text += fieldText;
+    }
+    return text;
 }
 
 void UITestEngine::SetSemanticControlText(IControl* ctrl, const char* text)

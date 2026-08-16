@@ -1,5 +1,7 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Auto-detect text and use one checkout representation on every platform. This
+# repository is used from both Windows and Linux, so core.autocrlf must not make
+# the same shared working tree alternate between CRLF and LF.
+* text=auto eol=lf
 
 # Force CRLF line endings for Windows-specific files
 *.vcxproj text eol=crlf
@@ -8,11 +10,11 @@
 *.bat text eol=crlf
 *.cmd text eol=crlf
 
-# C/C++ source files - keep as-is (don't normalize)
-*.c text eol=crlf
-*.cpp text eol=crlf
-*.h text eol=crlf
-*.hpp text eol=crlf
+# C/C++ source files use LF on every platform.
+*.c text eol=lf
+*.cpp text eol=lf
+*.h text eol=lf
+*.hpp text eol=lf
 
 # Markdown files
 *.md text eol=lf

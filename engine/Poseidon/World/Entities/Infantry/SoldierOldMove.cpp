@@ -111,6 +111,11 @@ void Man::ProcessMoveFunction(ActionContextBase* context)
 
                 Vector3Val pos = Position();
                 float surfY = GLandscape->RoadSurfaceY(pos + VUp * 0.5f);
+                if (!shape)
+                {
+                    break;
+                }
+
                 Vector3 offset = transform.Rotate(shape->BoundingCenter());
                 transform.SetPosition(Vector3(pos[0], surfY, pos[2]) + offset);
 
@@ -1342,7 +1347,7 @@ bool Man::BinocularSelected() const
     }
     const MagazineSlot& slot = GetMagazineSlot(_currentWeapon);
     const WeaponType* type = slot._weapon;
-    return stricmp(type->GetName(), "binocular") == 0;
+    return type && type->IsBinocular();
 }
 
 bool Man::IsHandGunInMove() const

@@ -56,7 +56,7 @@ Describe "graphics.cfg boot dance" {
             $preset | Should -BeIn 0,1,2,3 -Because "autodetect picks Low/Med/High/Ultra, never Custom"
             # Per-user knobs must be at the unconditional defaults.
             $kv['vsync']      | Should -Be '1' -Because "VSync defaults On"
-            $kv['fpsCap']     | Should -Be '0' -Because "FPS Cap defaults Unlimited"
+            $kv['fpsCap']     | Should -BeIn '30','60','90','120','144','240' -Because "FPS Cap is stamped from the display rate (GraphicsConfig::FpsCapForRefreshRate)"
             $kv['brightness'] | Should -Match '^1\.20*$' -Because "Brightness defaults 1.2 (original CWA default, GraphicsConfig.hpp)"
             $kv['gamma']      | Should -Match '^1\.0+$' -Because "Gamma defaults 1.0"
         } finally {

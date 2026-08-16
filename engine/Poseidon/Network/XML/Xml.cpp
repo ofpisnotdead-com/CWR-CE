@@ -23,6 +23,8 @@
 #include <Poseidon/Foundation/Framework/Log.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 #include <Poseidon/Foundation/platform.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
+#include <Poseidon/Network/HttpTestRewrite.hpp>
 #include <curl/curl.h>
 #include <mutex>
 #include <vector>
@@ -93,7 +95,8 @@ CurlDownloadStatus DownloadFileWithCurl(const char* url, const char* proxyServer
         return CurlDownloadStatus::Failed;
     }
 
-    curl_easy_setopt(curl, CURLOPT_URL, url);
+    const std::string effectiveUrl = Poseidon::ResolveHttpTestUrl(url);
+    curl_easy_setopt(curl, CURLOPT_URL, effectiveUrl.c_str());
     curl_easy_setopt(curl, CURLOPT_USERAGENT, AGENT_NAME);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
@@ -837,20 +840,7 @@ bool DownloadFile(const char* url, const char* filename, const char* proxyServer
     const CurlDownloadStatus curlStatus = DownloadFileWithCurl(url, proxyServer, maxSize, payload);
     if (curlStatus == CurlDownloadStatus::Succeeded)
     {
-        LocalPath(fn, filename);
-        FILE* file = fopen(fn, "wb");
-        if (file == nullptr)
-        {
-            return false;
-        }
-        const size_t written = fwrite(payload.data(), 1, payload.size(), file);
-        fclose(file);
-        if (written != payload.size())
-        {
-            DeleteFile(filename);
-            return false;
-        }
-        return true;
+        return Poseidon::WriteFileUtf8(filename, payload.data(), payload.size());
     }
     if (curlStatus == CurlDownloadStatus::Rejected)
     {
@@ -910,20 +900,7 @@ bool DownloadFile(const char* url, const char* filename, const char* proxyServer
     const CurlDownloadStatus curlStatus = DownloadFileWithCurl(url, proxyServer, maxSize, payload);
     if (curlStatus == CurlDownloadStatus::Succeeded)
     {
-        LocalPath(fn, filename);
-        FILE* file = fopen(fn, "wb");
-        if (file == nullptr)
-        {
-            return false;
-        }
-        const size_t written = fwrite(payload.data(), 1, payload.size(), file);
-        fclose(file);
-        if (written != payload.size())
-        {
-            ::unlink(filename);
-            return false;
-        }
-        return true;
+        return Poseidon::WriteFileUtf8(filename, payload.data(), payload.size());
     }
     if (curlStatus == CurlDownloadStatus::Rejected)
     {

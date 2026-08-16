@@ -3,6 +3,7 @@
 #include <Poseidon/Core/Config/UserConfig.hpp>
 
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <Poseidon/Foundation/Platform/GamePaths.hpp>
 
 #include <fstream>
@@ -36,7 +37,7 @@ void UserConfig_LoadDifficulties(UserConfig& uc)
     ParamFile userCfg;
     const std::string path = DifficultyConfigPath();
     std::error_code ec;
-    if (std::filesystem::exists(path, ec))
+    if (std::filesystem::exists(FilesystemPathFromUtf8(path), ec))
         userCfg.Parse(RString(path.c_str()));
     else
         userCfg.Parse(::Poseidon::GetUserParams());
@@ -65,7 +66,7 @@ void UserConfig_LoadDifficulties(UserConfig& uc)
 void UserConfig_SaveDifficulties(const UserConfig& uc)
 {
     const std::string path = DifficultyConfigPath();
-    std::ofstream out(path, std::ios::out | std::ios::trunc);
+    std::ofstream out(FilesystemPathFromUtf8(path), std::ios::out | std::ios::trunc);
     if (!out.is_open())
     {
         LOG_WARN(Config, "DifficultyConfig: failed to open '{}' for writing", path);

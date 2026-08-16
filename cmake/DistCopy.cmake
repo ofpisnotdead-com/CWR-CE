@@ -47,7 +47,7 @@ function(dist_copy TARGET)
         endif()
     endif()
 
-    # Copy runtime DLLs (e.g., OpenAL32.dll — LGPL dynamic linkage)
+    # Copy runtime DLLs (e.g., OpenAL32.dll or libopenal.dylib — LGPL dynamic linkage)
     set(_copy_openal_runtime OFF)
     get_target_property(_link_libraries ${TARGET} LINK_LIBRARIES)
     if(_link_libraries)
@@ -57,19 +57,27 @@ function(dist_copy TARGET)
             endif()
         endforeach()
     endif()
-    if(WIN32 AND TARGET OpenAL::OpenAL AND _copy_openal_runtime)
-        get_target_property(_openal_dll OpenAL::OpenAL IMPORTED_LOCATION)
-        if(NOT _openal_dll)
-            get_target_property(_openal_dll OpenAL::OpenAL IMPORTED_LOCATION_RELEASE)
+    if((WIN32 OR APPLE) AND TARGET OpenAL::OpenAL AND _copy_openal_runtime)
+        get_target_property(_openal_lib OpenAL::OpenAL IMPORTED_LOCATION)
+        if(NOT _openal_lib)
+            get_target_property(_openal_lib OpenAL::OpenAL IMPORTED_LOCATION_RELEASE)
         endif()
-        if(_openal_dll AND _openal_dll MATCHES "\\.dll$")
-            add_custom_command(TARGET ${TARGET} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${_openal_dll}" "${DIST_DIR}"
-                VERBATIM
-            )
+        if(_openal_lib AND (WIN32 AND _openal_lib MATCHES "\\.dll$") OR (APPLE AND _openal_lib MATCHES "\\.dylib$"))
+            if(WIN32)
+                add_custom_command(TARGET ${TARGET} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${_openal_lib}" "${DIST_DIR}/OpenAL32.dll"
+                    VERBATIM
+                )
+            elseif(APPLE)
+                add_custom_command(TARGET ${TARGET} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${_openal_lib}" "${DIST_DIR}/libopenal.dylib"
+                    VERBATIM
+                )
+            endif()
 
-            get_filename_component(_openal_bin_dir "${_openal_dll}" DIRECTORY)
+            get_filename_component(_openal_bin_dir "${_openal_lib}" DIRECTORY)
             get_filename_component(_openal_triplet_dir "${_openal_bin_dir}" DIRECTORY)
             set(_openal_copyright "${_openal_triplet_dir}/share/openal-soft/copyright")
             if(EXISTS "${_openal_copyright}")
@@ -80,7 +88,7 @@ function(dist_copy TARGET)
                 )
             endif()
         endif()
-        unset(_openal_dll)
+        unset(_openal_lib)
         unset(_openal_bin_dir)
         unset(_openal_triplet_dir)
         unset(_openal_copyright)

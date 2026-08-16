@@ -1,3 +1,3 @@
 tags = ["fizzy-22", "demo"]
 mission = "tests/integration/missions/demo_outro_titles.Demo"
-timeout = 120
+timeout = 60

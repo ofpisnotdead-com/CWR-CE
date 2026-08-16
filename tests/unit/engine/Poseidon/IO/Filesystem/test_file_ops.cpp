@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <Poseidon/IO/Filesystem/FileOps.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
+#include <Poseidon/IO/Streams/QStream.hpp>
 
 #include <chrono>
 #include <cstring>
@@ -9,6 +11,7 @@
 #include <string>
 #include <iterator>
 #include <system_error>
+#include <set>
 #include <Poseidon/Foundation/platform.hpp>
 
 namespace fs = std::filesystem;
@@ -38,6 +41,25 @@ std::string readText(const fs::path& path)
 {
     std::ifstream input(path, std::ios::binary);
     return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+}
+
+std::string readTextUtf8(const std::string& path)
+{
+    HANDLE file = OpenFileForRead(path.c_str());
+    REQUIRE(file != INVALID_HANDLE_VALUE);
+
+    const int size = GetOpenFileSize(file);
+    REQUIRE(size >= 0);
+
+    std::string output(static_cast<size_t>(size), '\0');
+    if (size > 0)
+    {
+        DWORD read = 0;
+        REQUIRE(ReadFile(file, output.data(), static_cast<DWORD>(output.size()), &read, nullptr));
+        REQUIRE(read == output.size());
+    }
+    CloseHandle(file);
+    return output;
 }
 
 } // namespace
@@ -91,7 +113,162 @@ TEST_CASE("FileOps opens, writes, appends, and reports file existence", "[poseid
     }
 }
 
+TEST_CASE("FileOps preserves UTF-8 filenames across supported custom sound alphabets",
+          "[poseidon-base][io][fileops][utf8]")
+{
+    TempIoDir dir("fileops_utf8");
+    const std::string root = dir.root.string();
+    const std::string srcDir = root + "/Sound";
+    const std::string dstDir = root + "/Copy";
+    fs::create_directories(srcDir);
+    fs::create_directories(dstDir);
+
+    const std::set<std::string> names = {
+        "BO\xC5\xBD"
+        "E, TO JE ALE SPOU\xC5\xA0\xC5\xA4.ogg",
+        "cafe_\xC3\xA9_naive_\xC3\xB6.ogg",
+        "\xD0\xBF\xD1\x80\xD0\xB8\xD0\xB2\xD0\xB5\xD1\x82_\xD0\xBC\xD0\xB8\xD1\x80.ogg",
+    };
+
+    for (const std::string& name : names)
+    {
+        const std::string path = srcDir + "/" + name;
+        HANDLE file = OpenFileForWrite(path.c_str(), true);
+        REQUIRE(file != INVALID_HANDLE_VALUE);
+
+        constexpr char payload[] = "ogg";
+        DWORD written = 0;
+        REQUIRE(WriteFile(file, payload, std::strlen(payload), &written, nullptr));
+        REQUIRE(written == std::strlen(payload));
+        CloseHandle(file);
+        REQUIRE(FilePathExists(path.c_str()));
+    }
+
+    std::set<std::string> listed;
+    for (const Poseidon::DirectoryEntryUtf8& entry : Poseidon::ListDirectoryEntriesUtf8(srcDir.c_str()))
+    {
+        if (!entry.isDirectory)
+        {
+            listed.insert(entry.name);
+            REQUIRE(entry.size == 3);
+        }
+    }
+    REQUIRE(listed == names);
+
+    for (const std::string& name : listed)
+    {
+        const std::string src = srcDir + "/" + name;
+        const std::string dst = dstDir + "/" + name;
+        REQUIRE(Poseidon::CopyFileUtf8(src.c_str(), dst.c_str(), false));
+        REQUIRE(readTextUtf8(dst) == "ogg");
+    }
+}
+
+TEST_CASE("UTF-8 file helpers read and write non-ASCII binary paths", "[poseidon-base][io][fileops][utf8]")
+{
+    TempIoDir dir("utf8_binary_helpers");
+    const std::string path = dir.root.string() + "/nested/BO\xC5\xBD"
+                                                 "E, TO JE ALE SPOU\xC5\xA0\xC5\xA4.ogg";
+
+    const char payload[] = {'o', 'g', 'g', '\0', static_cast<char>(0x80), static_cast<char>(0xff)};
+    REQUIRE(Poseidon::WriteFileUtf8(path.c_str(), payload, sizeof(payload)));
+    REQUIRE(Poseidon::FileExistsUtf8(path.c_str()));
+
+    const std::vector<char> read = Poseidon::ReadFileUtf8(path.c_str());
+    REQUIRE(read == std::vector<char>(payload, payload + sizeof(payload)));
+}
+
+TEST_CASE("UTF-8 stdio helper opens non-ASCII cache paths", "[poseidon-base][io][fileops][utf8]")
+{
+    TempIoDir dir("utf8_stdio");
+    const std::string cacheDir = dir.root.string() + "/\xE6\xB5\x8B\xE8\xAF\x95";
+    const std::string path = cacheDir + "/cache.bin";
+    REQUIRE(Poseidon::CreateDirectoryUtf8(cacheDir.c_str()));
+
+    std::FILE* output = Poseidon::OpenFileUtf8(path.c_str(), "wb");
+    REQUIRE(output != nullptr);
+    REQUIRE(std::fwrite("cache", 1, 5, output) == 5);
+    std::fclose(output);
+
+    std::FILE* input = Poseidon::OpenFileUtf8(path.c_str(), "rb");
+    REQUIRE(input != nullptr);
+    char bytes[5] = {};
+    REQUIRE(std::fread(bytes, 1, sizeof(bytes), input) == sizeof(bytes));
+    std::fclose(input);
+    REQUIRE(std::string(bytes, sizeof(bytes)) == "cache");
+}
+
+TEST_CASE("UTF-8 directory helper creates non-ASCII mission folders", "[poseidon-base][io][fileops][utf8]")
+{
+    TempIoDir dir("utf8_mission_directory");
+    const std::string missionsDir = dir.root.string() + "/missions";
+    const std::string missionName = "V\xC5\xA1"
+                                    "echny vehikly - test.Intro";
+    const std::string missionDir = missionsDir + "/" + missionName;
+    const std::string missionFile = missionDir + "/mission.sqm";
+
+    REQUIRE(Poseidon::CreateDirectoryUtf8(missionDir.c_str()));
+    REQUIRE(Poseidon::WriteFileUtf8(missionFile.c_str(), "ok", 2));
+    REQUIRE(Poseidon::FileExistsUtf8(missionFile.c_str()));
+
+    bool found = false;
+    for (const Poseidon::DirectoryEntryUtf8& entry : Poseidon::ListDirectoryEntriesUtf8(missionsDir.c_str()))
+    {
+        found = found || (entry.isDirectory && entry.name == missionName);
+    }
+    REQUIRE(found);
+}
+
+TEST_CASE("QOFStream writes UTF-8 filenames through platform file helpers", "[poseidon-base][io][fileops][utf8]")
+{
+    TempIoDir dir("qofstream_utf8");
+    const std::string path = dir.root.string() + "/BO\xC5\xBD"
+                                                 "E_TO_JE_ALE_SPOU\xC5\xA0\xC5\xA4.dat";
+
+    QOFStream output;
+    output.open(path.c_str());
+    constexpr char payload[] = "stream-payload";
+    output.write(payload, std::strlen(payload));
+    output.close();
+
+    REQUIRE_FALSE(output.fail());
+    REQUIRE(FilePathExists(path.c_str()));
+    REQUIRE(readTextUtf8(path) == payload);
+}
+
 #ifndef _WIN32
+TEST_CASE("file permission repair restores owner access to a mode-zero file", "[poseidon-base][io][fileops]")
+{
+    TempIoDir dir("repair_permissions");
+    fs::create_directories(dir.root / "Missions" / "Demo.Demo");
+    const fs::path path = dir.root / "Missions" / "Demo.Demo" / "continue.fps";
+    std::ofstream(path, std::ios::binary) << "saved-world";
+    REQUIRE(chmod(path.string().c_str(), 0) == 0);
+
+    const std::string mixedCasePath = (dir.root / "missions" / "Demo.Demo" / "continue.fps").string();
+    REQUIRE(Poseidon::RepairMissingFilePermissionsUtf8(mixedCasePath.c_str()));
+
+    struct stat info{};
+    REQUIRE(stat(path.string().c_str(), &info) == 0);
+    CHECK((info.st_mode & S_IRUSR) != 0);
+    CHECK((info.st_mode & S_IWUSR) != 0);
+    CHECK(readText(path) == "saved-world");
+}
+
+TEST_CASE("UTF-8 copy resolves mixed-case source and destination paths", "[poseidon-base][io][fileops]")
+{
+    TempIoDir dir("copy_mixed_case");
+    fs::create_directories(dir.root / "Saved" / "Missions" / "Demo.Demo");
+    const fs::path actualSource = dir.root / "Saved" / "Missions" / "Demo.Demo" / "save.fps";
+    std::ofstream(actualSource, std::ios::binary) << "saved-world";
+
+    const std::string source = (dir.root / "Saved" / "missions" / "Demo.Demo" / "save.fps").string();
+    const std::string destination = (dir.root / "Saved" / "missions" / "Demo.Demo" / "continue.fps").string();
+    REQUIRE(Poseidon::CopyFileUtf8(source.c_str(), destination.c_str(), false));
+
+    CHECK(readText(dir.root / "Saved" / "Missions" / "Demo.Demo" / "continue.fps") == "saved-world");
+}
+
 TEST_CASE("FileOps resolves mixed-case paths on POSIX", "[poseidon-base][io][fileops]")
 {
     TempIoDir dir("fileops_ci");

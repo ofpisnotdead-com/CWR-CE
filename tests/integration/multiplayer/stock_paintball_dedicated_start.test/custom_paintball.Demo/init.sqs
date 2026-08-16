@@ -1,0 +1,5 @@
+A0 = 0
+A2 = 0
+[] exec "control.sqs"
+[] exec "camintro.sqs"
+exit

@@ -30,4 +30,7 @@ std::string getUserCacheDir(const char* appName);
 /// The directory is created if it does not exist.
 std::string getUserDocumentsDir(const char* appName);
 
+/// Returns the current OS login name encoded as UTF-8.
+std::string getCurrentUserName();
+
 } // namespace Poseidon::Foundation

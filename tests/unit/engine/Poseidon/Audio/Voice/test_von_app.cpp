@@ -47,7 +47,7 @@ TEST_CASE("VoNReplayer decode and pull", "[VoN][app]")
     VoNDataPacket pkt{};
     pkt.init(1, VoNChatChannel::Direct, 0, FRAME, FRAME * 2);
 
-    rp.pushPacket(pkt, raw);
+    REQUIRE(rp.pushPacket(pkt, raw));
     REQUIRE(rp.buffered() == 1);
     REQUIRE(rp.isPlaying());
 
@@ -68,12 +68,34 @@ TEST_CASE("VoNReplayer reset clears state", "[VoN][app]")
 
     VoNDataPacket pkt{};
     pkt.init(1, VoNChatChannel::Direct, 0, FRAME, FRAME * 2);
-    rp.pushPacket(pkt, reinterpret_cast<const uint8_t*>(tone));
+    REQUIRE(rp.pushPacket(pkt, reinterpret_cast<const uint8_t*>(tone)));
     REQUIRE(rp.buffered() == 1);
 
     rp.reset();
     REQUIRE(rp.buffered() == 0);
     REQUIRE_FALSE(rp.isPlaying());
+}
+
+TEST_CASE("VoNReplayer accepts a new short push-to-talk burst before the previous frame is pulled", "[VoN][app]")
+{
+    auto codec = std::make_unique<PCMCodec>(RATE);
+    VoNReplayer rp(std::move(codec));
+
+    int16_t first[FRAME];
+    int16_t second[FRAME];
+    fillTone(first, FRAME, 1000);
+    fillTone(second, FRAME, 4000);
+
+    VoNDataPacket pkt{};
+    pkt.init(1, VoNChatChannel::Direct, 0, FRAME, FRAME * 2);
+    REQUIRE(rp.pushPacket(pkt, reinterpret_cast<const uint8_t*>(first)));
+
+    pkt.init(1, VoNChatChannel::Direct, 0, FRAME, FRAME * 2);
+    REQUIRE(rp.pushPacket(pkt, reinterpret_cast<const uint8_t*>(second)));
+
+    int16_t out[FRAME] = {};
+    REQUIRE(rp.pull(out, FRAME) == FRAME);
+    REQUIRE(out[0] == second[0]);
 }
 
 // --- VoNClient tests ---
@@ -281,7 +303,7 @@ TEST_CASE("VoN loopback pipeline with PCM codec", "[VoN][app]")
         pkt->init(1, VoNChatChannel::Global, i * FRAME, FRAME, FRAME * 2);
         std::memcpy(pkt->payload(), tone, FRAME * 2);
 
-        rp.pushPacket(*pkt, pkt->payload());
+        REQUIRE(rp.pushPacket(*pkt, pkt->payload()));
     }
 
     REQUIRE(rp.buffered() == 3);
@@ -320,7 +342,7 @@ TEST_CASE("VoN loopback pipeline with Opus codec", "[VoN][app]")
         pkt->init(1, VoNChatChannel::Vehicle, i * FRAME, FRAME, static_cast<uint16_t>(enc));
         std::memcpy(pkt->payload(), encBuf.data(), enc);
 
-        rp.pushPacket(*pkt, pkt->payload());
+        REQUIRE(rp.pushPacket(*pkt, pkt->payload()));
     }
 
     REQUIRE(rp.buffered() == 3);

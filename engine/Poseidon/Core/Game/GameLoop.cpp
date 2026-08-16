@@ -5,6 +5,7 @@
 #include <Poseidon/Core/Application.hpp>
 #include <Poseidon/Core/PendingConnect.hpp>
 #include <Poseidon/Core/Global.hpp>
+#include <Poseidon/Audio/IAudioSystem.hpp>
 #include <Poseidon/Input/CheatCode.hpp>
 #include <Poseidon/World/World.hpp>
 #include <Poseidon/World/Scene/Scene.hpp>
@@ -72,6 +73,8 @@ void RenderFrame(float deltaT, bool enableDraw)
     GDebugger.NextAliveExpected(10000);
 
     GWorld->SetSimulationFocus(enableDraw);
+    if (GSoundsys)
+        GSoundsys->SetSimulationRunning(GWorld->IsSimulationEnabled());
     GWorld->Simulate(deltaT, enableDraw);
 
     GApp->m_forceRender = false;
@@ -186,6 +189,8 @@ bool AppIdle()
     Poseidon::Foundation::MemoryFrameMaintenance();
 
     bool focused = (GApp->m_keepFocus || GApp->m_appActive) && !GApp->m_appPaused && !GApp->m_appIconic;
+    if (GSoundsys)
+        GSoundsys->Activate(focused);
     const bool testMissionActive = !AppConfig::Instance().GetTestMissionPath().empty();
     bool enableDraw = (focused || (GApp->m_forceRender || testMissionActive) &&
                                       (ENGINE_CONFIG.landEditor || ENGINE_CONFIG.useWindow));

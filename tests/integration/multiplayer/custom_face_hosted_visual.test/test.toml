@@ -1,0 +1,33 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 90
+
+tags = ["network"]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "host", "--log-format", "jsonl"]
+name = "host"
+type = "client"
+use_mission = false
+no_autotest = true
+machine_id = "trident:custom_face_hosted_visual:host"
+copy_files = [
+  { source = "custom-face-hosted.Demo/description.ext", target = "content/MPMissions/custom-face-hosted.Demo/description.ext" },
+  { source = "custom-face-hosted.Demo/mission.sqm", target = "content/MPMissions/custom-face-hosted.Demo/mission.sqm" },
+  { source = "UserInfo.cfg", target = "Users/host/UserInfo.cfg" },
+  { source = "face.jpg", target = "Users/host/face.jpg" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "joiner", "--log-format", "jsonl"]
+name = "joiner"
+type = "client"
+use_mission = false
+no_autotest = true
+after = "host"
+start_delay_ms = 3000
+machine_id = "trident:custom_face_hosted_visual:joiner"
+copy_files = [
+  { source = "UserInfo.cfg", target = "Users/joiner/UserInfo.cfg" },
+  { source = "face.jpg", target = "Users/joiner/face.jpg" },
+]

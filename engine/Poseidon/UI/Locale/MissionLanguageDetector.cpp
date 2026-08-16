@@ -20,6 +20,8 @@ using Poseidon::LSOK;
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <filesystem>
+#include <unordered_map>
 
 using Poseidon::WithLangSuffix;
 
@@ -96,6 +98,111 @@ bool IsMissionRelativeAssetPath(RString relPath)
     return relPath.GetLength() > 0 && relPath[0] != '\\' && relPath[0] != '/' && !strchr(path, '/') &&
            !strchr(path, '\\');
 }
+
+std::string NormalizeMissionRelativePath(const std::string& path)
+{
+    std::string normalized;
+    normalized.reserve(path.size());
+    for (char ch : path)
+    {
+        if (ch == '\\')
+            ch = '/';
+        normalized.push_back((char)std::tolower((unsigned char)ch));
+    }
+    while (!normalized.empty() && normalized.front() == '/')
+        normalized.erase(normalized.begin());
+    return normalized;
+}
+
+class LooseMissionFileIndex
+{
+  public:
+    explicit LooseMissionFileIndex(RString root) : _root(EnsureTrailingSlash(root))
+    {
+        namespace fs = std::filesystem;
+        std::error_code ec;
+        fs::path base((const char*)_root);
+        if (!fs::is_directory(base, ec))
+            return;
+
+        for (fs::recursive_directory_iterator it(base, fs::directory_options::skip_permission_denied, ec), end;
+             !ec && it != end; it.increment(ec))
+        {
+            if (!it->is_regular_file(ec))
+                continue;
+
+            fs::path relative = fs::relative(it->path(), base, ec);
+            if (ec)
+                continue;
+
+            std::string relativeName = relative.generic_string();
+            _files.try_emplace(NormalizeMissionRelativePath(relativeName), RString(relativeName.c_str()));
+        }
+    }
+
+    bool FileExists(RString fullPath) const
+    {
+        RString relPath = RelativePath(fullPath);
+        return relPath.GetLength() > 0 && FindRelative(relPath, nullptr);
+    }
+
+    RString ResolveVoicePath(RString relPath) const
+    {
+        RString actual;
+        if (FindRelative(relPath, &actual))
+            return _root + actual;
+
+        for (int lang = 0; lang < CfgLib::LanguageRegistry::Instance().Count(); ++lang)
+        {
+            RString localized =
+                WithLangSuffix(relPath, RString(CfgLib::LanguageRegistry::Instance().Languages()[lang].name.c_str()));
+            if (localized.GetLength() > 0 && FindRelative(localized, nullptr))
+                return _root + relPath;
+        }
+
+        if (IsMissionRelativeAssetPath(relPath))
+        {
+            RString soundPath = RString("sound/") + relPath;
+            if (FindRelative(soundPath, &actual))
+                return _root + actual;
+
+            for (int lang = 0; lang < CfgLib::LanguageRegistry::Instance().Count(); ++lang)
+            {
+                RString localized = WithLangSuffix(
+                    soundPath, RString(CfgLib::LanguageRegistry::Instance().Languages()[lang].name.c_str()));
+                if (localized.GetLength() > 0 && FindRelative(localized, nullptr))
+                    return _root + soundPath;
+            }
+        }
+
+        return RString();
+    }
+
+  private:
+    RString RelativePath(RString fullPath) const
+    {
+        const char* root = _root;
+        const char* path = fullPath;
+        const size_t rootLen = strlen(root);
+        if (strnicmp(path, root, rootLen) != 0)
+            return RString();
+
+        return RString(path + rootLen);
+    }
+
+    bool FindRelative(RString relPath, RString* actual) const
+    {
+        auto it = _files.find(NormalizeMissionRelativePath((const char*)relPath));
+        if (it == _files.end())
+            return false;
+        if (actual)
+            *actual = it->second;
+        return true;
+    }
+
+    RString _root;
+    std::unordered_map<std::string, RString> _files;
+};
 
 RString ResolveMissionVoicePath(RString root, RString relPath)
 {
@@ -344,6 +451,7 @@ void DetectVoiceLanguages(RString root, MissionLanguageDetector::MissionLanguage
     if (!cfgSounds)
         return;
 
+    LooseMissionFileIndex files(root);
     bool hasSharedVoice = false;
     for (int i = 0; i < cfgSounds->GetEntryCount(); ++i)
     {
@@ -356,18 +464,18 @@ void DetectVoiceLanguages(RString root, MissionLanguageDetector::MissionLanguage
         if (relPath.GetLength() == 0)
             continue;
 
-        RString basePath = ResolveMissionVoicePath(root, relPath);
+        RString basePath = files.ResolveVoicePath(relPath);
         if (basePath.GetLength() == 0)
             continue;
 
-        if (QIFStreamB::FileExist(basePath))
+        if (files.FileExists(basePath))
             hasSharedVoice = true;
 
         for (int lang = 0; lang < CfgLib::LanguageRegistry::Instance().Count(); ++lang)
         {
             RString localized =
                 WithLangSuffix(basePath, RString(CfgLib::LanguageRegistry::Instance().Languages()[lang].name.c_str()));
-            if (localized.GetLength() > 0 && QIFStreamB::FileExist(localized))
+            if (localized.GetLength() > 0 && files.FileExists(localized))
                 info.flags[lang].voice = true;
         }
     }

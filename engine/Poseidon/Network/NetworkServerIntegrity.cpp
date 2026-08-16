@@ -558,6 +558,7 @@ NetworkPlayerInfo* NetworkServer::OnPlayerCreate(int dpid, const char* name)
     info.integrityCheckNext = UINT_MAX;
     info.connectionProblemsReported = false;
     info.jip = false;
+    info.waitingForMission = false;
     info.kickedOff = false;
     info.nextQuestionId = 1;
 
@@ -723,6 +724,19 @@ void NetworkServer::OnPlayerDestroy(int dpid)
         {
             _nextPlayerId = 1;
             _votings.Clear();
+        }
+    }
+
+    for (int i = 0; i < _pendingMessages.Size();)
+    {
+        NetPendingMessage& pending = _pendingMessages[i];
+        if (pending.player->player == dpid)
+        {
+            _pendingMessages.Delete(i);
+        }
+        else
+        {
+            i++;
         }
     }
 

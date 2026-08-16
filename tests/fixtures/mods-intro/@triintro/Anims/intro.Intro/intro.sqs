@@ -1,0 +1,9 @@
+_cam = "camera" camCreate [7940.0,20.0,7160.0]
+_cam cameraEffect ["internal","back"]
+_cam camSetTarget player
+_cam camSetRelPos [0,-8,3]
+_cam camCommit 0
+@camCommitted _cam
+#loop
+~1
+goto "loop"

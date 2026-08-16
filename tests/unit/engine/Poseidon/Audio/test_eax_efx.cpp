@@ -4,7 +4,11 @@
 #include <catch2/catch_approx.hpp>
 #include <Poseidon/Audio/IAudioSystem.hpp>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <stddef.h>
+#include <string>
 
 using namespace Poseidon;
 using Catch::Approx;
@@ -217,6 +221,20 @@ TEST_CASE("EAX: SoundEnvironment struct default initializes", "[Audio][EAX]")
     CHECK(env.type == SEPlain);
     CHECK(env.size == 100.f);
     CHECK(env.density == Approx(0.5f));
+}
+
+TEST_CASE("EAX: OpenAL software EFX is not gated by hardware acceleration", "[Audio][EAX][oal]")
+{
+    const std::filesystem::path sourcePath =
+        std::filesystem::path(TESTS_ROOT_DIR).parent_path() / "engine" / "PoseidonOpenAL" / "SoundSystemOAL.cpp";
+    std::ifstream in(sourcePath);
+    REQUIRE(in.good());
+    std::stringstream buffer;
+    buffer << in.rdbuf();
+    const std::string source = buffer.str();
+
+    CHECK(source.find("if (!_canEAX || !_hwAccel)") == std::string::npos);
+    CHECK(source.find("EnableEAX(true): rejected — EFX not available") != std::string::npos);
 }
 
 // ---------------------------------------------------------------------------

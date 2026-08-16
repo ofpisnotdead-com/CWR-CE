@@ -26,6 +26,18 @@ enum class VoNCommand : uint8_t
     ResetConnection = 8
 };
 
+// Transmitter-side pipeline health. The transmit HUD must not rely on key
+// state alone: with a dead microphone or an unassigned voice identity the
+// key is held, the indicator shows, and nothing is sent.
+enum class VoNTransmitHealth : uint8_t
+{
+    Off = 0,          // transmit not requested (PTT released)
+    Transmitting = 1, // frames captured, encoded and handed to the network recently
+    NoCapture = 2,    // capture device or recorder missing — nothing can be sent
+    NotConnected = 3, // sender identity not assigned or transport sink not wired
+    Stalled = 4       // transmit requested but no packet produced within the window
+};
+
 static constexpr uint32_t VON_MAGIC_CTRL = 0xc1c1a027;
 static constexpr uint32_t VON_MAGIC_DATA = 0xdada8fc1;
 

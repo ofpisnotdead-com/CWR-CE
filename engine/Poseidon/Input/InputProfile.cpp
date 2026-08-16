@@ -4,8 +4,17 @@
 #include <Poseidon/Input/UserActionDesc.hpp>
 #include <algorithm>
 
+#include <SDL3/SDL_scancode.h>
+
 namespace Poseidon
 {
+
+int DefaultModifierForDefaultKey(UserAction action, int packedKey)
+{
+    if (action == UACheatEntry && packedKey == SDL_SCANCODE_KP_MINUS)
+        return SDL_SCANCODE_LSHIFT;
+    return -1;
+}
 
 const std::vector<InputCode> InputProfile::emptyBindings_;
 const std::vector<InputBinding> InputProfile::emptyBindingEntries_;
@@ -145,7 +154,12 @@ void InputProfile::LoadDefaults()
             if (IsLegacyGamepadCode(keys[j]))
                 continue;
             InputCode code = InputCode::FromLegacy(keys[j]);
-            if (code.valid())
+            if (!code.valid())
+                continue;
+            int mod = DefaultModifierForDefaultKey(static_cast<UserAction>(i), keys[j]);
+            if (mod >= 0)
+                Bind(static_cast<UserAction>(i), InputBinding(code, InputCode::FromLegacy(mod)));
+            else
                 Bind(static_cast<UserAction>(i), code);
         }
     }

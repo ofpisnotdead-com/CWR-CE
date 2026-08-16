@@ -143,6 +143,7 @@ public:
 	void SetFaceAnimation(int phase) {_forceWinkPhase = phase;}
 
 	void SetFace(const HeadType &type, bool women, LODShape *lShape, RString name, RString player = "");
+	RString GetFaceTextureName() const;
 	void SetGlasses(const HeadType &type, LODShape *lShape, RString name);
 	void SetForceMimic(RStringB name);
 	void SetMimic(RStringB name);

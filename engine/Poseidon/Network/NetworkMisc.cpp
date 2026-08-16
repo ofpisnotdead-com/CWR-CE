@@ -16,6 +16,7 @@ using namespace Poseidon;
 #include <Poseidon/Core/Global.hpp>
 // #include "strIncl.hpp"
 #include <Poseidon/UI/Locale/StringtableExt.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 
 #include <Poseidon/AI/ArcadeTemplate.hpp>
 #include <Poseidon/AI/AI.hpp>
@@ -45,7 +46,6 @@ using namespace Poseidon;
 
 #include <Poseidon/Game/UiActions.hpp>
 
-#include <Poseidon/Foundation/Algorithms/Crc.hpp>
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_keyboard.h>
 #include <SDL3/SDL_scancode.h>
@@ -79,6 +79,11 @@ using namespace Poseidon;
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
 
 #include <Poseidon/Foundation/Strings/Mbcs.hpp>
+
+namespace Poseidon
+{
+RString GetUserDirectory();
+}
 
 using namespace Poseidon::Dev;
 using Poseidon::Foundation::MemAllocSA;
@@ -474,7 +479,9 @@ bool CheckSquadObject::DoProcessXML()
 
         _logoFile =
             Poseidon::BuildNetworkServerSquadPictureUploadPath(GetServerTmpDir(), _squad->nick, _squad->picture);
-        CreatePath(_logoFile);
+        const std::filesystem::path logoPath = Poseidon::FilesystemPathFromUtf8(_logoFile.Data());
+        const std::string logoDir = Poseidon::FilesystemPathToUtf8(logoPath.parent_path());
+        Poseidon::CreateDirectoryUtf8(logoDir.c_str());
     }
     else
     {
@@ -882,6 +889,11 @@ PlayerIdentity* NetworkComponent::FindIdentity(int dpnid)
 
 int NetworkComponent::ReceiveFileSegment(TransferFileMessage& msg)
 {
+    if (Poseidon::IsSafeNetworkTransferredAssetPath(msg.path))
+    {
+        msg.path = Poseidon::GetUserDirectory() + msg.path;
+    }
+
     // The declared geometry is wire-controlled. Reject it before any allocation or
     // write so a malformed header can neither drive a giant Resize nor index/copy
     // outside the buffers.
@@ -945,26 +957,50 @@ int NetworkComponent::ReceiveFileSegment(TransferFileMessage& msg)
         return 0;
     }
     //  whole file received
-    CreatePath(file.fileName);
-    QOFStream f;
-    f.open(file.fileName);
-    f.write(file.fileData.Data(), file.fileData.Size());
-    f.close();
-    // delete buffer
+    const bool written = Poseidon::WriteFileUtf8(file.fileName, file.fileData.Data(), file.fileData.Size());
     _files.Delete(index);
-    if (f.fail())
+    if (!written)
         LOG_WARN(Network, "[ReceiveFileSegment] FAILED to write '{}' ({} bytes)", (const char*)msg.path, msg.totSize);
-    return f.fail() ? -1 : +1;
+    return written ? +1 : -1;
 }
 
-void NetworkComponent::TransferFile(int to, RString dest, RString source)
+bool NetworkComponent::HasReceivedFileSegment(const RString& path, int segment) const
 {
-    QIFStreamB f;
-    f.AutoOpen(source);
+    if (segment < 0)
+    {
+        return false;
+    }
+    for (int i = 0; i < _files.Size(); ++i)
+    {
+        const ReceivingFile& file = _files[i];
+        if (file.fileName == path && segment < file.fileSegments.Size())
+        {
+            return file.fileSegments[segment];
+        }
+    }
+    return false;
+}
 
-    Poseidon::SendNetworkFileTransferSegments<TransferFileMessage>(
-        dest, f.GetBuffer()->GetData(), f.GetBuffer()->GetSize(),
-        [this, to](TransferFileMessage& msg) { SendMsg(to, &msg, NMFGuaranteed); });
+void NetworkComponent::TransferFile(int to, RString dest, RString source, NetMsgFlags flags)
+{
+    const std::vector<char> data = Poseidon::ReadFileUtf8(source);
+    if (data.empty() && Poseidon::FileExistsUtf8(source))
+    {
+        LOG_WARN(Network, "[TransferFile] refusing empty file '{}'", (const char*)source);
+        return;
+    }
+    if (data.empty())
+    {
+        LOG_WARN(Network, "[TransferFile] failed to read '{}'", (const char*)source);
+        return;
+    }
+
+    const DWORD start = GlobalTickCount();
+    const int segments = Poseidon::SendNetworkFileTransferSegments<TransferFileMessage>(
+        dest, data.data(), static_cast<int>(data.size()),
+        [this, to, flags](TransferFileMessage& msg) { SendMsg(to, &msg, flags); });
+    LOG_INFO(Network, "[NMTTransferFile] relay queued to {} src='{}' dst='{}' bytes={} segments={} enqueueMs={}", to,
+             (const char*)source, (const char*)dest, data.size(), segments, GlobalTickCount() - start);
 }
 
 void NetworkComponent::TransferFace(int to, int player)
@@ -974,41 +1010,44 @@ void NetworkComponent::TransferFace(int to, int player)
     bool notBotClient = !client || client->GetPlayer() != to;
 
     RString srcDir = Poseidon::BuildNetworkServerPlayerUploadDir(GetServerTmpDir(), player);
-    RString dstDir = Poseidon::BuildNetworkPlayerAssetTmpDir(player);
-    if (srcDir.GetLength() == 0 || dstDir.GetLength() == 0)
+    RString relativeDstDir = Poseidon::BuildNetworkPlayerAssetTmpDir(player);
+    RString dstDir = Poseidon::GetUserDirectory() + relativeDstDir;
+    if (srcDir.GetLength() == 0 || relativeDstDir.GetLength() == 0)
     {
         return;
     }
 
     RString src = Poseidon::BuildNetworkServerPlayerAssetUploadPath(GetServerTmpDir(), player, RString("face.paa"));
-    RString dst = Poseidon::BuildNetworkPlayerAssetTmpPath(player, RString("face.paa"));
+    RString relativeDst = Poseidon::BuildNetworkPlayerAssetTmpPath(player, RString("face.paa"));
+    RString dst = Poseidon::GetUserDirectory() + relativeDst;
     if (QIFStream::FileExists(src))
     {
         if (notBotClient)
         {
-            TransferFile(to, dst, src);
+            TransferFile(to, relativeDst, src, NMFGuaranteed);
         }
         else
         {
-            CreatePath(dstDir);
-            ::CopyFile(src, dst, FALSE);
+            Poseidon::CreateDirectoryUtf8(dstDir);
+            Poseidon::CopyFileUtf8(src, dst, false);
         }
     }
     else
     {
         src = Poseidon::BuildNetworkServerPlayerAssetUploadPath(GetServerTmpDir(), player, RString("face.jpg"));
-        dst = Poseidon::BuildNetworkPlayerAssetTmpPath(player, RString("face.jpg"));
+        relativeDst = Poseidon::BuildNetworkPlayerAssetTmpPath(player, RString("face.jpg"));
+        dst = Poseidon::GetUserDirectory() + relativeDst;
         if (QIFStream::FileExists(src))
         {
             if (notBotClient)
             {
-                TransferFile(to, dst, src);
+                TransferFile(to, relativeDst, src, NMFGuaranteed);
             }
             else
             {
-                CreatePath(dstDir);
+                Poseidon::CreateDirectoryUtf8(dstDir);
+                Poseidon::CopyFileUtf8(src, dst, false);
             }
-            ::CopyFile(src, dst, FALSE);
         }
     }
 }
@@ -1020,32 +1059,33 @@ void NetworkComponent::TransferCustomRadio(int to, int player)
     bool notBotClient = !client || client->GetPlayer() != to;
 
     RString srcDir = Poseidon::BuildNetworkServerPlayerSoundUploadDir(GetServerTmpDir(), player);
-    RString dstDir = Poseidon::BuildNetworkPlayerSoundTmpDir(player);
-    if (srcDir.GetLength() == 0 || dstDir.GetLength() == 0)
+    RString relativeDstDir = Poseidon::BuildNetworkPlayerSoundTmpDir(player);
+    RString dstDir = Poseidon::GetUserDirectory() + relativeDstDir;
+    if (srcDir.GetLength() == 0 || relativeDstDir.GetLength() == 0)
     {
         return;
     }
 
-    std::error_code ec;
-    for (const auto& entry : std::filesystem::directory_iterator(std::string(srcDir), ec))
+    for (const Poseidon::DirectoryEntryUtf8& entry : Poseidon::ListDirectoryEntriesUtf8(srcDir))
     {
-        if (!entry.is_regular_file())
+        if (entry.isDirectory)
             continue;
-        RString filename = entry.path().filename().string().c_str();
+        RString filename = entry.name.c_str();
         RString src = Poseidon::BuildNetworkServerPlayerSoundUploadPath(GetServerTmpDir(), player, filename);
-        RString dst = Poseidon::BuildNetworkPlayerSoundTmpPath(player, filename);
-        if (src.GetLength() == 0 || dst.GetLength() == 0)
+        RString relativeDst = Poseidon::BuildNetworkPlayerSoundTmpPath(player, filename);
+        RString dst = Poseidon::GetUserDirectory() + relativeDst;
+        if (src.GetLength() == 0 || relativeDst.GetLength() == 0)
         {
             continue;
         }
         if (notBotClient)
         {
-            TransferFile(to, dst, src);
+            TransferFile(to, relativeDst, src, NMFGuaranteed);
         }
         else
         {
-            CreatePath(dstDir);
-            ::CopyFile(src, dst, FALSE);
+            Poseidon::CreateDirectoryUtf8(dstDir);
+            Poseidon::CopyFileUtf8(src, dst, false);
         }
     }
 }
@@ -1164,6 +1204,17 @@ void NetworkManager::GetSessions(AutoArray<SessionInfo>& sessions)
         info.badMod = info.equalModRequired && stricmp(info.mod, ModSystem::GetModNames()) != 0;
         info.badTag = stricmp(info.versionTag, GetVersionTag()) != 0;
     }
+}
+
+bool NetworkManager::ProbeRemoteHosts(AutoArray<RemoteHostAddress>& hosts, int port)
+{
+    if (!_sessionEnum)
+    {
+        return false;
+    }
+
+    _lastEnumHosts = Glob.uiTime;
+    return _sessionEnum->StartEnumHosts(RString(), port, &hosts);
 }
 
 void CheckMPVersion(SessionInfo& info)
@@ -1711,6 +1762,19 @@ RString NetworkManager::GetPlayerName(int dpid)
     {
         return "Unknown player";
     }
+}
+
+void NetworkManager::GetVoiceSpeakers(AutoArray<NetVoiceSpeakerInfo, Poseidon::Foundation::MemAllocSA>& speakers)
+{
+    if (_client)
+    {
+        _client->GetVoiceSpeakers(speakers);
+    }
+}
+
+int NetworkManager::GetVoiceTransmitHealth()
+{
+    return _client ? _client->GetVoiceTransmitHealth() : 0;
 }
 
 Vector3 NetworkManager::GetCameraPosition(int dpid)

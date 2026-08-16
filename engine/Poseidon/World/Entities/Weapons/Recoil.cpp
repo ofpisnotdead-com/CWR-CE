@@ -22,28 +22,31 @@ void RecoilFunction::AddItem(float time, float offset, float angle)
     item._mat = mat;
 }
 
-RecoilFunction::RecoilFunction() : _cfg(nullptr) {}
+RecoilFunction::RecoilFunction() = default;
 
-RecoilFunction::RecoilFunction(RStringB name)
+RecoilFunction::RecoilFunction(RStringB name) : _name(name)
 {
-    const ParamEntry& entry = Pars >> "CfgRecoils" >> name;
-
-    _cfg = &entry;
-    if (entry.GetSize() <= 0)
+    const ParamEntry* cfgRecoils = Pars.FindEntryNoInheritance("CfgRecoils");
+    if (!cfgRecoils)
     {
         return;
     }
 
+    const ParamEntry* entry = cfgRecoils->FindEntryNoInheritance(name);
+    if (!entry || entry->GetSize() <= 0)
+    {
+        return;
+    }
     RecoilItem item;
     item._time = 0;
     item._mat = MIdentity;
     _queue.Add(item);
 
-    for (int i = 0; i < entry.GetSize() - 2; i += 3)
+    for (int i = 0; i < entry->GetSize() - 2; i += 3)
     {
-        float itemTime = entry[i];
-        float itemMoveZ = entry[i + 1];
-        float itemRotX = entry[i + 2];
+        float itemTime = (*entry)[i];
+        float itemMoveZ = (*entry)[i + 1];
+        float itemRotX = (*entry)[i + 2];
 
         AddItem(itemTime, itemMoveZ, itemRotX);
     }
@@ -52,7 +55,7 @@ RecoilFunction::RecoilFunction(RStringB name)
 RecoilFunction::~RecoilFunction() = default;
 const RStringB& RecoilFunction::GetName() const
 {
-    return _cfg->GetName();
+    return _name;
 }
 
 float RecoilFunction::GetRecoilRotX(float time) const

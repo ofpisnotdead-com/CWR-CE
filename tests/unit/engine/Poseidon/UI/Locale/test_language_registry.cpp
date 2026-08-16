@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <Poseidon/UI/Locale/LanguageRegistry.hpp>
+#include <Poseidon/UI/Locale/SupportedLanguages.hpp>
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
 
@@ -33,6 +34,21 @@ TEST_CASE("LanguageRegistry - built-in defaults", "[locale][language]")
     REQUIRE(ru->codepage == Poseidon::Codepage::CP1251);
 
     REQUIRE(reg.Find("Klingon") == nullptr);
+}
+
+TEST_CASE("LanguageRegistry - normalize accepts language aliases", "[locale][language]")
+{
+    auto& reg = LanguageRegistry::Instance();
+    reg.ResetToDefaults();
+
+    REQUIRE(CfgLib::NormalizeSupportedLanguage("CZ") == "Czech");
+    REQUIRE(CfgLib::NormalizeSupportedLanguage("cz") == "Czech");
+    REQUIRE(CfgLib::NormalizeSupportedLanguage("cs_CZ.UTF-8") == "Czech");
+    REQUIRE(CfgLib::NormalizeSupportedLanguage("\xC4\x8C"
+                                               "e\xC5\xA1"
+                                               "tina") == "Czech");
+    REQUIRE(CfgLib::NormalizeSupportedLanguage("DE") == "German");
+    REQUIRE(CfgLib::NormalizeSupportedLanguage("de-DE") == "German");
 }
 
 // The Game-settings Voice Language picker offered the full text-language

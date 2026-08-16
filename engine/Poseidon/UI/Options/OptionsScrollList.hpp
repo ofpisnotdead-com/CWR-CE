@@ -39,9 +39,10 @@ class OptionsScrollList
 public:
 	enum : int {
 		kVisibleSlots   = 9,
-		kInnerChars     = 16,    // stepper value cell width in chars
+		kInnerChars     = 16,    // stepper value cell width in chars; also the wide binding primary cell
 		kLabelInnerChars = 18,   // left label column width in chars
 		kBindingLabelInnerChars = 11, // narrower left label width when bindings show chevrons
+		kBindingAltInnerChars = 6, // narrow right-hand binding cell (fits ~"Delete" before it clips)
 		// Matches the hint control's visible glyph budget.  Keep close to
 		// the real 3D width so long descriptions marquee before clipping.
 		kHintInnerChars = 50,
@@ -82,6 +83,10 @@ public:
 	static constexpr int SlotIdcPrev    (int slot) { return 500 + slot * 10 + 8; }
 	static constexpr int SlotIdcNext    (int slot) { return 500 + slot * 10 + 9; }
 	static int SlotForControlIdc(int idc);
+
+	// Render one text cell into `out`: marquee-scroll it when `marquee` is set and it
+	// overflows `innerChars`, else clip. Shared by row label, stepper, and both cells.
+	static void FormatCell(const char* val, int innerChars, bool marquee, DWORD elapsedMs, char* out, size_t outsz);
 
 	// Per-row shape descriptor.  count encoding:
 	//   > 0 — stepper/toggle, options[] has count strings to cycle
@@ -168,6 +173,10 @@ public:
 		// per-device capture modal here.
 		virtual void OnBindingClicked(int /*row*/, int /*slot*/, Display& /*host*/) {}
 
+		// Invoked when the user clears a Binding row's primary (slot=0)
+		// or alt (slot=1) cell via Backspace / Delete on a focused row.
+		virtual void OnBindingCleared(int /*row*/, int /*slot*/) {}
+
 		// Invoked when focus moves between rows.  prevRow may be -1 on
 		// first focus.  Audio uses this to start a category preview when
 		// a slider is selected and stop it when focus leaves.
@@ -247,6 +256,8 @@ public:
 		    { return IsCloseRow(row) ? nullptr : m_base.SliderValueText(row); }
 		void OnBindingClicked(int row, int slot, Display& host) override
 		    { if (!IsCloseRow(row)) m_base.OnBindingClicked(row, slot, host); }
+		void OnBindingCleared(int row, int slot) override
+		    { if (!IsCloseRow(row)) m_base.OnBindingCleared(row, slot); }
 		const char* FindBindingConflict(const char* fmt, int excludeRow, int excludeSlot) const override
 		    { return m_base.FindBindingConflict(fmt, excludeRow, excludeSlot); }
 
@@ -295,6 +306,7 @@ private:
 	void PollScrollbarDrag();
 	void PollSliderDrag();
 	bool PollPointerActionClick();
+	void PollPointerRightClick();
 	void MoveFocus(int direction);
 	void ScrollBy(int delta);
 	void CycleFocusedRowValue(int direction);
@@ -318,6 +330,7 @@ private:
 	int  RowLabelInnerChars(int row) const;
 	bool RowLabelNeedsMarquee(int row) const;
 	bool FocusedStepperValueNeedsMarquee() const;
+	bool FocusedBindingCellNeedsMarquee() const;
 
 	void SetSliderBar(int fillIdc, int percent,
 	                  float trackX, float trackY, float trackH, float trackWidth);
@@ -376,6 +389,7 @@ private:
 	float m_lastCursorY    = -2.0f;
 	int   m_lastNotifiedFocus = -1;
 	bool  m_pointerLeftWasDown = false;
+	bool  m_pointerRightWasDown = false;
 	bool  m_pointerActionCaptured = false;
 	int   m_pointerActionRow = -1;
 };

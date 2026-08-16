@@ -6,7 +6,11 @@ namespace Poseidon::Foundation
 
 #ifndef _WIN32
 
+#ifdef __APPLE__
+pthread_mutex_t mutexInit = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
+#else
 pthread_mutex_t mutexInit = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+#endif
 
 #endif
 

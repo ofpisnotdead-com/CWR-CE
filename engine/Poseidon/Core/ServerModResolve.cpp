@@ -39,6 +39,25 @@ ServerModList::ServerModList(const std::string& modString, bool equalModRequired
     }
 }
 
+ServerModList::ServerModList(std::vector<std::pair<std::string, int64_t>> packages, bool equalModRequired)
+    : _exact(equalModRequired), _hasExactRevisions(true)
+{
+    for (auto& package : packages)
+    {
+        ModId id(package.first);
+        if (id.Empty() || !_set.insert(id).second)
+            continue;
+        _required.push_back(id);
+        _revisions.emplace(std::move(id), package.second > 0 ? package.second : 1);
+    }
+}
+
+int64_t ServerModList::RequiredRevision(const ModId& id) const
+{
+    const auto it = _revisions.find(id);
+    return it == _revisions.end() ? 1 : it->second;
+}
+
 ServerModResolver::ServerModResolver(const std::vector<ModId>& installed, const std::vector<ModId>& active)
     : _active(active)
 {
@@ -47,7 +66,21 @@ ServerModResolver::ServerModResolver(const std::vector<ModId>& installed, const 
         if (!id.Empty())
         {
             _installed.insert(id);
+            _installedRevisions.emplace(id, 1);
         }
+    }
+}
+
+ServerModResolver::ServerModResolver(const std::vector<InstalledModPackage>& installed,
+                                     const std::vector<ModId>& active)
+    : _active(active)
+{
+    for (const InstalledModPackage& package : installed)
+    {
+        if (package.id.Empty())
+            continue;
+        _installed.insert(package.id);
+        _installedRevisions.emplace(package.id, package.packageRevision > 0 ? package.packageRevision : 1);
     }
 }
 
@@ -57,19 +90,43 @@ ServerModResolution ServerModResolver::Resolve(const ServerModList& server, cons
 
     for (const ModId& id : server.Required())
     {
-        if (_installed.count(id) != 0)
+        const int64_t requiredRevision = server.RequiredRevision(id);
+        const auto installed = _installedRevisions.find(id);
+        const ModCatalogEntry* catalogEntry = catalog.Find(id);
+        if (server.HasExactRevisions() && catalogEntry != nullptr &&
+            catalogEntry->PackageRevision() != requiredRevision)
+        {
+            out._blocked.push_back(id);
+            if (catalogEntry->PackageRevision() > requiredRevision &&
+                out._blockReason != MpJoinBlockReason::RevisionUnavailable)
+                out._blockReason = MpJoinBlockReason::ServerOutdated;
+            else
+                out._blockReason = MpJoinBlockReason::RevisionUnavailable;
+            continue;
+        }
+        if (server.HasExactRevisions() && catalogEntry == nullptr && catalog.IsReachable())
+        {
+            out._blocked.push_back(id);
+            out._blockReason = MpJoinBlockReason::RevisionUnavailable;
+            continue;
+        }
+        if (installed != _installedRevisions.end() &&
+            (!server.HasExactRevisions() || installed->second == requiredRevision))
         {
             out._satisfied.push_back(id);
             continue;
         }
-        if (const ModCatalogEntry* e = catalog.Find(id))
+        if (catalogEntry != nullptr)
         {
-            out._toDownload.push_back(
-                {id, e->Name().empty() ? id.Value() : e->Name(), e->DownloadUrl(), e->FolderName(), e->SizeBytes()});
+            out._toDownload.push_back({id, catalogEntry->Name().empty() ? id.Value() : catalogEntry->Name(),
+                                       catalogEntry->DownloadUrl(), catalogEntry->FolderName(),
+                                       catalogEntry->SizeBytes(), catalogEntry->PackageRevision(),
+                                       catalogEntry->Sha256(), catalogEntry->Version()});
         }
         else
         {
             out._blocked.push_back(id);
+            out._blockReason = MpJoinBlockReason::RevisionUnavailable;
         }
     }
 

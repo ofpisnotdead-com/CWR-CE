@@ -116,15 +116,7 @@ Object* Man::GetProxy(LODShapeWithShadow*& shape, int level, Matrix4& transform,
     {
         if (ShowItemInHand())
         {
-            const WeaponType* weapon = nullptr;
-            for (int i = 0; i < NWeaponSystems(); i++)
-            {
-                if (GetWeaponSystem(i)->_weaponType & MaskSlotBinocular)
-                {
-                    weapon = GetWeaponSystem(i);
-                    break;
-                }
-            }
+            const WeaponType* weapon = Poseidon::FindBinocularWeapon(_weapons);
             if (weapon)
             {
                 pshape = weapon->_model;
@@ -135,15 +127,7 @@ Object* Man::GetProxy(LODShapeWithShadow*& shape, int level, Matrix4& transform,
     {
         if (ShowItemInRightHand())
         {
-            const WeaponType* weapon = nullptr;
-            for (int i = 0; i < NWeaponSystems(); i++)
-            {
-                if (GetWeaponSystem(i)->_weaponType & MaskSlotBinocular)
-                {
-                    weapon = GetWeaponSystem(i);
-                    break;
-                }
-            }
+            const WeaponType* weapon = Poseidon::FindBinocularWeapon(_weapons);
             if (weapon)
             {
                 pshape = weapon->_model;
@@ -289,14 +273,7 @@ void Man::DrawProxies(int level, ClipFlags clipFlags, const Matrix4& transform, 
         {
             if (ShowItemInHand())
             {
-                for (int i = 0; i < NWeaponSystems(); i++)
-                {
-                    if (GetWeaponSystem(i)->_weaponType & MaskSlotBinocular)
-                    {
-                        weapon = GetWeaponSystem(i);
-                        break;
-                    }
-                }
+                weapon = Poseidon::FindBinocularWeapon(_weapons);
                 if (weapon)
                 {
                     pshape = weapon->_model;
@@ -307,14 +284,7 @@ void Man::DrawProxies(int level, ClipFlags clipFlags, const Matrix4& transform, 
         {
             if (ShowItemInRightHand())
             {
-                for (int i = 0; i < NWeaponSystems(); i++)
-                {
-                    if (GetWeaponSystem(i)->_weaponType & MaskSlotBinocular)
-                    {
-                        weapon = GetWeaponSystem(i);
-                        break;
-                    }
-                }
+                weapon = Poseidon::FindBinocularWeapon(_weapons);
                 if (weapon)
                 {
                     pshape = weapon->_model;

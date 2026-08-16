@@ -1,0 +1,36 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 75
+
+tags = ["headful", "network"]
+
+# Transmitter-side failure visibility: the joiner's microphone is the
+# test-tone backend in "dead" mode (device opens but never delivers a
+# sample), the classic silent VoN failure where the sender holds PTT, the
+# HUD indicator shows, and nothing reaches anyone. The joiner must observe
+# its own transmit health degrade to Stalled (4) via triGetVonTransmitHealth
+# — the same state that turns the voice-chat indicator red — and the host
+# must receive nothing.
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "von-health-host", "--log-format", "jsonl"]
+name = "host"
+type = "client"
+use_mission = false
+no_autotest = true
+machine_id = "trident:von_transmit_health:host"
+copy_files = [
+  { source = "hosted-von.Demo/description.ext", target = "content/MPMissions/hosted-von.Demo/description.ext" },
+  { source = "hosted-von.Demo/mission.sqm", target = "content/MPMissions/hosted-von.Demo/mission.sqm" },
+]
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "von-health-joiner", "--log-format", "jsonl"]
+name = "joiner"
+type = "client"
+use_mission = false
+no_autotest = true
+after = "host"
+start_delay_ms = 3000
+machine_id = "trident:von_transmit_health:joiner"
+env = [{ name = "POSEIDON_VOICE_TEST_TONE", value = "dead" }]

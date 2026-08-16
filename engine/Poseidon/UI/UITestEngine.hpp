@@ -6,6 +6,7 @@
 
 class IControl;
 class ControlsContainer;
+class CHTMLContainer;
 
 namespace Poseidon
 {
@@ -57,8 +58,15 @@ class UITestEngine
     // Get the active display container (for harness queries), or nullptr
     ControlsContainer* GetActiveDisplay() const { return FindActiveDisplay(); }
 
-    // Get text from a control (handles dynamic_cast to known types)
+    // Get text from a control (handles dynamic_cast to known types). Returns the
+    // semantic test override when one is set, otherwise the rendered text.
     static std::string GetControlText(IControl* ctrl);
+    // The rendered on-screen text, ignoring any semantic override: what the
+    // player actually sees, which may be clipped or marquee-scrolled.
+    static std::string GetControlDisplayText(IControl* ctrl);
+    // Concatenated text of an HTML control's current section ("" if not HTML)
+    static std::string GetHtmlText(IControl* ctrl);
+    static std::string GetHtmlText(const CHTMLContainer& html);
     static void SetSemanticControlText(IControl* ctrl, const char* text);
     static void ClearSemanticControlText(IControl* ctrl);
 

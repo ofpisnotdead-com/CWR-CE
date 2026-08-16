@@ -163,10 +163,16 @@ void MotionType::DeleteEdge(MoveId a, MoveId b)
 
 bool MotionType::FindPath(MotionPath& path, MoveId from, MotionPathItem to) const
 {
+    path.Resize(0);
+    int nVerts = _vertex.Size();
+    if (from < 0 || from >= nVerts || to.id < 0 || to.id >= nVerts)
+    {
+        return false;
+    }
+
     const MotionEdge& edge = Edge(from, to.id);
     if ((MotionEdgeType)edge.type != MEdgeNone)
     {
-        path.Resize(0);
         path.Add(to);
 #if LOG_PATH
         LOG_DEBUG(Physics, "Direct path from {} to {}", NAME(from), NAME(to.id));
@@ -175,12 +181,9 @@ bool MotionType::FindPath(MotionPath& path, MoveId from, MotionPathItem to) cons
         return true;
     }
 
-    path.Resize(0);
-
     AUTO_STATIC_ARRAY(int, vs, 1024);
     AUTO_STATIC_ARRAY(int, d, 1024);
     AUTO_STATIC_ARRAY(int, p, 1024);
-    int nVerts = _vertex.Size();
     d.Resize(nVerts);
     p.Resize(nVerts);
     for (int i = 0; i < nVerts; i++)
@@ -219,7 +222,7 @@ bool MotionType::FindPath(MotionPath& path, MoveId from, MotionPathItem to) cons
         {
             const MotionEdge& ei = e[i];
             int target = ei.target;
-            if (target < 0)
+            if (target < 0 || target >= nVerts)
             {
                 continue;
             }
@@ -243,13 +246,13 @@ bool MotionType::FindPath(MotionPath& path, MoveId from, MotionPathItem to) cons
 #endif
     for (;;)
     {
-        PoseidonAssert(p[to.id] >= 0 && p[to.id] < _moveIds.FirstInvalidValue());
-        to = MotionPathItem((MoveId)p[to.id]);
-        if (to.id < 0)
+        int predecessor = p[to.id];
+        if (predecessor < 0 || predecessor >= nVerts)
         {
-            Fail("Dijkstra buggy");
+            path.Resize(0);
             return false;
         }
+        to = MotionPathItem((MoveId)predecessor);
         if (to.id == from)
         {
 #if LOG_PATH
@@ -874,10 +877,13 @@ Vector3 Man::AnimatePoint(int level, int index) const
 
 bool Man::HasFlares(CameraType camType) const
 {
-    if (camType == CamGunner)
+    if (camType == CamGunner && _currentWeapon >= 0 && _currentWeapon < NMagazineSlots())
     {
         const MagazineSlot& slot = GetMagazineSlot(_currentWeapon);
-        return slot._muzzle->_opticsFlare;
+        if (slot._muzzle)
+        {
+            return slot._muzzle->_opticsFlare;
+        }
     }
     return base::HasFlares(camType);
 }

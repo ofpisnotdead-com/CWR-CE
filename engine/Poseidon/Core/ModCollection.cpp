@@ -1,5 +1,6 @@
 #include <Poseidon/Core/ModCollection.hpp>
 
+#include <Poseidon/Foundation/Strings/LocaleCollate.hpp>
 #include <Poseidon/IO/Filesystem/FileOps.hpp>
 
 #include <cjson/cJSON.h>
@@ -40,6 +41,25 @@ std::string ReadModJsonString(const std::filesystem::path& modDir, const char* k
         const cJSON* item = cJSON_GetObjectItemCaseSensitive(root, key);
         if (cJSON_IsString(item) && item->valuestring != nullptr)
             out = item->valuestring;
+        cJSON_Delete(root);
+    }
+    return out;
+}
+
+int64_t ReadModJsonInt64(const std::filesystem::path& modDir, const char* key, int64_t fallback)
+{
+    std::ifstream in(modDir / "mod.json", std::ios::binary);
+    if (!in)
+        return fallback;
+    std::ostringstream buffer;
+    buffer << in.rdbuf();
+    cJSON* root = cJSON_Parse(buffer.str().c_str());
+    int64_t out = fallback;
+    if (root != nullptr)
+    {
+        const cJSON* item = cJSON_GetObjectItemCaseSensitive(root, key);
+        if (cJSON_IsNumber(item))
+            out = static_cast<int64_t>(item->valuedouble);
         cJSON_Delete(root);
     }
     return out;
@@ -148,6 +168,10 @@ std::string ResolveFromRootByMetadata(const std::filesystem::path& root, const s
 bool LooksLikeMod(const std::string& dir)
 {
     namespace fs = std::filesystem;
+    // Classic engine roots plus the player-content roots the browsers scan additively; matched
+    // case-insensitively, so the canonical names here recognize any casing on disk.
+    constexpr const char* kModContentDirs[] = {"AddOns",     "Dta",       "Bin",         "Campaigns", "Missions",
+                                               "MPMissions", "Templates", "SPTemplates", "Anims",     "Fonts"};
     std::error_code ec;
     for (fs::directory_iterator it(dir, ec), end; it != end; it.increment(ec))
     {
@@ -155,11 +179,14 @@ bool LooksLikeMod(const std::string& dir)
             break;
         const std::string name = LowerAscii(it->path().filename().string());
         std::error_code mec;
-        // addons/dta/campaigns + a bin/ config override are what a mod changes.
-        // Missions/MPMissions are deliberately excluded — mission packs are a
-        // separate content type, not mods.
-        if (it->is_directory(mec) && (name == "addons" || name == "dta" || name == "bin" || name == "campaigns"))
-            return true;
+        if (it->is_directory(mec))
+        {
+            for (const char* root : kModContentDirs)
+            {
+                if (name == LowerAscii(root))
+                    return true;
+            }
+        }
         if (it->is_regular_file(mec) && name == "mod.json")
             return true;
     }
@@ -190,13 +217,16 @@ std::vector<Mod> ScanModsRoot(const std::string& root, ModSource source)
         m.catalogId = ReadModJsonString(it->path(), "modId");
         m.name = ModDisplayName(folder, ReadModJsonString(it->path(), "name"));
         m.version = ReadModJsonString(it->path(), "version");
+        m.packageRevision = std::max<int64_t>(1, ReadModJsonInt64(it->path(), "packageRevision", 1));
+        m.sha256 = ReadModJsonString(it->path(), "sha256");
         m.path = it->path().string();
         m.sizeBytes = DirSizeBytes(it->path());
         m.source = source;
         mods.push_back(std::move(m));
     }
 
-    std::sort(mods.begin(), mods.end(), [](const Mod& a, const Mod& b) { return a.name < b.name; });
+    std::sort(mods.begin(), mods.end(),
+              [](const Mod& a, const Mod& b) { return Foundation::CollateUtf8(a.name.c_str(), b.name.c_str()) < 0; });
     return mods;
 }
 
@@ -290,6 +320,8 @@ ModCollection ActiveModsFromMountPath(const std::string& mountPath)
         m.catalogId = ReadModJsonString(std::filesystem::path(entry), "modId");
         m.name = ModDisplayName(m.id, ReadModJsonString(std::filesystem::path(entry), "name"));
         m.version = ReadModJsonString(std::filesystem::path(entry), "version");
+        m.packageRevision = std::max<int64_t>(1, ReadModJsonInt64(std::filesystem::path(entry), "packageRevision", 1));
+        m.sha256 = ReadModJsonString(std::filesystem::path(entry), "sha256");
         m.path = entry;
         col.Add(std::move(m));
     }

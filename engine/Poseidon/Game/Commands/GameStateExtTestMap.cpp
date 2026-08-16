@@ -4,6 +4,10 @@
 #include <Poseidon/UI/Controls/UIControls.hpp>
 #include <Poseidon/Foundation/Framework/Log.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
+#include <Poseidon/Input/InputSubsystem.hpp>
+#include <Poseidon/Input/UserActionDesc.hpp>
+
+#include <SDL3/SDL_scancode.h>
 
 #include <cstdio>
 
@@ -46,6 +50,51 @@ GameValue TriMapSetScale(const GameState* /*state*/, GameValuePar arg)
     return GameValue("OK");
 }
 
+/// triMapGetScale -> the in-mission map zoom scale, or -1 if no map.
+GameValue TriMapGetScale(const GameState* /*state*/)
+{
+    if (!GWorld)
+        return GameValue((GameScalarType)-1.0f);
+    auto* map = dynamic_cast<DisplayMap*>(GWorld->Map());
+    if (!map || !map->GetMap())
+        return GameValue((GameScalarType)-1.0f);
+    return GameValue((GameScalarType)map->GetMap()->GetScale());
+}
+
+/// triBindAction ["<ActionName>", <scancode>] -> "OK" / "FAIL:<reason>". Replaces
+/// the action's binding with a single keyboard key in every context; a rebind hook.
+GameValue TriBindAction(const GameState* /*state*/, GameValuePar arg)
+{
+    if (arg.GetType() != GameArray)
+        return GameValue("FAIL:expected_array");
+    const GameArrayType& a = arg;
+    if (a.Size() < 2)
+        return GameValue("FAIL:need_action_and_key");
+    RString name = (GameStringType)a[0];
+    int sc = static_cast<int>(static_cast<GameScalarType>(a[1]));
+
+    const UserActionDesc* descs = InputSubsystem::GetUserActionDesc();
+    int action = -1;
+    for (int i = 0; i < UAN; ++i)
+        if (descs[i].name && stricmp(descs[i].name, (const char*)name) == 0)
+        {
+            action = i;
+            break;
+        }
+    if (action < 0)
+        return GameValue("FAIL:unknown_action");
+
+    auto& input = InputSubsystem::Instance();
+    for (int c = 0; c < static_cast<int>(InputContext::Count); ++c)
+    {
+        InputProfile& p = input.GetProfile(static_cast<InputContext>(c));
+        p.ClearBindings(static_cast<UserAction>(action));
+        p.Bind(static_cast<UserAction>(action), InputCode::Key(static_cast<SDL_Scancode>(sc)));
+    }
+    LOG_INFO(Core, "[tri] triBindAction {} sc=0x{:x}", (const char*)name, sc);
+    return GameValue("OK");
+}
+
 /// triShowVoiceOverlay <0|1> — create / destroy the CapsLock VoIP voice-chat
 /// overlay (the cursor-less HUD that normally appears while UAVoiceOverNet is
 /// held).  Lets tests reproduce the menu-cursor-vanishes-under-overlay case
@@ -55,7 +104,7 @@ GameValue TriShowVoiceOverlay(const GameState* /*state*/, GameValuePar arg)
     if (!GWorld)
         return GameValue("FAIL:no_world");
     if ((float)arg != 0.0f)
-        GWorld->CreateVoiceChat();
+        GWorld->CreateVoiceChat(false);
     else
         GWorld->DestroyVoiceChat(0);
     LOG_INFO(Core, "[tri] triShowVoiceOverlay {}", (float)arg != 0.0f);

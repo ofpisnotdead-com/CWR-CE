@@ -29,6 +29,13 @@ function(add_fuzzer name source)
         set_target_properties(${name} PROPERTIES
             LINK_FLAGS "/SUBSYSTEM:CONSOLE /IGNORE:4099 /SAFESEH:NO"
         )
+    elseif(APPLE)
+        target_link_options(${name} PRIVATE -fsanitize=fuzzer,address,undefined)
+        target_link_libraries(${name} PRIVATE
+            Poseidon
+            pthread
+            dl
+        )
     else()
         # Linux clang links the full libFuzzer + ASan + UBSan runtime from the
         # driver flag; no explicit clang_rt naming is needed.

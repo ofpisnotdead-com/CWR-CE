@@ -21,7 +21,7 @@ triSimFrames 15
 triClickText "OPTIONS"
 triSimFrames 5
 triClickText "Audio"
-triSimFrames 5
+triSimFrames 30
 triAssertGe [(triCountSuppressedMusicWaves), 1]
 
 triSendKey 41   // SDL_SCANCODE_ESCAPE - pop AudioPage back to Index

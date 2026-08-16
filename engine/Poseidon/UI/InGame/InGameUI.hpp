@@ -49,6 +49,7 @@ public:
 	virtual void OnWeaponRemoved(int slot) = 0;
 
 	virtual const AutoArray<RString> &GetCustomRadio() const = 0;
+	virtual bool PlayCustomRadio(int index) = 0;
 
 	void ShowUnitInfo(bool show = true) {_showUnitInfo = show;}
 	void ShowTacticalDisplay(bool show = true) {_showTacticalDisplay = show;}

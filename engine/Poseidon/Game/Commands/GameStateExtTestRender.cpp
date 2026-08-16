@@ -404,6 +404,12 @@ GameValue TriSetVsync(const GameState* /*state*/, GameValuePar arg)
     LOG_INFO(Core, "[tri] triSetVsync {}", v);
     return GameValue("OK");
 }
+/// triTextInputActive - whether SDL's text-input/IME session is currently armed.
+GameValue TriTextInputActive(const GameState* /*state*/)
+{
+    return GameValue((GEngine && GEngine->IsTextInputActive()) ? 1.0f : 0.0f);
+}
+
 /// triPerfStats — frame-phase profiler rolling stats as a machine-readable
 /// string: "fps=F frame=avg/p95/max setup=avg/p95 draw=... calls=N frames=N".
 GameValue TriPerfStats(const GameState* /*state*/, GameValuePar /*arg*/)

@@ -2,6 +2,7 @@
 #include <catch2/catch_approx.hpp>
 #include <Poseidon/Core/Config/UserConfig.hpp>
 #include <Poseidon/Core/Difficulty.hpp>
+#include <Poseidon/IO/ParamFile/ParamFile.hpp>
 #include "../test_fixtures.hpp"
 
 TEST_CASE("UserConfig LoadFromFile", "[core][config][serialization]")
@@ -90,8 +91,7 @@ TEST_CASE("UserConfig SaveToFile", "[core][config][serialization]")
         const char* tempPath = GET_TEMP_FILE("user_config_fov.cfg");
 
         Poseidon::UserConfig original;
-        original.fovTop = 0.75f;
-        original.fovLeft = 1.7778f; // 16:9
+        original.SetCustomFov(1.7778f, 0.75f);
 
         original.SaveToFile(tempPath);
 
@@ -108,11 +108,17 @@ TEST_CASE("UserConfig SaveToFile", "[core][config][serialization]")
     {
         const char* tempPath = GET_TEMP_FILE("user_config_no_fov.cfg");
 
-        // Save a config without FOV (just difficulty)
         Poseidon::UserConfig original;
         original.SaveToFile(tempPath);
 
-        // Now load into a fresh config — should get defaults
+        Poseidon::ParamFile raw;
+        REQUIRE(raw.Parse(tempPath) == LSOK);
+        const Poseidon::ParamEntry* version = raw.FindEntry("version");
+        REQUIRE(version != nullptr);
+        CHECK((int)*version == 2);
+        CHECK(raw.FindEntry("fovTop") == nullptr);
+        CHECK(raw.FindEntry("fovLeft") == nullptr);
+
         Poseidon::UserConfig loaded;
         loaded.LoadFromFile(tempPath);
 
@@ -163,8 +169,7 @@ TEST_CASE("UserConfig profile integration", "[core][config][profile]")
         original.cadetDifficulty[Poseidon::DTArmor] = false;
         original.cadetDifficulty[Poseidon::DTAutoSpot] = false;
         original.veteranDifficulty[Poseidon::DTWeaponCursor] = false;
-        original.fovTop = 0.75f;
-        original.fovLeft = 2.3704f; // 21:9
+        original.SetCustomFov(2.3704f, 0.75f);
 
         original.SaveToFile(tempPath);
 
@@ -194,7 +199,7 @@ TEST_CASE("UserConfig profile integration", "[core][config][profile]")
 
         // Modify and save again
         Poseidon::UserConfig modified;
-        modified.fovLeft = 3.5556f; // 32:9
+        modified.SetCustomFov(3.5556f, 0.75f);
         modified.cadetDifficulty[Poseidon::DTMap] = false;
         modified.SaveToFile(tempPath);
 
@@ -204,6 +209,78 @@ TEST_CASE("UserConfig profile integration", "[core][config][profile]")
 
         REQUIRE(reloaded.fovLeft == Catch::Approx(3.5556f));
         REQUIRE(reloaded.cadetDifficulty[Poseidon::DTMap] == false);
+    }
+}
+
+TEST_CASE("UserConfig FOV migration", "[core][config][serialization]")
+{
+    SECTION("generated version-1 values become automatic")
+    {
+        const char* tempPath = GET_TEMP_FILE("user_config_fov_v1_auto.cfg");
+        Poseidon::ParamFile raw;
+        raw.Add("version", 1);
+        raw.Add("fovLeft", 4.0f / 3.0f);
+        raw.Add("fovTop", 0.75f);
+        REQUIRE(raw.Save(tempPath) == LSOK);
+
+        Poseidon::UserConfig config;
+        config.LoadFromFile(tempPath);
+        REQUIRE(config.MigrateFov(4.0f / 3.0f, 0.75f));
+        CHECK_FALSE(config.HasCustomFov());
+        config.SaveToFile(tempPath);
+
+        REQUIRE(raw.Parse(tempPath) == LSOK);
+        REQUIRE(raw.FindEntry("version") != nullptr);
+        CHECK((int)*raw.FindEntry("version") == 2);
+        CHECK(raw.FindEntry("fovLeft") == nullptr);
+        CHECK(raw.FindEntry("fovTop") == nullptr);
+        TestFixtures::CleanupTempFile(tempPath);
+    }
+
+    SECTION("custom version-1 values remain custom")
+    {
+        const char* tempPath = GET_TEMP_FILE("user_config_fov_v1_custom.cfg");
+        Poseidon::ParamFile raw;
+        raw.Add("version", 1);
+        raw.Add("fovLeft", 1.5f);
+        raw.Add("fovTop", 0.8f);
+        REQUIRE(raw.Save(tempPath) == LSOK);
+
+        Poseidon::UserConfig config;
+        config.LoadFromFile(tempPath);
+        REQUIRE(config.MigrateFov(4.0f / 3.0f, 0.75f));
+        CHECK(config.HasCustomFov());
+        CHECK(config.fovLeft == Catch::Approx(1.5f));
+        CHECK(config.fovTop == Catch::Approx(0.8f));
+        config.SaveToFile(tempPath);
+
+        Poseidon::UserConfig reloaded;
+        reloaded.LoadFromFile(tempPath);
+        CHECK_FALSE(reloaded.MigrateFov(4.0f / 3.0f, 0.75f));
+        CHECK(reloaded.HasCustomFov());
+        CHECK(reloaded.fovLeft == Catch::Approx(1.5f));
+        CHECK(reloaded.fovTop == Catch::Approx(0.8f));
+        TestFixtures::CleanupTempFile(tempPath);
+    }
+
+    SECTION("invalid version-2 values become automatic")
+    {
+        const char* tempPath = GET_TEMP_FILE("user_config_fov_v2_invalid.cfg");
+        Poseidon::ParamFile raw;
+        raw.Add("version", 2);
+        raw.Add("fovLeft", 1.5f);
+        REQUIRE(raw.Save(tempPath) == LSOK);
+
+        Poseidon::UserConfig config;
+        config.LoadFromFile(tempPath);
+        REQUIRE(config.MigrateFov(4.0f / 3.0f, 0.75f));
+        CHECK_FALSE(config.HasCustomFov());
+        config.SaveToFile(tempPath);
+
+        REQUIRE(raw.Parse(tempPath) == LSOK);
+        CHECK(raw.FindEntry("fovLeft") == nullptr);
+        CHECK(raw.FindEntry("fovTop") == nullptr);
+        TestFixtures::CleanupTempFile(tempPath);
     }
 }
 

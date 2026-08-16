@@ -28,6 +28,7 @@
 #include <Poseidon/Core/SaveVersion.hpp>
 #include <Poseidon/Core/Profile/ProfileManager.hpp>
 #include <Poseidon/Foundation/Platform/GamePaths.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <filesystem>
 #include <limits.h>
 #include <stdio.h>
@@ -340,9 +341,6 @@ DisplayNewUser::DisplayNewUser(ControlsContainer* parent, RString name, bool edi
     _head->SetFace(_face);
     _head->SetGlasses(_glasses);
 
-    // Squad field hidden — CD key verification removed
-    GetCtrl(IDC_NEW_USER_SQUAD)->ShowCtrl(false);
-    GetCtrl(IDC_NEW_USER_SQUAD_TEXT)->ShowCtrl(false);
     _langCbToken = RegisterLanguageChangedCallback([this]() { RefreshLanguage(); });
 }
 
@@ -664,7 +662,8 @@ bool DisplayNewUser::CanDestroy()
         if (!_edit || stricmp(name, _name) != 0)
         {
             std::string profileDir = ProfileManager::GetProfileDirPath(GamePaths::Instance().UserDir(), name);
-            if (std::filesystem::is_directory(profileDir))
+            std::error_code ec;
+            if (std::filesystem::is_directory(FilesystemPathFromUtf8(profileDir), ec))
             {
                 // player already exist
                 CreateMsgBox(MB_BUTTON_OK, LocalizeString(IDS_MSG_PLAYER_EXIST));

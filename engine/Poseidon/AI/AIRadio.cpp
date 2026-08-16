@@ -1414,15 +1414,8 @@ void RadioChannel::Say(RString waveName, AIUnit* sender, RString senderName, RSt
     SoundPars pars;
     if (waveName[0] == '#')
     {
-        char buffer[256];
-        strncpy(buffer, waveName + 1, 256);
-        buffer[255] = 0;
-        char* ext = strrchr(buffer, '.');
-        if (ext)
-        {
-            *ext = 0;
-        }
-        GChatList.Add(_chatChannel, sender, buffer, false, false);
+        GChatList.Add(_chatChannel, sender, Poseidon::BuildNetworkCustomRadioMenuText(RString(waveName + 1)), false,
+                      false);
 
         pars.name = Poseidon::BuildNetworkCustomRadioSoundPath(player, RString(waveName + 1),
                                                                GetUserDirectory() + RString("sound\\"));

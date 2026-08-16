@@ -39,6 +39,14 @@ pub struct ServerDirectory {
 /// Back-compat alias: the directory used to be SQLite-only.
 pub type SqliteServerDirectory = ServerDirectory;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TokenRelocation {
+    NotFound,
+    Unchanged,
+    Moved,
+    Conflict,
+}
+
 /// Build a sqlx SQLite connection URL from a filesystem path that round-trips on every
 /// platform. The sqlx `Any` layer first parses the string with the `url` crate, then the
 /// SQLite backend re-serialises that `Url` back into a filename. An authority-style
@@ -110,7 +118,7 @@ impl ServerDirectory {
             Dialect::Sqlite => "INTEGER",
         };
         // (column, type) — booleans are stored as 0/1 integers, like the rest of the schema.
-        let additions: [(&str, &str); 17] = [
+        let additions: [(&str, &str); 18] = [
             ("app_name", "TEXT"),
             ("version_tag", "TEXT"),
             ("time_left", int_type),
@@ -128,6 +136,7 @@ impl ServerDirectory {
             ("param1", "TEXT"),
             ("param2", "TEXT"),
             ("required_addons", "TEXT"),
+            ("mod_packages_json", "TEXT"),
         ];
         // Re-read in case the rename above changed the set.
         let columns = self.server_columns().await?;
@@ -135,13 +144,37 @@ impl ServerDirectory {
             if columns.iter().any(|c| c == name) {
                 continue;
             }
-            let default = if ty == "TEXT" { "''" } else { "0" };
+            let default = if name == "mod_packages_json" {
+                "'[]'"
+            } else if ty == "TEXT" {
+                "''"
+            } else {
+                "0"
+            };
             sqlx::raw_sql(&format!(
                 "ALTER TABLE servers ADD COLUMN {name} {ty} NOT NULL DEFAULT {default}"
             ))
             .execute(&self.pool)
             .await
             .with_context(|| format!("adding servers.{name}"))?;
+        }
+        let columns = self.server_columns().await?;
+        if !columns
+            .iter()
+            .any(|column| column == "consecutive_failures")
+        {
+            sqlx::raw_sql(&format!(
+                "ALTER TABLE servers ADD COLUMN consecutive_failures {int_type} NOT NULL DEFAULT 0"
+            ))
+            .execute(&self.pool)
+            .await
+            .context("adding servers.consecutive_failures")?;
+        }
+        if !columns.iter().any(|column| column == "token_hash") {
+            sqlx::raw_sql("ALTER TABLE servers ADD COLUMN token_hash TEXT")
+                .execute(&self.pool)
+                .await
+                .context("adding servers.token_hash")?;
         }
         Ok(())
     }
@@ -153,6 +186,12 @@ impl ServerDirectory {
         .execute(&self.pool)
         .await
         .context("creating post-migration indexes")?;
+        sqlx::raw_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_servers_token_hash ON servers(token_hash) WHERE token_hash IS NOT NULL;",
+        )
+        .execute(&self.pool)
+        .await
+        .context("creating unique server token index; duplicate token hashes require operator cleanup")?;
         Ok(())
     }
 
@@ -196,18 +235,47 @@ impl ServerDirectory {
         request: RegisterServerRequest,
         now_unix_ms: i64,
     ) -> Result<DirectoryServerRecord> {
+        self.register_record(request, now_unix_ms, None)
+            .await?
+            .context("unconditional server registration was not applied")
+    }
+
+    pub async fn register_with_token_claim(
+        &self,
+        request: RegisterServerRequest,
+        now_unix_ms: i64,
+        token_hash: &str,
+        expected_token_hash: Option<&str>,
+    ) -> Result<Option<DirectoryServerRecord>> {
+        self.register_record(
+            request,
+            now_unix_ms,
+            Some((token_hash, expected_token_hash)),
+        )
+        .await
+    }
+
+    async fn register_record(
+        &self,
+        request: RegisterServerRequest,
+        now_unix_ms: i64,
+        token_claim: Option<(&str, Option<&str>)>,
+    ) -> Result<Option<DirectoryServerRecord>> {
         let record = request.into_record(now_unix_ms);
-        sqlx::query(&self.bind_sql(
+        let claimed_hash = token_claim.map(|(hash, _)| hash);
+        let expected_hash = token_claim.and_then(|(_, expected)| expected);
+        let claim_token = i64::from(token_claim.is_some());
+        let affected = sqlx::query(&self.bind_sql(
             "INSERT INTO servers (
                 app_name, server_id, address, hostport, hostname, gametype, actver, reqver, version_tag, state,
                 numplayers, maxplayers, password, mod_list, equal_mod_required, transport_impl,
                 platform, last_seen_unix_ms, verification_state, last_observed_unix_ms, observed_reachable,
                 time_left, state_elapsed_seconds,
                 map_name, cadet, difficulty, jip, disabled_ai, respawn, respawn_delay, locked, dedicated,
-                description, param1, param2, required_addons
+                description, param1, param2, required_addons, mod_packages_json, token_hash
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             ON CONFLICT(server_id) DO UPDATE SET
                 app_name = excluded.app_name,
@@ -241,7 +309,10 @@ impl ServerDirectory {
                 description = excluded.description,
                 param1 = excluded.param1,
                 param2 = excluded.param2,
-                required_addons = excluded.required_addons",
+                required_addons = excluded.required_addons,
+                mod_packages_json = excluded.mod_packages_json,
+                token_hash = CASE WHEN ? <> 0 THEN excluded.token_hash ELSE servers.token_hash END
+            WHERE ? = 0 OR servers.token_hash IS NULL OR servers.token_hash = ?",
         ))
         .bind(&record.app_name)
         .bind(&record.server_id)
@@ -279,8 +350,18 @@ impl ServerDirectory {
         .bind(&record.param1)
         .bind(&record.param2)
         .bind(&record.required_addons)
+        .bind(serde_json::to_string(&record.mod_packages)?)
+        .bind(claimed_hash)
+        .bind(claim_token)
+        .bind(claim_token)
+        .bind(expected_hash)
         .execute(&self.pool)
-        .await?;
+        .await?
+        .rows_affected();
+
+        if affected == 0 {
+            return Ok(None);
+        }
 
         self.insert_sample(
             &record.server_id,
@@ -289,9 +370,7 @@ impl ServerDirectory {
         )
         .await?;
 
-        self.get(&record.server_id)
-            .await?
-            .with_context(|| format!("server {} missing after upsert", record.server_id))
+        self.get(&record.server_id).await
     }
 
     pub async fn observe(
@@ -347,6 +426,115 @@ impl ServerDirectory {
             .fetch_optional(&self.pool)
             .await?;
         Ok(row.and_then(|row| row.try_get::<Option<String>, _>(0).ok().flatten()))
+    }
+
+    pub async fn server_id_for_token_hash(&self, token_hash: &str) -> Result<Option<String>> {
+        let row = sqlx::query(&self.bind_sql("SELECT server_id FROM servers WHERE token_hash = ?"))
+            .bind(token_hash)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row.and_then(|row| row.try_get::<String, _>(0).ok()))
+    }
+
+    pub async fn relocate_token_owner(
+        &self,
+        token_hash: &str,
+        new_server_id: &str,
+        new_address: &str,
+        new_hostport: u16,
+        now_unix_ms: i64,
+        recovery_ms: i64,
+    ) -> Result<TokenRelocation> {
+        let mut transaction = self.pool.begin().await?;
+        let owner_query = match self.dialect {
+            Dialect::Postgres => "SELECT server_id FROM servers WHERE token_hash = ? FOR UPDATE",
+            Dialect::Sqlite => "SELECT server_id FROM servers WHERE token_hash = ?",
+        };
+        let owner = sqlx::query(&self.bind_sql(owner_query))
+            .bind(token_hash)
+            .fetch_optional(&mut *transaction)
+            .await?
+            .and_then(|row| row.try_get::<String, _>(0).ok());
+        let Some(old_server_id) = owner else {
+            transaction.rollback().await?;
+            return Ok(TokenRelocation::NotFound);
+        };
+        if old_server_id == new_server_id {
+            transaction.rollback().await?;
+            return Ok(TokenRelocation::Unchanged);
+        }
+
+        let target_query = match self.dialect {
+            Dialect::Postgres => {
+                "SELECT token_hash, last_seen_unix_ms FROM servers WHERE server_id = ? FOR UPDATE"
+            }
+            Dialect::Sqlite => {
+                "SELECT token_hash, last_seen_unix_ms FROM servers WHERE server_id = ?"
+            }
+        };
+        let target = sqlx::query(&self.bind_sql(target_query))
+            .bind(new_server_id)
+            .fetch_optional(&mut *transaction)
+            .await?;
+        if let Some(target) = target {
+            let target_hash = target.try_get::<Option<String>, _>(0)?;
+            let target_last_seen = target.try_get::<i64, _>(1)?;
+            if target_hash.as_deref() != Some(token_hash)
+                && now_unix_ms - target_last_seen < recovery_ms
+            {
+                transaction.rollback().await?;
+                return Ok(TokenRelocation::Conflict);
+            }
+            sqlx::query(&self.bind_sql("DELETE FROM servers WHERE server_id = ?"))
+                .bind(new_server_id)
+                .execute(&mut *transaction)
+                .await?;
+        }
+
+        sqlx::query(&self.bind_sql(
+            "UPDATE servers SET server_id = ?, address = ?, hostport = ? WHERE server_id = ?",
+        ))
+        .bind(new_server_id)
+        .bind(new_address)
+        .bind(i64::from(new_hostport))
+        .bind(&old_server_id)
+        .execute(&mut *transaction)
+        .await?;
+
+        sqlx::query(&self.bind_sql(
+            "DELETE FROM server_samples
+             WHERE server_id = ? AND observed_unix_ms IN (
+                 SELECT observed_unix_ms FROM server_samples WHERE server_id = ?
+             )",
+        ))
+        .bind(&old_server_id)
+        .bind(new_server_id)
+        .execute(&mut *transaction)
+        .await?;
+        sqlx::query(&self.bind_sql("UPDATE server_samples SET server_id = ? WHERE server_id = ?"))
+            .bind(new_server_id)
+            .bind(&old_server_id)
+            .execute(&mut *transaction)
+            .await?;
+
+        sqlx::query(&self.bind_sql(
+            "DELETE FROM server_sessions
+             WHERE server_id = ? AND ended_unix_ms IN (
+                 SELECT ended_unix_ms FROM server_sessions WHERE server_id = ?
+             )",
+        ))
+        .bind(&old_server_id)
+        .bind(new_server_id)
+        .execute(&mut *transaction)
+        .await?;
+        sqlx::query(&self.bind_sql("UPDATE server_sessions SET server_id = ? WHERE server_id = ?"))
+            .bind(new_server_id)
+            .bind(&old_server_id)
+            .execute(&mut *transaction)
+            .await?;
+
+        transaction.commit().await?;
+        Ok(TokenRelocation::Moved)
     }
 
     pub async fn get(&self, server_id: &str) -> Result<Option<DirectoryServerRecord>> {
@@ -661,7 +849,7 @@ const SELECT_SERVER_COLUMNS: &str = "SELECT
     platform, last_seen_unix_ms, verification_state, last_observed_unix_ms, observed_reachable,
     time_left, state_elapsed_seconds,
     map_name, cadet, difficulty, jip, disabled_ai, respawn, respawn_delay, locked, dedicated,
-    description, param1, param2, required_addons
+    description, param1, param2, required_addons, mod_packages_json
 FROM servers";
 
 fn map_row(row: &AnyRow) -> Result<DirectoryServerRecord> {
@@ -702,6 +890,14 @@ fn map_row(row: &AnyRow) -> Result<DirectoryServerRecord> {
         param1: row.try_get(33)?,
         param2: row.try_get(34)?,
         required_addons: row.try_get(35)?,
+        mod_packages: {
+            let value = row.try_get::<String, _>(36)?;
+            if value.trim().is_empty() {
+                Vec::new()
+            } else {
+                serde_json::from_str(&value)?
+            }
+        },
         token: None,
     })
 }
@@ -785,6 +981,7 @@ CREATE TABLE IF NOT EXISTS servers (
     param1 TEXT NOT NULL DEFAULT '',
     param2 TEXT NOT NULL DEFAULT '',
     required_addons TEXT NOT NULL DEFAULT '',
+    mod_packages_json TEXT NOT NULL DEFAULT '[]',
     consecutive_failures INTEGER NOT NULL DEFAULT 0,
     token_hash TEXT
 );
@@ -851,6 +1048,7 @@ CREATE TABLE IF NOT EXISTS servers (
     param1 TEXT NOT NULL DEFAULT '',
     param2 TEXT NOT NULL DEFAULT '',
     required_addons TEXT NOT NULL DEFAULT '',
+    mod_packages_json TEXT NOT NULL DEFAULT '[]',
     consecutive_failures BIGINT NOT NULL DEFAULT 0,
     token_hash TEXT
 );

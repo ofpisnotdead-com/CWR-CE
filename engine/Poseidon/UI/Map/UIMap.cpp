@@ -3,6 +3,8 @@
 #include <Poseidon/Core/Config/EngineConfig.hpp>
 #include <Poseidon/Core/Config/UserConfig.hpp>
 #include <Poseidon/UI/Map/UIMap.hpp>
+#include <Poseidon/UI/Locale/Stringtable/CodepageTranscode.hpp>
+#include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
 // #include "win.h"
 #include <SDL3/SDL_scancode.h>
 #include <Poseidon/World/Entities/Infantry/Person.hpp>
@@ -1176,7 +1178,7 @@ void CStaticMap::DrawName(const ParamEntry& cls)
     float size = _sizeNames * (_invScaleX * 0.05);
     saturate(size, 0.5 * _fontNames->Height(), 2.0 * _fontNames->Height());
 
-    RString text = cls >> "name";
+    RString text = Poseidon::DecodeLegacyTextToRString(cls >> "name", GLanguage);
     float h = size;
     float w = GEngine->GetTextWidth(size, _fontNames, text);
 
@@ -2045,6 +2047,31 @@ void CStaticMap::DrawGrid()
 void CStaticMap::OnDraw(float alpha)
 {
     Precalculate();
+
+    // Zoom is polled from the bound actions (follows rebinds + gamepad); wheel is separate.
+    auto& input = InputSubsystem::Instance();
+    const float zoomIn = input.GetAction(UAMapZoomIn, false);
+    const float zoomOut = input.GetAction(UAMapZoomOut, false);
+    if (zoomIn > 0 || zoomOut > 0)
+    {
+        float dt = Glob.uiTime - _zoomLast;
+        _zoomLast = Glob.uiTime;
+        if (Glob.uiTime - _zoomStart < 0.5)
+        {
+            dt *= 0.5;
+        }
+        if (_interpolator)
+        {
+            ClearAnimation();
+        }
+        SetScale(exp(zoomIn >= zoomOut ? -dt : dt) * GetScale());
+    }
+    else
+    {
+        _zoomStart = Glob.uiTime;
+        _zoomLast = Glob.uiTime;
+    }
+
     unsigned key = _mouseKey;
     if (key == 0)
     {
@@ -2061,12 +2088,6 @@ void CStaticMap::OnDraw(float alpha)
 
         switch (key)
         {
-            case SDLK_KP_PLUS:
-                SetScale(exp(-dt) * GetScale());
-                break;
-            case SDLK_KP_MINUS:
-                SetScale(exp(dt) * GetScale());
-                break;
             case SDLK_KP_1:
                 _mapX += dt;
                 SaturateX(_mapX);
@@ -2184,8 +2205,6 @@ bool CStaticMap::OnKeyUp(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
 {
     switch (nChar)
     {
-        case SDLK_KP_PLUS:
-        case SDLK_KP_MINUS:
         case SDLK_KP_1:
         case SDLK_KP_2:
         case SDLK_KP_3:
@@ -2206,8 +2225,6 @@ bool CStaticMap::OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
 {
     switch (nChar)
     {
-        case SDLK_KP_PLUS:
-        case SDLK_KP_MINUS:
         case SDLK_KP_1:
         case SDLK_KP_2:
         case SDLK_KP_3:

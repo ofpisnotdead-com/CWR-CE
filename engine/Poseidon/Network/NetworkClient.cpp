@@ -7,7 +7,10 @@
 #include <Poseidon/Core/Version.hpp>
 #include <Poseidon/Core/Config/Config.hpp>
 #include <Poseidon/Network/NetworkClientCommon.hpp>
+#include <Poseidon/IO/Filesystem/DirTree.hpp>
 #include <Poseidon/Network/NetworkConfig.hpp>
+#include <Poseidon/Network/NetworkCustomAssets.hpp>
+#include <Poseidon/Network/NetworkMissionTransfer.hpp>
 #include <Poseidon/Network/WireBounds.hpp>
 #include <Poseidon/Core/Global.hpp>
 // #include "strIncl.hpp"
@@ -155,6 +158,13 @@ NetworkClient::NetworkClient(NetworkManager* parent, RString address, RString pa
 
     _controlsPaused = false;
     _jip = false;
+    _pendingSelectPlayer = false;
+    _missionRawLastRequestTime = 0;
+    _missionRawLastSegmentTime = 0;
+    _missionRawExpectedSize = 0;
+    _missionRawHighestReceivedSegment = -1;
+    _missionRawRequestedDuplicateUniqueSegments = 0;
+    _missionTransferHeaderStatsLogged = false;
 
     _soundId = 0; // incremented for each PlaySound
 
@@ -364,6 +374,7 @@ void NetworkClient::DoRespawn(RespawnQueueItem& item)
     AIUnitInfo& info = body->GetInfo();
     saturateMax(info._experience, info._initExperience);
     soldier->SetInfo(info);
+    soldier->SetRemotePlayer(body->GetRemotePlayer());
     soldier->SetFace(info._face, info._name);
     soldier->SetGlasses(info._glasses);
 
@@ -534,6 +545,7 @@ void NetworkClient::OnSimulate()
     ReceiveSystemMessages();
     ReceiveLocalMessages();
     ReceiveUserMessages();
+    RequestMissingMissionRawSegments();
 
     // statistics
     if (DiagLevel >= 3)
@@ -674,6 +686,12 @@ void OnClientUserMessage(char* buffer, int bufferSize, void* context)
     }
 }
 
+void OnClientRawMagicMessage(int magic, const char* buffer, int bufferSize, void* context)
+{
+    NetworkClient* client = (NetworkClient*)context;
+    client->OnRawMagicMessage(magic, buffer, bufferSize);
+}
+
 void OnClientSendComplete(DWORD msgID, bool ok, void* context)
 {
     NetworkClient* client = (NetworkClient*)context;
@@ -697,7 +715,8 @@ void NetworkClient::ReceiveSystemMessages()
         // (DestroyAllObjects can null _cameraOn, preventing SimulateHUD calls)
         if (!AppConfig::Instance().GetMPAssign().empty())
         {
-            GApp->m_exitCode = _serverReachedPlay ? 0 : 2;
+            GApp->m_exitCode =
+                ResolveMultiplayerAutomationExitCode(GApp->m_exitCode, GApp->m_closeRequest, _serverReachedPlay);
             GApp->m_closeRequest = true;
             LOG_INFO(Network, "[mp-assign] Session lost, exitCode={}", GApp->m_exitCode);
             return;
@@ -727,6 +746,10 @@ void NetworkClient::ReceiveSystemMessages()
             case NTRDisconnected:
                 format = LocalizeString(IDS_MP_DISCONNECT);
                 break;
+            case NTRVersion:
+                message = LocalizeString(IDS_MSG_MP_VERSION);
+                GChatList.Add(CCGlobal, nullptr, message, false, true);
+                return;
         }
         message = Format(format, (const char*)name);
         GChatList.Add(CCGlobal, nullptr, message, false, true);
@@ -740,6 +763,256 @@ void NetworkClient::ReceiveUserMessages()
     if (_client)
     {
         _client->ProcessUserMessages(OnClientUserMessage, this);
+        _client->ProcessRawMagicMessages(OnClientRawMagicMessage, this);
+    }
+}
+
+void NetworkClient::OnRawMagicMessage(int magic, const char* buffer, int bufferSize)
+{
+    if (magic != Poseidon::NetworkMissionBulkRawMagic || _missionFileValid)
+    {
+        return;
+    }
+
+    Poseidon::NetworkMissionBulkRawPacket packet;
+    if (!Poseidon::DecodeNetworkMissionBulkRawPayload(buffer, bufferSize, packet) ||
+        packet.kind != Poseidon::NetworkMissionBulkRawKind::Data)
+    {
+        LOG_WARN(Network, "[NMTTransferMission] rejected malformed raw mission packet size={}", bufferSize);
+        return;
+    }
+
+    TransferFileMessage transfer;
+    transfer.path = Poseidon::BuildNetworkMissionTransferCachePboPath(_missionHeader.fileName);
+    if (transfer.path.GetLength() == 0)
+    {
+        transfer.path = Poseidon::BuildNetworkMissionTransferCachePboPathFromTransferPath(packet.transferPath);
+    }
+    if (transfer.path.GetLength() == 0)
+    {
+        LOG_WARN(
+            Network,
+            "[NMTTransferMission] rejected raw mission packet for unsafe mission file name '{}' transfer path '{}'",
+            (const char*)_missionHeader.fileName, (const char*)packet.transferPath);
+        return;
+    }
+    transfer.totSize = packet.totalSize;
+    _missionRawExpectedSize = packet.totalSize;
+    transfer.offset = packet.offset;
+    transfer.totSegments = packet.totalSegments;
+    transfer.curSegment = packet.curSegment;
+    transfer.data.Resize(packet.dataSize);
+    if (packet.dataSize > 0)
+    {
+        memcpy(transfer.data.Data(), packet.data, packet.dataSize);
+    }
+
+    if (_missionRawFirstSegmentTime == 0)
+    {
+        const DWORD now = ::GlobalTickCount();
+        _missionRawFirstSegmentTime = now;
+        _missionRawLastSegmentTime = now;
+        _missionRawLastRequestTime = 0;
+        _missionRawLastRequestFirstSegment = -1;
+        _missionRawLastRequestSegmentCount = 0;
+        _missionRawHighestReceivedSegment = -1;
+        _missionRawReceivedSegments = 0;
+        _missionRawDuplicateSegments = 0;
+        _missionRawRequestedDuplicateSegments = 0;
+        _missionRawRequestedDuplicateUniqueSegments = 0;
+        _missionRawRequestedSegments = 0;
+        _missionRawRequestCount = 0;
+        _missionRawRequestedSegmentMap.Clear();
+        _missionRawRequestedDuplicateSegmentMap.Clear();
+    }
+    else
+    {
+        _missionRawLastSegmentTime = ::GlobalTickCount();
+    }
+    _missionRawHighestReceivedSegment = std::max(_missionRawHighestReceivedSegment, transfer.curSegment);
+    RString receivePath = transfer.path;
+    if (Poseidon::IsSafeNetworkTransferredAssetPath(receivePath))
+    {
+        receivePath = Poseidon::GetUserDirectory() + receivePath;
+    }
+    const bool duplicateSegment = HasReceivedFileSegment(receivePath, transfer.curSegment);
+    if (duplicateSegment)
+    {
+        ++_missionRawDuplicateSegments;
+        const bool requestedDuplicate =
+            Poseidon::WasNetworkMissionBulkSegmentRequested(_missionRawRequestedSegmentMap, transfer.curSegment);
+        if (requestedDuplicate)
+        {
+            ++_missionRawRequestedDuplicateSegments;
+            if (Poseidon::MarkNetworkMissionBulkSegmentSeen(_missionRawRequestedDuplicateSegmentMap,
+                                                            transfer.totSegments, transfer.curSegment))
+            {
+                ++_missionRawRequestedDuplicateUniqueSegments;
+            }
+        }
+        LOG_DEBUG(Network, "[NMTTransferMission] ignored duplicate raw segment {} requested={} path='{}'",
+                  transfer.curSegment, requestedDuplicate ? 1 : 0, (const char*)transfer.path);
+        return;
+    }
+
+    if (Poseidon::ShouldResetNetworkMissionTransferBank(transfer.offset))
+    {
+        const std::string prefix = GameDirs::MPCurrentPrefix();
+        RemoveBank(prefix.c_str());
+    }
+
+    int ret = ReceiveFileSegment(transfer);
+    LOG_DEBUG(Network, "[NMTTransferMission] raw path='{}' ret={} state={} missionFileValid={}",
+              (const char*)transfer.path, ret, (int)_state, _missionFileValid);
+    if (ret >= 0)
+    {
+        ++_missionRawReceivedSegments;
+    }
+    if (ret > 0)
+    {
+        const char* ptr = transfer.path;
+        const char* ext = strrchr(ptr, '.');
+        NET_ERROR(ext);
+        NET_ERROR(stricmp(ext, ".pbo") == 0);
+        RString path = transfer.path.Substring(0, ext - ptr);
+        CreateMPMissionBank(path, _missionHeader.island);
+
+        _missionFileValid = true;
+        _missionRawExpectedSize = 0;
+        AskMissionFileMessage ask(true);
+        const DWORD now = ::GlobalTickCount();
+        const DWORD elapsed = _missionRawFirstSegmentTime != 0 ? now - _missionRawFirstSegmentTime : 0;
+        LOG_INFO(Network,
+                 "[NMTTransferMission] completed {} bytes via raw UDP in {} ms, segments={}/{}, duplicates={}, "
+                 "requestedDuplicates={}, requestedDuplicateSegments={}, requestedSegments={}, resendRequests={}, "
+                 "sending AskMissionFile valid=true",
+                 transfer.totSize, elapsed, _missionRawReceivedSegments, transfer.totSegments,
+                 _missionRawDuplicateSegments, _missionRawRequestedDuplicateSegments,
+                 _missionRawRequestedDuplicateUniqueSegments, _missionRawRequestedSegments, _missionRawRequestCount);
+        _missionRawFirstSegmentTime = 0;
+        _missionRawLastSegmentTime = 0;
+        _missionRawHighestReceivedSegment = -1;
+        _missionRawReceivedSegments = 0;
+        _missionRawDuplicateSegments = 0;
+        _missionRawRequestedDuplicateSegments = 0;
+        _missionRawRequestedDuplicateUniqueSegments = 0;
+        _missionRawRequestedSegments = 0;
+        _missionRawRequestCount = 0;
+        _missionRawRequestedSegmentMap.Clear();
+        _missionRawRequestedDuplicateSegmentMap.Clear();
+        SendMsg(&ask, NMFGuaranteed);
+        NET_ERROR(!_parent->IsServer());
+        if (_state == NGSTransferMission && PrepareGame())
+        {
+            _state = NGSLoadIsland;
+            if (_jip && _missionHeader.joinInProgress)
+            {
+                _state = NGSBriefing;
+                ClientReady(NGSBriefing);
+            }
+        }
+    }
+    else if (ret < 0)
+    {
+        RString format = LocalizeString(IDS_MP_VALIDERROR_2);
+        char message[512];
+        snprintf(message, sizeof(message), "%s", (const char*)"");
+        const PlayerIdentity* id = FindIdentity(_player);
+        if (id)
+        {
+            snprintf(message, sizeof(message), format, (const char*)id->name);
+            sprintf(message + strlen(message), " - %s", (const char*)transfer.path);
+        }
+        Disconnect(message);
+    }
+}
+
+void NetworkClient::RequestMissingMissionRawSegments()
+{
+    if (!_client || _missionFileValid || _missionRawExpectedSize <= 0)
+    {
+        return;
+    }
+    const DWORD now = ::GlobalTickCount();
+
+    const RString transferPath = Poseidon::BuildNetworkMissionTransferCachePboPath(_missionHeader.fileName);
+    if (transferPath.GetLength() == 0)
+    {
+        return;
+    }
+
+    for (int fileIndex = 0; fileIndex < _files.Size(); ++fileIndex)
+    {
+        ReceivingFile& file = _files[fileIndex];
+        if (file.fileName != transferPath)
+        {
+            continue;
+        }
+
+        int firstMissing = -1;
+        int missingCount = 0;
+        const int scanLimit = Poseidon::GetNetworkMissionBulkMissingScanLimit(
+            file.fileSegments.Size(), _missionRawHighestReceivedSegment, now, _missionRawLastSegmentTime,
+            Poseidon::NetworkMissionBulkRetransmitDelayMs, Poseidon::NetworkMissionBulkRepeatedRetransmitDelayMs);
+        if (scanLimit < 0)
+        {
+            return;
+        }
+        const int requestSegmentLimit = Poseidon::GetNetworkMissionBulkRetransmitSegmentLimit(
+            now, _missionRawLastSegmentTime, Poseidon::NetworkMissionBulkRetransmitDelayMs);
+
+        for (int segment = 0; segment <= scanLimit; ++segment)
+        {
+            if (file.fileSegments[segment])
+            {
+                if (firstMissing >= 0)
+                {
+                    break;
+                }
+                continue;
+            }
+            if (firstMissing < 0)
+            {
+                firstMissing = segment;
+            }
+            ++missingCount;
+            if (missingCount >= requestSegmentLimit)
+            {
+                break;
+            }
+        }
+
+        if (firstMissing < 0)
+        {
+            return;
+        }
+
+        const DWORD delay = Poseidon::GetNetworkMissionBulkRetransmitDelayMs(
+            firstMissing, missingCount, _missionRawLastRequestFirstSegment, _missionRawLastRequestSegmentCount);
+        if (Poseidon::ShouldWaitForNetworkMissionBulkRetransmit(
+                now, _missionRawFirstSegmentTime, _missionRawLastRequestTime, _missionRawLastSegmentTime, delay))
+        {
+            return;
+        }
+
+        AutoArray<char> payload;
+        if (Poseidon::EncodeNetworkMissionBulkRawRequest(firstMissing, missingCount, _missionRawExpectedSize, payload))
+        {
+            _missionRawLastRequestTime = now;
+            _missionRawLastRequestFirstSegment = firstMissing;
+            _missionRawLastRequestSegmentCount = missingCount;
+            ++_missionRawRequestCount;
+            const int newlyRequested = Poseidon::MarkNetworkMissionBulkRequestedRange(
+                _missionRawRequestedSegmentMap, file.fileSegments.Size(), firstMissing, missingCount);
+            _missionRawRequestedSegments += newlyRequested;
+            LOG_DEBUG(Network,
+                      "[NMTTransferMission] requesting raw resend firstSegment={} count={} size={} delay={} "
+                      "newSegments={}",
+                      firstMissing, missingCount, _missionRawExpectedSize, delay, newlyRequested);
+            _client->SendRawMagic(Poseidon::NetworkMissionBulkRawMagic, reinterpret_cast<BYTE*>(payload.Data()),
+                                  payload.Size());
+        }
+        return;
     }
 }
 

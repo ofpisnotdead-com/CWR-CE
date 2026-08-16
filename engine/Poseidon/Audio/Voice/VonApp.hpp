@@ -7,6 +7,7 @@
 #include <Poseidon/Audio/Voice/VonTransport.hpp>
 #include <Poseidon/Audio/Voice/VonNet.hpp>
 
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -26,12 +27,7 @@ class VoNRecorder
     bool update(VoNCapture& mic, uint32_t senderId, VoNChatChannel ch, std::vector<uint8_t>& outPacket);
 
     bool isRecording() const { return _recording; }
-    void setRecording(bool on)
-    {
-        _recording = on;
-        if (!on)
-            _origin = 0;
-    }
+    void setRecording(bool on) { _recording = on; }
     uint64_t totalSamples() const { return _origin; }
 
   private:
@@ -49,7 +45,7 @@ class VoNReplayer
     explicit VoNReplayer(std::unique_ptr<VoNCodec> codec, int jbCapacity = 8);
 
     // Feed a received data packet
-    void pushPacket(const VoNDataPacket& pkt, const uint8_t* payload);
+    bool pushPacket(const VoNDataPacket& pkt, const uint8_t* payload);
 
     // Pull decoded PCM. Returns samples written (frameSamples or 0).
     int pull(int16_t* out, int maxSamples);
@@ -63,6 +59,11 @@ class VoNReplayer
     VoNJitterBuffer _jitter;
     std::vector<int16_t> _decBuf;
     bool _playing = false;
+
+    // Diagnostic trap state (VoN# log lines): stream identity + rate limits.
+    uint32_t _dbgChannel = 0;
+    uint32_t _rxSinceStart = 0;
+    uint32_t _jbDrops = 0;
 };
 
 // Client-side VoN — one recorder + N replayers (one per remote speaker)
@@ -87,6 +88,11 @@ class VoNClient
     // Start/stop recording (push-to-talk)
     void setTransmit(bool on);
     bool isTransmitting() const;
+
+    // Transmitter-side pipeline health for the HUD and harness. The overload
+    // taking `now` exists so tests can probe the stall window without sleeping.
+    VoNTransmitHealth transmitHealth() const;
+    VoNTransmitHealth transmitHealthAt(std::chrono::steady_clock::time_point now) const;
 
     // Feed incoming voice data packet
     void onDataPacket(const VoNDataPacket& pkt, const uint8_t* payload);
@@ -123,6 +129,17 @@ class VoNClient
     uint32_t _senderId = 0;
     VoNChatChannel _chatChannel = VoNChatChannel::Direct;
     uint64_t _testToneOrigin = 0;
+
+    // No packet for this long while transmit is requested = Stalled.
+    static constexpr std::chrono::milliseconds kTransmitStallWindow{500};
+    bool _transmitRequested = false;
+    std::chrono::steady_clock::time_point _transmitStartAt{};
+    std::chrono::steady_clock::time_point _lastPacketAt{};
+
+    // Diagnostic trap state (VoN# log lines).
+    uint32_t _txBurstPackets = 0;
+    bool _txBlockedLogged = false;
+    uint32_t _muteDrops = 0;
 };
 
 // Server-side VoN — routes voice between clients
@@ -147,6 +164,7 @@ class VoNServer
     {
         VoNChatChannel channel;
         std::vector<uint32_t> targets;
+        uint32_t fwdCount = 0; // diagnostic (VoN# log lines)
     };
     std::mutex _routeLock;
     std::unordered_map<uint32_t, Route> _routes; // sender → route

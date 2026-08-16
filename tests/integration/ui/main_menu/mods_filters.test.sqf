@@ -1,5 +1,4 @@
-// MODS catalog filters: source filter cycling and name filter dialog.
-// triSeedMods alternates Workshop/Local, so 6 seeded = 3 Workshop + 3 Local.
+// MODS catalog tabs and inline name search.
 
 triSetLanguage "English"
 triSimUntil { triGameMode == 2 }
@@ -10,47 +9,46 @@ triAssertEq [(triDisplay), 72]
 
 triSeedMods 6
 
-// Source filter: All (6) → Workshop (3) → Local (3) → All (6).
-triAssertIncludes [(triVisibleTexts), "Source: All"]
+// Seed state cycles Missing/Downloaded/Active: all six are shown initially and
+// four are installed.
 _all = triModsVisibleCount
 if (_all != 6) exitWith { format ["FAIL:all count=%1 (want 6)", _all] }
-triScreenshot "01_source_all"
+triAssertIncludes [(triVisibleTexts), "All (6)"]
+triAssertIncludes [(triVisibleTexts), "Active (2)"]
+triAssertIncludes [(triVisibleTexts), "Installed (4)"]
 
-triClick 122
-triAssertIncludes [(triVisibleTexts), "Source: Workshop"]
+// Tab advances through the source tabs while keeping table focus.
+triSendKey 43
+_active = triModsVisibleCount
+if (_active != 2) exitWith { format ["FAIL:active count=%1 (want 2)", _active] }
+
+triSendKey 43
+_installed = triModsVisibleCount
+if (_installed != 4) exitWith { format ["FAIL:installed count=%1 (want 4)", _installed] }
+
+triClick 7003
 _ws = triModsVisibleCount
 if (_ws != 3) exitWith { format ["FAIL:workshop count=%1 (want 3)", _ws] }
-triScreenshot "02_source_workshop"
 
-triClick 122
-triAssertIncludes [(triVisibleTexts), "Source: Local"]
+triClick 7004
 _lo = triModsVisibleCount
 if (_lo != 3) exitWith { format ["FAIL:local count=%1 (want 3)", _lo] }
-triScreenshot "03_source_local"
 
-triClick 122
-triAssertIncludes [(triVisibleTexts), "Source: All"]
+triClick 7001
 _all2 = triModsVisibleCount
-if (_all2 != 6) exitWith { format ["FAIL:source-all-again count=%1 (want 6)", _all2] }
+if (_all2 != 6) exitWith { format ["FAIL:all-again count=%1 (want 6)", _all2] }
 
-// Name filter: "Test Mod 1" matches one row; clear restores all.
-triModsSetFilter "Test Mod 1"
-triAssertIncludes [(triVisibleTexts), "Filter: Test Mod 1"]
+// Typing through the focused inline search updates the list on the next frame.
+triClick 123
+triTypeText "Test Mod 1"
+triSimFrames 2
+triAssertEq [(triControlText 123), "Test Mod 1"]
 _one = triModsVisibleCount
 if (_one != 1) exitWith { format ["FAIL:filtered count=%1 (want 1)", _one] }
-triScreenshot "04_name_filtered"
 
+// The harness clear also proves the display refreshes when the query is removed.
 triModsSetFilter ""
-triAssertIncludes [(triVisibleTexts), "Filter"]
 _all3 = triModsVisibleCount
 if (_all3 != 6) exitWith { format ["FAIL:cleared count=%1 (want 6)", _all3] }
-
-// Filter dialog chrome: clicking IDC_MODS_FILTER opens IDD_MODS_FILTER; Cancel
-// returns to the catalog.
-triClick 123
-triAssertEq [(triDisplay), 73]
-triScreenshot "05_filter_dialog"
-triClick 2
-triAssertEq [(triDisplay), 72]
 
 triEndTest

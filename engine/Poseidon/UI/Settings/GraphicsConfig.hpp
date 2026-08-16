@@ -19,7 +19,9 @@
 //
 //   Per-user knobs      — independent of preset, keep value across
 //                         preset changes:
-//                           vsync, fpsCap, brightness, gamma
+//                           msaaSamples, renderScale, alphaToCoverage,
+//                           multitexturing, vsync, fpsCap, brightness,
+//                           gamma
 //
 // Autodetect on first boot: GraphicsConfig::PickPresetFromRam()
 // returns a tier from SDL_GetSystemRAM(); ApplyPresetToTiers fills the
@@ -43,8 +45,8 @@ public:
 		PresetCustom = 4,   // sentinel — UI shows "Custom" when the four tier rows
 		                     // don't match any of Low/Medium/High/Ultra's bundle
 	};
-	// Terrain / Object / Shadow / Particles share the same Off-to-Ultra
-	// shape.  Off only legal where called out (Shadow, Particles).
+	// Extreme is legal only for Terrain. Off is legal only for Shadow and
+	// Particles.
 	enum Tier
 	{
 		TierOff    = 0,
@@ -52,6 +54,7 @@ public:
 		TierMedium = 2,
 		TierHigh   = 3,
 		TierUltra  = 4,
+		TierExtreme = 5,
 	};
 	enum VsyncMode
 	{
@@ -75,11 +78,23 @@ public:
 	float     renderScale      = 1.0f;          // SSAA: render at scale x window and downsample.
 	                                             // 1.0 = off; up to 2.0.  The only general cure for
 	                                             // sub-pixel OPAQUE geometry sparkle (fence bars)
-	int       msaaSamples      = 0;             // MSAA on the frame target: 0 (off) / 2 / 4 / 8.
-	                                             // Default off — AA is being tuned via the dev panel
-	                                             // Render tab before a shipped default is picked
-	float     brightness       = 1.6f;          // 0.4..1.8 (1.6 = original CWA default: cfg.ReadValue("brightness",1.6))
-	float     gamma            = 1.0f;          // 0.5..2.3
+	int       msaaSamples      = 0;             // MSAA on the frame target: 0 (off) / 2 / 4 / 8
+	bool      multitexturing   = true;          // Detail-texture / specular second stage on terrain and
+	                                             // objects.  Off drops those draws to the base texture
+	float     brightness       = 1.6f;          // 0.4..1.8
+	float     gamma            = 1.2f;          // 0.5..2.3
+
+	// Schema version of the persisted file.  Load resets this to 0 first, so a
+	// file written before versioning reads back as 0 and Migrate can act on it.
+	static constexpr int kVersion = 2;
+	int       version          = kVersion;
+
+	// Bring a loaded config up to kVersion.  Returns true when the caller needs
+	// to persist the result.  `refreshHz` is 0 when it cannot be read.
+	bool Migrate(int refreshHz);
+
+	// Rounds up to an allowed value, so the cap never sits below the monitor.
+	static int FpsCapForRefreshRate(int refreshHz);
 
 	// Reset every field to factory defaults.
 	void LoadDefaults();

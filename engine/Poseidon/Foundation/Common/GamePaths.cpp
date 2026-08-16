@@ -1,10 +1,14 @@
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <Poseidon/Foundation/Common/PlatformPaths.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <cstdlib>
 #include <filesystem>
 #include <algorithm>
 #include <ctype.h>
 #include <system_error>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace fs = std::filesystem;
 
@@ -31,11 +35,10 @@ static std::string getSystemTempDir(const char* codename)
     std::string lower(codename);
     std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 #ifdef _WIN32
-    const char* tmp = std::getenv("TEMP");
-    if (!tmp)
-        tmp = std::getenv("TMP");
-    if (tmp)
-        return std::string(tmp) + "\\" + lower;
+    wchar_t tmp[MAX_PATH + 1] = {};
+    const DWORD size = ::GetTempPathW(MAX_PATH, tmp);
+    if (size > 0 && size <= MAX_PATH)
+        return Poseidon::WidePathToUtf8(tmp) + lower;
     return "C:\\Temp\\" + lower;
 #else
     return "/tmp/" + lower;
@@ -48,8 +51,22 @@ GamePaths& GamePaths::Instance()
     return instance;
 }
 
+std::string GamePaths::ResolveUserDir(const char* codename)
+{
+    return resolveDir("POSEIDON_USER_DIR", getUserDataDir(codename));
+}
+
+std::string GamePaths::ResolveUserContentDir(const char* codename, const char* product)
+{
+    if (const char* env = std::getenv("POSEIDON_USER_CONTENT_DIR"); env && env[0] != '\0')
+        return resolveDir("POSEIDON_USER_CONTENT_DIR", "");
+    if (const char* env = std::getenv("POSEIDON_USER_DIR"); env && env[0] != '\0')
+        return resolveDir("", ResolveUserDir(codename) + "content");
+    return resolveDir("", getUserDocumentsDir(product));
+}
+
 ResolvedGamePaths GamePaths::Resolve(const char* codename, const char* cfgBase, const char* productName, bool oldPaths,
-                                      const char* oldPathsRoot)
+                                     const char* oldPathsRoot)
 {
     ResolvedGamePaths resolved;
     resolved.codename = codename;
@@ -63,7 +80,7 @@ ResolvedGamePaths GamePaths::Resolve(const char* codename, const char* cfgBase, 
         if (oldPathsRoot && oldPathsRoot[0] != '\0')
             root = oldPathsRoot;
         else
-            root = fs::current_path().string();
+            root = Poseidon::FilesystemPathToUtf8(fs::current_path());
 
         resolved.userDir = resolveDir("", root);
         resolved.userContentDir = resolved.userDir;
@@ -78,7 +95,7 @@ ResolvedGamePaths GamePaths::Resolve(const char* codename, const char* cfgBase, 
 
     resolved.cacheDir = resolveDir("POSEIDON_CACHE_DIR", getUserCacheDir(codename));
     resolved.tempDir = resolveDir("POSEIDON_TEMP_DIR", getSystemTempDir(codename));
-    resolved.userDir = resolveDir("POSEIDON_USER_DIR", getUserDataDir(codename));
+    resolved.userDir = ResolveUserDir(codename);
 
     // Bulky, user-facing content (mods, editor missions) lives in a discoverable,
     // non-roaming root — Documents on Windows, XDG-data on Linux — NOT the
@@ -87,14 +104,7 @@ ResolvedGamePaths GamePaths::Resolve(const char* codename, const char* cfgBase, 
     //   2. sandboxed runs (POSEIDON_USER_DIR set, e.g. tests) keep content inside
     //      that sandbox so we never create folders in the real Documents;
     //   3. otherwise the platform Documents / XDG-data folder.
-    const char* contentEnv = std::getenv("POSEIDON_USER_CONTENT_DIR");
-    const char* userDirEnv = std::getenv("POSEIDON_USER_DIR");
-    if (contentEnv != nullptr && contentEnv[0] != '\0')
-        resolved.userContentDir = resolveDir("POSEIDON_USER_CONTENT_DIR", "");
-    else if (userDirEnv != nullptr && userDirEnv[0] != '\0')
-        resolved.userContentDir = resolveDir("", resolved.userDir + "content");
-    else
-        resolved.userContentDir = resolveDir("", getUserDocumentsDir(product.c_str()));
+    resolved.userContentDir = ResolveUserContentDir(codename, product.c_str());
 
     // ModsDir is independently overridable (POSEIDON_MODS_DIR) — the mod loader
     // reads it directly. Editor-mission folders, by contrast, are derived from
@@ -130,15 +140,14 @@ void GamePaths::Initialize(const char* codename, const char* cfgBase, const char
     m_mpMissionsDir = resolved.mpMissionsDir;
     m_oldPaths = resolved.oldPaths;
 
-    std::error_code ec;
-    fs::create_directories(m_userDir, ec);
-    fs::create_directories(m_cacheDir, ec);
-    fs::create_directories(m_tempDir, ec);
-    fs::create_directories(m_userContentDir, ec);
-    fs::create_directories(m_modsDir, ec);
-    fs::create_directories(m_workshopDir, ec);
-    fs::create_directories(m_missionsDir, ec);
-    fs::create_directories(m_mpMissionsDir, ec);
+    Poseidon::CreateDirectoryUtf8(m_userDir.c_str());
+    Poseidon::CreateDirectoryUtf8(m_cacheDir.c_str());
+    Poseidon::CreateDirectoryUtf8(m_tempDir.c_str());
+    Poseidon::CreateDirectoryUtf8(m_userContentDir.c_str());
+    Poseidon::CreateDirectoryUtf8(m_modsDir.c_str());
+    Poseidon::CreateDirectoryUtf8(m_workshopDir.c_str());
+    Poseidon::CreateDirectoryUtf8(m_missionsDir.c_str());
+    Poseidon::CreateDirectoryUtf8(m_mpMissionsDir.c_str());
 
     m_initialized = true;
 }

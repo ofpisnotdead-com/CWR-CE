@@ -1191,7 +1191,7 @@ bool AIGroup::Think()
 
     if (!Leader())
     {
-        AI_ERROR(NUnits() == 0);
+        PoseidonAssert(NUnits() == 0);
         return false;
     }
 
@@ -1259,7 +1259,7 @@ bool AIGroup::Think()
 
         if (!Leader())
         {
-            AI_ERROR(NUnits() == 0);
+            PoseidonAssert(NUnits() == 0);
             return false;
         }
     }

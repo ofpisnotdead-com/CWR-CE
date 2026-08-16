@@ -1,8 +1,0 @@
-# Boots with the committed fixture mod @configmergemod mounted on the mod path
-# (--mod), so its bin/config goes through the deferred merge into the game config.
-# --mods-dir lets the relative --mod name resolve; game CWD under tri is the data
-# dir (packages/Remaster). Its own isolated dir (one mod per fixtures dir) so the
-# scan-based mods_* tests aren't contaminated by this mod and vice versa.
-extra_args = ["--mods-dir", "../../tests/fixtures/mods-configmerge", "--mod", "@configmergemod"]
-timeout = 120
-tags = ["headless", "full_game"]
