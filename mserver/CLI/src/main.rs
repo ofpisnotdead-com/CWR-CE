@@ -64,9 +64,9 @@ enum Command {
     /// Print the entries and properties of a PBO archive.
     Info(InfoArgs),
     /// Publish a mod (a folder to pack, or an already-packed .pbo) to a workshop.
-    Publish(PublishArgs),
-    /// Upload a new immutable revision of an existing workshop mod.
-    Update(UpdateArgs),
+    Publish(Box<PublishArgs>),
+    /// Set the game versions that can use one package revision.
+    Compatibility(CompatibilityArgs),
     /// List the mods on a remote workshop.
     List,
     /// Download + unpack mods from a workshop into a mods directory (for servers).
@@ -106,16 +106,31 @@ struct InfoArgs {
     file: String,
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Clone, Debug)]
 struct PublishArgs {
     /// A folder to pack, or an already-packed `.pbo` to upload as-is.
     source: String,
     /// Admin API key (also read from `PAPA_ADMIN_KEY`).
     #[arg(long, env = "PAPA_ADMIN_KEY")]
     admin_key: String,
-    /// Display name of the mod.
+    /// Stable workshop identity. Defaults to `modId` in the source `mod.json`.
     #[arg(long)]
-    name: String,
+    mod_id: Option<String>,
+    /// Display name of the mod. Defaults to the source `mod.json`.
+    #[arg(long)]
+    name: Option<String>,
+    /// Game application identifier, e.g. `CWR`.
+    #[arg(long)]
+    app: Option<String>,
+    /// Compatible game data version, e.g. `305`.
+    #[arg(long)]
+    actver: Option<i32>,
+    /// Additional compatible game data version (repeatable).
+    #[arg(long = "compatible-actver")]
+    compatible_actvers: Vec<i32>,
+    /// Compatible build tag.
+    #[arg(long = "vertag", visible_alias = "version-tag")]
+    version_tag: Option<String>,
     /// Explicit version; defaults to the artifact content hash on the server.
     #[arg(long)]
     version: Option<String>,
@@ -138,35 +153,17 @@ struct PublishArgs {
 }
 
 #[derive(Args, Debug)]
-struct UpdateArgs {
-    /// Stable workshop mod identifier to update.
+struct CompatibilityArgs {
+    /// Stable workshop identity.
     mod_id: String,
-    /// A folder to pack, or an already-packed `.pbo` to upload as-is.
-    source: String,
+    /// Package revision to expose.
+    revision: u64,
+    /// Compatible game data version (repeatable).
+    #[arg(long = "actver", required = true)]
+    compatible_actvers: Vec<i32>,
     /// Admin API key (also read from `PAPA_ADMIN_KEY`).
     #[arg(long, env = "PAPA_ADMIN_KEY")]
     admin_key: String,
-    /// Replacement display name; omitted values inherit the current metadata.
-    #[arg(long)]
-    name: Option<String>,
-    /// Replacement author-facing version.
-    #[arg(long)]
-    version: Option<String>,
-    /// Replacement short description.
-    #[arg(long)]
-    description: Option<String>,
-    /// Replacement author list.
-    #[arg(long = "author")]
-    authors: Vec<String>,
-    /// Replacement project homepage URL.
-    #[arg(long)]
-    homepage_url: Option<String>,
-    /// Replacement canonical install folder name.
-    #[arg(long)]
-    folder_name: Option<String>,
-    /// Addon prefix property baked into the PBO.
-    #[arg(long)]
-    prefix: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -230,12 +227,51 @@ fn main() -> Result<()> {
         Command::Unpack(args) => run_unpack(args),
         Command::Info(args) => run_info(args),
         Command::Publish(args) => run_publish(args, &cli.master, cli.insecure),
-        Command::Update(args) => run_update(args, &cli.master, cli.insecure),
+        Command::Compatibility(args) => run_compatibility(args, &cli.master, cli.insecure),
         Command::List => run_list(&cli.master, cli.insecure),
         Command::Install(args) => run_install(args, &cli.master, cli.insecure),
         Command::Query(args) => run_query(args),
         Command::Servers(args) => run_servers(args, &cli.master, cli.insecure),
         Command::Server(args) => run_server(args, &cli.master, cli.insecure),
+    }
+}
+
+fn run_compatibility(args: &CompatibilityArgs, master: &str, insecure: bool) -> Result<()> {
+    let base = master.trim_end_matches('/');
+    let url = format!(
+        "{base}/v1/mods/{}/revisions/{}/compatibility",
+        args.mod_id, args.revision
+    );
+    let body = serde_json::to_string(&serde_json::json!({
+        "compatibleActvers": args.compatible_actvers
+    }))?;
+    let response = http_agent(insecure)?
+        .put(&url)
+        .set("x-api-key", &args.admin_key)
+        .set("content-type", "application/json")
+        .send_string(&body);
+    match response {
+        Ok(_) => {
+            println!(
+                "set {} revision {} compatibility to {}",
+                args.mod_id,
+                args.revision,
+                args.compatible_actvers
+                    .iter()
+                    .map(i32::to_string)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+            Ok(())
+        }
+        Err(ureq::Error::Status(code, response)) => {
+            let detail = response.into_string().unwrap_or_default();
+            bail!(
+                "compatibility update rejected: HTTP {code}: {}",
+                detail.trim()
+            );
+        }
+        Err(error) => bail!("compatibility update failed: {error}"),
     }
 }
 
@@ -281,22 +317,42 @@ fn run_info(args: &InfoArgs) -> Result<()> {
 }
 
 fn run_publish(args: &PublishArgs, master: &str, insecure: bool) -> Result<()> {
-    run_upload(args, None, master, insecure)
+    let args = publish_args_with_manifest(args)?;
+    let mod_id = args.mod_id.as_deref();
+    if let Some(mod_id) = mod_id {
+        if mod_id.is_empty()
+            || mod_id.contains('/')
+            || mod_id.contains('\\')
+            || mod_id.contains("..")
+        {
+            bail!("invalid mod id '{mod_id}'");
+        }
+    }
+    let existing = mod_id
+        .map(|id| remote_mod_exists(master, id, insecure))
+        .transpose()?
+        .unwrap_or(false);
+    let name = args.name.as_deref().unwrap_or("");
+    if !existing && name.is_empty() {
+        bail!("new packages require --name or a name in the source mod.json");
+    }
+    run_upload(&args, mod_id.filter(|_| existing), master, insecure)
 }
 
-fn run_update(args: &UpdateArgs, master: &str, insecure: bool) -> Result<()> {
-    let publish = PublishArgs {
-        source: args.source.clone(),
-        admin_key: args.admin_key.clone(),
-        name: args.name.clone().unwrap_or_default(),
-        version: args.version.clone(),
-        description: args.description.clone(),
-        authors: args.authors.clone(),
-        homepage_url: args.homepage_url.clone(),
-        folder_name: args.folder_name.clone(),
-        prefix: args.prefix.clone(),
-    };
-    run_upload(&publish, Some(&args.mod_id), master, insecure)
+fn remote_mod_exists(master: &str, mod_id: &str, insecure: bool) -> Result<bool> {
+    let base = master.trim_end_matches('/');
+    match http_agent(insecure)?
+        .get(&format!("{base}/v1/mods/{mod_id}"))
+        .call()
+    {
+        Ok(_) => Ok(true),
+        Err(ureq::Error::Status(404, _)) => Ok(false),
+        Err(ureq::Error::Status(code, response)) => {
+            let detail = response.into_string().unwrap_or_default();
+            bail!("catalog lookup failed: HTTP {code}: {}", detail.trim());
+        }
+        Err(error) => bail!("catalog lookup failed: {error}"),
+    }
 }
 
 fn run_upload(
@@ -342,6 +398,7 @@ fn run_upload(
         Ok(ok) => {
             let entry: serde_json::Value = ok.into_json().context("parsing publish response")?;
             let response_mod_id = entry["modId"].as_str().unwrap_or("?");
+            let response_name = upload_result_name(&entry, args.name.as_deref().unwrap_or(""));
             let version = entry["version"].as_str().unwrap_or("?");
             let revision = entry["packageRevision"].as_u64().unwrap_or(1);
             let download = entry["downloadUrl"].as_str().unwrap_or("?");
@@ -351,8 +408,7 @@ fn run_upload(
                 "published"
             };
             println!(
-                "{action} '{}' as {response_mod_id}, version {version}, package revision {revision} ({artifact_len} bytes compressed) -> {base}{download}",
-                args.name
+                "{action} '{response_name}' as {response_mod_id}, version {version}, package revision {revision} ({artifact_len} bytes compressed) -> {base}{download}"
             );
             Ok(())
         }
@@ -362,6 +418,115 @@ fn run_upload(
         }
         Err(error) => bail!("publish request failed: {error}"),
     }
+}
+
+fn upload_result_name<'a>(entry: &'a serde_json::Value, requested_name: &'a str) -> &'a str {
+    entry["name"].as_str().unwrap_or(requested_name)
+}
+
+fn publish_args_with_manifest(args: &PublishArgs) -> Result<PublishArgs> {
+    let manifest = read_source_manifest(Path::new(&args.source))?;
+    let mut resolved = args.clone();
+    if let Some(manifest) = manifest {
+        resolved.mod_id = resolved.mod_id.or_else(|| json_string(&manifest, "modId"));
+        resolved.name = resolved.name.or_else(|| json_string(&manifest, "name"));
+        resolved.app = resolved.app.or_else(|| json_string(&manifest, "app"));
+        resolved.actver = resolved.actver.or_else(|| {
+            manifest["actver"]
+                .as_i64()
+                .and_then(|value| i32::try_from(value).ok())
+        });
+        if resolved.compatible_actvers.is_empty() {
+            resolved.compatible_actvers = manifest["compatibleActvers"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(serde_json::Value::as_i64)
+                .filter_map(|value| i32::try_from(value).ok())
+                .collect();
+        }
+        resolved.version_tag = resolved
+            .version_tag
+            .or_else(|| json_string(&manifest, "vertag"));
+        resolved.version = resolved
+            .version
+            .or_else(|| json_string(&manifest, "version"));
+        resolved.description = resolved
+            .description
+            .or_else(|| json_string(&manifest, "description"));
+        resolved.homepage_url = resolved
+            .homepage_url
+            .or_else(|| json_string(&manifest, "homepageUrl"));
+        resolved.folder_name = resolved
+            .folder_name
+            .or_else(|| json_string(&manifest, "folderName"));
+        if resolved.authors.is_empty() {
+            resolved.authors = manifest["authors"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|author| author.as_str().map(str::to_string))
+                .collect();
+        }
+    }
+    if resolved.mod_id.is_none() {
+        resolved.mod_id = resolved
+            .name
+            .as_deref()
+            .map(workshop_slug)
+            .filter(|value| !value.is_empty());
+    }
+    Ok(resolved)
+}
+
+fn read_source_manifest(source: &Path) -> Result<Option<serde_json::Value>> {
+    let bytes = if source.is_dir() {
+        let path = source.join("mod.json");
+        match fs::read(&path) {
+            Ok(bytes) => Some(bytes),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error).with_context(|| format!("reading {}", path.display())),
+        }
+    } else if source.is_file() {
+        Pbo::read_path(source)
+            .with_context(|| format!("'{}' is not a valid PBO", source.display()))?
+            .read("mod.json")
+            .transpose()?
+    } else {
+        None
+    };
+    bytes
+        .map(|bytes| {
+            serde_json::from_slice(&bytes)
+                .with_context(|| format!("parsing mod.json in {}", source.display()))
+        })
+        .transpose()
+}
+
+fn json_string(value: &serde_json::Value, key: &str) -> Option<String> {
+    value[key]
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn workshop_slug(name: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    let mut out = String::new();
+    let mut pending_dash = false;
+    for ch in name.nfkd() {
+        if ch.is_ascii_alphanumeric() {
+            if pending_dash && !out.is_empty() {
+                out.push('-');
+            }
+            pending_dash = false;
+            out.push(ch.to_ascii_lowercase());
+        } else if !('\u{0300}'..='\u{036f}').contains(&ch) {
+            pending_dash = true;
+        }
+    }
+    out
 }
 
 /// A streaming reader for the raw PBO. A folder is packed into memory (addon folders are small);
@@ -1099,24 +1264,39 @@ fn session_flags(s: &serde_json::Value) -> String {
 /// The multipart body up to (but excluding) the file bytes: the metadata fields plus the
 /// `file` part header. The caller streams the artifact bytes after this, then the trailer.
 fn build_multipart_prelude(boundary: &str, args: &PublishArgs) -> Vec<u8> {
-    let mut fields: Vec<(&str, &str)> = Vec::new();
-    if !args.name.trim().is_empty() {
-        fields.push(("name", args.name.as_str()));
+    let mut fields: Vec<(&str, String)> = Vec::new();
+    if let Some(mod_id) = &args.mod_id {
+        fields.push(("modId", mod_id.clone()));
+    }
+    if let Some(name) = &args.name {
+        fields.push(("name", name.clone()));
+    }
+    if let Some(app) = &args.app {
+        fields.push(("app", app.clone()));
+    }
+    if let Some(actver) = args.actver {
+        fields.push(("actver", actver.to_string()));
+    }
+    for actver in &args.compatible_actvers {
+        fields.push(("compatibleActver", actver.to_string()));
+    }
+    if let Some(version_tag) = &args.version_tag {
+        fields.push(("vertag", version_tag.clone()));
     }
     if let Some(version) = &args.version {
-        fields.push(("version", version));
+        fields.push(("version", version.clone()));
     }
     if let Some(folder_name) = &args.folder_name {
-        fields.push(("folderName", folder_name));
+        fields.push(("folderName", folder_name.clone()));
     }
     if let Some(description) = &args.description {
-        fields.push(("description", description));
+        fields.push(("description", description.clone()));
     }
     if let Some(homepage) = &args.homepage_url {
-        fields.push(("homepageUrl", homepage));
+        fields.push(("homepageUrl", homepage.clone()));
     }
     for author in &args.authors {
-        fields.push(("author", author));
+        fields.push(("author", author.clone()));
     }
 
     let mut body = Vec::new();
@@ -1140,9 +1320,10 @@ fn build_multipart_prelude(boundary: &str, args: &PublishArgs) -> Vec<u8> {
 mod tests {
     use super::{
         build_multipart_prelude, compress_artifact, decode_and_unpack, difficulty_flag_names,
-        install_is_current, replace_install, with_default_port, write_installed_mod_manifest,
-        PublishArgs,
+        install_is_current, publish_args_with_manifest, replace_install, upload_result_name,
+        with_default_port, workshop_slug, write_installed_mod_manifest, Cli, Command, PublishArgs,
     };
+    use clap::Parser;
     use papa_bear_archive::Pbo;
     use std::io::Cursor;
     use tempfile::tempdir;
@@ -1269,11 +1450,16 @@ mod tests {
     }
 
     #[test]
-    fn update_multipart_omits_inherited_metadata() {
+    fn publish_multipart_omits_unspecified_metadata() {
         let args = PublishArgs {
             source: "fixture.pbo".to_string(),
             admin_key: "key".to_string(),
-            name: String::new(),
+            mod_id: None,
+            name: None,
+            app: None,
+            actver: None,
+            compatible_actvers: Vec::new(),
+            version_tag: None,
             version: None,
             description: None,
             authors: Vec::new(),
@@ -1283,7 +1469,244 @@ mod tests {
         };
         let body = String::from_utf8(build_multipart_prelude("boundary", &args)).unwrap();
         assert!(!body.contains("name=\"name\""));
+        assert!(!body.contains("name=\"app\""));
+        assert!(!body.contains("name=\"actver\""));
+        assert!(!body.contains("name=\"vertag\""));
         assert!(body.contains("name=\"file\""));
+    }
+
+    #[test]
+    fn publish_multipart_includes_game_compatibility() {
+        let args = PublishArgs {
+            source: "fixture.pbo".to_string(),
+            admin_key: "key".to_string(),
+            mod_id: Some("fixture".to_string()),
+            name: Some("Fixture".to_string()),
+            app: Some("CWR".to_string()),
+            actver: Some(305),
+            compatible_actvers: vec![303, 305],
+            version_tag: Some("release".to_string()),
+            version: Some("1.0".to_string()),
+            description: None,
+            authors: Vec::new(),
+            homepage_url: None,
+            folder_name: None,
+            prefix: None,
+        };
+
+        let body = String::from_utf8(build_multipart_prelude("boundary", &args)).unwrap();
+        assert!(body.contains("name=\"app\"\r\n\r\nCWR"));
+        assert!(body.contains("name=\"modId\"\r\n\r\nfixture"));
+        assert!(body.contains("name=\"actver\"\r\n\r\n305"));
+        assert!(body.contains("name=\"compatibleActver\"\r\n\r\n303"));
+        assert!(body.contains("name=\"compatibleActver\"\r\n\r\n305"));
+        assert!(body.contains("name=\"vertag\"\r\n\r\nrelease"));
+    }
+
+    #[test]
+    fn publish_accepts_identity_and_game_compatibility_flags() {
+        let publish = Cli::try_parse_from([
+            "papa",
+            "publish",
+            "--admin-key",
+            "key",
+            "--name",
+            "Fixture",
+            "--mod-id",
+            "fixture",
+            "--app",
+            "CWR",
+            "--actver",
+            "305",
+            "--vertag",
+            "release",
+            "fixture.pbo",
+        ])
+        .unwrap();
+        let Command::Publish(publish) = publish.command else {
+            panic!("expected publish command");
+        };
+        assert_eq!(publish.app.as_deref(), Some("CWR"));
+        assert_eq!(publish.actver, Some(305));
+        assert_eq!(publish.version_tag.as_deref(), Some("release"));
+        assert_eq!(publish.mod_id.as_deref(), Some("fixture"));
+    }
+
+    #[test]
+    fn source_manifest_supplies_publish_identity_and_metadata() {
+        let source = tempdir().unwrap();
+        std::fs::write(
+            source.path().join("mod.json"),
+            r#"{
+                "modId":"csla-2.2",
+                "name":"CSLA",
+                "app":"CWR",
+                "actver":305,
+                "compatibleActvers":[303,305],
+                "vertag":"release",
+                "version":"2.2",
+                "folderName":"CSLA",
+                "description":"fixture",
+                "authors":["Author One","Author Two"],
+                "homepageUrl":"https://example.invalid"
+            }"#,
+        )
+        .unwrap();
+        let args = PublishArgs {
+            source: source.path().to_string_lossy().into_owned(),
+            admin_key: "key".to_string(),
+            mod_id: None,
+            name: None,
+            app: None,
+            actver: None,
+            compatible_actvers: Vec::new(),
+            version_tag: None,
+            version: None,
+            description: None,
+            authors: Vec::new(),
+            homepage_url: None,
+            folder_name: None,
+            prefix: None,
+        };
+
+        let resolved = publish_args_with_manifest(&args).unwrap();
+        assert_eq!(resolved.mod_id.as_deref(), Some("csla-2.2"));
+        assert_eq!(resolved.name.as_deref(), Some("CSLA"));
+        assert_eq!(resolved.app.as_deref(), Some("CWR"));
+        assert_eq!(resolved.actver, Some(305));
+        assert_eq!(resolved.compatible_actvers, [303, 305]);
+        assert_eq!(resolved.version_tag.as_deref(), Some("release"));
+        assert_eq!(resolved.version.as_deref(), Some("2.2"));
+        assert_eq!(resolved.folder_name.as_deref(), Some("CSLA"));
+        assert_eq!(resolved.authors, ["Author One", "Author Two"]);
+    }
+
+    #[test]
+    fn packed_source_manifest_supplies_publish_identity() {
+        let work = tempdir().unwrap();
+        let source = work.path().join("source");
+        std::fs::create_dir(&source).unwrap();
+        std::fs::write(
+            source.join("mod.json"),
+            r#"{"modId":"packed-fixture","name":"Packed Fixture"}"#,
+        )
+        .unwrap();
+        std::fs::write(source.join("config.cpp"), b"class CfgPatches {};").unwrap();
+        let packed = work.path().join("fixture.pbo");
+        Pbo::pack_dir(&source, None)
+            .unwrap()
+            .write_path(&packed)
+            .unwrap();
+        let args = PublishArgs {
+            source: packed.to_string_lossy().into_owned(),
+            admin_key: "key".to_string(),
+            mod_id: None,
+            name: None,
+            app: None,
+            actver: None,
+            compatible_actvers: Vec::new(),
+            version_tag: None,
+            version: None,
+            description: None,
+            authors: Vec::new(),
+            homepage_url: None,
+            folder_name: None,
+            prefix: None,
+        };
+
+        let resolved = publish_args_with_manifest(&args).unwrap();
+        assert_eq!(resolved.mod_id.as_deref(), Some("packed-fixture"));
+        assert_eq!(resolved.name.as_deref(), Some("Packed Fixture"));
+    }
+
+    #[test]
+    fn command_line_metadata_overrides_source_manifest() {
+        let source = tempdir().unwrap();
+        std::fs::write(
+            source.path().join("mod.json"),
+            r#"{"modId":"old-id","name":"Old","actver":303}"#,
+        )
+        .unwrap();
+        let args = PublishArgs {
+            source: source.path().to_string_lossy().into_owned(),
+            admin_key: "key".to_string(),
+            mod_id: Some("new-id".to_string()),
+            name: Some("New".to_string()),
+            app: Some("CWR".to_string()),
+            actver: Some(305),
+            compatible_actvers: Vec::new(),
+            version_tag: None,
+            version: None,
+            description: None,
+            authors: Vec::new(),
+            homepage_url: None,
+            folder_name: None,
+            prefix: None,
+        };
+
+        let resolved = publish_args_with_manifest(&args).unwrap();
+        assert_eq!(resolved.mod_id.as_deref(), Some("new-id"));
+        assert_eq!(resolved.name.as_deref(), Some("New"));
+        assert_eq!(resolved.actver, Some(305));
+    }
+
+    #[test]
+    fn name_supplies_stable_identity_without_manifest() {
+        let source = tempdir().unwrap();
+        let args = PublishArgs {
+            source: source.path().to_string_lossy().into_owned(),
+            admin_key: "key".to_string(),
+            mod_id: None,
+            name: Some("FDF Mod".to_string()),
+            app: None,
+            actver: None,
+            compatible_actvers: Vec::new(),
+            version_tag: None,
+            version: None,
+            description: None,
+            authors: Vec::new(),
+            homepage_url: None,
+            folder_name: None,
+            prefix: None,
+        };
+
+        let resolved = publish_args_with_manifest(&args).unwrap();
+        assert_eq!(resolved.mod_id.as_deref(), Some("fdf-mod"));
+    }
+
+    #[test]
+    fn workshop_slug_matches_server_identity_rules() {
+        assert_eq!(workshop_slug("FDF Mod"), "fdf-mod");
+        assert_eq!(workshop_slug("\u{010c}SLA"), "csla");
+    }
+
+    #[test]
+    fn compatibility_command_accepts_repeated_versions() {
+        let cli = Cli::try_parse_from([
+            "papa",
+            "compatibility",
+            "fixture",
+            "1",
+            "--actver",
+            "303",
+            "--actver",
+            "305",
+            "--admin-key",
+            "key",
+        ])
+        .unwrap();
+        let Command::Compatibility(args) = cli.command else {
+            panic!("expected compatibility command");
+        };
+        assert_eq!(args.mod_id, "fixture");
+        assert_eq!(args.revision, 1);
+        assert_eq!(args.compatible_actvers, [303, 305]);
+    }
+
+    #[test]
+    fn publish_result_uses_server_name() {
+        let response = serde_json::json!({"name": "Fixture"});
+        assert_eq!(upload_result_name(&response, ""), "Fixture");
     }
 
     #[test]

@@ -229,6 +229,7 @@ pub async fn seed_dev_mods(store: &ModStore) -> Result<usize> {
             mod_id: row.mod_id,
             app_name: Some("CWR".to_string()),
             actver: Some(303),
+            compatible_actvers: Vec::new(),
             version_tag: None,
             compatible: false,
             name: row.name,

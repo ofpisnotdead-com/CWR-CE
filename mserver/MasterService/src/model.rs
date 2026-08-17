@@ -286,6 +286,12 @@ pub struct ModCatalogEntry {
     pub app_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub actver: Option<i32>,
+    #[serde(
+        rename = "compatibleActvers",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub compatible_actvers: Vec<i32>,
     #[serde(rename = "vertag", default, skip_serializing_if = "Option::is_none")]
     pub version_tag: Option<String>,
     #[serde(default)]
@@ -320,6 +326,12 @@ pub struct ModCatalogEntry {
     pub download_url: Option<String>,
     #[serde(rename = "sizeBytes", default)]
     pub size_bytes: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, ToSchema)]
+pub struct SetModCompatibilityRequest {
+    #[serde(rename = "compatibleActvers")]
+    pub compatible_actvers: Vec<i32>,
 }
 
 pub(crate) const fn default_package_revision() -> u64 {

@@ -1194,6 +1194,7 @@ mod tests {
             multipart_body(
                 boundary,
                 &[
+                    ("modId", "synthetic-upload-1.0"),
                     ("name", "Synthetic Upload"),
                     ("app", "CWR"),
                     ("actver", "302"),
@@ -1255,7 +1256,7 @@ mod tests {
         let entry: ModCatalogEntry =
             serde_json::from_slice(&to_bytes(ok.into_body(), usize::MAX).await.unwrap()).unwrap();
         assert_eq!(entry.name, "Synthetic Upload");
-        assert_eq!(entry.mod_id, "synthetic-upload");
+        assert_eq!(entry.mod_id, "synthetic-upload-1.0");
         assert_eq!(entry.package_revision, 1);
         assert_eq!(entry.version.len(), 8); // default version = sha256[..8] hex
         assert_eq!(entry.app_name.as_deref(), Some("CWR"));
@@ -1328,7 +1329,14 @@ mod tests {
         let publish_body = |artifact: &'static [u8]| {
             multipart_body(
                 "revisionboundary",
-                &[("name", "Revision Fixture"), ("version", "1.0")],
+                &[
+                    ("name", "Revision Fixture"),
+                    ("version", "1.0"),
+                    ("app", "CWR"),
+                    ("actver", "303"),
+                    ("compatibleActver", "303"),
+                    ("compatibleActver", "305"),
+                ],
                 Some(("file", artifact)),
             )
         };
@@ -1364,7 +1372,11 @@ mod tests {
             .unwrap();
         assert_eq!(collision.status(), StatusCode::CONFLICT);
 
-        let update = multipart_body("revisionboundary", &[], Some(("file", b"revision-two")));
+        let update = multipart_body(
+            "revisionboundary",
+            &[("actver", "305")],
+            Some(("file", b"revision-two")),
+        );
         let updated = app
             .clone()
             .oneshot(request("/v1/mods/revision-fixture/revisions", update))
@@ -1376,6 +1388,28 @@ mod tests {
                 .unwrap();
         assert_eq!(updated.package_revision, 2);
         assert_eq!(updated.version, "1.0");
+
+        let catalog = |actver| {
+            Request::builder()
+                .uri(format!("/v1/mods?app=CWR&actver={actver}"))
+                .body(Body::empty())
+                .unwrap()
+        };
+        let for_303 = app.clone().oneshot(catalog(303)).await.unwrap();
+        let for_303: Vec<ModCatalogEntry> =
+            serde_json::from_slice(&to_bytes(for_303.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(for_303[0].package_revision, 1);
+        assert_eq!(
+            for_303[0].download_url.as_deref(),
+            Some("/v1/mods/revision-fixture/revisions/1/download")
+        );
+
+        let for_305 = app.clone().oneshot(catalog(305)).await.unwrap();
+        let for_305: Vec<ModCatalogEntry> =
+            serde_json::from_slice(&to_bytes(for_305.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(for_305[0].package_revision, 2);
 
         let history = app
             .clone()
@@ -1397,6 +1431,57 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![2, 1]
         );
+
+        let unauthorised = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/v1/mods/revision-fixture/revisions/1/compatibility")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"compatibleActvers":[303,305]}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(unauthorised.status(), StatusCode::UNAUTHORIZED);
+
+        let compatibility = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/v1/mods/revision-fixture/revisions/1/compatibility")
+                    .header("content-type", "application/json")
+                    .header("x-api-key", "secret-key")
+                    .body(Body::from(r#"{"compatibleActvers":[305,303,305]}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(compatibility.status(), StatusCode::OK);
+        let compatibility: ModCatalogEntry = serde_json::from_slice(
+            &to_bytes(compatibility.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(compatibility.compatible_actvers, [303, 305]);
+
+        let persisted = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/mods/revision-fixture/revisions/1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let persisted: ModCatalogEntry =
+            serde_json::from_slice(&to_bytes(persisted.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(persisted.compatible_actvers, [303, 305]);
 
         let latest_download = app
             .oneshot(

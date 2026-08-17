@@ -224,6 +224,22 @@ impl PapaBearService {
         }
     }
 
+    pub async fn set_mod_revision_compatibility(
+        &self,
+        mod_id: &str,
+        revision: u64,
+        compatible_actvers: &[i32],
+    ) -> Result<Option<ModCatalogEntry>> {
+        match &self.mod_store {
+            Some(store) => {
+                store
+                    .set_revision_compatibility(mod_id, revision, compatible_actvers)
+                    .await
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Delete a mod (its catalog entry + artifact) from the store. Returns `true` if it
     /// existed, `false` if there was nothing to delete or mods are disabled.
     pub async fn delete_mod(&self, mod_id: &str) -> Result<bool> {
