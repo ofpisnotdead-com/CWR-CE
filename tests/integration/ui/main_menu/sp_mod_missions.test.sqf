@@ -6,6 +6,10 @@ triAssertEq [(triDisplay), 2]
 triWaitFrames 30
 triAssertEq [(triAssertListText [101, "Tri SP Gap1"]), "OK"]
 triAssertEq [(triAssertListText [101, "Tri SP Loose"]), "OK"]
+// A category folder named in UTF-8 survives the decode untouched. A folder named in a legacy
+// codepage cannot be a fixture here: such a path is not valid UTF-8 and macOS refuses to check
+// it out, so the byte-level decode is pinned by the codepage unit test instead.
+triAssertEq [(triAssertListText [101, "Čsla..."]), "OK"]
 // The title comes from the mission's own stringtable.csv.
 triAssertEq [(triAssertListText [101, "Tri SP Local Title"]), "OK"]
 // A packed mission with no briefingName is listed under its own name.

@@ -404,7 +404,7 @@ void DisplaySingleMission::ScanMissionDirectory(const RString& dir, C3DListBox* 
                 {
                     displayName = nameNoExt;
                 }
-                int index = lbox->AddString(displayName);
+                int index = lbox->AddString(DecodeLegacyTextToRString(displayName, GLanguage));
                 lbox->SetData(index, nameNoExt);
                 lbox->SetValue(index, 1); // bank
             }
@@ -526,14 +526,14 @@ void DisplaySingleMission::ScanMissionDirectory(const RString& dir, C3DListBox* 
                         // syntax to the player.
                         displayName = info.name;
                     }
-                    int index = lbox->AddString(displayName);
+                    int index = lbox->AddString(DecodeLegacyTextToRString(displayName, GLanguage));
                     lbox->SetData(index, info.name);
                     lbox->SetValue(index, 0); // directory
                 }
                 else
                 {
                     // Subdirectory
-                    int index = lbox->AddString(name + RString("..."));
+                    int index = lbox->AddString(DecodeLegacyTextToRString(name, GLanguage) + RString("..."));
                     lbox->SetData(index, name);
                     lbox->SetValue(index, -1); // subdirectory
                 }
