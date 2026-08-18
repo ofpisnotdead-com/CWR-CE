@@ -6,6 +6,8 @@ triAssertEq [(triDisplay), 2]
 triWaitFrames 30
 triAssertEq [(triAssertListText [101, "Tri SP Gap1"]), "OK"]
 triAssertEq [(triAssertListText [101, "Tri SP Loose"]), "OK"]
+// A packed mission with no briefingName is listed under its own name.
+triAssertEq [(triAssertListText [101, "tri_sp_noname.Demo"]), "OK"]
 triAssertEq [(triSelectListByData [101, "TriLoose.Demo"]), true]
 triClickText "Play"
 triAssertNear [(triGetViewDistance), 777, 1]
