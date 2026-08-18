@@ -1,0 +1,14 @@
+onLoadMission = "CTI JIP Contract";
+joinInProgress = 1;
+respawn = 3;
+
+class CfgRemoteExec
+{
+    mode = 1;
+    class Functions
+    {
+        class triRecordRemoteExec
+        {
+        };
+    };
+};

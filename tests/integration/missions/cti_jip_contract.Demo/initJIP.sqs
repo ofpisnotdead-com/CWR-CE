@@ -1,0 +1,3 @@
+ctiJipHookRan = true
+ctiJipRevisionObserved = ctiSnapshot select 0
+exit
