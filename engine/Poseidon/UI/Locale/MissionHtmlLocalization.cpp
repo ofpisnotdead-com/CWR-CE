@@ -177,6 +177,29 @@ RString LocalizeMissionString(RString value)
     return value;
 }
 
+RString GetCampaignStringtableFileForMission(RString missionDirectory)
+{
+    const RString missionDir = EnsureTrailingSlash(missionDirectory);
+    if (missionDir.GetLength() == 0)
+        return RString();
+
+    const RString missionsRoot = GetDirectoryPath(missionDir.Substring(0, missionDir.GetLength() - 1));
+    if (missionsRoot.GetLength() == 0)
+        return RString();
+
+    const RString campaignDir = GetDirectoryPath(missionsRoot.Substring(0, missionsRoot.GetLength() - 1));
+    if (campaignDir.GetLength() == 0)
+        return RString();
+
+    // Only a campaign root carries description.ext, so a single mission under
+    // Missions/ cannot pick up whatever sits beside its parent.
+    const RString description = campaignDir + RString("description.ext");
+    if (!QIFStreamB::FileExist(description))
+        return RString();
+
+    return GetMissionStringtableFileForHtml(description);
+}
+
 RString LoadMissionBriefingNameRaw(RString missionDirectory)
 {
     const RString sqmPath = EnsureTrailingSlash(missionDirectory) + RString("mission.sqm");
@@ -337,12 +360,17 @@ RString LoadLocalizedMissionBriefingName(RString missionDirectory, RString fallb
         // table isn't merged into the global one (the campaign-load screen
         // never loads it). Expand it against the mission's own
         // stringtable.csv with the same expander mission HTML uses (which
-        // also falls back to the global table); LocalizeMissionString then
-        // returns the literal/expanded text or "" for a token that resolved
-        // nowhere, so an unexpanded "$STR_…" never leaks to the UI.
+        // also falls back to the global table), then the campaign table;
+        // LocalizeMissionString then returns the literal/expanded text or ""
+        // for a token that resolved nowhere, so an unexpanded "$STR_..." never
+        // leaks to the UI.
         const RString csv =
             GetMissionStringtableFileForHtml(EnsureTrailingSlash(missionDirectory) + RString("mission.sqm"));
-        const RString localized = LocalizeMissionString(ExpandMissionHtmlStringtableTokens(raw, csv));
+        RString expanded = ExpandMissionHtmlStringtableTokens(raw, csv);
+        const RString campaignCsv = GetCampaignStringtableFileForMission(missionDirectory);
+        if (campaignCsv.GetLength() > 0)
+            expanded = ExpandMissionHtmlStringtableTokens(expanded, campaignCsv);
+        const RString localized = LocalizeMissionString(expanded);
         if (localized.GetLength() > 0)
             return localized;
     }
