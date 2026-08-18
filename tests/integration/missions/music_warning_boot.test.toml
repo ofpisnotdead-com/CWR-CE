@@ -1,0 +1,4 @@
+binary = "PoseidonGame"
+mission = "tests/integration/missions/music_warning_boot.Demo"
+timeout = 120
+tags = ["headless"]
