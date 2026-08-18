@@ -38,6 +38,10 @@ RString Localize(RString str);
 // _tableMission. Cheap enough to call once per mission during the list build.
 RString LookupStringtableCsv(RString csvPath, const char* key);
 
+class QFBank;
+
+RString LookupStringtableCsvInBank(const QFBank& bank, const char* key);
+
 void ClearStringtable();
 
 // Runtime language switch. Reloads every previously-loaded stringtable file with

@@ -342,7 +342,17 @@ void DisplaySingleMission::ScanMissionDirectory(const RString& dir, C3DListBox* 
                     }
                 }
 
-                RString displayName = Localize(name);
+                // No mission is open at scan time, so the global tables know nothing about a
+                // key that ships inside the PBO.
+                RString displayName;
+                if (name[0] == '$' || name[0] == '@')
+                {
+                    displayName = LookupStringtableCsvInBank(bank, (const char*)name + 1);
+                }
+                if (displayName.GetLength() == 0)
+                {
+                    displayName = Localize(name);
+                }
                 if (displayName.GetLength() == 0)
                 {
                     displayName = nameNoExt;

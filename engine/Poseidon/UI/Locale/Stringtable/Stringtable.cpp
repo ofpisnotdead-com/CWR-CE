@@ -674,31 +674,8 @@ RString Localize(RString str)
     return str;
 }
 
-RString LookupStringtableCsv(RString csvPath, const char* key)
+static RString ReadStringtableCsvValue(QIFStreamB& f, bool fileIsUtf8, const char* key)
 {
-    if (csvPath.GetLength() == 0 || !key || !*key)
-    {
-        return RString();
-    }
-    // Match LoadStringtable's preference: <stem>.utf8.csv wins when present.
-    RString resolved = csvPath;
-    if (HasCsvSuffix(csvPath) && !HasUtf8CsvSuffix(csvPath))
-    {
-        const int n = csvPath.GetLength() - static_cast<int>(strlen(".csv"));
-        std::string candidate(static_cast<const char*>(csvPath), n);
-        candidate += ".utf8.csv";
-        if (QIFStreamB::FileExist(candidate.c_str()))
-        {
-            resolved = RString(candidate.c_str());
-        }
-    }
-    if (!QIFStreamB::FileExist(resolved))
-    {
-        return RString();
-    }
-    QIFStreamB f;
-    f.AutoOpen(resolved);
-    const bool fileIsUtf8 = HasUtf8CsvSuffix(resolved);
     int column = -1;
     int englishColumn = -1;
     int headerColumns = 0;
@@ -783,6 +760,54 @@ RString LookupStringtableCsv(RString csvPath, const char* key)
         return RString();
     }
     return RString();
+}
+
+RString LookupStringtableCsv(RString csvPath, const char* key)
+{
+    if (csvPath.GetLength() == 0 || !key || !*key)
+    {
+        return RString();
+    }
+    // Match LoadStringtable's preference: <stem>.utf8.csv wins when present.
+    RString resolved = csvPath;
+    if (HasCsvSuffix(csvPath) && !HasUtf8CsvSuffix(csvPath))
+    {
+        const int n = csvPath.GetLength() - static_cast<int>(strlen(".csv"));
+        std::string candidate(static_cast<const char*>(csvPath), n);
+        candidate += ".utf8.csv";
+        if (QIFStreamB::FileExist(candidate.c_str()))
+        {
+            resolved = RString(candidate.c_str());
+        }
+    }
+    if (!QIFStreamB::FileExist(resolved))
+    {
+        return RString();
+    }
+    QIFStreamB f;
+    f.AutoOpen(resolved);
+    return ReadStringtableCsvValue(f, HasUtf8CsvSuffix(resolved), key);
+}
+
+RString LookupStringtableCsvInBank(const QFBank& bank, const char* key)
+{
+    if (!key || !*key)
+    {
+        return RString();
+    }
+    QIFStreamB utf8;
+    utf8.open(bank, "stringtable.utf8.csv");
+    if (utf8.rest() > 0)
+    {
+        return ReadStringtableCsvValue(utf8, true, key);
+    }
+    QIFStreamB legacy;
+    legacy.open(bank, "stringtable.csv");
+    if (legacy.rest() <= 0)
+    {
+        return RString();
+    }
+    return ReadStringtableCsvValue(legacy, false, key);
 }
 
 void ClearStringtable()
