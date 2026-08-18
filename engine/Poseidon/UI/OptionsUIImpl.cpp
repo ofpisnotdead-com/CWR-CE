@@ -159,7 +159,54 @@ std::string MissionKey(const char* name)
         c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
     return key;
 }
+
+// GetWorldName() answers with CfgWorlds >> initWorld for an island it does not know, so a
+// mission on a missing map opens on the intro island with every unit in open sea. Require the
+// class and its landscape both, as the editor tree and the MP browser do.
+bool MissionWorldAvailable(RString world)
+{
+    if (world.GetLength() == 0 || !(Pars >> "CfgWorlds").FindEntry(world))
+    {
+        return false;
+    }
+    return QIFStreamB::FileExist(GetWorldName(world));
+}
+
 } // namespace
+
+// A packed mission is placed by the last dot in its name (CreateSingleMissionBank), an unpacked
+// one by the first (ProcessTemplateName).
+RString SPMissionWorld(RString missionName, bool packed)
+{
+    const char* dot = packed ? strrchr(missionName, '.') : strchr(missionName, '.');
+    if (!dot)
+    {
+        return RString();
+    }
+    std::string world(dot + 1);
+    if (!packed)
+    {
+        const size_t next = world.find('.');
+        if (next != std::string::npos)
+        {
+            world.resize(next);
+        }
+    }
+    return RString(world.c_str());
+}
+
+bool SPMissionWorldInstalled(RString missionName, bool packed)
+{
+    return MissionWorldAvailable(SPMissionWorld(missionName, packed));
+}
+
+static RString MissingWorldMessage(RString missionName, bool packed)
+{
+    char message[256];
+    snprintf(message, sizeof(message), LocalizeString(IDS_MSG_NO_WORLD),
+             (const char*)SPMissionWorld(missionName, packed));
+    return RString(message);
+}
 
 // Every active mod's Missions/ (mods first, so a mod mission wins dedup) then the game root,
 // matching the load side where CreateSingleMissionBank prefers a mod PBO.
@@ -598,28 +645,38 @@ void DisplaySingleMission::OnChangeMission()
         return;
     }
 
-    RString filename;
-    MissionLanguageDetector::MissionPreviewInfo preview;
-    if (missionType == 1)
+    if (!SPMissionWorldInstalled(mission, missionType == 1))
     {
-        RString bank = CreateSingleMissionBank(directory);
-        if (bank.GetLength() == 0)
-        {
-            return;
-        }
-        preview = MissionLanguageDetector::DetectPreview(bank);
-        filename = GetOverviewFile(bank);
+        html->LoadBuffer(RString(),
+                         RString("<html><body><br/><br/><p align=\"center\">") +
+                             MissingWorldMessage(mission, missionType == 1) + RString("</p></body></html>"),
+                         false);
     }
     else
     {
-        preview = MissionLanguageDetector::DetectPreview(directory + RString("\\"));
-        filename = GetOverviewFile(directory + RString("\\"));
-    }
-    if (filename.GetLength() > 0 || preview.missionViewDistance.has_value() ||
-        MissionLanguageDetector::FormatTextLanguages(preview.languages) != RString("-") ||
-        MissionLanguageDetector::FormatVoiceLanguages(preview.languages) != RString("-"))
-    {
-        LoadMissionPreviewHtml(html, filename, preview);
+        RString filename;
+        MissionLanguageDetector::MissionPreviewInfo preview;
+        if (missionType == 1)
+        {
+            RString bank = CreateSingleMissionBank(directory);
+            if (bank.GetLength() == 0)
+            {
+                return;
+            }
+            preview = MissionLanguageDetector::DetectPreview(bank);
+            filename = GetOverviewFile(bank);
+        }
+        else
+        {
+            preview = MissionLanguageDetector::DetectPreview(directory + RString("\\"));
+            filename = GetOverviewFile(directory + RString("\\"));
+        }
+        if (filename.GetLength() > 0 || preview.missionViewDistance.has_value() ||
+            MissionLanguageDetector::FormatTextLanguages(preview.languages) != RString("-") ||
+            MissionLanguageDetector::FormatVoiceLanguages(preview.languages) != RString("-"))
+        {
+            LoadMissionPreviewHtml(html, filename, preview);
+        }
     }
 
     // update buttons
@@ -744,6 +801,11 @@ void DisplaySingleMission::OnButtonClicked(int idc)
                     _directory = "";
                 }
                 LoadDirectory();
+                return;
+            }
+            else if (!SPMissionWorldInstalled(lbox->GetData(sel), value == 1))
+            {
+                CreateMsgBox(MB_BUTTON_OK, MissingWorldMessage(lbox->GetData(sel), value == 1));
                 return;
             }
             else

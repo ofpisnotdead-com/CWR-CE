@@ -1135,6 +1135,11 @@ void SetBaseDirectory(RString dir);
 void SetMission(RString world, RString mission);
 
 std::vector<RString> GetSPMissionLookupDirs(const RString& subDir);
+
+// The island a single mission names, and whether it is installed. Packed missions name it
+// after the last dot of the mission name, unpacked ones after the first.
+RString SPMissionWorld(RString missionName, bool packed);
+bool SPMissionWorldInstalled(RString missionName, bool packed);
 AutoArray<RString> CollectArcadeWorldMissions(RString world);
 
 bool ProcessTemplateName(RString name);
