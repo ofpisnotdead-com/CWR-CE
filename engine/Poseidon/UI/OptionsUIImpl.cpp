@@ -261,10 +261,11 @@ void DisplaySingleMission::ScanMissionDirectory(const RString& dir, C3DListBox* 
             if ((info.attrib & _A_SUBDIR) == 0)
             {
                 // remove extension (.pbo)
-                RString name = info.name;
-                int n = name.GetLength() - 4;
-                PoseidonAssert(stricmp(name + n, ".pbo") == 0);
-                RString nameNoExt = name.Substring(0, n);
+                RString fileName = info.name;
+                int n = fileName.GetLength() - 4;
+                PoseidonAssert(stricmp(fileName + n, ".pbo") == 0);
+                RString nameNoExt = fileName.Substring(0, n);
+                RString name = nameNoExt;
 
                 if (!seen.insert(MissionKey(nameNoExt)).second)
                 {
@@ -341,7 +342,12 @@ void DisplaySingleMission::ScanMissionDirectory(const RString& dir, C3DListBox* 
                     }
                 }
 
-                int index = lbox->AddString(Localize(name));
+                RString displayName = Localize(name);
+                if (displayName.GetLength() == 0)
+                {
+                    displayName = nameNoExt;
+                }
+                int index = lbox->AddString(displayName);
                 lbox->SetData(index, nameNoExt);
                 lbox->SetValue(index, 1); // bank
             }
