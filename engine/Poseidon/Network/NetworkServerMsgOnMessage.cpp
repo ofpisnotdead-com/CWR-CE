@@ -583,34 +583,7 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                     }
                 }
 
-                // Replace existing entry for same variable, or append
-                bool replaced = false;
-                if (varName.GetLength() > 0)
-                {
-                    for (int j = 0; j < _jipMessages.Size(); j++)
-                    {
-                        if (_jipMessages[j].type != NMTPublicVariable)
-                            continue;
-                        if (_jipMessages[j].key == varName)
-                        {
-                            _jipMessages[j].msg = msg;
-                            replaced = true;
-                            break;
-                        }
-                    }
-                }
-                if (!replaced)
-                {
-                    static const int kMaxJIPMessages = 10000;
-                    if (_jipMessages.Size() < kMaxJIPMessages)
-                    {
-                        JIPInitMessage jipMsg;
-                        jipMsg.type = type;
-                        jipMsg.msg = msg;
-                        jipMsg.key = varName;
-                        _jipMessages.Add(jipMsg);
-                    }
-                }
+                Poseidon::AddOrReplaceJIPMessage(_jipMessages, type, msg, varName);
             }
             break;
         case NMTPublicExec:
@@ -642,15 +615,7 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
                              (const char*)params._jipKey, from);
                     break;
                 }
-                for (int i = 0; i < _jipMessages.Size();)
-                {
-                    if (_jipMessages[i].type == NMTRemoteExec && _jipMessages[i].key == params._jipKey)
-                    {
-                        _jipMessages.Delete(i);
-                        continue;
-                    }
-                    ++i;
-                }
+                Poseidon::RemoveJIPMessage(_jipMessages, NMTRemoteExec, params._jipKey);
                 break;
             }
 
@@ -775,28 +740,7 @@ void NetworkServer::OnMessage(int from, NetworkMessage* msg, NetworkMessageType 
             // JIP: store for late-joining players if requested
             if (acceptedForJip && params._jip && _missionHeader.joinInProgress)
             {
-                static const int kMaxJIPMessages = 10000;
-                bool replaced = false;
-                if (params._jipKey.GetLength() > 0)
-                {
-                    for (int i = 0; i < _jipMessages.Size(); ++i)
-                    {
-                        if (_jipMessages[i].type == NMTRemoteExec && _jipMessages[i].key == params._jipKey)
-                        {
-                            _jipMessages[i].msg = msg;
-                            replaced = true;
-                            break;
-                        }
-                    }
-                }
-                if (!replaced && _jipMessages.Size() < kMaxJIPMessages)
-                {
-                    JIPInitMessage jipMsg;
-                    jipMsg.type = type;
-                    jipMsg.msg = msg;
-                    jipMsg.key = params._jipKey;
-                    _jipMessages.Add(jipMsg);
-                }
+                Poseidon::AddOrReplaceJIPMessage(_jipMessages, type, msg, params._jipKey);
             }
         }
         break;

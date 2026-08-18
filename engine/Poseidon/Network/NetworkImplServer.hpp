@@ -2,6 +2,7 @@
 
 #include <Poseidon/Network/NetworkImplComponent.hpp>
 #include <Poseidon/Network/IpBan.hpp>
+#include <Poseidon/Network/NetworkJIPQueue.hpp>
 #include <Poseidon/Network/NetworkServerAuth.hpp>
 
 #include <atomic>
@@ -466,14 +467,7 @@ class NetworkServer : public NetworkComponent
     // map persons to units
     AutoArray<PersonUnitPair> _mapPersonUnit;
 
-    // JIP: messages queued for late-joining players (publicVariable, etc.)
-    struct JIPInitMessage
-    {
-        NetworkMessageType type;
-        Ref<NetworkMessage> msg;
-        RString key; // deduplication key (variable name for publicVariable)
-    };
-    AutoArray<JIPInitMessage> _jipMessages;
+    AutoArray<Poseidon::NetworkJIPMessage> _jipMessages;
     Poseidon::RemoteExecPolicyMode _remoteExecPolicyMode = Poseidon::RemoteExecPolicyMode::DenyClient;
     AutoArray<RString> _remoteExecAllowedNames;
 
