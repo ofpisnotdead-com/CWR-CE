@@ -2714,8 +2714,8 @@ bool AddModMPMissionFiles(RStringB dir, void* context)
     }
 
     auto* ctx = static_cast<AddModMPMissionsContext*>(context);
+    // _findfirst folds case per component, so this spelling also finds "mpmissions".
     AddModMPMissionFilesInDir(ctx, (const char*)dir, GameDirs::MPMissions);
-    AddModMPMissionFilesInDir(ctx, (const char*)dir, "mpmissions");
     return false;
 }
 } // namespace

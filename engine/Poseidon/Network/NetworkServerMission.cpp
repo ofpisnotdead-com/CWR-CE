@@ -169,6 +169,14 @@ using Poseidon::Foundation::Time;
 const float LogErrorLimit = 1.0f;
 extern const char* GameStateNames[];
 
+// The subfolder walk is case-sensitive on Linux, so the mod's own spelling has to be used.
+static std::filesystem::path ModMPMissionsDir(const std::filesystem::path& modRoot)
+{
+    std::filesystem::path dir = modRoot / GameDirs::MPMissions;
+    std::error_code ec;
+    return std::filesystem::is_directory(dir, ec) ? dir : modRoot / "mpmissions";
+}
+
 // Add an MPMissions root plus its immediate subfolders, so a mod grouping missions one level down
 // (MPMissions/<Category>/<mission>.pbo) is found by name. Root added even when absent, as before.
 static void AppendMissionDirWithSubfolders(std::vector<std::string>& dirs, const std::filesystem::path& base)
@@ -201,9 +209,7 @@ std::vector<std::string> Poseidon::GetMPMissionLookupDirectories()
                 return false;
             }
             auto* active = static_cast<ActiveModMissionDirs*>(context);
-            AppendMissionDirWithSubfolders(*active->dirs,
-                                           std::filesystem::path((const char*)dir) / GameDirs::MPMissions);
-            AppendMissionDirWithSubfolders(*active->dirs, std::filesystem::path((const char*)dir) / "mpmissions");
+            AppendMissionDirWithSubfolders(*active->dirs, ModMPMissionsDir((const char*)dir));
             return false;
         },
         &ctx);
