@@ -1815,6 +1815,9 @@ void CHTMLContainer::CopySection(int from, int to)
 void CHTMLContainer::FormatSection(int s)
 {
     float maxLineWidth = GetPageWidth();
+    // Cell widths that add up to the whole line must still fit once the sum has
+    // been rounded, so the last cell of a full-width row stays on that row.
+    const float lineFitTolerance = 1e-4f * maxLineWidth;
     float minHeight = _sizeP;
 
     HTMLSection& section = _sections[s];
@@ -1859,7 +1862,10 @@ void CHTMLContainer::FormatSection(int s)
         }
         else if (field.format == HFImg)
         {
-            if (row->width > 0 && row->width + field.width > lineWidth)
+            // The draw pass advances a picture in a table cell by the cell width,
+            // not by the picture inside it.
+            const float advance = field.tableWidth > 0 ? field.tableWidth : field.width;
+            if (row->width > 0 && row->width + advance > lineWidth + lineFitTolerance)
             {
                 row->lastField = f;
                 row->lastPos = 0;
@@ -1878,7 +1884,7 @@ void CHTMLContainer::FormatSection(int s)
                 height += _sizeP;
             }
             saturateMax(row->height, height);
-            row->width += field.width;
+            row->width += advance;
             row->align = field.align;
             if (field.exclude)
             {
