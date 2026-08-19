@@ -402,7 +402,7 @@ static int DecodeLZW(QIStream& in, char* dst, long lensb, int byteW, int pitch, 
                 Fail("LZW: stream read failed");
                 return -1;
             }
-            csum += (char)c;
+            csum += (signed char)c;
             // save pixel
             if (!resPal)
             {
@@ -420,7 +420,7 @@ static int DecodeLZW(QIStream& in, char* dst, long lensb, int byteW, int pitch, 
                 dst += lineAlign, lineCnt = byteW;
             }
             // continue decompression
-            text_buf[r] = (char)c;
+            text_buf[r] = (signed char)c;
             r++;
             r &= (N - 1);
         }
@@ -443,7 +443,7 @@ static int DecodeLZW(QIStream& in, char* dst, long lensb, int byteW, int pitch, 
             for (i = r - i, j += i; i <= j && lensb > 0; i++)
             {
                 c = (byte)text_buf[i & (N - 1)];
-                csum += (char)c;
+                csum += (signed char)c;
                 // save pixel
                 if (!resPal)
                 {
@@ -461,13 +461,13 @@ static int DecodeLZW(QIStream& in, char* dst, long lensb, int byteW, int pitch, 
                     dst += lineAlign, lineCnt = byteW;
                 }
                 // continue decompression
-                text_buf[r] = (char)c;
+                text_buf[r] = (signed char)c;
                 r++;
                 r &= (N - 1);
             }
         }
     }
-    in.read((char*)&csr, sizeof(csr));
+    in.read((signed char*)&csr, sizeof(csr));
     if (in.fail() || in.eof())
     {
         Fail("LZW: end of stream");
