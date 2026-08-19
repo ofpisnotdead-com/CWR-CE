@@ -70,7 +70,8 @@ private:
 			kRowAntiAliasing   = 10,
 			kRowSupersampling  = 11,
 			kRowMultitexturing = 12,
-			kRowCount          = 13,
+			kRowNightEye       = 13,
+			kRowCount          = 14,
 		};
 
 		void SetPage(class GraphicsPage* page) { m_page = page; }

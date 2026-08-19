@@ -372,6 +372,19 @@ GameValue TriSetAlphaToCoverage(const GameState* /*state*/, GameValuePar arg)
     return GameValue("OK");
 }
 
+/// triSetNightEye <0|1> - toggle the scotopic night pass that blends lit
+/// geometry towards its own luminance after dark. On by default via
+/// GraphicsConfig; tests toggle it to capture colored-vs-grey pairs from one
+/// camera. Returns "OK".
+GameValue TriSetNightEye(const GameState* /*state*/, GameValuePar arg)
+{
+    const bool enable = static_cast<float>(arg) != 0.0f;
+    if (GEngine)
+        GEngine->SetNightEyeEnabled(enable);
+    LOG_INFO(Core, "[tri] triSetNightEye {}", enable ? 1 : 0);
+    return GameValue("OK");
+}
+
 /// triSetFlatShading <0|1> — replace all object shading with solid red, keeping
 /// the alpha-test silhouette + cutout holes.  Diagnostic for highlight bugs: a
 /// bright pixel that vanishes under flat colour is a shading/texture artifact;

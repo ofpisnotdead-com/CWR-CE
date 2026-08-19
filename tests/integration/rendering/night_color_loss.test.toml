@@ -1,0 +1,7 @@
+tags = ["headless", "rendering", "ci-host-blocked"]
+binary = "PoseidonGame"
+mission = "tests/integration/missions/night_color_loss.Demo"
+data_dir = "packages/Demo"
+timeout = 120
+assert_timeout = 40
+extra_args = ["--dev", "--no-splash"]
