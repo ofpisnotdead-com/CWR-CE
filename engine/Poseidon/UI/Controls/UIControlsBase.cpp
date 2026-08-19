@@ -1466,6 +1466,7 @@ ControlObjectContainerAnim::ControlObjectContainerAnim(ControlsContainer* parent
 
     _open = false;
     _close = false;
+    _cursorMovedSinceAnimationStart = true;
     _animSpeed = cls >> "animSpeed";
     _invAnimSpeed = 1.0 / _animSpeed;
     _skeleton = new Skeleton();
@@ -1497,6 +1498,7 @@ void ControlObjectContainerAnim::Open()
     }
     _open = true;
     _close = false;
+    _cursorMovedSinceAnimationStart = false;
     _animStart = Glob.uiTime - _phase * _invAnimSpeed;
     /*
         if (_close)
@@ -1523,6 +1525,7 @@ void ControlObjectContainerAnim::Close()
     }
     _close = true;
     _open = false;
+    _cursorMovedSinceAnimationStart = false;
     _animStart = Glob.uiTime - (1 - _phase) * _invAnimSpeed;
     /*
         if (_open)
@@ -1539,6 +1542,31 @@ void ControlObjectContainerAnim::Close()
     {
         Zoom(false);
     }
+}
+
+void ControlObjectContainerAnim::OnMouseMove(float x, float y, bool active)
+{
+    if (active)
+    {
+        _cursorMovedSinceAnimationStart = true;
+    }
+    ControlObjectContainer::OnMouseMove(x, y, active);
+}
+
+void ControlObjectContainerAnim::OnMouseHold(float x, float y, bool active)
+{
+    if (!active || (!IsAnimating() && _cursorMovedSinceAnimationStart))
+    {
+        ControlObjectContainer::OnMouseHold(x, y, active);
+        return;
+    }
+
+    if (_indexMove >= 0)
+    {
+        _controls[_indexMove]._control->OnMouseHold(x, y, false);
+        _indexMove = -1;
+    }
+    ControlObjectWithZoom::OnMouseHold(x, y, active);
 }
 
 void ControlObjectContainerAnim::Animate(int level)

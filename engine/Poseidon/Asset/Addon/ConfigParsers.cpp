@@ -111,6 +111,7 @@ void MergeBaseResourceExtra()
         if (ResolveFileInDir(binDir, "resource-extra.cpp", extraFile, extraFileName))
         {
             ParamFile extra;
+            extra.SetBase(&Res);
             ParseTextFileFromResolvedPath(extra, extraFile, extraFileName);
             Res.Update(extra);
             // Update leaves array values' _file aimed at the stack-local `extra`; re-point at Res
@@ -266,6 +267,7 @@ bool ParseResource(RStringB dir, void* context)
         if (ResolveFileInDir(binDirUsed, "resource-extra.cpp", extraFile, extraFileName))
         {
             ParamFile extra;
+            extra.SetBase(&Res);
             ParseTextFileFromResolvedPath(extra, extraFile, extraFileName);
             Res.Update(extra);
             // Re-point at Res before the stack-local `extra` dies, else a later string-expression

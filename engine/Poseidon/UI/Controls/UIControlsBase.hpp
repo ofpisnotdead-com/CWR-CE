@@ -349,6 +349,7 @@ protected:
 	float _phase;
 	float _animSpeed;
 	float _invAnimSpeed;
+	bool _cursorMovedSinceAnimationStart;
 
 public:
 
@@ -357,6 +358,8 @@ public:
 	void Animate(int level) override;
 	void Deanimate(int level) override;
 	bool IsAnimated(int level) const override {return true;}
+	void OnMouseMove(float x, float y, bool active = true) override;
+	void OnMouseHold(float x, float y, bool active = true) override;
 
 	void Open();
 	void Close();
