@@ -228,7 +228,7 @@ pub async fn seed_dev_mods(store: &ModStore) -> Result<usize> {
         let metadata = ModCatalogEntry {
             mod_id: row.mod_id,
             app_name: Some("CWR".to_string()),
-            actver: Some(303),
+            actver: Some(305),
             compatible_actvers: Vec::new(),
             version_tag: None,
             compatible: false,
@@ -534,6 +534,6 @@ mod tests {
             .any(|entry| entry.description.contains("Synthetic catalog entry 001")));
         assert!(mods.iter().any(|entry| entry.version.len() == 8));
         assert!(mods.iter().any(|entry| entry.download_url.is_some()));
-        assert!(mods.iter().all(|entry| entry.actver == Some(303)));
+        assert!(mods.iter().all(|entry| entry.actver == Some(305)));
     }
 }

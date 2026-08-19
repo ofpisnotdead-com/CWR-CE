@@ -81,7 +81,7 @@ mod tests {
         version: &str,
         homepage_url: Option<&str>,
     ) {
-        write_mod_metadata_for_game(root, mod_id, name, version, homepage_url, "CWR", 303, None);
+        write_mod_metadata_for_game(root, mod_id, name, version, homepage_url, "CWR", 305, None);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2528,7 +2528,7 @@ mod tests {
             "1.0.0",
             None,
             "CWR",
-            303,
+            305,
             Some("rc1"),
         );
         write_mod_metadata_for_game(
@@ -2548,7 +2548,7 @@ mod tests {
             "1.0.0",
             None,
             "CWR",
-            304,
+            306,
             None,
         );
 
@@ -2563,7 +2563,7 @@ mod tests {
         let mods = service
             .list_mods(&ListModsQuery {
                 app_name: Some("CWR".to_string()),
-                actver: Some(303),
+                actver: Some(305),
                 version_tag: Some("rc1".to_string()),
                 q: Some("effects".to_string()),
                 ..ListModsQuery::default()

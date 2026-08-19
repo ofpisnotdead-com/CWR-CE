@@ -85,7 +85,7 @@ void SetField(char* dst, std::size_t n, const char* s)
 }
 } // namespace
 
-TEST_CASE("MP 3.03 discovery retains the 3.02 packet layout", "[version][mpjoin][network]")
+TEST_CASE("MP 3.05 discovery retains the 3.02 packet layout", "[version][mpjoin][network]")
 {
     STATIC_REQUIRE(sizeof(Legacy302DiscoveryPacket) == SESSION_PACKET_SIZE);
     STATIC_REQUIRE(offsetof(Legacy302DiscoveryPacket, actualVersion) == offsetof(SessionPacket, actualVersion));
@@ -98,17 +98,17 @@ TEST_CASE("MP 3.03 discovery retains the 3.02 packet layout", "[version][mpjoin]
     status.magic = MAGIC_ENUM_RESPONSE;
     status.actualVersion = APP_VERSION_NUM;
     status.requiredVersion = APP_VERSION_NUM;
-    SetField(status.name, sizeof(status.name), "CWR 3.03 Server");
-    SetField(status.versionTag, sizeof(status.versionTag), "rc303");
+    SetField(status.name, sizeof(status.name), "CWR 3.05 Server");
+    SetField(status.versionTag, sizeof(status.versionTag), "rc305");
 
     Legacy302DiscoveryPacket parsedBy302{};
     std::memcpy(&parsedBy302, &status, sizeof(parsedBy302));
 
     REQUIRE(parsedBy302.magic == MAGIC_ENUM_RESPONSE);
-    REQUIRE(std::strcmp(parsedBy302.name, "CWR 3.03 Server") == 0);
-    REQUIRE(parsedBy302.actualVersion == 303);
-    REQUIRE(parsedBy302.requiredVersion == 303);
-    REQUIRE(std::strcmp(parsedBy302.versionTag, "rc303") == 0);
+    REQUIRE(std::strcmp(parsedBy302.name, "CWR 3.05 Server") == 0);
+    REQUIRE(parsedBy302.actualVersion == 305);
+    REQUIRE(parsedBy302.requiredVersion == 305);
+    REQUIRE(std::strcmp(parsedBy302.versionTag, "rc305") == 0);
 
     constexpr int Legacy302Actual = 302;
     constexpr int Legacy302Required = 302;

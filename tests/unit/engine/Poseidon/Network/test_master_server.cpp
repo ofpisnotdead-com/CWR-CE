@@ -160,12 +160,12 @@ TEST_CASE("a 3.02 browser lists a 3.03 server as incompatible", "[network][maste
 
 TEST_CASE("master service requests carry structured user-agent", "[network][master][version]")
 {
-    REQUIRE(BuildMasterServerServiceUserAgent(nullptr) == "CWR-CE/303");
+    REQUIRE(BuildMasterServerServiceUserAgent(nullptr) == "CWR-CE/305");
 
     MasterServerServiceHttpRequest request;
     REQUIRE(BuildMasterServerServiceGetRequest("https://master.example/v1/servers", request));
 
-    REQUIRE(request.userAgent.find("CWR-CE/303") == 0);
+    REQUIRE(request.userAgent.find("CWR-CE/305") == 0);
     REQUIRE(request.userAgent.find("tag=") != std::string::npos);
     REQUIRE(request.userAgent.find("role=client") != std::string::npos);
 }
@@ -185,14 +185,14 @@ TEST_CASE("master mod list URL uses the workshop catalog app and current version
 
     REQUIRE(url.find("/v1/mods?") != std::string::npos);
     REQUIRE(url.find("app=CWR-CE") != std::string::npos);
-    REQUIRE(url.find("actver=303") != std::string::npos);
+    REQUIRE(url.find("actver=305") != std::string::npos);
     REQUIRE(url.find("vertag=") != std::string::npos);
     REQUIRE(url.find("q=effects") != std::string::npos);
 }
 
 TEST_CASE("master mod catalog parse carries compatibility fields", "[network][master][mods]")
 {
-    const char* json = "{\"modId\":\"effects-pack\",\"app\":\"CWR-CE\",\"actver\":303,"
+    const char* json = "{\"modId\":\"effects-pack\",\"app\":\"CWR-CE\",\"actver\":305,"
                        "\"vertag\":\"dev\","
                        "\"compatible\":true,\"name\":\"Effects Pack\",\"version\":\"1.0\","
                        "\"packageRevision\":4,\"sha256\":\"abcd\",\"publishedUnixMs\":1234,"
@@ -202,7 +202,7 @@ TEST_CASE("master mod catalog parse carries compatibility fields", "[network][ma
     REQUIRE(ParseMasterServerServiceModDetailResponse(json, entry));
     REQUIRE(entry.modId == "effects-pack");
     REQUIRE(entry.app == "CWR-CE");
-    REQUIRE(entry.actualVersion == 303);
+    REQUIRE(entry.actualVersion == 305);
     REQUIRE(entry.versionTag == "dev");
     REQUIRE(entry.compatible);
     REQUIRE(entry.packageRevision == 4);
