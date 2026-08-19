@@ -81,6 +81,9 @@ public:
 	int       msaaSamples      = 0;             // MSAA on the frame target: 0 (off) / 2 / 4 / 8
 	bool      multitexturing   = true;          // Detail-texture / specular second stage on terrain and
 	                                             // objects.  Off drops those draws to the base texture
+	bool      nightEye         = true;          // Scotopic night rendering: unlit surfaces blend towards
+	                                             // their own luminance after dark, so night reads grey.
+	                                             // Off leaves night in color
 	float     brightness       = 1.6f;          // 0.4..1.8
 	float     gamma            = 1.2f;          // 0.5..2.3
 

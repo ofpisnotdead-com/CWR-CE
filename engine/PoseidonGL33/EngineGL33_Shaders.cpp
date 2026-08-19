@@ -1801,7 +1801,7 @@ void EngineGL33::DoSelectPixelShader(PixelShaderID ps, PixelShaderMode mode, Pix
 
 void EngineGL33::EnableNightEye(float night)
 {
-    if (_nightVision)
+    if (_nightVision || !_nightEyeEnabled)
         night = 0;
     if (fabs(_nightEye - night) < 0.01f)
         return;

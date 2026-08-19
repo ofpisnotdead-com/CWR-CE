@@ -292,6 +292,7 @@ class Engine : public IGraphicsEngine
     float _avgBrightness; // average screen brightness
     bool _nightVision;
     bool _multitexturing;
+    bool _nightEyeEnabled;
     render::PassKindHint _passKindHint = render::PassKindHint::None; // explicit cockpit pass routing
     int _showFps;
     AspectSettings _aspectSettings;
@@ -341,6 +342,10 @@ class Engine : public IGraphicsEngine
     virtual void SetWBuffer(bool val) {}
 
     ColorVal GetAccomodateEye() const { return _accomodateEye; } // color filter
+
+    // Gates the scotopic night pass, which blends unlit geometry towards its
+    // own luminance so that night reads grey rather than colored.
+    void SetNightEyeEnabled(bool set);
 
     virtual void EnableNightEye(float night) {}
 
