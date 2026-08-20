@@ -232,6 +232,8 @@ class WaveOAL : public IWave
     bool PumpDrainUpload();
     void DecodeQueuedChunk();
 
+    float AppliedGainForTest() const;
+
     // Test-only: the AL_PITCH currently applied to the source (1.0 if no
     // source).  Lets a test prove SetVolume's freq->pitch mapping reaches
     // the real OpenAL source.

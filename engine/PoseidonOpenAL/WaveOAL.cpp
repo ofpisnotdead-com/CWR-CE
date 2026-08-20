@@ -10,6 +10,7 @@
 #include <Poseidon/Dev/Diag/ScopedTimer.hpp>
 #include <Poseidon/Core/TaskPool.hpp>
 #include <PoseidonOpenAL/OpenALRuntime.hpp>
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <thread>
@@ -374,8 +375,9 @@ void WaveOAL::OpenStreaming()
     }
 
     _streaming.chunkBytes = chunkBytes;
-    _streaming.decodeOffsetBytes.store(0, std::memory_order_release);
-    _streaming.consumedBytes.store(0, std::memory_order_release);
+    const int64_t initialOffset = std::max(_state.curPosition, 0);
+    _streaming.decodeOffsetBytes.store(initialOffset, std::memory_order_release);
+    _streaming.consumedBytes.store(initialOffset, std::memory_order_release);
     _streaming.eofReached.store(false, std::memory_order_release);
     _streaming.decodeInFlight.store(false, std::memory_order_release);
     _streaming.aborted.store(false, std::memory_order_release);
@@ -845,15 +847,12 @@ void WaveOAL::ApplyVolume()
     static const float minRelDiff = 1e-2f;
     if (_playing)
     {
-        if (std::fabs(gain - _gainSet) > minRelDiff * gain)
-        {
-            alSourcef(_alSource, AL_GAIN, gain);
-            // Level-comparison line — same shape as the DX8-ref's per-update
-            // `audio play ... volume_db100=` log so A/B runs diff directly.
-            LOG_DEBUG(Audio, "audio gain sound={} gain={:.4f} db={:.0f} 3d={} kind={} vol={:.3f} adj={:.3f}",
-                      static_cast<const char*>(Name()), gain, gain > 0.f ? 2000.f * std::log10(gain) : -10000.f,
-                      _is3D ? 1 : 0, static_cast<int>(_kind), _volume, _volumeAdjust);
-        }
+        if (std::fabs(gain - _gainSet) <= minRelDiff * gain)
+            return;
+        alSourcef(_alSource, AL_GAIN, gain);
+        LOG_DEBUG(Audio, "audio gain sound={} gain={:.4f} db={:.0f} 3d={} kind={} vol={:.3f} adj={:.3f}",
+                  static_cast<const char*>(Name()), gain, gain > 0.f ? 2000.f * std::log10(gain) : -10000.f,
+                  _is3D ? 1 : 0, static_cast<int>(_kind), _volume, _volumeAdjust);
     }
     else
     {
@@ -1390,7 +1389,7 @@ void WaveOAL::Skip(float deltaT)
     if (_state.frequency <= 0 || _state.sSize <= 0)
         return;
 
-    int skip = WaveLogic::TimeToPosition(deltaT, _state.frequency, _state.sSize);
+    int skip = WaveLogic::TimeToPosition(deltaT, _state.frequency, _state.sSize * std::max(_state.nChannel, 1));
     _state.curPosition += skip;
 
     // Delay/pause wave: size == 0 means there's no PCM to play, only a
@@ -1577,6 +1576,15 @@ float WaveOAL::AppliedPitchForTest() const
     ALfloat pitch = 1.0f;
     alGetSourcef(_alSource, AL_PITCH, &pitch);
     return pitch;
+}
+
+float WaveOAL::AppliedGainForTest() const
+{
+    if (!_alSource)
+        return 1.0f;
+    ALfloat gain = 1.0f;
+    alGetSourcef(_alSource, AL_GAIN, &gain);
+    return gain;
 }
 
 void WaveOAL::ApplyPitch()
