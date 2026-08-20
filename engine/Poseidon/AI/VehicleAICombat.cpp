@@ -638,6 +638,11 @@ static Vector3 GetWeaponSoundPos(EntityAI* veh, int weapon)
 */
 bool EntityAI::ReloadMagazine(int slotIndex)
 {
+    if (slotIndex < 0 || slotIndex >= NMagazineSlots())
+    {
+        return false;
+    }
+
     const MagazineSlot& slot = GetMagazineSlot(slotIndex);
     const MuzzleType* muzzle = slot._muzzle;
     Magazine* oldMagazine = slot._magazine;
@@ -744,6 +749,11 @@ bool EntityAI::AutoReload(int weapon)
     //   FireWeapon
     //   AddMagazine ????
     //   AddWeapon ????
+
+    if (weapon < 0 || weapon >= NMagazineSlots())
+    {
+        return false;
+    }
 
     const MagazineSlot& slot = GetMagazineSlot(weapon);
     const MuzzleType* muzzle = slot._muzzle;
@@ -1318,7 +1328,7 @@ void EntityAI::Animate(int level)
     }
 
     // reload animations
-    if (_currentWeapon >= 0)
+    if (_currentWeapon >= 0 && _currentWeapon < NMagazineSlots())
     {
         const MagazineSlot& s = GetMagazineSlot(_currentWeapon);
         const WeaponType* weapon = s._weapon;
@@ -1374,7 +1384,7 @@ void EntityAI::Deanimate(int level)
 
 float EntityAI::GetAimed(int weapon, Target* target) const
 {
-    if (weapon < 0)
+    if (weapon < 0 || weapon >= NMagazineSlots())
     {
         return 0;
     }
@@ -1793,6 +1803,11 @@ bool EntityAI::GetWeaponCartridgePos(int weapon, Matrix4& pos, Vector3& vel) con
 
 bool EntityAI::GetWeaponLoaded(int weapon) const
 {
+    if (weapon < 0 || weapon >= NMagazineSlots())
+    {
+        return true; // bad weapon. Invalid weapon index
+    }
+
     const Magazine* magazine = GetMagazineSlot(weapon)._magazine;
     if (!magazine)
     {
@@ -1925,6 +1940,11 @@ bool EntityAI::FireShell(int weapon, Vector3Par offset, Vector3Par direction, Ta
 
     _fire._nextWeaponSwitch = Glob.time + GetInvAbility() * 0.5;
 
+    if (weapon < 0 || weapon >= NMagazineSlots())
+    {
+        return false;
+    }
+
     const Magazine* magazine = GetMagazineSlot(weapon)._magazine;
     if (!magazine)
     {
@@ -2001,6 +2021,10 @@ bool EntityAI::FireMGun(int weapon, Vector3Par offset, Vector3Par direction, Tar
     }
 
     // fire
+    if (weapon < 0 || weapon >= NMagazineSlots())
+    {
+        return false;
+    }
     const MagazineSlot& slot = GetMagazineSlot(weapon);
     const Magazine* magazine = slot._magazine;
     if (!magazine)
