@@ -1,0 +1,6 @@
+{
+    "modId": "brokenresource",
+    "name": "Broken Resource Fixture",
+    "version": "1.0.0",
+    "description": "Exercises fallback when a mod resource cannot be preprocessed."
+}

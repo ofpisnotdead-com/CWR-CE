@@ -241,7 +241,8 @@ bool ParseResource(RStringB dir, void* context)
         RString fileName;
         if (ResolveFileInDir(binDir, "resource.cpp", file, fileName))
         {
-            ParseTextFileFromResolvedPath(Res, file, fileName);
+            if (!ParseTextFileFromResolvedPath(Res, file, fileName))
+                return false;
             ok = true;
             binDirUsed = binDir;
             break;
