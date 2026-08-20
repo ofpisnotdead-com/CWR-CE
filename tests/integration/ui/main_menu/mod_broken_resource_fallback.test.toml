@@ -1,0 +1,4 @@
+extra_args = ["--mods-dir", "../../tests/fixtures/mods-broken-resource", "--no-strict"]
+timeout = 120
+assert_timeout = 60
+tags = ["headful"]
