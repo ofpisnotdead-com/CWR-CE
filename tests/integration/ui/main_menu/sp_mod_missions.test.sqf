@@ -24,6 +24,15 @@ triAssertIncludes [(triVisibleTexts), "OK"]
 triClick 1
 triSimFrames 20
 triAssertEq [(triDisplay), 2]
+// A mission whose addons are not installed refuses the same way, instead of loading and
+// dropping back to the main menu.
+triAssertEq [(triAssertListText [101, "Tri SP No Addon"]), "OK"]
+triAssertEq [(triSelectListByData [101, "tri_sp_noaddon.Demo"]), true]
+triClick 1
+triAssertEq [(triDisplay), -1]
+triClick 1
+triSimFrames 20
+triAssertEq [(triDisplay), 2]
 triAssertEq [(triSelectListByData [101, "TriLoose.Demo"]), true]
 triClickText "Play"
 triAssertNear [(triGetViewDistance), 777, 1]
