@@ -1123,8 +1123,11 @@ bool DisplayMultiplayer::BeginModdedJoin(const SessionInfo& info)
     for (const auto& m : Poseidon::ScanModsRoot(Poseidon::ModsWorkshopRoot(), Poseidon::ModSource::Workshop))
         installed.push_back({Poseidon::ModId(m.catalogId.empty() ? m.id : m.catalogId), m.packageRevision});
     std::vector<Poseidon::ModId> active;
-    for (const auto& m : Poseidon::ActiveModsFromMountPath((const char*)Poseidon::ModSystem::GetModList()).All())
-        active.emplace_back(m.catalogId.empty() ? m.id : m.catalogId);
+    {
+        ModCollection col{Poseidon::ActiveModsFromMountPath((const char*)Poseidon::ModSystem::GetModList())};
+        for (const auto& m : col.All())
+            active.emplace_back(m.catalogId.empty() ? m.id : m.catalogId);
+    }
 
     const Poseidon::ServerModList required = _joinServerPackages.empty()
                                                  ? Poseidon::ServerModList((const char*)info.mod, info.equalModRequired)
