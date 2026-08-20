@@ -21,6 +21,8 @@ RString GetPictureName(RString baseName);
 RString GetSoundName(RString baseName);
 FontID GetFontID(RString baseName);
 RString GetWorldName(RString baseName);
+// GetWorldName falls back to initWorld for an unknown island; this tells the two apart.
+bool WorldInstalled(RString worldClass);
 RString SelectMenuInitWorld(RString initWorld, RString demoWorld, bool preferDemoWorld, bool initWorldExists,
                             bool demoWorldExists);
 // Menu background cutscene world: CfgWorlds::demoWorld for the demo build (see

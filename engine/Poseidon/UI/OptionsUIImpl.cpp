@@ -160,23 +160,11 @@ std::string MissionKey(const char* name)
     return key;
 }
 
-// GetWorldName() answers with CfgWorlds >> initWorld for an island it does not know, so a
-// mission on a missing map opens on the intro island with every unit in open sea. Require the
-// class and its landscape both, as the editor tree and the MP browser do.
-bool MissionWorldAvailable(RString world)
-{
-    if (world.GetLength() == 0 || !(Pars >> "CfgWorlds").FindEntry(world))
-    {
-        return false;
-    }
-    return QIFStreamB::FileExist(GetWorldName(world));
-}
-
 } // namespace
 
 // A packed mission is placed by the last dot in its name (CreateSingleMissionBank), an unpacked
 // one by the first (ProcessTemplateName).
-RString SPMissionWorld(RString missionName, bool packed)
+static RString SPMissionWorld(RString missionName, bool packed)
 {
     const char* dot = packed ? strrchr(missionName, '.') : strchr(missionName, '.');
     if (!dot)
@@ -195,17 +183,38 @@ RString SPMissionWorld(RString missionName, bool packed)
     return RString(world.c_str());
 }
 
-bool SPMissionWorldInstalled(RString missionName, bool packed)
-{
-    return MissionWorldAvailable(SPMissionWorld(missionName, packed));
-}
+const int kPreviewAddonLimit = 8;
 
-static RString MissingWorldMessage(RString missionName, bool packed)
+// Empty when the mission can be played, otherwise what stops it, ready to show.
+static DisplaySingleMission::MissionBlock MissionBlockedReason(RString missionName, bool packed, RString missionPrefix)
 {
-    char message[256];
-    snprintf(message, sizeof(message), LocalizeString(IDS_MSG_NO_WORLD),
-             (const char*)SPMissionWorld(missionName, packed));
-    return RString(message);
+    RString world = SPMissionWorld(missionName, packed);
+    if (!WorldInstalled(world))
+    {
+        char message[256];
+        snprintf(message, sizeof(message), LocalizeString(IDS_MSG_NO_WORLD), (const char*)world);
+        return {RString(message), RString(message)};
+    }
+
+    ParamFile file;
+    if (missionPrefix.GetLength() == 0 || !file.ParseBinOrTxt(missionPrefix + RString("mission.sqm")))
+    {
+        return {};
+    }
+    const ParamEntry* mission = file.FindEntry("Mission");
+    if (!mission)
+    {
+        return {};
+    }
+    FindArrayRStringCI addOns;
+    FindArrayRStringCI missing;
+    ReadMissionAddons(*mission, addOns);
+    FindMissingAddons(addOns, missing);
+    if (missing.Size() == 0)
+    {
+        return {};
+    }
+    return {MissingAddonMessage(missing, kPreviewAddonLimit), MissingAddonMessage(missing)};
 }
 
 // Every active mod's Missions/ (mods first, so a mod mission wins dedup) then the game root,
@@ -274,6 +283,7 @@ void DisplaySingleMission::LoadDirectory()
     }
 
     lbox->ClearStrings();
+    _blockedMissions.clear();
 
     if (_directory.GetLength() > 0)
     {
@@ -596,6 +606,29 @@ void EnsureContinueSave(RString dir)
     }
 }
 
+RString DisplaySingleMission::MissionDirectory(RString mission, int missionType) const
+{
+    const RString subDir =
+        missionType == 1 ? RString("Missions\\") + _directory : ResolveSPMissionSubdir(_directory, mission);
+    return subDir + mission;
+}
+
+DisplaySingleMission::MissionBlock DisplaySingleMission::BlockedMissionReason(RString mission, int missionType)
+{
+    const std::string key = MissionKey(mission);
+    const auto it = _blockedMissions.find(key);
+    if (it != _blockedMissions.end())
+    {
+        return it->second;
+    }
+
+    const RString directory = MissionDirectory(mission, missionType);
+    const RString prefix = missionType == 1 ? CreateSingleMissionBank(directory) : directory + RString("\\");
+    const MissionBlock reason = MissionBlockedReason(mission, missionType == 1, prefix);
+    _blockedMissions[key] = reason;
+    return reason;
+}
+
 void DisplaySingleMission::OnChangeMission()
 {
     C3DHTML* html = dynamic_cast<C3DHTML*>(GetCtrl(IDC_SINGLE_OVERVIEW));
@@ -604,6 +637,11 @@ void DisplaySingleMission::OnChangeMission()
         return;
     }
     html->Init();
+    if (!_overviewTextColor.has_value())
+    {
+        _overviewTextColor = html->GetTextColor();
+    }
+    html->SetTextColor(*_overviewTextColor);
     C3DListBox* lbox = dynamic_cast<C3DListBox*>(GetCtrl(IDC_SINGLE_MISSION));
     if (!lbox)
     {
@@ -617,9 +655,7 @@ void DisplaySingleMission::OnChangeMission()
 
     RString mission = lbox->GetData(sel);
     const int missionType = lbox->GetValue(sel);
-    const RString missionSubdir =
-        missionType == 1 ? RString("Missions\\") + _directory : ResolveSPMissionSubdir(_directory, mission);
-    RString directory = missionSubdir + mission;
+    RString directory = MissionDirectory(mission, missionType);
 
     if (missionType < 0)
     {
@@ -645,11 +681,13 @@ void DisplaySingleMission::OnChangeMission()
         return;
     }
 
-    if (!SPMissionWorldInstalled(mission, missionType == 1))
+    const MissionBlock blocked = BlockedMissionReason(mission, missionType);
+    if (blocked.brief.GetLength() > 0)
     {
+        html->SetTextColor(PackedColor(Color(0.6, 0, 0, 1)));
         html->LoadBuffer(RString(),
-                         RString("<html><body><br/><br/><p align=\"center\">") +
-                             MissingWorldMessage(mission, missionType == 1) + RString("</p></body></html>"),
+                         RString("<html><body><br/><br/><p align=\"center\">") + blocked.brief +
+                             RString("</p></body></html>"),
                          false);
     }
     else
@@ -803,9 +841,11 @@ void DisplaySingleMission::OnButtonClicked(int idc)
                 LoadDirectory();
                 return;
             }
-            else if (!SPMissionWorldInstalled(lbox->GetData(sel), value == 1))
+            else if (const MissionBlock blocked = BlockedMissionReason(lbox->GetData(sel), value);
+                     blocked.full.GetLength() > 0)
             {
-                CreateMsgBox(MB_BUTTON_OK, MissingWorldMessage(lbox->GetData(sel), value == 1));
+                LOG_WARN(Mission, "Cannot play {}: {}", (const char*)lbox->GetData(sel), (const char*)blocked.full);
+                CreateMsgBox(MB_BUTTON_OK, blocked.full);
                 return;
             }
             else

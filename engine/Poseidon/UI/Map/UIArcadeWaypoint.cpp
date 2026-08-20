@@ -932,20 +932,7 @@ bool ParseCutscene(RString cutscene, bool multiplayer)
     LSError result = ar.Serialize(cutscene, CurrentTemplate, 1);
     if (result == LSNoAddOn)
     {
-        RString message = LocalizeString(IDS_MSG_ADDON_MISSING);
-        bool first = true;
-        for (int i = 0; i < CurrentTemplate.missingAddOns.Size(); i++)
-        {
-            if (first)
-            {
-                first = false;
-            }
-            else
-            {
-                message = message + RString(", ");
-            }
-            message = message + CurrentTemplate.missingAddOns[i];
-        }
+        RString message = MissingAddonMessage(CurrentTemplate.missingAddOns);
         LOG_WARN(Mission, "Cannot load {} from {}: {}", (const char*)cutscene, (const char*)name, (const char*)message);
         Poseidon::Foundation::WarningMessage(message);
     }
