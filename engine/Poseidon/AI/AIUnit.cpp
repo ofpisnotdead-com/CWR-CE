@@ -1641,6 +1641,23 @@ Vector3 AIUnit::GetFormationAbsolute() const
 
 bool AIUnit::IsSimplePath(Vector3Val from, Vector3Val pos)
 {
+    /*
+    From CTI practice. In both the early 2.02 Community Edition (CWA-CE) and the 3.0 remake (CWR),
+    the following issue existed: after creating a TZK CTI task, the game froze. Previously analyzed with VTUNE,
+    the hot spot was found in the current function IsSimplePath, and during debugging of the input
+    when the freeze occurred, the incoming parameters were abnormal coordinates. After the remake release,
+    with visible logs, the following log was observed when the freeze happened:
+    [ERRR] [AI]      ..\..\engine\Poseidon\AI\AIUnitImpl.cpp(2333): check failed: grp
+    It is suspected that some variables did not meet expectations, thus triggering a specific bug
+    that produced unexpected inputs in the current function.
+    The 2.03 version of CWA-CE includes the following NaN detection, which effectively eliminates this freeze.
+    Related Discord message: https://discord.com/channels/304618767068037120/1300311187023724595/1303683923687243784
+    */
+    if ((_isnan(pos.X()) || _isnan(pos.Y()) || _isnan(pos.Z())))
+    {
+        return false;
+    }
+
     const float maxDist = 300;
     float dist2 = (from - pos).SquareSizeXZ();
     if (dist2 > Square(maxDist))
