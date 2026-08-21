@@ -37,6 +37,7 @@ public:
 	void SetMaxChars(int value) {_maxChars = value;}
 	int GetMaxChars() const {return _maxChars;}
 	void SetCaretPos(int pos);
+	void SelectAll();
 	bool DoKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags);
 	bool DoChar(unsigned nChar, unsigned nRepCnt, unsigned nFlags);
 	bool DoIMEChar(unsigned nChar, unsigned nRepCnt, unsigned nFlags);
