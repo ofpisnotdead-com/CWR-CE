@@ -693,8 +693,13 @@ class DisplayServer : public Display
     void OnChildDestroyed(int idd, int exit) override;
 
   protected:
-    void UpdateMissions(RString filename = "");
+    // Category folder the mission list is showing, empty at the MPMissions root.
+    RString _missionFolder;
+
+    // filename/filenameValue name the row to select once the list is rebuilt.
+    void UpdateMissions(RString filename = "", int filenameValue = 2);
     void OnMissionChanged(int sel);
+    RString MissionSubdir() const;
 
     bool SetMission(bool editor);
 

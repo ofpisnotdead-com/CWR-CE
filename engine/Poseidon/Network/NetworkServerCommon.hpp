@@ -18,6 +18,9 @@ void SetMission(RString world, RString mission, RString subdir);
 RString& GetMPMissionsDir();
 RString GetUserDirectory();
 RString GetMissionDirectory();
+// How many category folder levels below MPMissions a mission is looked up in, and so how deep
+// the mission browser offers folders.
+constexpr int MaxMPMissionFolderDepth = 4;
 std::vector<std::string> GetMPMissionLookupDirectories();
 RString ResolveMPMissionTemplateBase(RString mission, RString world);
 void RunInitScript();
