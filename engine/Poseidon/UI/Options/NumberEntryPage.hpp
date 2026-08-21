@@ -20,7 +20,7 @@ class NumberEntryPage : public OptionsPage
     const char* TitleText() const override { return ""; }
     bool IsModal() const override { return true; }
     int DefaultFocusIdc() const override { return kApplyIdc; }
-    const char* ResourceClassName() const override { return "RscOptionsPageNumberEntry"; }
+    const char* ResourceClassName() const override;
 
     void Mount(OptionsShell& shell) override;
     void Unmount(OptionsShell& shell) override;

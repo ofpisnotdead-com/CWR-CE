@@ -25,6 +25,12 @@ NumberEntryPage::NumberEntryPage(std::string title, float value, float minimum, 
 {
 }
 
+const char* NumberEntryPage::ResourceClassName() const
+{
+    const ParamEntry& primary = Res >> "RscOptionsPageNumberEntry";
+    return primary.FindEntry("controls") ? "RscOptionsPageNumberEntry" : "RscOptionsPageNumberEntryFallback";
+}
+
 void NumberEntryPage::Mount(OptionsShell& shell)
 {
     OptionsPage::Mount(shell);
