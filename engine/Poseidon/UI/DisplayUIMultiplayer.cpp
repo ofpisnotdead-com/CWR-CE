@@ -21,7 +21,9 @@ using namespace Poseidon;
 #include <Poseidon/Game/Chat.hpp>
 #include <Poseidon/Audio/DynSound.hpp>
 #include <Poseidon/UI/Locale/MissionHtmlLocalization.hpp>
+#include <Poseidon/Network/NetworkServerCommon.hpp>
 #include <Poseidon/UI/DisplayUI.hpp>
+#include <set>
 #include <Poseidon/UI/DisplayUICommon.hpp>
 #include <Poseidon/UI/OptionsUICommon.hpp>
 #include <Poseidon/Core/SaveVersion.hpp>
@@ -2322,6 +2324,39 @@ void DisplayServer::OnChangeDifficulty()
 RString CreateMPMissionBank(RString filename, RString island);
 void RemoveBank(const char* prefix);
 
+namespace
+{
+RString EnterMissionFolder(RString folder, RString child)
+{
+    const char sep[2] = {PATH_SEP, 0};
+    return folder.GetLength() == 0 ? child : folder + RString(sep) + child;
+}
+
+RString ParentMissionFolder(RString folder)
+{
+    const char* last = strrchr(folder, PATH_SEP);
+    return last ? RString(std::string((const char*)folder, last - (const char*)folder).c_str()) : RString();
+}
+
+RString LeafMissionFolder(RString folder)
+{
+    const char* last = strrchr(folder, PATH_SEP);
+    return last ? RString(last + 1) : folder;
+}
+} // namespace
+
+RString DisplayServer::MissionSubdir() const
+{
+    // GetMPMissionsDir carries the trailing separator, and the simulate-mode path.
+    RString subdir = GetMPMissionsDir();
+    if (_missionFolder.GetLength() > 0)
+    {
+        char sep[2] = {PATH_SEP, 0};
+        subdir = subdir + _missionFolder + RString(sep);
+    }
+    return subdir;
+}
+
 bool DisplayServer::SetMission(bool editor)
 {
     C3DListBox* lbox = dynamic_cast<C3DListBox*>(GetCtrl(IDC_SERVER_ISLAND));
@@ -2390,7 +2425,7 @@ bool DisplayServer::SetMission(bool editor)
             {
                 SetBaseDirectory("");
                 GetNetworkManager().CreateMission("", "");
-                ::SetMission(world, mission, GetMPMissionsDir());
+                ::SetMission(world, mission, MissionSubdir());
             }
             break;
         case 2:
@@ -2402,7 +2437,7 @@ bool DisplayServer::SetMission(bool editor)
             {
                 GetNetworkManager().CreateMission("", "");
             }
-            ::SetMission(world, mission, GetMPMissionsDir());
+            ::SetMission(world, mission, MissionSubdir());
         }
         break;
         default:
@@ -2447,7 +2482,22 @@ void DisplayServer::OnButtonClicked(int idc)
                 if (index >= 0)
                 {
                     int value = lbox->GetValue(index);
-                    if (value == -2)
+                    if (value == -1 || value == -4)
+                    {
+                        if (value == -1)
+                        {
+                            _missionFolder = EnterMissionFolder(_missionFolder, lbox->GetData(index));
+                            UpdateMissions();
+                        }
+                        else
+                        {
+                            const RString left = LeafMissionFolder(_missionFolder);
+                            _missionFolder = ParentMissionFolder(_missionFolder);
+                            UpdateMissions(left, -1);
+                        }
+                        break;
+                    }
+                    if (value == -3)
                     {
                         if (!SetMission(true))
                         {
@@ -2462,7 +2512,7 @@ void DisplayServer::OnButtonClicked(int idc)
                         CreateEditor(this, true);
                         break;
                     }
-                    else if (value == -1)
+                    else if (value == -2)
                     {
                         C3DListBox* lbox = dynamic_cast<C3DListBox*>(GetCtrl(IDC_SERVER_ISLAND));
                         if (!lbox)
@@ -2522,6 +2572,8 @@ void DisplayServer::OnLBSelChanged(int idc, int curSel)
 {
     if (idc == IDC_SERVER_ISLAND)
     {
+        // A folder listed for one island need not hold anything for the next.
+        _missionFolder = RString();
         UpdateMissions();
     }
     else if (idc == IDC_SERVER_MISSION)
@@ -2658,12 +2710,109 @@ struct AddModMPMissionsContext
 {
     C3DListBox* lbox;
     RString island;
+    // Category folder to list, empty at the MPMissions root.
+    RString folder;
+    // While set, the scan writes folder names here and adds no rows.
+    std::set<std::string>* folders = nullptr;
 };
 
-void ScanMPMissionBanksInDir(AddModMPMissionsContext* ctx, const char* dir)
+// A mission directory is named "<mission>.<world>", for any world, so anything without a dot
+// is a category folder. Matches how the single-mission browser reads its own directories.
+bool IsMPMissionDirName(const char* name)
+{
+    return strchr(name, '.') != nullptr;
+}
+
+RString FolderPath(RString root, RString folder)
+{
+    if (folder.GetLength() == 0)
+    {
+        return root;
+    }
+    const char sep[2] = {PATH_SEP, 0};
+    return root + RString(sep) + folder;
+}
+
+bool MPMissionDirMatchesIsland(const char* name, RString island)
+{
+    const char* dot = strrchr(name, '.');
+    return dot && stricmp(dot + 1, island) == 0;
+}
+
+// A folder earns a row only when it holds a mission for the selected island, within the depth
+// the load path looks in.
+bool MPMissionFolderHasIsland(RString dir, RString island, int depth = 1)
 {
     char pattern[1024];
-    snprintf(pattern, sizeof(pattern), "%s%c*.pbo", dir, PATH_SEP);
+    snprintf(pattern, sizeof(pattern), "%s%c*.pbo", (const char*)dir, PATH_SEP);
+
+    _finddata_t info;
+    intptr_t h = _findfirst(pattern, &info);
+    if (h != -1)
+    {
+        do
+        {
+            if ((info.attrib & _A_SUBDIR) == 0 && MPMissionBankMatchesIsland(info.name, island))
+            {
+                _findclose(h);
+                return true;
+            }
+        } while (0 == _findnext(h, &info));
+        _findclose(h);
+    }
+
+    snprintf(pattern, sizeof(pattern), "%s%c*", (const char*)dir, PATH_SEP);
+    h = _findfirst(pattern, &info);
+    if (h == -1)
+    {
+        return false;
+    }
+    bool found = false;
+    do
+    {
+        if ((info.attrib & _A_SUBDIR) == 0 || info.name[0] == '.')
+        {
+            continue;
+        }
+        const char sep[2] = {PATH_SEP, 0};
+        const RString sub = dir + RString(sep) + RString(info.name);
+        found = IsMPMissionDirName(info.name)
+                    ? MPMissionDirMatchesIsland(info.name, island)
+                    : depth < MaxMPMissionFolderDepth && MPMissionFolderHasIsland(sub, island, depth + 1);
+    } while (!found && 0 == _findnext(h, &info));
+    _findclose(h);
+    return found;
+}
+
+void CollectMPMissionFolders(RString root, RString island, std::set<std::string>& folders)
+{
+    char pattern[1024];
+    snprintf(pattern, sizeof(pattern), "%s%c*", (const char*)root, PATH_SEP);
+
+    _finddata_t info;
+    intptr_t h = _findfirst(pattern, &info);
+    if (h == -1)
+    {
+        return;
+    }
+    do
+    {
+        if ((info.attrib & _A_SUBDIR) != 0 && info.name[0] != '.' && !IsMPMissionDirName(info.name))
+        {
+            const char sep[2] = {PATH_SEP, 0};
+            if (MPMissionFolderHasIsland(root + RString(sep) + RString(info.name), island))
+            {
+                folders.insert(std::string(info.name));
+            }
+        }
+    } while (0 == _findnext(h, &info));
+    _findclose(h);
+}
+
+void ScanMPMissionBanksInDir(AddModMPMissionsContext* ctx, RString dir)
+{
+    char pattern[1024];
+    snprintf(pattern, sizeof(pattern), "%s%c*.pbo", (const char*)dir, PATH_SEP);
 
     _finddata_t info;
     intptr_t h = _findfirst(pattern, &info);
@@ -2684,26 +2833,14 @@ void AddModMPMissionFilesInDir(AddModMPMissionsContext* ctx, const char* modDir,
 {
     char base[1024];
     snprintf(base, sizeof(base), "%s%c%s", modDir, PATH_SEP, missionsDir);
-    ScanMPMissionBanksInDir(ctx, base);
 
-    // Mods usually group missions one level down (MPMissions/<Category>/<mission>.pbo); scan those subfolders too.
-    char subPattern[1024];
-    snprintf(subPattern, sizeof(subPattern), "%s%c*", base, PATH_SEP);
-    _finddata_t info;
-    intptr_t h = _findfirst(subPattern, &info);
-    if (h != -1)
+    const RString dir = FolderPath(base, ctx->folder);
+    if (ctx->folders)
     {
-        do
-        {
-            if ((info.attrib & _A_SUBDIR) != 0 && info.name[0] != '.')
-            {
-                char subDir[1024];
-                snprintf(subDir, sizeof(subDir), "%s%c%s", base, PATH_SEP, info.name);
-                ScanMPMissionBanksInDir(ctx, subDir);
-            }
-        } while (0 == _findnext(h, &info));
-        _findclose(h);
+        CollectMPMissionFolders(dir, ctx->island, *ctx->folders);
+        return;
     }
+    ScanMPMissionBanksInDir(ctx, dir);
 }
 
 bool AddModMPMissionFiles(RStringB dir, void* context)
@@ -2720,7 +2857,7 @@ bool AddModMPMissionFiles(RStringB dir, void* context)
 }
 } // namespace
 
-void DisplayServer::UpdateMissions(RString filename)
+void DisplayServer::UpdateMissions(RString filename, int filenameValue)
 {
     C3DListBox* lbox = dynamic_cast<C3DListBox*>(GetCtrl(IDC_SERVER_ISLAND));
     if (!lbox)
@@ -2737,7 +2874,7 @@ void DisplayServer::UpdateMissions(RString filename)
     }
 
     RString mission = filename;
-    int value = 2;
+    int value = filenameValue;
     if (mission.GetLength() == 0)
     {
         index = lbox->GetCurSel();
@@ -2754,21 +2891,45 @@ void DisplayServer::UpdateMissions(RString filename)
         return;
     }
 
-    if (GameModuleRegistry::IsRegistered(GameModuleId::Editor))
+    const RString scanDir = FolderPath(GameDirs::MPMissions, _missionFolder);
+
+    if (_missionFolder.GetLength() > 0)
+    {
+        index = lbox->AddString("..");
+        lbox->SetValue(index, -4); // parent folder
+    }
+
+    std::set<std::string> folders;
+    AddModMPMissionsContext modFolders;
+    modFolders.lbox = lbox;
+    modFolders.island = island;
+    modFolders.folder = _missionFolder;
+    modFolders.folders = &folders;
+    ModSystem::EnumDirectories(AddModMPMissionFiles, &modFolders);
+    CollectMPMissionFolders(scanDir, island, folders);
+    CollectMPMissionFolders(GetUserMissionsBase() + scanDir, island, folders);
+    for (const std::string& folder : folders)
+    {
+        index = lbox->AddString(RString(folder.c_str()) + RString("..."));
+        lbox->SetData(index, folder.c_str());
+        lbox->SetValue(index, -1); // category folder
+    }
+
+    if (GameModuleRegistry::IsRegistered(GameModuleId::Editor) && _missionFolder.GetLength() == 0)
     {
         index = lbox->AddString(LocalizeString(IDS_MPW_NEW_EDIT));
-        lbox->SetValue(index, -2);
+        lbox->SetValue(index, -3);
         lbox->SetFtColor(index, PackedColor(Color(0, 1, 0, 0.25)));
         lbox->SetSelColor(index, PackedColor(Color(0, 1, 0, 0.5)));
 
         index = lbox->AddString(LocalizeString(IDS_MPW_NEW_WIZ));
-        lbox->SetValue(index, -1);
+        lbox->SetValue(index, -2);
         lbox->SetFtColor(index, PackedColor(Color(0, 1, 0, 0.25)));
         lbox->SetSelColor(index, PackedColor(Color(0, 1, 0, 0.5)));
     }
 
-    char buffer[256];
-    ::sprintf(buffer, "%s%c*.%s.pbo", GameDirs::MPMissions, PATH_SEP, (const char*)island);
+    char buffer[1024];
+    snprintf(buffer, sizeof(buffer), "%s%c*.%s.pbo", (const char*)scanDir, PATH_SEP, (const char*)island);
 
     _finddata_t info;
     intptr_t h = _findfirst(buffer, &info);
@@ -2787,9 +2948,10 @@ void DisplayServer::UpdateMissions(RString filename)
     AddModMPMissionsContext modMissions;
     modMissions.lbox = lbox;
     modMissions.island = island;
+    modMissions.folder = _missionFolder;
     ModSystem::EnumDirectories(AddModMPMissionFiles, &modMissions);
 
-    ::sprintf(buffer, "%s%c*.%s", GameDirs::MPMissions, PATH_SEP, (const char*)island);
+    snprintf(buffer, sizeof(buffer), "%s%c*.%s", (const char*)scanDir, PATH_SEP, (const char*)island);
 
     h = _findfirst(buffer, &info);
     if (h != -1)
@@ -2813,8 +2975,8 @@ void DisplayServer::UpdateMissions(RString filename)
         _findclose(h);
     }
 
-    ::sprintf(buffer, "%s%s%c*.%s", (const char*)GetUserMissionsBase(), GameDirs::MPMissions, PATH_SEP,
-              (const char*)island);
+    snprintf(buffer, sizeof(buffer), "%s%s%c*.%s", (const char*)GetUserMissionsBase(), (const char*)scanDir, PATH_SEP,
+             (const char*)island);
 
     h = _findfirst(buffer, &info);
     if (h != -1)

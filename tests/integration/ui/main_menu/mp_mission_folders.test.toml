@@ -1,0 +1,4 @@
+extra_args = ["--mods-dir", "../../tests/fixtures/mods-mp-folders", "--mod", "@mpfolders", "--no-menu-scene"]
+timeout = 120
+assert_timeout = 60
+tags = ["exclusive"]
