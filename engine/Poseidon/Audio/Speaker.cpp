@@ -23,7 +23,7 @@ using Poseidon::Foundation::EnumName;
 static RStringB RandomMicOut()
 {
     const ParamEntry& micOuts = Pars >> "CfgVoice" >> "micOuts";
-    int i = toInt(GRandGen.RandomValue() * micOuts.GetSize());
+    int i = toInt(GFxRandGen.RandomValue() * micOuts.GetSize());
     return micOuts[i];
 }
 
