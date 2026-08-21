@@ -115,11 +115,12 @@ public:
 	//             primary-cell click zone targets primary; alt-cell zone
 	//             targets alt.  Provider::OnBindingClicked(row, slot)
 	//             opens the page-specific capture modal.
-	enum Kind { KindStepper, KindBoolean, KindSlider, KindMeter, KindHeader, KindAction, KindBinding };
+	enum Kind { KindStepper, KindBoolean, KindSlider, KindNumericSlider, KindMeter, KindHeader, KindAction, KindBinding };
 	static bool CanRowReceiveFocus(Kind kind);
 	static bool CanRowAdjustValue(Kind kind, bool disabled);
 	static bool CanRowInvokeAction(Kind kind, bool disabled);
 	static bool CanRowOpenBinding(Kind kind, bool disabled);
+	static bool CanRowOpenNumericEntry(Kind kind, bool disabled);
 
 	// Page-specific data + value storage.  The list holds no row data
 	// itself — every getter/setter delegates here.
@@ -172,6 +173,7 @@ public:
 		// (slot=0) or alt (slot=1) cell.  Subclasses spawn the
 		// per-device capture modal here.
 		virtual void OnBindingClicked(int /*row*/, int /*slot*/, Display& /*host*/) {}
+		virtual void OnNumericEntry(int /*row*/, Display& /*host*/) {}
 
 		// Invoked when the user clears a Binding row's primary (slot=0)
 		// or alt (slot=1) cell via Backspace / Delete on a focused row.
@@ -256,6 +258,8 @@ public:
 		    { return IsCloseRow(row) ? nullptr : m_base.SliderValueText(row); }
 		void OnBindingClicked(int row, int slot, Display& host) override
 		    { if (!IsCloseRow(row)) m_base.OnBindingClicked(row, slot, host); }
+		void OnNumericEntry(int row, Display& host) override
+		    { if (!IsCloseRow(row)) m_base.OnNumericEntry(row, host); }
 		void OnBindingCleared(int row, int slot) override
 		    { if (!IsCloseRow(row)) m_base.OnBindingCleared(row, slot); }
 		const char* FindBindingConflict(const char* fmt, int excludeRow, int excludeSlot) const override

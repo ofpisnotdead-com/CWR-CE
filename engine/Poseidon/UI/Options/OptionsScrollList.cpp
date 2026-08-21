@@ -109,7 +109,7 @@ bool OptionsScrollList::CanRowAdjustValue(Kind kind, bool disabled)
 {
     if (disabled)
         return false;
-    return kind == KindStepper || kind == KindBoolean || kind == KindSlider;
+    return kind == KindStepper || kind == KindBoolean || kind == KindSlider || kind == KindNumericSlider;
 }
 
 bool OptionsScrollList::CanRowInvokeAction(Kind kind, bool disabled)
@@ -120,6 +120,11 @@ bool OptionsScrollList::CanRowInvokeAction(Kind kind, bool disabled)
 bool OptionsScrollList::CanRowOpenBinding(Kind kind, bool disabled)
 {
     return kind == KindBinding && !disabled;
+}
+
+bool OptionsScrollList::CanRowOpenNumericEntry(Kind kind, bool disabled)
+{
+    return kind == KindNumericSlider && !disabled;
 }
 
 int OptionsScrollList::Utf8Length(const char* s)
@@ -390,7 +395,7 @@ void OptionsScrollList::RenderSlot(int slot, int logicalRow)
     Kind kind = m_provider.RowKind(logicalRow);
     bool isStepper = (kind == KindStepper);
     bool isBoolean = (kind == KindBoolean);
-    bool isSlider = (kind == KindSlider);
+    bool isSlider = (kind == KindSlider || kind == KindNumericSlider);
     bool isVU = (kind == KindMeter);
     bool isHeader = (kind == KindHeader);
     bool isAction = (kind == KindAction);
@@ -1236,6 +1241,12 @@ bool OptionsScrollList::OnKeyDown(unsigned nChar)
                 m_provider.OnBindingClicked(m_rowFocus, m_bindingSlot, m_host);
                 return true;
             }
+            if (kind == KindNumericSlider)
+            {
+                if (CanRowOpenNumericEntry(kind, m_provider.IsDisabled(m_rowFocus)))
+                    m_provider.OnNumericEntry(m_rowFocus, m_host);
+                return true;
+            }
             CycleFocusedRowValue(+1);
             return true;
     }
@@ -1288,6 +1299,15 @@ bool OptionsScrollList::OnButtonClicked(int idc)
             FocusFocusedRow();
             RenderPage();
             m_provider.OnBindingClicked(rowIdx, 0, m_host);
+            return true;
+        }
+        if (kind == KindNumericSlider)
+        {
+            if (!CanRowOpenNumericEntry(kind, disabled))
+                return true;
+            m_rowFocus = rowIdx;
+            FocusFocusedRow();
+            m_provider.OnNumericEntry(rowIdx, m_host);
             return true;
         }
         if (kind == KindBoolean)

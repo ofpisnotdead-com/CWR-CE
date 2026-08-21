@@ -49,6 +49,7 @@ class GamePage : public ScrollListPage
         void SetRowValue(int row, int value) override;
         OptionsScrollList::Kind RowKind(int row) const override;
         const char* SliderValueText(int row) const override;
+        void OnNumericEntry(int row, Display& host) override;
 
       private:
         void RefreshToggleTexts() const;
