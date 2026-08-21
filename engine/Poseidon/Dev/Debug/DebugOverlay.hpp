@@ -4,8 +4,9 @@
 // Cheats, and future Console/Perf/Memory tabs — designed to extend without
 // touching the engine.
 //
-// Lifecycle (called from the GL33 engine + main loop):
+// Lifecycle (called from the GL33/Metal engine + main loop):
 //   DebugOverlay::Init(window, glContext)  — once after GL context exists
+//   DebugOverlay::InitForMetal(window)     — once after Metal surface exists
 //   DebugOverlay::ProcessEvent(event)      — for every SDL event
 //   DebugOverlay::NewFrame()               — at the start of each frame
 //   DebugOverlay::Render()                 — before SDL_GL_SwapWindow
@@ -22,6 +23,7 @@ namespace Poseidon::Dev {
 namespace DebugOverlay
 {
     void Init(SDL_Window* window, void* glContext);
+    void InitForMetal(SDL_Window* window);
     void ProcessEvent(const SDL_Event& event);
 
     // Fire an in-process content re-mount through the exact deferred path the MODS-tab
