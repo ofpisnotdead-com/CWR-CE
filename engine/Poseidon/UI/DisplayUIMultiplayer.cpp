@@ -1544,8 +1544,8 @@ void DisplayMultiplayer::OnChildDestroyed(int idd, int exit)
                 if (!_joinTasks.empty())
                 {
                     const std::string proxy = (const char*)GetNetworkProxy();
-                    CreateChild(new DisplayModDownload(this, std::move(_joinTasks),
-                                                       Poseidon::MakeModDownloadTransport(proxy), "mod"));
+                    CreateChild(
+                        new DisplayModDownload(this, std::move(_joinTasks), Poseidon::MakeModDownloadTransport(proxy)));
                     _joinTasks.clear();
                 }
                 else

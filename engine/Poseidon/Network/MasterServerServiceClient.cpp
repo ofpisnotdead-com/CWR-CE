@@ -8,6 +8,7 @@
 #include <Poseidon/Foundation/Platform/VersionNo.h>
 #include <cjson/cJSON.h>
 
+#include <array>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -194,6 +195,14 @@ bool TryParseMasterServerProxyAddress(const char* proxyServer, std::string& host
 
 namespace
 {
+constexpr long kDownloadConnectTimeoutSeconds = 10;
+constexpr long kDownloadLowSpeedBytesPerSecond = 1;
+constexpr long kDownloadLowSpeedTimeoutSeconds = 30;
+constexpr long kHttpOk = 200;
+constexpr long kHttpPartialContent = 206;
+constexpr long kHttpRangeNotSatisfiable = 416;
+constexpr std::array<long, 7> kTransientDownloadStatuses = {408, 425, 429, 500, 502, 503, 504};
+constexpr size_t kMaximumDownloadValidatorLength = 1024;
 
 size_t AppendResponseBody(char* data, size_t size, size_t count, void* userdata)
 {
@@ -426,9 +435,9 @@ CURLcode StreamMasterServerServiceDownload(const char* url, const char* proxySer
     const std::string userAgent = BuildMasterServerServiceUserAgent("client");
     curl_easy_setopt(curl, CURLOPT_USERAGENT, userAgent.c_str());
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
-    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
-    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, kDownloadConnectTimeoutSeconds);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, kDownloadLowSpeedBytesPerSecond);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, kDownloadLowSpeedTimeoutSeconds);
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteDownloadChunk);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, out);
@@ -496,8 +505,12 @@ bool IsTransientDownloadError(CURLcode result)
 
 bool IsTransientDownloadStatus(long statusCode)
 {
-    return statusCode == 408 || statusCode == 425 || statusCode == 429 || statusCode == 500 || statusCode == 502 ||
-           statusCode == 503 || statusCode == 504;
+    for (const long transientStatus : kTransientDownloadStatuses)
+    {
+        if (statusCode == transientStatus)
+            return true;
+    }
+    return false;
 }
 
 std::string LoadDownloadValidator(const std::string& path)
@@ -505,7 +518,7 @@ std::string LoadDownloadValidator(const std::string& path)
     std::ifstream input(path);
     std::string validator;
     std::getline(input, validator);
-    if (validator.size() > 1024 || validator.find_first_of("\r\n") != std::string::npos)
+    if (validator.size() > kMaximumDownloadValidatorLength || validator.find_first_of("\r\n") != std::string::npos)
         validator.clear();
     return validator;
 }
@@ -1339,20 +1352,20 @@ DownloadFileResult DownloadMasterServerServiceFile(const char* url, const char* 
     if (offset > 0)
     {
         const bool validatorMatches = response.validator.empty() || response.validator == validator;
-        if (response.statusCode != 206 || response.contentRangeStart != offset || !validatorMatches)
+        if (response.statusCode != kHttpPartialContent || response.contentRangeStart != offset || !validatorMatches)
         {
             remove(tempPath.c_str());
             remove(validatorPath.c_str());
             if (error != nullptr)
                 *error = "download resume was not accepted";
-            if (response.statusCode == 200 || response.statusCode == 416 ||
+            if (response.statusCode == kHttpOk || response.statusCode == kHttpRangeNotSatisfiable ||
                 IsSuccessfulMasterServerServiceStatus(response.statusCode))
                 return DownloadFileResult::TransientFailure;
             return IsTransientDownloadStatus(response.statusCode) ? DownloadFileResult::TransientFailure
                                                                   : DownloadFileResult::PermanentFailure;
         }
     }
-    else if (!IsSuccessfulMasterServerServiceStatus(response.statusCode) || response.statusCode == 206)
+    else if (!IsSuccessfulMasterServerServiceStatus(response.statusCode) || response.statusCode == kHttpPartialContent)
     {
         remove(tempPath.c_str());
         remove(validatorPath.c_str());

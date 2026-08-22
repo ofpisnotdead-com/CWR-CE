@@ -1464,14 +1464,6 @@ static bool BuildCheckedDownloadTasks(CModsList* list, const std::string& root, 
     return !tasks.empty();
 }
 
-static RString LocalizedDownloadUnitNoun(const char* unitNoun, int count)
-{
-    const bool plural = count != 1;
-    if (unitNoun != nullptr && stricmp(unitNoun, "mod") == 0)
-        return LocalizeString(plural ? "STR_DISP_MODS_NOUN_MODS" : "STR_DISP_MODS_NOUN_MOD");
-    return LocalizeString(plural ? "STR_DISP_MODS_NOUN_ADDONS" : "STR_DISP_MODS_NOUN_ADDON");
-}
-
 static void MarkCheckedDownloadsReady(CModsList* list, bool activateSelection)
 {
     AutoArray<ModRow> rows = list->GetRows();
@@ -1551,8 +1543,8 @@ void DisplayMods::OnButtonClicked(int idc)
         {
             std::string proxy = (const char*)GetNetworkProxy();
             CreateChild(
-                new DisplayModDownload(this, std::move(tasks), MakeMasterServerTransport(proxy), "addon", {},
-                                       hasUpdates ? "STR_DISP_MODS_UPDATE_PROMPT" : "STR_DISP_MODS_DOWNLOAD_PROMPT"));
+                new DisplayModDownload(this, std::move(tasks), MakeMasterServerTransport(proxy), {},
+                                       hasUpdates ? "STR_DISP_MODS_UPDATE_SUMMARY" : "STR_DISP_MODS_DOWNLOAD_SUMMARY"));
             return;
         }
 
@@ -2039,10 +2031,9 @@ void DisplayMods::UpdateSortCarets()
 // DisplayModDownload — the download-progress dialog (agnostic)
 
 DisplayModDownload::DisplayModDownload(ControlsContainer* parent, std::vector<DownloadTask> tasks,
-                                       DownloadFileFn transport, const char* unitNoun, std::function<double()> now,
-                                       const char* promptKey)
-    : Display(parent), _tasks(std::move(tasks)), _worker(std::move(transport), std::move(now)),
-      _unitNoun(unitNoun != nullptr ? unitNoun : "addon"), _phase(PhasePrompt), _started(false)
+                                       DownloadFileFn transport, std::function<double()> now, const char* promptKey)
+    : Display(parent), _tasks(std::move(tasks)), _worker(std::move(transport), std::move(now)), _phase(PhasePrompt),
+      _started(false)
 {
     _enableSimulation = false;
     Load("RscDisplayModDownload");
@@ -2050,12 +2041,10 @@ DisplayModDownload::DisplayModDownload(ControlsContainer* parent, std::vector<Do
     int64_t total = 0;
     for (const DownloadTask& t : _tasks)
         total += (t.expectedBytes > 0 ? t.expectedBytes : 0);
-    const int count = static_cast<int>(_tasks.size());
-    RString noun = LocalizedDownloadUnitNoun((const char*)_unitNoun, count);
-    const RString prompt = strcmp(promptKey, "STR_DISP_MODS_UPDATE_PROMPT") == 0
-                               ? RString(LocalizeStringWithFallback(promptKey, "Update %d %s (%s)."))
-                               : LocalizeString(promptKey);
-    _prompt = Format((const char*)prompt, count, (const char*)noun, DownloadProgress::FormatBytes(total).c_str());
+    const RString prompt = strcmp(promptKey, "STR_DISP_MODS_UPDATE_SUMMARY") == 0
+                               ? RString(LocalizeStringWithFallback(promptKey, "Update (%s)."))
+                               : RString(LocalizeStringWithFallback(promptKey, "Download (%s)."));
+    _prompt = Format((const char*)prompt, DownloadProgress::FormatBytes(total).c_str());
     SetNotebookText(IDC_MODS_DL_PROMPT, _prompt);
 }
 
@@ -2075,11 +2064,11 @@ void DisplayModDownload::StartDownload()
     SetNotebookText(IDC_MODS_DL_PROMPT, "");
     if (CActiveText* btn = dynamic_cast<CActiveText*>(GetCtrl(IDC_MODS_DOWNLOAD_GO)))
     {
-        btn->SetText(LocalizeString("STR_DISP_MODS_DOWNLOAD"));
+        btn->SetText(LocalizeStringWithFallback("STR_DISP_MODS_DOWNLOAD", "Download"));
         btn->EnableCtrl(false); // dimmed while the worker runs; Cancel still active
     }
     if (CActiveText* cancel = dynamic_cast<CActiveText*>(GetCtrl(IDC_CANCEL)))
-        cancel->SetText(LocalizeString("STR_DISP_CANCEL"));
+        cancel->SetText(LocalizeStringWithFallback("STR_DISP_CANCEL", "Cancel"));
 }
 
 void DisplayModDownload::ApplyView()
@@ -2092,19 +2081,23 @@ void DisplayModDownload::ApplyView()
 
     // Hold the localized labels in locals so the view's const char* fields stay valid
     // for the BuildDownloadDialogView call.
-    RString lblComplete = LocalizeString("STR_DISP_MODS_DL_COMPLETE");
-    RString lblCancelled = LocalizeString("STR_DISP_MODS_DL_CANCELLED");
-    RString lblStarting = LocalizeString("STR_DISP_MODS_DL_STARTING");
-    RString lblFailed = LocalizeString("STR_DISP_MODS_DL_FAILED");
+    RString lblComplete = LocalizeStringWithFallback("STR_DISP_MODS_DL_COMPLETE", "Complete");
+    RString lblCancelled = LocalizeStringWithFallback("STR_DISP_MODS_DL_CANCELLED", "Cancelled");
+    RString lblStarting = LocalizeStringWithFallback("STR_DISP_MODS_DL_STARTING", "Starting...");
+    RString lblFailed = LocalizeStringWithFallback("STR_DISP_MODS_DL_FAILED", "Download failed");
+    RString lblInstallFailed = LocalizeStringWithFallback("STR_DISP_MODS_INSTALL_FAILED", "Installation failed");
+    RString lblEta = LocalizeStringWithFallback("STR_DISP_MODS_DL_ETA", "ETA");
     DownloadDialogLabels labels;
     labels.complete = lblComplete;
     labels.cancelled = lblCancelled;
     labels.starting = lblStarting;
     labels.failed = lblFailed;
-    DownloadDialogView v = BuildDownloadDialogView(s, (const char*)_unitNoun, labels);
+    labels.installFailed = lblInstallFailed;
+    labels.eta = lblEta;
+    DownloadDialogView v = BuildDownloadDialogView(s, labels);
     if (s.postProcessing)
     {
-        const RString unpacking = LocalizeString("STR_DISP_MODS_DL_UNPACKING");
+        const RString unpacking = LocalizeStringWithFallback("STR_DISP_MODS_DL_UNPACKING", "Unpacking");
         v.statusLine = FormatAnimatedActivity((const char*)unpacking, Foundation::GlobalTickCount());
     }
     SetNotebookText(IDC_MODS_DL_CURRENT_LABEL, v.currentLine.c_str());
@@ -2124,14 +2117,14 @@ void DisplayModDownload::ApplyView()
     {
         if (_phase == PhaseDone)
         {
-            btn->SetText(LocalizeString("STR_DISP_MODS_CONTINUE"));
+            btn->SetText(LocalizeStringWithFallback("STR_DISP_MODS_CONTINUE", "Continue"));
             btn->EnableCtrl(true);
             if (CActiveText* cancel = dynamic_cast<CActiveText*>(GetCtrl(IDC_CANCEL)))
-                cancel->SetText(LocalizeString("STR_DISP_CLOSE"));
+                cancel->SetText(LocalizeStringWithFallback("STR_DISP_CLOSE", "Close"));
         }
         else if (_phase == PhaseFailed)
         {
-            btn->SetText(LocalizeString("STR_DISP_MODS_RETRY"));
+            btn->SetText(LocalizeStringWithFallback("STR_DISP_MODS_RETRY", "Retry"));
             btn->EnableCtrl(true);
         }
     }

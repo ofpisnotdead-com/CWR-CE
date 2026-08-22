@@ -14,6 +14,7 @@
 #include <vector>
 
 using Catch::Matchers::WithinAbs;
+using Poseidon::DownloadFailureKind;
 using Poseidon::DownloadFileFn;
 using Poseidon::DownloadFileResult;
 using Poseidon::DownloadProgress;
@@ -266,6 +267,7 @@ TEST_CASE("RunDownloadJobs fails when a post-step fails", "[download][worker]")
     RunDownloadJobs({task}, progress, mtx, TwoHalfDownload(clock), clock.Fn(), cancel);
     CHECK(progress.IsFailed());
     CHECK_FALSE(progress.IsDone());
+    CHECK(progress.FailureKind() == DownloadFailureKind::Install);
     CHECK(progress.Error() == "corrupt archive");
     // The bytes fully streamed (bar reads 100%); it is the install that failed,
     // surfaced via IsFailed rather than by rewinding the bar.

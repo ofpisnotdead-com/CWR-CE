@@ -1,5 +1,6 @@
 #include <Poseidon/Core/DownloadWorker.hpp>
 
+#include <array>
 #include <chrono>
 #include <utility>
 
@@ -7,6 +8,11 @@ namespace Poseidon
 {
 namespace
 {
+using namespace std::chrono_literals;
+
+constexpr std::array kDownloadRetryDelays = {500ms, 1500ms, 5000ms};
+constexpr auto kDownloadRetryCancelPollInterval = 50ms;
+
 double DefaultMonotonicSeconds()
 {
     using namespace std::chrono;
@@ -15,10 +21,10 @@ double DefaultMonotonicSeconds()
 
 void WaitBeforeDownloadRetry(int retryNumber, const std::function<bool()>& cancelled)
 {
-    const auto delay = std::chrono::milliseconds(retryNumber == 1 ? 500 : retryNumber == 2 ? 1500 : 5000);
+    const auto delay = kDownloadRetryDelays[static_cast<size_t>(retryNumber - 1)];
     const auto deadline = std::chrono::steady_clock::now() + delay;
     while (!cancelled() && std::chrono::steady_clock::now() < deadline)
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::this_thread::sleep_for(kDownloadRetryCancelPollInterval);
 }
 } // namespace
 
@@ -65,7 +71,7 @@ void RunDownloadJobs(const std::vector<DownloadTask>& tasks, DownloadProgress& p
                 return;
             if (result != DownloadFileResult::TransientFailure)
                 break;
-            if (retryNumber < 3)
+            if (retryNumber < static_cast<int>(kDownloadRetryDelays.size()))
                 ++retryNumber;
             if (retryWait)
                 retryWait(retryNumber, cancelled);
@@ -92,7 +98,7 @@ void RunDownloadJobs(const std::vector<DownloadTask>& tasks, DownloadProgress& p
                 if (postProcessing != nullptr)
                     postProcessing->store(false);
                 std::lock_guard<std::mutex> g(mtx);
-                progress.SetFailed(postError.empty() ? "install failed" : postError);
+                progress.SetFailed(postError.empty() ? "install failed" : postError, DownloadFailureKind::Install);
                 return;
             }
             if (postProcessing != nullptr)
@@ -188,6 +194,7 @@ DownloadSnapshot DownloadWorker::Poll() const
     s.failed = p.IsFailed();
     s.cancelled = _session->cancel.load() && !p.IsDone() && !p.IsFailed();
     s.postProcessing = _session->postProcessing.load();
+    s.failureKind = p.FailureKind();
     s.error = p.Error();
     return s;
 }

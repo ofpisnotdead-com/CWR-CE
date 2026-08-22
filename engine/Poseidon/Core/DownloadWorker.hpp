@@ -71,6 +71,7 @@ struct DownloadSnapshot
     bool failed = false;
     bool cancelled = false;
     bool postProcessing = false;
+    DownloadFailureKind failureKind = DownloadFailureKind::None;
     std::string error;
 };
 

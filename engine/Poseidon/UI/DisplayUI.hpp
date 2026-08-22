@@ -187,7 +187,6 @@ class DisplayModDownload : public Display
   protected:
     std::vector<DownloadTask> _tasks;
     DownloadWorker _worker;
-    RString _unitNoun;
     RString _prompt;
     enum Phase
     {
@@ -207,8 +206,8 @@ class DisplayModDownload : public Display
 
   public:
     DisplayModDownload(ControlsContainer* parent, std::vector<DownloadTask> tasks, DownloadFileFn transport,
-                       const char* unitNoun = "addon", std::function<double()> now = std::function<double()>(),
-                       const char* promptKey = "STR_DISP_MODS_DOWNLOAD_PROMPT");
+                       std::function<double()> now = std::function<double()>(),
+                       const char* promptKey = "STR_DISP_MODS_DOWNLOAD_SUMMARY");
 
     void OnButtonClicked(int idc) override;
     void OnSimulate(EntityAI* vehicle) override;

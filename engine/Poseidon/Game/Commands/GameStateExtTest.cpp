@@ -25,8 +25,8 @@ using namespace Poseidon;
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
 #include <Poseidon/Graphics/Cursor/ICursorOverlay.hpp>
 #include <Poseidon/UI/Map/UIMap.hpp>
-#include <Poseidon/Core/resincl.hpp>   // IDC_* used by DisplayUI.hpp (not self-contained)
-#include <Poseidon/UI/DisplayUI.hpp>   // DisplayMultiplayer / DisplayMods for the seed verbs
+#include <Poseidon/Core/resincl.hpp> // IDC_* used by DisplayUI.hpp (not self-contained)
+#include <Poseidon/UI/DisplayUI.hpp> // DisplayMultiplayer / DisplayMods for the seed verbs
 #include <Poseidon/UI/ModDownloadSupport.hpp>
 #include <Poseidon/Core/ModSystem.hpp> // GetModList for triAssertActiveMod
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
