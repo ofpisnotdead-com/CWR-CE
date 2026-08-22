@@ -42,6 +42,17 @@
 #include <Poseidon/Core/SaveVersion.hpp>
 #include <Poseidon/Core/Version.hpp>
 
+namespace
+{
+void AddMissingAddons(FindArrayRStringCI& missing, const FindArrayRStringCI& from)
+{
+    for (int i = 0; i < from.Size(); i++)
+    {
+        missing.AddUnique(from[i]);
+    }
+}
+} // namespace
+
 namespace Poseidon
 {
 RString GetUserParams();
@@ -148,56 +159,12 @@ bool DisplayArcadeMap::LoadTemplates(const char* filename)
     {
         if (result == LSNoAddOn)
         {
-            RString message = LocalizeString(IDS_MSG_ADDON_MISSING);
-            bool first = true;
-            for (int i = 0; i < _templateMission.missingAddOns.Size(); i++)
-            {
-                if (first)
-                {
-                    first = false;
-                }
-                else
-                {
-                    message = message + RString(", ");
-                }
-                message = message + _templateMission.missingAddOns[i];
-            }
-            for (int i = 0; i < _templateIntro.missingAddOns.Size(); i++)
-            {
-                if (first)
-                {
-                    first = false;
-                }
-                else
-                {
-                    message = message + RString(", ");
-                }
-                message = message + _templateIntro.missingAddOns[i];
-            }
-            for (int i = 0; i < _templateOutroWin.missingAddOns.Size(); i++)
-            {
-                if (first)
-                {
-                    first = false;
-                }
-                else
-                {
-                    message = message + RString(", ");
-                }
-                message = message + _templateOutroWin.missingAddOns[i];
-            }
-            for (int i = 0; i < _templateOutroLoose.missingAddOns.Size(); i++)
-            {
-                if (first)
-                {
-                    first = false;
-                }
-                else
-                {
-                    message = message + RString(", ");
-                }
-                message = message + _templateOutroLoose.missingAddOns[i];
-            }
+            FindArrayRStringCI missing;
+            AddMissingAddons(missing, _templateMission.missingAddOns);
+            AddMissingAddons(missing, _templateIntro.missingAddOns);
+            AddMissingAddons(missing, _templateOutroWin.missingAddOns);
+            AddMissingAddons(missing, _templateOutroLoose.missingAddOns);
+            RString message = MissingAddonMessage(missing);
             CreateMsgBox(MB_BUTTON_OK, message);
         }
         else
@@ -244,56 +211,12 @@ bool DisplayArcadeMap::MergeTemplates(const char* filename)
     LSError result = SerializeAll(ar, true);
     if (result == LSNoAddOn)
     {
-        RString message = LocalizeString(IDS_MSG_ADDON_MISSING);
-        bool first = true;
-        for (int i = 0; i < _templateMission.missingAddOns.Size(); i++)
-        {
-            if (first)
-            {
-                first = false;
-            }
-            else
-            {
-                message = message + RString(", ");
-            }
-            message = message + _templateMission.missingAddOns[i];
-        }
-        for (int i = 0; i < _templateIntro.missingAddOns.Size(); i++)
-        {
-            if (first)
-            {
-                first = false;
-            }
-            else
-            {
-                message = message + RString(", ");
-            }
-            message = message + _templateIntro.missingAddOns[i];
-        }
-        for (int i = 0; i < _templateOutroWin.missingAddOns.Size(); i++)
-        {
-            if (first)
-            {
-                first = false;
-            }
-            else
-            {
-                message = message + RString(", ");
-            }
-            message = message + _templateOutroWin.missingAddOns[i];
-        }
-        for (int i = 0; i < _templateOutroLoose.missingAddOns.Size(); i++)
-        {
-            if (first)
-            {
-                first = false;
-            }
-            else
-            {
-                message = message + RString(", ");
-            }
-            message = message + _templateOutroLoose.missingAddOns[i];
-        }
+        FindArrayRStringCI missing;
+        AddMissingAddons(missing, _templateMission.missingAddOns);
+        AddMissingAddons(missing, _templateIntro.missingAddOns);
+        AddMissingAddons(missing, _templateOutroWin.missingAddOns);
+        AddMissingAddons(missing, _templateOutroLoose.missingAddOns);
+        RString message = MissingAddonMessage(missing);
         CreateMsgBox(MB_BUTTON_OK, message);
         return false;
     }

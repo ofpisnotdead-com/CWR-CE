@@ -487,3 +487,17 @@ TEST_CASE("TranscodeToUtf8 - Output is valid UTF-8", "[codepage][utf8_validity]"
         REQUIRE(isValidUtf8(TranscodeToUtf8(in, Codepage::CP1251)));
     }
 }
+
+TEST_CASE("legacy-encoded folder names decode for display", "[locale][codepage][missions]")
+{
+    // Mission and category folders reach the browser as raw filesystem bytes, so a mod or a
+    // player profile written before UTF-8 carries its accents in the local codepage.
+    const std::string jine = "Jin\xE9";
+    const std::string csla = "\xC8SLA";
+
+    CHECK(DecodeLegacyTextToUtf8(jine, Codepage::CP1250) == "Jiné");
+    CHECK(DecodeLegacyTextToUtf8(csla, Codepage::CP1250) == "ČSLA");
+
+    const std::string utf8Csla = "ČSLA";
+    CHECK(DecodeLegacyTextToUtf8(utf8Csla, Codepage::CP1250) == utf8Csla);
+}
