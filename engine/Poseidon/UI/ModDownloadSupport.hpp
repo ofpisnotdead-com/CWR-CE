@@ -40,14 +40,14 @@ inline std::string ModsWorkshopRoot()
 inline DownloadFileFn MakeModDownloadTransport(std::string proxy)
 {
     return [proxy](const DownloadTask& task, const std::function<void(int64_t, int64_t)>& onBytes,
-                   const std::function<bool()>& cancelled, std::string& error) -> bool
+                   const std::function<bool()>& cancelled, std::string& error) -> DownloadFileResult
     {
         struct Ctx
         {
             const std::function<void(int64_t, int64_t)>* cb;
             const std::function<bool()>* cancelled;
         } ctx{&onBytes, &cancelled};
-        const bool ok = DownloadMasterServerServiceFile(
+        const DownloadFileResult result = DownloadMasterServerServiceFile(
             task.url.c_str(), proxy.empty() ? nullptr : proxy.c_str(), task.destPath.c_str(), &ctx,
             [](void* instance, int64_t received, int64_t total)
             {
@@ -59,10 +59,9 @@ inline DownloadFileFn MakeModDownloadTransport(std::string proxy)
             {
                 auto* c = static_cast<Ctx*>(instance);
                 return c != nullptr && c->cancelled != nullptr && *c->cancelled && (*c->cancelled)();
-            });
-        if (!ok)
-            error = "download failed";
-        return ok;
+            },
+            &error);
+        return result;
     };
 }
 

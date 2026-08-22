@@ -25,8 +25,9 @@ using namespace Poseidon;
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
 #include <Poseidon/Graphics/Cursor/ICursorOverlay.hpp>
 #include <Poseidon/UI/Map/UIMap.hpp>
-#include <Poseidon/Core/resincl.hpp>   // IDC_* used by DisplayUI.hpp (not self-contained)
-#include <Poseidon/UI/DisplayUI.hpp>   // DisplayMultiplayer / DisplayMods for the seed verbs
+#include <Poseidon/Core/resincl.hpp> // IDC_* used by DisplayUI.hpp (not self-contained)
+#include <Poseidon/UI/DisplayUI.hpp> // DisplayMultiplayer / DisplayMods for the seed verbs
+#include <Poseidon/UI/ModDownloadSupport.hpp>
 #include <Poseidon/Core/ModSystem.hpp> // GetModList for triAssertActiveMod
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <Poseidon/IO/ParamFileExt.hpp> // global Pars for triAssertConfigClass
@@ -657,6 +658,28 @@ GameValue TriReadWorkshopFile(const GameState* /*state*/, GameValuePar arg)
     return GameValue(contents.str().c_str());
 }
 
+GameValue TriDownloadFile(const GameState* /*state*/, GameValuePar arg)
+{
+    const std::string url = (const char*)static_cast<GameStringType>(arg);
+    const std::filesystem::path dest = std::filesystem::path(GetTriOutputDir()) / "download-fixture.txt";
+    std::error_code ec;
+    std::filesystem::remove(dest, ec);
+    std::filesystem::remove(dest.string() + ".part", ec);
+    std::filesystem::remove(dest.string() + ".part.validator", ec);
+
+    DownloadTask task{"fixture", url, dest.string(), 0, {}};
+    DownloadWorker worker(MakeModDownloadTransport({}));
+    worker.Start({std::move(task)});
+    worker.Wait();
+    if (worker.Poll().failed)
+        return GameValue("");
+
+    std::ifstream input(dest, std::ios::binary);
+    std::ostringstream contents;
+    contents << input.rdbuf();
+    return GameValue(contents.str().c_str());
+}
+
 /// triOpenModDownload <n> opens the download dialog with deterministic fake tasks.
 GameValue TriOpenModDownload(const GameState* /*state*/, GameValuePar arg)
 {
@@ -683,11 +706,11 @@ GameValue TriOpenModDownload(const GameState* /*state*/, GameValuePar arg)
     }
     // Fake transport: stream the file in two halves in-process, no I/O.
     DownloadFileFn fake = [](const DownloadTask& task, const std::function<void(int64_t, int64_t)>& onBytes,
-                             const std::function<bool()>& /*cancelled*/, std::string& /*error*/) -> bool
+                             const std::function<bool()>& /*cancelled*/, std::string& /*error*/) -> DownloadFileResult
     {
         onBytes(task.expectedBytes / 2, task.expectedBytes);
         onBytes(task.expectedBytes, task.expectedBytes);
-        return true;
+        return DownloadFileResult::Success;
     };
     display->CreateChild(new DisplayModDownload(display, std::move(tasks), std::move(fake)));
     return GameValue(true);

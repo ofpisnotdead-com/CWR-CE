@@ -28,6 +28,7 @@ void DownloadProgress::Reset()
     _overallReceived = 0;
     _done = false;
     _failed = false;
+    _failureKind = DownloadFailureKind::None;
     _error.clear();
     _samples.clear();
 }
@@ -71,9 +72,10 @@ void DownloadProgress::Finish()
     _done = true;
 }
 
-void DownloadProgress::SetFailed(std::string error)
+void DownloadProgress::SetFailed(std::string error, DownloadFailureKind kind)
 {
     _failed = true;
+    _failureKind = kind;
     _error = std::move(error);
 }
 

@@ -9,6 +9,7 @@ using Catch::Matchers::WithinAbs;
 using Poseidon::BuildDownloadDialogView;
 using Poseidon::DownloadDialogLabels;
 using Poseidon::DownloadDialogView;
+using Poseidon::DownloadFailureKind;
 using Poseidon::DownloadSnapshot;
 using Poseidon::FormatAnimatedActivity;
 
@@ -27,7 +28,7 @@ TEST_CASE("DownloadDialogView: a running multi-addon job shows both bars, speed 
     CHECK_THAT(v.currentFraction, WithinAbs(0.5f, 1e-4f));
     CHECK_THAT(v.overallFraction, WithinAbs(0.4f, 1e-4f));
     CHECK(v.currentLine == "@ww4   50%");
-    CHECK(v.overallLine == "2 / 5 addons   40%");
+    CHECK(v.overallLine == "2 / 5   40%");
     CHECK(v.statusLine == "2.1 MB/s   ETA 0:42");
 }
 
@@ -41,7 +42,7 @@ TEST_CASE("DownloadDialogView: a single file omits the N/N count (MP mission sha
     s.overallFraction = 0.5f;
     s.speedBytesPerSec = 0.0; // no rate yet
 
-    DownloadDialogView v = BuildDownloadDialogView(s, "mission");
+    DownloadDialogView v = BuildDownloadDialogView(s);
     CHECK(v.currentLine == "mission.pbo   50%");
     CHECK(v.overallLine == "50%"); // no "1 / 1 missions"
     CHECK(v.statusLine == "Starting...");
@@ -57,11 +58,11 @@ TEST_CASE("DownloadDialogView: completion shows 100% and Complete", "[download][
     s.done = true;
 
     DownloadDialogView v = BuildDownloadDialogView(s);
-    CHECK(v.overallLine == "3 / 3 addons   100%"); // done -> all N
+    CHECK(v.overallLine == "3 / 3   100%");
     CHECK(v.statusLine == "Complete");
 }
 
-TEST_CASE("DownloadDialogView: a failure surfaces the error in the status line", "[download][view]")
+TEST_CASE("DownloadDialogView: a failure does not expose the technical error", "[download][view]")
 {
     DownloadSnapshot s;
     s.itemCount = 2;
@@ -71,7 +72,7 @@ TEST_CASE("DownloadDialogView: a failure surfaces the error in the status line",
     s.error = "connection reset";
 
     DownloadDialogView v = BuildDownloadDialogView(s);
-    CHECK(v.statusLine == "Download failed: connection reset");
+    CHECK(v.statusLine == "Download failed");
 }
 
 TEST_CASE("DownloadDialogView: cancellation is reported", "[download][view]")
@@ -95,29 +96,43 @@ TEST_CASE("DownloadDialogView: terminal status labels come from the caller (loca
                        "eno";                              // "Zrušeno"
     labels.starting = "Spou\xC5\xA1t\xC4\x9Bn\xC3\xAD..."; // "Spouštění..."
     labels.failed = "Stahov\xC3\xA1n\xC3\xAD selhalo";     // "Stahování selhalo"
+    labels.installFailed = "Instalace selhala";
+    labels.eta = "zb\xC3\xBDv\xC3\xA1";
 
     DownloadSnapshot done;
     done.itemCount = 1;
     done.done = true;
-    CHECK(BuildDownloadDialogView(done, "addon", labels).statusLine == "Dokon\xC4\x8D"
-                                                                       "eno");
+    CHECK(BuildDownloadDialogView(done, labels).statusLine == "Dokon\xC4\x8D"
+                                                              "eno");
 
     DownloadSnapshot cancelled;
     cancelled.itemCount = 1;
     cancelled.cancelled = true;
-    CHECK(BuildDownloadDialogView(cancelled, "addon", labels).statusLine == "Zru\xC5\xA1"
-                                                                            "eno");
+    CHECK(BuildDownloadDialogView(cancelled, labels).statusLine == "Zru\xC5\xA1"
+                                                                   "eno");
 
     DownloadSnapshot starting;
     starting.itemCount = 1;
     starting.speedBytesPerSec = 0.0;
-    CHECK(BuildDownloadDialogView(starting, "addon", labels).statusLine == "Spou\xC5\xA1t\xC4\x9Bn\xC3\xAD...");
+    CHECK(BuildDownloadDialogView(starting, labels).statusLine == "Spou\xC5\xA1t\xC4\x9Bn\xC3\xAD...");
 
     DownloadSnapshot failed;
     failed.itemCount = 1;
     failed.failed = true;
     failed.error = "reset";
-    CHECK(BuildDownloadDialogView(failed, "addon", labels).statusLine == "Stahov\xC3\xA1n\xC3\xAD selhalo: reset");
+    CHECK(BuildDownloadDialogView(failed, labels).statusLine == "Stahov\xC3\xA1n\xC3\xAD selhalo");
+
+    failed.failureKind = DownloadFailureKind::Install;
+    CHECK(BuildDownloadDialogView(failed, labels).statusLine == "Instalace selhala");
+
+    DownloadSnapshot running;
+    running.itemCount = 2;
+    running.currentIndex = 0;
+    running.speedBytesPerSec = 1024.0;
+    running.etaSeconds = 42.0;
+    const DownloadDialogView runningView = BuildDownloadDialogView(running, labels);
+    CHECK(runningView.overallLine == "1 / 2   0%");
+    CHECK(runningView.statusLine == "1 KB/s   zb\xC3\xBDv\xC3\xA1 0:42");
 }
 
 TEST_CASE("DownloadDialogView: an empty/idle snapshot yields blank lines", "[download][view]")
