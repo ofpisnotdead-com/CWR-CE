@@ -771,15 +771,16 @@ std::string AnswerDownloadQuery(cJSON* root)
     };
     DownloadProgress progress;
 
-    const bool ok = DownloadMasterServerServiceFile(url, nullptr, dest, &progress,
-                                                    [](void* instance, int64_t received, int64_t total)
-                                                    {
-                                                        auto* p = static_cast<DownloadProgress*>(instance);
-                                                        p->received = received;
-                                                        p->total = total;
-                                                        ++p->calls;
-                                                    });
-    if (!ok)
+    const DownloadFileResult result =
+        DownloadMasterServerServiceFile(url, nullptr, dest, &progress,
+                                        [](void* instance, int64_t received, int64_t total)
+                                        {
+                                            auto* p = static_cast<DownloadProgress*>(instance);
+                                            p->received = received;
+                                            p->total = total;
+                                            ++p->calls;
+                                        });
+    if (result != DownloadFileResult::Success)
     {
         return HarnessProtocol::ErrorResponse("download failed");
     }

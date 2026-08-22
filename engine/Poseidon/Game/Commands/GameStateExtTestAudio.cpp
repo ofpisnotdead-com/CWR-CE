@@ -123,6 +123,7 @@ GameValue TriSeedMods(const GameState*, GameValuePar);
 GameValue TriSeedWorkshopMods(const GameState*, GameValuePar);
 GameValue TriFetchWorkshopMods(const GameState*);
 GameValue TriReadWorkshopFile(const GameState*, GameValuePar);
+GameValue TriDownloadFile(const GameState*, GameValuePar);
 GameValue TriSortMods(const GameState*, GameValuePar);
 GameValue TriModsVisibleCount(const GameState*);
 GameValue TriModsFreshness(const GameState*, GameValuePar);
@@ -3011,6 +3012,7 @@ INIT_MODULE(GameStateExtTest, 3)
     GGameState.NewFunction(GameFunction(GameBool, "triSeedWorkshopMods", TriSeedWorkshopMods, GameScalar));
     GGameState.NewNularOp(GameNular(GameBool, "triFetchWorkshopMods", TriFetchWorkshopMods));
     GGameState.NewFunction(GameFunction(GameString, "triReadWorkshopFile", TriReadWorkshopFile, GameArray));
+    GGameState.NewFunction(GameFunction(GameString, "triDownloadFile", TriDownloadFile, GameString));
     GGameState.NewFunction(GameFunction(GameBool, "triSortMods", TriSortMods, GameScalar));
     GGameState.NewNularOp(GameNular(GameScalar, "triModsVisibleCount", TriModsVisibleCount));
     GGameState.NewFunction(GameFunction(GameString, "triModsFreshness", TriModsFreshness, GameScalar));

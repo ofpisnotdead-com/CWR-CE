@@ -1,0 +1,38 @@
+data_dir = "packages/Demo"
+timeout = 60
+
+[[http_fixtures]]
+url = "https://fixtures.test/resume.txt"
+file = "payload.txt"
+min_requests = 2
+min_range_requests = 1
+disconnect_after = 12
+
+[[http_fixtures]]
+url = "https://fixtures.test/no-range.txt"
+file = "payload.txt"
+min_requests = 3
+min_range_requests = 1
+disconnect_after = 12
+ignore_range = true
+
+[[http_fixtures]]
+url = "https://fixtures.test/changed.txt"
+file = "payload.txt"
+min_requests = 3
+min_range_requests = 1
+disconnect_after = 12
+change_validator_after_first_request = true
+
+[[http_fixtures]]
+url = "https://fixtures.test/repeated.txt"
+file = "payload.txt"
+min_requests = 6
+min_range_requests = 5
+disconnect_after = 5
+disconnect_requests = 5
+
+[[instances]]
+name = "client"
+type = "client"
+extra_args = ["--no-strict"]

@@ -15,6 +15,7 @@
 
 using Catch::Matchers::WithinAbs;
 using Poseidon::DownloadFileFn;
+using Poseidon::DownloadFileResult;
 using Poseidon::DownloadProgress;
 using Poseidon::DownloadSnapshot;
 using Poseidon::DownloadTask;
@@ -37,13 +38,13 @@ struct FakeClock
 DownloadFileFn TwoHalfDownload(FakeClock& clock)
 {
     return [&clock](const DownloadTask& task, const std::function<void(int64_t, int64_t)>& onBytes,
-                    const std::function<bool()>& /*cancelled*/, std::string& /*error*/) -> bool
+                    const std::function<bool()>& /*cancelled*/, std::string& /*error*/) -> DownloadFileResult
     {
         clock.t += 1.0;
         onBytes(task.expectedBytes / 2, task.expectedBytes);
         clock.t += 1.0;
         onBytes(task.expectedBytes, task.expectedBytes);
-        return true;
+        return DownloadFileResult::Success;
     };
 }
 } // namespace
@@ -75,14 +76,14 @@ TEST_CASE("RunDownloadJobs feeds streamed bytes into the shared progress", "[dow
 
     // Mid-stream, the overall received must already reflect the bytes seen so far.
     DownloadFileFn observing = [&](const DownloadTask& task, const std::function<void(int64_t, int64_t)>& onBytes,
-                                   const std::function<bool()>&, std::string&) -> bool
+                                   const std::function<bool()>&, std::string&) -> DownloadFileResult
     {
         clock.t += 1.0;
         onBytes(40, task.expectedBytes);
         CHECK(progress.OverallReceived() == 40);
         CHECK_THAT(progress.CurrentFraction(), WithinAbs(0.4f, 1e-4f));
         onBytes(task.expectedBytes, task.expectedBytes);
-        return true;
+        return DownloadFileResult::Success;
     };
 
     std::vector<DownloadTask> tasks = {{"@only", "http://x", "x.pbo", 100, {}}};
@@ -113,7 +114,7 @@ TEST_CASE("RunDownloadJobs runs a task post-step after the file lands", "[downlo
     CHECK(progress.IsDone());
 }
 
-TEST_CASE("RunDownloadJobs fails and skips the rest on a download error", "[download][worker]")
+TEST_CASE("RunDownloadJobs fails and skips the rest on a permanent download error", "[download][worker]")
 {
     FakeClock clock;
     DownloadProgress progress;
@@ -122,11 +123,11 @@ TEST_CASE("RunDownloadJobs fails and skips the rest on a download error", "[down
 
     int calls = 0;
     DownloadFileFn failFirst = [&](const DownloadTask&, const std::function<void(int64_t, int64_t)>&,
-                                   const std::function<bool()>&, std::string& error) -> bool
+                                   const std::function<bool()>&, std::string& error) -> DownloadFileResult
     {
         ++calls;
         error = "connection reset";
-        return false;
+        return DownloadFileResult::PermanentFailure;
     };
 
     std::vector<DownloadTask> tasks = {{"@a", "http://a", "a.pbo", 100, {}}, {"@b", "http://b", "b.pbo", 100, {}}};
@@ -136,6 +137,116 @@ TEST_CASE("RunDownloadJobs fails and skips the rest on a download error", "[down
     CHECK(progress.IsFailed());
     CHECK_FALSE(progress.IsDone());
     CHECK(progress.Error() == "connection reset");
+}
+
+TEST_CASE("RunDownloadJobs retries a transient download error", "[download][worker][retry]")
+{
+    FakeClock clock;
+    DownloadProgress progress;
+    std::mutex mtx;
+    std::atomic<bool> cancel{false};
+
+    int attempts = 0;
+    int64_t partialBytes = 0;
+    DownloadFileFn interrupted = [&](const DownloadTask& task, const std::function<void(int64_t, int64_t)>& onBytes,
+                                     const std::function<bool()>&, std::string& error) -> DownloadFileResult
+    {
+        ++attempts;
+        if (attempts == 1)
+        {
+            partialBytes = 40;
+            onBytes(partialBytes, task.expectedBytes);
+            error = "connection reset";
+            return DownloadFileResult::TransientFailure;
+        }
+        onBytes(task.expectedBytes, task.expectedBytes);
+        return DownloadFileResult::Success;
+    };
+
+    RunDownloadJobs({{"@a", "http://a", "a.pbo", 100, {}}}, progress, mtx, interrupted, clock.Fn(), cancel);
+
+    CHECK(partialBytes == 40);
+    CHECK(attempts == 2);
+    CHECK(progress.IsDone());
+    CHECK_FALSE(progress.IsFailed());
+}
+
+TEST_CASE("RunDownloadJobs continues after repeated transient download errors", "[download][worker][retry]")
+{
+    FakeClock clock;
+    DownloadProgress progress;
+    std::mutex mtx;
+    std::atomic<bool> cancel{false};
+
+    int attempts = 0;
+    std::vector<int> retryNumbers;
+    DownloadFileFn interrupted = [&](const DownloadTask& task, const std::function<void(int64_t, int64_t)>& onBytes,
+                                     const std::function<bool()>&, std::string& error) -> DownloadFileResult
+    {
+        ++attempts;
+        if (attempts == 6)
+        {
+            onBytes(task.expectedBytes, task.expectedBytes);
+            return DownloadFileResult::Success;
+        }
+        error = "connection reset";
+        return DownloadFileResult::TransientFailure;
+    };
+
+    auto recordWait = [&](int retryNumber, const std::function<bool()>&) { retryNumbers.push_back(retryNumber); };
+    RunDownloadJobs({{"@a", "http://a", "a.pbo", 100, {}}}, progress, mtx, interrupted, clock.Fn(), cancel, nullptr,
+                    recordWait);
+
+    CHECK(attempts == 6);
+    CHECK(retryNumbers == std::vector<int>{1, 2, 3, 3, 3});
+    CHECK(progress.IsDone());
+    CHECK_FALSE(progress.IsFailed());
+}
+
+TEST_CASE("RunDownloadJobs does not retry a cancelled transfer", "[download][worker][retry]")
+{
+    FakeClock clock;
+    DownloadProgress progress;
+    std::mutex mtx;
+    std::atomic<bool> cancel{false};
+
+    int attempts = 0;
+    DownloadFileFn cancelled = [&](const DownloadTask&, const std::function<void(int64_t, int64_t)>&,
+                                   const std::function<bool()>&, std::string&) -> DownloadFileResult
+    {
+        ++attempts;
+        return DownloadFileResult::Cancelled;
+    };
+
+    RunDownloadJobs({{"@a", "http://a", "a.pbo", 100, {}}}, progress, mtx, cancelled, clock.Fn(), cancel);
+
+    CHECK(attempts == 1);
+    CHECK_FALSE(progress.IsDone());
+    CHECK_FALSE(progress.IsFailed());
+}
+
+TEST_CASE("RunDownloadJobs stops when cancelled during retry backoff", "[download][worker][retry]")
+{
+    FakeClock clock;
+    DownloadProgress progress;
+    std::mutex mtx;
+    std::atomic<bool> cancel{false};
+
+    int attempts = 0;
+    DownloadFileFn interrupted = [&](const DownloadTask&, const std::function<void(int64_t, int64_t)>&,
+                                     const std::function<bool()>&, std::string&) -> DownloadFileResult
+    {
+        ++attempts;
+        return DownloadFileResult::TransientFailure;
+    };
+    auto cancelDuringWait = [&](int, const std::function<bool()>&) { cancel.store(true); };
+
+    RunDownloadJobs({{"@a", "http://a", "a.pbo", 100, {}}}, progress, mtx, interrupted, clock.Fn(), cancel, nullptr,
+                    cancelDuringWait);
+
+    CHECK(attempts == 1);
+    CHECK_FALSE(progress.IsDone());
+    CHECK_FALSE(progress.IsFailed());
 }
 
 TEST_CASE("RunDownloadJobs fails when a post-step fails", "[download][worker]")
@@ -171,12 +282,12 @@ TEST_CASE("RunDownloadJobs stops cleanly when cancelled between files", "[downlo
     int calls = 0;
     DownloadFileFn cancelAfterFirst = [&](const DownloadTask& task,
                                           const std::function<void(int64_t, int64_t)>& onBytes,
-                                          const std::function<bool()>&, std::string&) -> bool
+                                          const std::function<bool()>&, std::string&) -> DownloadFileResult
     {
         ++calls;
         onBytes(task.expectedBytes, task.expectedBytes);
         cancel.store(true); // user hit Cancel during the first file
-        return true;
+        return DownloadFileResult::Success;
     };
 
     std::vector<DownloadTask> tasks = {{"@a", "http://a", "a.pbo", 100, {}}, {"@b", "http://b", "b.pbo", 100, {}}};
@@ -196,10 +307,10 @@ TEST_CASE("RunDownloadJobs finishes immediately for an empty job", "[download][w
 
     int calls = 0;
     DownloadFileFn never = [&](const DownloadTask&, const std::function<void(int64_t, int64_t)>&,
-                               const std::function<bool()>&, std::string&) -> bool
+                               const std::function<bool()>&, std::string&) -> DownloadFileResult
     {
         ++calls;
-        return true;
+        return DownloadFileResult::Success;
     };
 
     RunDownloadJobs({}, progress, mtx, never, clock.Fn(), cancel);
@@ -263,11 +374,11 @@ TEST_CASE("DownloadWorker: teardown does not block on a stuck download (cancel f
     // UI thread waited for the whole transfer to finish).
     std::atomic<bool> entered{false};
     DownloadFileFn stuck = [&entered](const DownloadTask&, const std::function<void(int64_t, int64_t)>&,
-                                      const std::function<bool()>&, std::string&) -> bool
+                                      const std::function<bool()>&, std::string&) -> DownloadFileResult
     {
         entered.store(true);
         std::this_thread::sleep_for(std::chrono::milliseconds(800));
-        return true;
+        return DownloadFileResult::Success;
     };
 
     const auto start = std::chrono::steady_clock::now();

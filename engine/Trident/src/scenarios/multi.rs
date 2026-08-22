@@ -76,10 +76,24 @@ pub struct HttpFixtureConfig {
     pub file: String,
     #[serde(default)]
     pub min_requests: usize,
+    #[serde(default)]
+    pub min_range_requests: usize,
+    #[serde(default)]
+    pub disconnect_after: Option<usize>,
+    #[serde(default = "default_disconnect_requests")]
+    pub disconnect_requests: usize,
+    #[serde(default)]
+    pub ignore_range: bool,
+    #[serde(default)]
+    pub change_validator_after_first_request: bool,
 }
 
 const fn default_game_port() -> u16 {
     2302
+}
+
+const fn default_disconnect_requests() -> usize {
+    1
 }
 
 /// Configuration for a single game instance within a multi-instance test.
@@ -524,6 +538,12 @@ struct HttpFixtureRoute {
     body: Arc<Vec<u8>>,
     min_requests: usize,
     requests: Arc<std::sync::atomic::AtomicUsize>,
+    min_range_requests: usize,
+    range_requests: Arc<std::sync::atomic::AtomicUsize>,
+    disconnect_after: Option<usize>,
+    disconnect_requests: usize,
+    ignore_range: bool,
+    change_validator_after_first_request: bool,
 }
 
 struct RunningHttpFixtures {
@@ -544,6 +564,14 @@ impl RunningHttpFixtures {
                     "HTTP fixture '{}' received {requests} request(s), expected at least {}",
                     route.source_url,
                     route.min_requests
+                );
+            }
+            let range_requests = route.range_requests.load(Ordering::Relaxed);
+            if range_requests < route.min_range_requests {
+                anyhow::bail!(
+                    "HTTP fixture '{}' received {range_requests} range request(s), expected at least {}",
+                    route.source_url,
+                    route.min_range_requests
                 );
             }
         }
@@ -590,20 +618,83 @@ async fn serve_http_fixture_connection(
         .then(|| routes.iter().find(|route| route.path == path))
         .flatten();
 
+    let header = |name: &str| {
+        request_text.lines().skip(1).find_map(|line| {
+            let (header_name, value) = line.split_once(':')?;
+            header_name
+                .eq_ignore_ascii_case(name)
+                .then(|| value.trim().to_string())
+        })
+    };
+    let range = header("Range");
+    let if_range = header("If-Range");
+
     if let Ok(mut log) = request_log.lock() {
-        let _ = writeln!(log, "{method} {path}");
+        let _ = writeln!(
+            log,
+            "{method} {path} range={} if-range={}",
+            range.as_deref().unwrap_or("-"),
+            if_range.as_deref().unwrap_or("-")
+        );
     }
 
-    let (status, body): (&str, &[u8]) = route.map_or(("404 Not Found", b"not found"), |route| {
-        route.requests.fetch_add(1, Ordering::Relaxed);
-        ("200 OK", route.body.as_slice())
-    });
-    let header = format!(
-        "HTTP/1.1 {status}\r\nContent-Length: {}\r\nContent-Type: application/octet-stream\r\nConnection: close\r\n\r\n",
+    let Some(route) = route else {
+        stream
+            .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\nConnection: close\r\n\r\nnot found")
+            .await?;
+        stream.shutdown().await?;
+        return Ok(());
+    };
+
+    let request_number = route.requests.fetch_add(1, Ordering::Relaxed) + 1;
+    let etag = if route.change_validator_after_first_request && request_number > 1 {
+        "\"trident-fixture-v2\""
+    } else {
+        "\"trident-fixture\""
+    };
+    let mut status = "200 OK";
+    let mut body = route.body.as_slice();
+    let mut content_range = None;
+    if let Some(value) = range.as_deref() {
+        route.range_requests.fetch_add(1, Ordering::Relaxed);
+        if !route.ignore_range && if_range.as_deref().map_or(true, |value| value == etag) {
+            let start = value
+                .strip_prefix("bytes=")
+                .and_then(|value| value.strip_suffix('-'))
+                .and_then(|value| value.parse::<usize>().ok());
+            match start {
+                Some(start) if start < body.len() => {
+                    status = "206 Partial Content";
+                    content_range =
+                        Some(format!("bytes {start}-{}/{}", body.len() - 1, body.len()));
+                    body = &body[start..];
+                }
+                _ => {
+                    status = "416 Range Not Satisfiable";
+                    content_range = Some(format!("bytes */{}", body.len()));
+                    body = &[];
+                }
+            }
+        }
+    }
+
+    let mut response_header = format!(
+        "HTTP/1.1 {status}\r\nContent-Length: {}\r\nContent-Type: application/octet-stream\r\nETag: {etag}\r\nConnection: close\r\n",
         body.len()
     );
-    stream.write_all(header.as_bytes()).await?;
-    stream.write_all(body).await?;
+    if let Some(value) = content_range {
+        response_header.push_str("Content-Range: ");
+        response_header.push_str(&value);
+        response_header.push_str("\r\n");
+    }
+    response_header.push_str("\r\n");
+    stream.write_all(response_header.as_bytes()).await?;
+    let sent = if request_number <= route.disconnect_requests {
+        route.disconnect_after.unwrap_or(body.len()).min(body.len())
+    } else {
+        body.len()
+    };
+    stream.write_all(&body[..sent]).await?;
     stream.shutdown().await?;
     Ok(())
 }
@@ -649,6 +740,12 @@ async fn start_http_fixtures(
             body: Arc::new(body),
             min_requests: fixture.min_requests,
             requests: Arc::new(AtomicUsize::new(0)),
+            min_range_requests: fixture.min_range_requests,
+            range_requests: Arc::new(AtomicUsize::new(0)),
+            disconnect_after: fixture.disconnect_after,
+            disconnect_requests: fixture.disconnect_requests,
+            ignore_range: fixture.ignore_range,
+            change_validator_after_first_request: fixture.change_validator_after_first_request,
         });
     }
 
@@ -2659,6 +2756,11 @@ name = "client"
             url: "https://squad.test/squad.xml".to_string(),
             file: "squad.xml".to_string(),
             min_requests: 1,
+            min_range_requests: 0,
+            disconnect_after: None,
+            disconnect_requests: 1,
+            ignore_range: false,
+            change_validator_after_first_request: false,
         }];
 
         let running = start_http_fixtures(&fixtures, test_dir.path(), output_dir.path())
@@ -2682,6 +2784,11 @@ name = "client"
             url: "https://squad.test/logo.paa".to_string(),
             file: "logo.paa".to_string(),
             min_requests: 1,
+            min_range_requests: 0,
+            disconnect_after: None,
+            disconnect_requests: 1,
+            ignore_range: false,
+            change_validator_after_first_request: false,
         }];
 
         let running = start_http_fixtures(&fixtures, test_dir.path(), output_dir.path())
@@ -2691,6 +2798,43 @@ name = "client"
 
         let error = running.validate().unwrap_err();
         assert!(error.to_string().contains("received 0 request(s)"));
+        running.stop().await;
+    }
+
+    #[tokio::test]
+    async fn http_fixture_disconnects_once_and_serves_a_range() {
+        let test_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        std::fs::write(test_dir.path().join("payload.bin"), b"0123456789abcdef").unwrap();
+        let fixtures = vec![HttpFixtureConfig {
+            url: "https://fixtures.test/payload.bin".to_string(),
+            file: "payload.bin".to_string(),
+            min_requests: 2,
+            min_range_requests: 1,
+            disconnect_after: Some(6),
+            disconnect_requests: 1,
+            ignore_range: false,
+            change_validator_after_first_request: false,
+        }];
+
+        let running = start_http_fixtures(&fixtures, test_dir.path(), output_dir.path())
+            .await
+            .unwrap()
+            .unwrap();
+        let target = &running.rewrites[0].1;
+        let first = reqwest::get(target).await.unwrap();
+        assert!(first.bytes().await.is_err());
+
+        let response = reqwest::Client::new()
+            .get(target)
+            .header("Range", "bytes=6-")
+            .header("If-Range", "\"trident-fixture\"")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::PARTIAL_CONTENT);
+        assert_eq!(response.bytes().await.unwrap().as_ref(), b"6789abcdef");
+        assert!(running.validate().is_ok());
         running.stop().await;
     }
 
