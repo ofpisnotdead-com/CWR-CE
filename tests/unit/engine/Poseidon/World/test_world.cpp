@@ -49,7 +49,6 @@ TEST_CASE("multiplayer chat shortcuts are suppressed while chat input is active"
 {
     REQUIRE(Poseidon::ShouldHandleMultiplayerChatShortcut(false));
     REQUIRE_FALSE(Poseidon::ShouldHandleMultiplayerChatShortcut(true));
-    REQUIRE_FALSE(Poseidon::ShouldSwitchMultiplayerChannelFromChatInput());
 }
 
 TEST_CASE("chat line submits on both the main and numpad Enter", "[world][chat]")
@@ -68,10 +67,10 @@ TEST_CASE("chat line swallows its own control keys but lets typing through", "[w
     REQUIRE(Poseidon::IsChatConsumedKey(SDLK_RETURN));
     REQUIRE(Poseidon::IsChatConsumedKey(SDLK_KP_ENTER));
     REQUIRE(Poseidon::IsChatConsumedKey(SDLK_ESCAPE));
-    REQUIRE(Poseidon::IsChatConsumedKey(SDLK_UP));
-    REQUIRE(Poseidon::IsChatConsumedKey(SDLK_DOWN));
-    REQUIRE(Poseidon::IsChatConsumedKey(SDLK_PAGEUP));
-    REQUIRE(Poseidon::IsChatConsumedKey(SDLK_PAGEDOWN));
+    REQUIRE_FALSE(Poseidon::IsChatConsumedKey(SDLK_UP));
+    REQUIRE_FALSE(Poseidon::IsChatConsumedKey(SDLK_DOWN));
+    REQUIRE_FALSE(Poseidon::IsChatConsumedKey(SDLK_PAGEUP));
+    REQUIRE_FALSE(Poseidon::IsChatConsumedKey(SDLK_PAGEDOWN));
 
     // Printable keys must pass through so the player can actually type.
     REQUIRE_FALSE(Poseidon::IsChatConsumedKey(SDLK_A));

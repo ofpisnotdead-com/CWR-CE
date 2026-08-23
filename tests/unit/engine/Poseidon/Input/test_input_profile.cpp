@@ -232,3 +232,14 @@ TEST_CASE("InputProfile defaults VoN CapsLock to push-to-talk only", "[input][In
     REQUIRE(profile.HasBinding(UAVoiceOverNetPushToTalk, InputCode::Key(SDL_SCANCODE_CAPSLOCK)));
     REQUIRE_FALSE(profile.HasBinding(UAVoiceOverNet, InputCode::Key(SDL_SCANCODE_CAPSLOCK)));
 }
+
+TEST_CASE("InputProfile defaults chat navigation to the legacy keys", "[input][InputProfile][chat]")
+{
+    InputProfile profile;
+    profile.LoadDefaults();
+
+    CHECK(profile.HasBinding(UAChatPrevChannel, InputCode::Key(SDL_SCANCODE_DOWN)));
+    CHECK(profile.HasBinding(UAChatNextChannel, InputCode::Key(SDL_SCANCODE_UP)));
+    CHECK(profile.HasBinding(UAChatHistoryUp, InputCode::Key(SDL_SCANCODE_PAGEUP)));
+    CHECK(profile.HasBinding(UAChatHistoryDown, InputCode::Key(SDL_SCANCODE_PAGEDOWN)));
+}

@@ -372,3 +372,11 @@ TEST_CASE("KbmPage: capture reports every action using the same binding", "[UI][
     CHECK(conflicts[1] == UARevealTarget);
     CHECK(conflicts[2] == UAZoomIn);
 }
+
+TEST_CASE("KbmPage: chat action labels work without package strings", "[UI][KbmPage]")
+{
+    CHECK(std::string(ControlActionLabel(UAChatPrevChannel)) == "Previous chat channel");
+    CHECK(std::string(ControlActionLabel(UAChatNextChannel)) == "Next chat channel");
+    CHECK(std::string(ControlActionLabel(UAChatHistoryUp)) == "Chat history up");
+    CHECK(std::string(ControlActionLabel(UAChatHistoryDown)) == "Chat history down");
+}

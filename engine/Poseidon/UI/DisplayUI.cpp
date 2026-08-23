@@ -918,11 +918,10 @@ void DisplayConfigure::RefreshLanguage()
 {
     if (!_keys)
         return;
-    UserActionDesc* userActionDesc = InputSubsystem::GetUserActionDesc();
     int n = _keys->GetSize();
     for (int i = 0; i < n && i < UAN; i++)
     {
-        _keys->Set(i).text = LocalizeString(userActionDesc[i].desc);
+        _keys->Set(i).text = InputSubsystem::GetUserActionLabel(static_cast<UserAction>(i));
     }
 
     // Also refresh the three C3DActiveText labels that reflect input state.
@@ -1059,10 +1058,9 @@ Control* DisplayConfigure::OnCreateCtrl(int type, int idc, const ParamEntry& cls
         case IDC_CONFIG_KEYS:
             _keys = new CKeys(this, idc, cls);
             {
-                UserActionDesc* userActionDesc = InputSubsystem::GetUserActionDesc();
                 for (int i = 0; i < UAN; i++)
                 {
-                    _keys->AddString(LocalizeString(userActionDesc[i].desc));
+                    _keys->AddString(InputSubsystem::GetUserActionLabel(static_cast<UserAction>(i)));
                     _keys->SetKeys(i, input.GetUserKeys(static_cast<UserAction>(i)));
                 }
             }

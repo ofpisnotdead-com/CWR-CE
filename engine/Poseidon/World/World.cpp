@@ -335,6 +335,44 @@ void World::Simulate(float deltaT, bool& enableDraw)
     }
 
     // multiplayer chat control
+    if (GetNetworkManager().GetGameState() >= NGSCreate && _chat)
+    {
+        const Poseidon::ChatInputActions actions = Poseidon::PollChatInputActions(input);
+        if (!IsPlayerDead())
+        {
+            if (actions.previousChannel)
+            {
+                PrevChatChannel();
+                if (_channel)
+                {
+                    _channel->ResetHUD();
+                }
+                if (_voiceChat)
+                {
+                    _voiceChat->ResetHUD();
+                }
+                OnChannelChanged();
+            }
+            if (actions.nextChannel)
+            {
+                NextChatChannel();
+                if (_channel)
+                {
+                    _channel->ResetHUD();
+                }
+                if (_voiceChat)
+                {
+                    _voiceChat->ResetHUD();
+                }
+                OnChannelChanged();
+            }
+        }
+        if (actions.historyUp)
+            GChatList.BrowseUp();
+        if (actions.historyDown)
+            GChatList.BrowseDown();
+    }
+
     if (GetNetworkManager().GetGameState() >= NGSCreate &&
         Poseidon::ShouldHandleMultiplayerChatShortcut(_chat != nullptr))
     {

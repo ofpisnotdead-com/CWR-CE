@@ -608,7 +608,12 @@ float InputSubsystem::GetAction(InputContext ctx, UserAction action, bool checkF
 
 bool InputSubsystem::GetActionToDo(UserAction action, bool reset, bool checkFocus)
 {
-    const int idx = static_cast<int>(context_);
+    return GetActionToDo(context_, action, reset, checkFocus);
+}
+
+bool InputSubsystem::GetActionToDo(InputContext ctx, UserAction action, bool reset, bool checkFocus)
+{
+    const int idx = static_cast<int>(ctx);
     if (idx < 0 || idx >= kNumContexts)
         return false;
     return QueryProfileActionToDo(GInput, profiles_[idx], action, actionDoneByContext_[idx][action], reset, checkFocus);
@@ -1283,6 +1288,10 @@ UserActionDesc* InputSubsystem::GetUserActionDesc()
         UserActionDesc("MapZoomOut", IDS_USRACT_MAP_ZOOM_OUT, SDL_SCANCODE_KP_MINUS,
                        INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_UP, -1),
         UserActionDesc("CheatEntry", IDS_USRACT_CHEAT_ENTRY, SDL_SCANCODE_KP_MINUS, -1),
+        UserActionDesc("ChatPrevChannel", IDS_USRACT_CHAT_PREV_CHANNEL, SDL_SCANCODE_DOWN, -1),
+        UserActionDesc("ChatNextChannel", IDS_USRACT_CHAT_NEXT_CHANNEL, SDL_SCANCODE_UP, -1),
+        UserActionDesc("ChatHistoryUp", IDS_USRACT_CHAT_HISTORY_UP, SDL_SCANCODE_PAGEUP, -1),
+        UserActionDesc("ChatHistoryDown", IDS_USRACT_CHAT_HISTORY_DOWN, SDL_SCANCODE_PAGEDOWN, -1),
 #if _ENABLE_CHEATS
         UserActionDesc("Cheat1", IDS_USRACT_CHEAT_1, SDL_SCANCODE_RGUI, -1),
         UserActionDesc("Cheat2", IDS_USRACT_CHEAT_2, SDL_SCANCODE_RALT, -1),
@@ -1294,6 +1303,25 @@ UserActionDesc* InputSubsystem::GetUserActionDesc()
     static_assert(std::size(userActionDesc) == UAN,
                   "UserActionDesc table must have exactly one entry per UserAction (UAN)");
     return userActionDesc;
+}
+
+const char* InputSubsystem::GetUserActionLabel(UserAction action)
+{
+    if (action < 0 || action >= UAN)
+        return "";
+    switch (action)
+    {
+        case UAChatPrevChannel:
+            return LocalizeStringWithFallback("STR_USRACT_CHAT_PREV_CHANNEL", "Previous chat channel");
+        case UAChatNextChannel:
+            return LocalizeStringWithFallback("STR_USRACT_CHAT_NEXT_CHANNEL", "Next chat channel");
+        case UAChatHistoryUp:
+            return LocalizeStringWithFallback("STR_USRACT_CHAT_HISTORY_UP", "Chat history up");
+        case UAChatHistoryDown:
+            return LocalizeStringWithFallback("STR_USRACT_CHAT_HISTORY_DOWN", "Chat history down");
+        default:
+            return LocalizeString(GetUserActionDesc()[action].desc);
+    }
 }
 
 bool InputSubsystem::IsReverseMouse() const

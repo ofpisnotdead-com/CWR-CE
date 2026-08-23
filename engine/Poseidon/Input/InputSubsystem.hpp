@@ -33,6 +33,7 @@ class InputSubsystem
     float GetAction(UserAction action, bool checkFocus = true) const;
     float GetAction(InputContext ctx, UserAction action, bool checkFocus = true) const;
     bool GetActionToDo(UserAction action, bool reset = true, bool checkFocus = true);
+    bool GetActionToDo(InputContext ctx, UserAction action, bool reset = true, bool checkFocus = true);
 
     // Forward / fast-forward for a context with the Turbo modifier folded in (Turbo
     // promotes MoveForward to fast). Vehicle pilots read these, not the raw actions.
@@ -168,6 +169,7 @@ class InputSubsystem
 
     // Action descriptions
     static UserActionDesc* GetUserActionDesc();
+    static const char* GetUserActionLabel(UserAction action);
 
     // Config settings
     bool IsReverseMouse() const;

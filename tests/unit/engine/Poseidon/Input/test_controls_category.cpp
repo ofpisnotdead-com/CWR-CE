@@ -107,6 +107,14 @@ TEST_CASE("ControlsCategory: cheat entry lives in Common with a Shift+Numpad-Min
     CHECK(entries[0].modifier.toLegacy() == SDL_SCANCODE_LSHIFT);
 }
 
+TEST_CASE("ControlsCategory: chat navigation lives in Common", "[Input][ControlsCategory][chat]")
+{
+    CHECK(IsActionInControlsCategory(UAChatPrevChannel, ControlsCategoryCommon));
+    CHECK(IsActionInControlsCategory(UAChatNextChannel, ControlsCategoryCommon));
+    CHECK(IsActionInControlsCategory(UAChatHistoryUp, ControlsCategoryCommon));
+    CHECK(IsActionInControlsCategory(UAChatHistoryDown, ControlsCategoryCommon));
+}
+
 // Keyboard and gamepad controls pages share the same category lists; KbmPage /
 // GamepadPage IsActionVisible delegate to IsActionVisibleOn{Keyboard,Gamepad}. These
 // guard the "one shared source" invariant so a new action cannot silently go missing
