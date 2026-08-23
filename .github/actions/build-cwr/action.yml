@@ -23,6 +23,10 @@ inputs:
     description: Enable the ccache compiler launcher and cache.
     required: false
     default: 'true'
+  ccache-max-size:
+    description: Size limit for the ccache cache.
+    required: false
+    default: '1G'
   use-vcpkg-binary-cache:
     description: Restore and save the per-triplet vcpkg binary cache.
     required: false
@@ -60,7 +64,7 @@ runs:
       with:
         variant: ccache
         key: ${{ runner.os }}-${{ inputs.preset }}-pch-${{ hashFiles('engine/Poseidon/Foundation/PoseidonPCH.hpp', 'engine/Poseidon/Foundation/platform.hpp') }}
-        max-size: 1G
+        max-size: ${{ inputs.ccache-max-size }}
 
     - name: Setup CMake and Ninja
       uses: lukka/get-cmake@latest

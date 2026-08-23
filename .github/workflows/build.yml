@@ -72,6 +72,35 @@ jobs:
           path: ${{ env.CWR_DIST_DIR }}/PoseidonServer
           if-no-files-found: error
 
+  build-linux-sanitizers:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sanitizer: san
+            label: ASan+UBSan
+          - sanitizer: tsan
+            label: TSan
+    name: Linux ${{ matrix.label }}
+    runs-on: ubuntu-24.04
+    env:
+      CWR_PRESET: linux-x64-clang-${{ matrix.sanitizer }}
+      CWR_VCPKG_TRIPLET: x64-linux-clang-${{ matrix.sanitizer }}
+      CWR_BUILD_DIR: build/linux-x64-clang-${{ matrix.sanitizer }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        uses: ./.github/actions/build-cwr
+        with:
+          preset: ${{ env.CWR_PRESET }}
+          vcpkg-triplet: ${{ env.CWR_VCPKG_TRIPLET }}
+          build-dir: ${{ env.CWR_BUILD_DIR }}
+          run-tests: 'false'
+          ccache-max-size: '500M'
+
   build-macos:
     strategy:
       fail-fast: false
