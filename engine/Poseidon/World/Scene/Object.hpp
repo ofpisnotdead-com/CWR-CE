@@ -301,6 +301,10 @@ public:
 
 	// Get min-max of object after animate. Default (generic) implementation may be slow when shape is complex.
 	virtual void AnimatedMinMax( int level, Vector3 *minMax );
+	// True when the animated bounds of this level are static and may be served from the cache.
+	bool AnimBBoxCacheable( int level ) const;
+	// Animated bounds from the cache, without animating the shape. False when not cached.
+	bool CachedAnimatedMinMax( int level, Vector3 *minMax ) const;
 	// Get bounding sphere of object after animate. Default (generic) implementation may be slow when shape is complex.
 	virtual void AnimatedBSphere( int level, Vector3 &bCenter, float &bRadius, bool isAnimated );
 
