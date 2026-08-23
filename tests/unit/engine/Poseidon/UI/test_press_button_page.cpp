@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 using namespace Poseidon;
 namespace
@@ -89,7 +90,7 @@ class TestPressButtonPage : public PressButtonPage
                   result.replaceConflict = replaceConflict;
                   ++result.saveCalls;
               },
-              [](int, int) { return UAN; })
+              [](int, int) { return std::vector<UserAction>{}; })
     {
     }
 

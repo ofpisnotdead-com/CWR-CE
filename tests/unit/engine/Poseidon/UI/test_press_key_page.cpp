@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 using namespace Poseidon;
 namespace Poseidon
@@ -58,7 +59,7 @@ class TestPressKeyPage : public PressKeyPage
                   result.replaceConflict = replaceConflict;
                   ++result.saveCalls;
               },
-              [](int, int) { return UAN; }, allowMouseWheel)
+              [](int, int) { return std::vector<UserAction>{}; }, allowMouseWheel)
     {
     }
 

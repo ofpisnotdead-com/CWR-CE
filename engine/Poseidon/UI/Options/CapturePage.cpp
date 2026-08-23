@@ -1,6 +1,8 @@
 #include <Poseidon/UI/Options/CapturePage.hpp>
 
+#include <Poseidon/UI/Options/OptionsScrollList.hpp>
 #include <Poseidon/UI/Options/OptionsShell.hpp>
+#include <Poseidon/UI/Controls/UIControlsExtShared.hpp>
 
 #include <Poseidon/Core/resincl.hpp>
 #include <Poseidon/Input/InputDeviceConstants.hpp>
@@ -9,8 +11,10 @@
 
 #include <SDL3/SDL_keycode.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <utility>
+#include <vector>
 #include <Poseidon/Foundation/Framework/AppFrame.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 
@@ -22,6 +26,58 @@ extern RString GetKeyName(int dikCode);
 namespace
 {
 constexpr unsigned long kCaptureDoubleTapWindowMs = 400;
+
+class ConflictStatus final : public C3DStatic
+{
+  public:
+    ConflictStatus(ControlsContainer* parent, int idc, const ParamEntry& cls) : C3DStatic(parent, idc, cls) {}
+
+    void SetColoredText(RString text, std::string colorMask)
+    {
+        SetText(text);
+        m_colorMask = std::move(colorMask);
+    }
+
+    void OnDraw(float alpha) override
+    {
+        if (m_colorMask.find('1') == std::string::npos)
+        {
+            C3DStatic::OnDraw(alpha);
+            return;
+        }
+
+        Vector3 normal = _down.CrossProduct(_right).Normalized();
+        Vector3 position = _position - 0.002f * normal;
+        Vector3 up = -_down;
+        Vector3 right = 0.75f * up.Size() * _right.Normalized();
+        Vector3 width = GEngine->GetText3DWidth(right, _font, _text);
+        if ((_style & ST_HPOS) == ST_RIGHT)
+            position += _right - width;
+        else if ((_style & ST_HPOS) == ST_CENTER)
+            position += 0.5f * (_right - width);
+
+        const PackedColor normalColor = ModAlpha(_color, alpha);
+        const PackedColor actionColor = ModAlpha(PackedColor(Color(1.0f, 0.9f, 0.2f, 1.0f)), alpha);
+        const char* text = _text;
+        int byteStart = 0;
+        int byteEnd = 0;
+        for (size_t i = 0; i < m_colorMask.size(); ++i)
+        {
+            byteEnd += Utf8CodepointBytes(text + byteEnd);
+            if (i + 1 < m_colorMask.size() && m_colorMask[i] == m_colorMask[i + 1])
+                continue;
+
+            RString segment = _text.Substring(byteStart, byteEnd);
+            const PackedColor color = m_colorMask[i] == '1' ? actionColor : normalColor;
+            GEngine->DrawText3D(position, up, right, ClipAll, _font, color, DisableSun, segment);
+            position += GEngine->GetText3DWidth(right, _font, segment);
+            byteStart = byteEnd;
+        }
+    }
+
+  private:
+    std::string m_colorMask;
+};
 } // namespace
 
 CapturePage::CapturePage(Idcs idcs, std::string actionLabel, std::string slotName, SaveCallback onSave,
@@ -61,12 +117,16 @@ bool CapturePage::OnButtonClicked(OptionsShell& shell, int idc)
     }
     if (idc == m_idcs.retry)
     {
+        if (!m_conflictActions.empty())
+        {
+            Resolve(shell, true, true);
+            return true;
+        }
         m_state = Listening;
         m_capturedCode = -1;
         m_capturedModifier = -1;
         m_capturedAtMs = 0;
-        m_conflictAction = UAN;
-        m_conflictActionLabel.clear();
+        m_conflictActions.clear();
         if (auto* c = shell.GetCtrl(m_idcs.save))
             c->ShowCtrl(false);
         if (auto* c = shell.GetCtrl(m_idcs.retry))
@@ -118,6 +178,18 @@ bool CapturePage::OnKeyDown(OptionsShell& shell, unsigned nChar)
     return true;
 }
 
+Control* CapturePage::OnCreateControl(OptionsShell& shell, int /*type*/, int idc, const ParamEntry& cls)
+{
+    if (idc == m_idcs.status)
+        return new ConflictStatus(&shell, idc, cls);
+    return nullptr;
+}
+
+void CapturePage::OnSimulate(OptionsShell& shell)
+{
+    RefreshStatusMarquee(shell);
+}
+
 bool CapturePage::TryCapture(OptionsShell& shell, int packedCode, int modifier)
 {
     if (m_resolved || m_state != Listening || packedCode < 0)
@@ -132,13 +204,7 @@ bool CapturePage::TryCapture(OptionsShell& shell, int packedCode, int modifier)
     RefreshTitle(shell);
     RefreshStatus(shell);
 
-    if (auto* c = shell.GetCtrl(m_idcs.save))
-        c->ShowCtrl(true);
-    if (auto* c = shell.GetCtrl(m_idcs.retry))
-        c->ShowCtrl(true);
-
-    if (auto* save = dynamic_cast<C3DActiveText*>(shell.GetCtrl(m_idcs.save)))
-        save->SetText(LocalizeString(m_conflictAction == UAN ? "STR_DISP_OPT_CAP_SAVE" : "STR_DISP_OPT_CAP_REPLACE"));
+    RefreshButtons(shell);
     shell.FocusCtrl(m_idcs.save);
     return true;
 }
@@ -163,8 +229,7 @@ bool CapturePage::TryUpgradeToDoubleTap(OptionsShell& shell, int packedCode, int
     RefreshConflict();
     RefreshTitle(shell);
     RefreshStatus(shell);
-    if (auto* save = dynamic_cast<C3DActiveText*>(shell.GetCtrl(m_idcs.save)))
-        save->SetText(LocalizeString(m_conflictAction == UAN ? "STR_DISP_OPT_CAP_SAVE" : "STR_DISP_OPT_CAP_REPLACE"));
+    RefreshButtons(shell);
     return true;
 }
 
@@ -187,31 +252,46 @@ bool CapturePage::TryUpgradeToCombo(OptionsShell& shell, int packedCode, int mod
     RefreshConflict();
     RefreshTitle(shell);
     RefreshStatus(shell);
-    if (auto* save = dynamic_cast<C3DActiveText*>(shell.GetCtrl(m_idcs.save)))
-        save->SetText(LocalizeString(m_conflictAction == UAN ? "STR_DISP_OPT_CAP_SAVE" : "STR_DISP_OPT_CAP_REPLACE"));
+    RefreshButtons(shell);
     return true;
 }
 
-void CapturePage::Resolve(OptionsShell& shell, bool save)
+void CapturePage::Resolve(OptionsShell& shell, bool save, bool replaceConflict)
 {
     if (m_resolved)
         return;
     m_resolved = true;
     if (save && m_state == Captured && m_onSave)
-        m_onSave(m_capturedCode, m_capturedModifier, m_conflictAction != UAN);
+        m_onSave(m_capturedCode, m_capturedModifier, replaceConflict);
     shell.PopPage();
+}
+
+void CapturePage::RefreshButtons(OptionsShell& shell)
+{
+    if (auto* save = dynamic_cast<C3DActiveText*>(shell.GetCtrl(m_idcs.save)))
+    {
+        save->ShowCtrl(true);
+        if (m_conflictActions.empty())
+            save->SetText(LocalizeString("STR_DISP_OPT_CAP_SAVE"));
+        else
+            save->SetText(LocalizeStringWithFallback("STR_DISP_OPT_CAP_USE_ANYWAY", "Use anyway"));
+    }
+    if (auto* retry = dynamic_cast<C3DActiveText*>(shell.GetCtrl(m_idcs.retry)))
+    {
+        retry->ShowCtrl(true);
+        retry->SetText(
+            LocalizeString(m_conflictActions.empty() ? "STR_DISP_OPT_CAP_RETRY" : "STR_DISP_OPT_CAP_REPLACE"));
+    }
 }
 
 void CapturePage::RefreshConflict()
 {
     if (!m_onConflict)
     {
-        m_conflictAction = UAN;
-        m_conflictActionLabel.clear();
+        m_conflictActions.clear();
         return;
     }
-    m_conflictAction = m_onConflict(m_capturedCode, m_capturedModifier);
-    m_conflictActionLabel = (m_conflictAction != UAN) ? ControlActionLabel(m_conflictAction) : "";
+    m_conflictActions = m_onConflict(m_capturedCode, m_capturedModifier);
 }
 
 void CapturePage::RefreshTitle(OptionsShell& shell)
@@ -248,25 +328,111 @@ void CapturePage::RefreshTitle(OptionsShell& shell)
     SetCtrlText(shell, m_idcs.title, title);
 }
 
+std::string CapturePage::BuildStatusColorMask(const std::string& status, const std::string& actions,
+                                              const std::vector<std::string>& actionLabels)
+{
+    std::string colorMask(static_cast<size_t>(CountUtf8Codepoints(status.c_str())), '0');
+    const size_t actionByteStart = status.find(actions);
+    if (actions.empty() || actionByteStart == std::string::npos)
+        return colorMask;
+
+    int labelStart = CountUtf8Codepoints(status.substr(0, actionByteStart).c_str());
+    for (const std::string& actionLabel : actionLabels)
+    {
+        const int labelLength = CountUtf8Codepoints(actionLabel.c_str());
+        colorMask.replace(static_cast<size_t>(labelStart), static_cast<size_t>(labelLength),
+                          static_cast<size_t>(labelLength), '1');
+        labelStart += labelLength + 2;
+    }
+    return colorMask;
+}
+
 void CapturePage::RefreshStatus(OptionsShell& shell)
 {
     char status[256];
-    if (m_state == Captured && m_conflictAction != UAN)
+    std::string actions;
+    std::vector<std::string> actionLabels;
+    for (UserAction action : m_conflictActions)
+        actionLabels.emplace_back(ControlActionLabel(action));
+    if (m_state == Captured && m_conflictActions.size() == 1)
     {
-        snprintf(status, sizeof(status), (const char*)LocalizeString("STR_DISP_OPT_CAP_CONFLICT"),
-                 m_conflictActionLabel.c_str());
+        actions = actionLabels.front();
+        snprintf(status, sizeof(status), (const char*)LocalizeString("STR_DISP_OPT_CAP_CONFLICT"), actions.c_str());
+        m_statusText = status;
+    }
+    else if (m_state == Captured && m_conflictActions.size() > 1)
+    {
+        for (const std::string& actionLabel : actionLabels)
+        {
+            if (!actions.empty())
+                actions += ", ";
+            actions += actionLabel;
+        }
+        const RString format = LocalizeStringWithFallback("STR_DISP_OPT_CAP_CONFLICT_MULTIPLE",
+                                                          "Already assigned to multiple actions: %s.");
+        const int length = snprintf(nullptr, 0, (const char*)format, actions.c_str());
+        std::vector<char> formatted(static_cast<size_t>(length) + 1);
+        snprintf(formatted.data(), formatted.size(), (const char*)format, actions.c_str());
+        m_statusText = formatted.data();
     }
     else if (m_state == Captured)
     {
-        // Empty — Save / Retry / Cancel buttons explain themselves.
-        SetCtrlText(shell, m_idcs.status, "");
-        return;
+        m_statusText.clear();
     }
     else
     {
         snprintf(status, sizeof(status), "%s", (const char*)LocalizeString("STR_DISP_OPT_CAP_WAITING"));
+        m_statusText = status;
     }
-    SetCtrlText(shell, m_idcs.status, status);
+    m_statusColorMask = BuildStatusColorMask(m_statusText, actions, actionLabels);
+    m_statusMarqueeAtMs = Foundation::GlobalTickCount();
+    m_statusVisibleChars = 0;
+    RefreshStatusMarquee(shell);
+}
+
+void CapturePage::RefreshStatusMarquee(OptionsShell& shell)
+{
+    auto* status = dynamic_cast<C3DStatic*>(shell.GetCtrl(m_idcs.status));
+    if (!status)
+        return;
+
+    auto* conflictStatus = dynamic_cast<ConflictStatus*>(status);
+    if (m_statusText.empty() || status->MeasureTextFraction(m_statusText.c_str()) <= 1.0f)
+    {
+        if (conflictStatus)
+            conflictStatus->SetColoredText(m_statusText.c_str(), m_statusColorMask);
+        else
+            status->SetText(m_statusText.c_str());
+        return;
+    }
+
+    if (m_statusVisibleChars == 0)
+    {
+        const int codepoints = CountUtf8Codepoints(m_statusText.c_str());
+        char candidate[512];
+        for (int chars = 1; chars <= codepoints; ++chars)
+        {
+            OptionsScrollList::FormatCell(m_statusText.c_str(), chars, false, 0, candidate, sizeof(candidate));
+            if (status->MeasureTextFraction(candidate) > 1.0f)
+            {
+                m_statusVisibleChars = std::max(1, chars - 1);
+                break;
+            }
+        }
+        if (m_statusVisibleChars == 0)
+            m_statusVisibleChars = codepoints;
+    }
+
+    char visible[512];
+    char visibleColorMask[512];
+    const DWORD elapsed = Foundation::GlobalTickCount() - m_statusMarqueeAtMs;
+    OptionsScrollList::FormatCell(m_statusText.c_str(), m_statusVisibleChars, true, elapsed, visible, sizeof(visible));
+    OptionsScrollList::FormatCell(m_statusColorMask.c_str(), m_statusVisibleChars, true, elapsed, visibleColorMask,
+                                  sizeof(visibleColorMask));
+    if (conflictStatus)
+        conflictStatus->SetColoredText(visible, visibleColorMask);
+    else
+        status->SetText(visible);
 }
 
 } // namespace Poseidon

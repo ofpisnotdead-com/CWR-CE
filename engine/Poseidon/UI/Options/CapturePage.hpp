@@ -16,14 +16,14 @@
 //   onSave(packedCode, replaceConflict): commit; replaceConflict
 //                                         indicates the user accepted
 //                                         the conflict prompt's Replace.
-//   onConflict(packedCode) -> UserAction: returns the conflicting
-//                                         action's enum, or UAN if free.
+//   onConflict(packedCode) -> actions: returns every conflicting action.
 
 #include <Poseidon/UI/Options/OptionsPage.hpp>
 #include <Poseidon/Input/UserAction.hpp>
 
 #include <functional>
 #include <string>
+#include <vector>
 
 
 namespace Poseidon
@@ -32,7 +32,7 @@ class CapturePage : public OptionsPage
 {
   public:
     using SaveCallback     = std::function<void(int /*packedCode*/, int /*modifier*/, bool /*replaceConflict*/)>;
-    using ConflictCallback = std::function<UserAction(int /*packedCode*/, int /*modifier*/)>;
+    using ConflictCallback = std::function<std::vector<UserAction>(int /*packedCode*/, int /*modifier*/)>;
 
     enum class Result { Main, Refused };
 
@@ -68,6 +68,8 @@ class CapturePage : public OptionsPage
     void Mount(OptionsShell& shell) override;
     bool OnButtonClicked(OptionsShell& shell, int idc) override;
     bool OnKeyDown(OptionsShell& shell, unsigned nChar) override;
+    Control* OnCreateControl(OptionsShell& shell, int type, int idc, const ParamEntry& cls) override;
+    void OnSimulate(OptionsShell& shell) override;
 
   protected:
     // Stringtable key for the listening prompt, e.g.
@@ -90,6 +92,9 @@ class CapturePage : public OptionsPage
     virtual bool IsBareModifierCode(int /*packedCode*/) const { return false; }
 
     bool IsListening() const { return m_state == Listening; }
+    const std::vector<UserAction>& ConflictActions() const { return m_conflictActions; }
+    static std::string BuildStatusColorMask(const std::string& status, const std::string& actions,
+                                            const std::vector<std::string>& actionLabels);
     bool TryCapture(OptionsShell& shell, int packedCode, int modifier);
     bool TryUpgradeToDoubleTap(OptionsShell& shell, int packedCode, int modifier);
     bool TryUpgradeToCombo(OptionsShell& shell, int packedCode, int modifier);
@@ -101,16 +106,20 @@ class CapturePage : public OptionsPage
         Captured
     };
 
-    void Resolve(OptionsShell& shell, bool save);
+    void Resolve(OptionsShell& shell, bool save, bool replaceConflict = false);
     void RefreshConflict();
+    void RefreshButtons(OptionsShell& shell);
     void RefreshTitle(OptionsShell& shell);
     void RefreshStatus(OptionsShell& shell);
+    void RefreshStatusMarquee(OptionsShell& shell);
 
     SaveCallback m_onSave;
     ConflictCallback m_onConflict;
     std::string m_actionLabel;
     std::string m_slotName;
-    std::string m_conflictActionLabel;
+    std::string m_statusText;
+    std::string m_statusColorMask;
+    std::vector<UserAction> m_conflictActions;
     Idcs m_idcs;
     State m_state = Listening;
     bool m_resolved = false;
@@ -118,7 +127,8 @@ class CapturePage : public OptionsPage
     int m_capturedCode = -1;
     int m_capturedModifier = -1;
     unsigned long m_capturedAtMs = 0;
-    UserAction m_conflictAction = UAN;
+    unsigned long m_statusMarqueeAtMs = 0;
+    int m_statusVisibleChars = 0;
 };
 
 } // namespace Poseidon

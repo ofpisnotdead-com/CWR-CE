@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 using namespace Poseidon;
 namespace
@@ -27,7 +28,7 @@ struct CaptureResult
 class TestCapturePage : public CapturePage
 {
   public:
-    explicit TestCapturePage(CaptureResult& result)
+    explicit TestCapturePage(CaptureResult& result, std::vector<UserAction> conflicts = {})
         : CapturePage(
               Idcs{9301, 9303, 9302, 9380, 9381}, "Test Action", "Primary",
               [&result](int packedCode, int modifier, bool replaceConflict)
@@ -37,12 +38,18 @@ class TestCapturePage : public CapturePage
                   result.replaceConflict = replaceConflict;
                   ++result.saveCalls;
               },
-              [](int, int) { return UAN; })
+              [conflicts = std::move(conflicts)](int, int) { return conflicts; })
     {
     }
 
     const char* ResourceClassName() const override { return "RscOptionsPagePressKey"; }
     bool Listening() const { return IsListening(); }
+    const std::vector<UserAction>& Conflicts() const { return ConflictActions(); }
+    static std::string ColorMask(const std::string& status, const std::string& actions,
+                                 const std::vector<std::string>& actionLabels)
+    {
+        return BuildStatusColorMask(status, actions, actionLabels);
+    }
 
   protected:
     const char* PromptKey() const override { return "STR_DISP_OPT_CAP_PRESS_KEY"; }
@@ -127,4 +134,64 @@ TEST_CASE("CapturePage cancel from captured state closes without saving", "[UI][
     raw->OnKeyDown(shell, SDLK_ESCAPE);
 
     CHECK(result.saveCalls == 0);
+}
+
+TEST_CASE("CapturePage conflict save keeps the existing assignment", "[UI][CapturePage]")
+{
+    TestableOptionsShell shell;
+    CaptureResult result;
+    auto page = std::make_unique<TestCapturePage>(result, std::vector<UserAction>{UARevealTarget});
+    TestCapturePage* raw = page.get();
+
+    shell.PushPage(std::move(page));
+    raw->OnKeyDown(shell, SDLK_A);
+    raw->OnButtonClicked(shell, 9301);
+
+    CHECK(result.saveCalls == 1);
+    CHECK_FALSE(result.replaceConflict);
+}
+
+TEST_CASE("CapturePage conflict replace removes the existing assignment", "[UI][CapturePage]")
+{
+    TestableOptionsShell shell;
+    CaptureResult result;
+    auto page = std::make_unique<TestCapturePage>(result, std::vector<UserAction>{UARevealTarget});
+    TestCapturePage* raw = page.get();
+
+    shell.PushPage(std::move(page));
+    raw->OnKeyDown(shell, SDLK_A);
+    raw->OnButtonClicked(shell, 9303);
+
+    CHECK(result.saveCalls == 1);
+    CHECK(result.replaceConflict);
+}
+
+TEST_CASE("CapturePage keeps every conflicting action", "[UI][CapturePage]")
+{
+    TestableOptionsShell shell;
+    CaptureResult result;
+    auto page =
+        std::make_unique<TestCapturePage>(result, std::vector<UserAction>{UALockTarget, UARevealTarget, UAZoomIn});
+    TestCapturePage* raw = page.get();
+
+    shell.PushPage(std::move(page));
+    raw->OnKeyDown(shell, SDLK_A);
+
+    REQUIRE(raw->Conflicts().size() == 3);
+    CHECK(raw->Conflicts()[0] == UALockTarget);
+    CHECK(raw->Conflicts()[1] == UARevealTarget);
+    CHECK(raw->Conflicts()[2] == UAZoomIn);
+}
+
+TEST_CASE("CapturePage colors action names without coloring separators", "[UI][CapturePage]")
+{
+    const std::string status = "Already assigned to multiple actions: Move forward, Move back.";
+    const std::string actions = "Move forward, Move back";
+    const std::string mask = TestCapturePage::ColorMask(status, actions, {"Move forward", "Move back"});
+
+    REQUIRE(mask.size() == status.size());
+    CHECK(mask.substr(status.find("Move forward"), 12) == "111111111111");
+    CHECK(mask.substr(status.find(", "), 2) == "00");
+    CHECK(mask.substr(status.find("Move back"), 9) == "111111111");
+    CHECK(mask.back() == '0');
 }

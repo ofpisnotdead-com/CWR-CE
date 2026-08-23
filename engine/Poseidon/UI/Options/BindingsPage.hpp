@@ -29,6 +29,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace Poseidon
 {
@@ -38,7 +39,7 @@ class BindingsPage : public ScrollListPage
     BindingsPage() = default;
 
     using SaveCallback = std::function<void(int packedCode, int modifier, bool replaceConflict)>;
-    using ConflictCallback = std::function<UserAction(int packedCode, int modifier)>;
+    using ConflictCallback = std::function<std::vector<UserAction>(int packedCode, int modifier)>;
 
     void RefreshAfterCapture();
 
@@ -75,6 +76,7 @@ class BindingsPage : public ScrollListPage
     void ResetCurrentCategoryToDefaults();
     void ApplyCapture(int actionIdx, int slot, int packedCode, int modifier, bool replaceConflict);
     void ClearCapture(int actionIdx, int slot);
+    std::vector<UserAction> FindCaptureConflicts(UserAction action, int slot, int packedCode, int modifier) const;
 
   private:
     class Provider : public OptionsScrollList::Provider

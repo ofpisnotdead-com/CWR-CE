@@ -270,6 +270,32 @@ void BindingsPage::ClearCapture(int actionIdx, int slot)
         ClearBindingAtSlot(sub.GetProfile(contexts.data[c]), static_cast<UserAction>(actionIdx), slot, filter);
 }
 
+std::vector<UserAction> BindingsPage::FindCaptureConflicts(UserAction action, int slot, int packedCode,
+                                                           int modifier) const
+{
+    const InputProfile& profile = InputSubsystem::Instance().GetProfile(PrimaryContextForCategory(m_category));
+    std::vector<UserAction> conflicts;
+    for (int i = 0; i < UAN; ++i)
+    {
+        int visibleSlot = 0;
+        for (const InputBinding& binding : profile.GetBindingEntries(static_cast<UserAction>(i)))
+        {
+            if (!DeviceFilter(binding.code.toLegacy()))
+                continue;
+            if (!BindingMatches(binding, packedCode, modifier))
+            {
+                visibleSlot++;
+                continue;
+            }
+            if (i == action && visibleSlot == slot)
+                continue;
+            conflicts.push_back(static_cast<UserAction>(i));
+            break;
+        }
+    }
+    return conflicts;
+}
+
 void BindingsPage::RefreshAfterCapture()
 {
     if (auto* l = List())
@@ -478,30 +504,8 @@ void BindingsPage::Provider::OnBindingClicked(int row, int slot, Display& host)
         page->ApplyCapture(actionIdx, slot, packedCode, modifier, replaceConflict);
         page->RefreshAfterCapture();
     };
-    auto onConflict = [page, actionIdx, slot](int packedCode, int modifier) -> UserAction
-    {
-        auto& sub = InputSubsystem::Instance();
-        const InputProfile& profile = sub.GetProfile(PrimaryContextForCategory(page->m_category));
-        for (int i = 0; i < UAN; ++i)
-        {
-            int visibleSlot = 0;
-            const auto& bindings = profile.GetBindingEntries(static_cast<UserAction>(i));
-            for (const InputBinding& binding : bindings)
-            {
-                if (!page->DeviceFilter(binding.code.toLegacy()))
-                    continue;
-                if (!BindingMatches(binding, packedCode, modifier))
-                {
-                    visibleSlot++;
-                    continue;
-                }
-                if (i == actionIdx && visibleSlot == slot)
-                    continue;
-                return static_cast<UserAction>(i);
-            }
-        }
-        return UAN;
-    };
+    auto onConflict = [page, actionIdx, slot](int packedCode, int modifier)
+    { return page->FindCaptureConflicts(static_cast<UserAction>(actionIdx), slot, packedCode, modifier); };
 
     shell->PushPage(m_owner->MakeCaptureModal((UserAction)actionIdx, ControlActionLabel((UserAction)actionIdx),
                                               slot == 0 ? "Primary" : "Alt", std::move(onSave), std::move(onConflict)));

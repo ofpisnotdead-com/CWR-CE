@@ -22,6 +22,7 @@
 #include <SDL3/SDL_scancode.h>
 #include <catch2/catch_message.hpp>
 #include <string>
+#include <vector>
 #include <Poseidon/Foundation/Containers/Array.hpp>
 
 using namespace Poseidon;
@@ -67,6 +68,10 @@ class TestableKbmPage : public KbmPage
     void Capture(UserAction action, int slot, int code, int modifier = -1, bool replaceConflict = false)
     {
         ApplyCapture(action, slot, code, modifier, replaceConflict);
+    }
+    std::vector<UserAction> Conflicts(UserAction action, int slot, int code, int modifier = -1) const
+    {
+        return FindCaptureConflicts(action, slot, code, modifier);
     }
 };
 
@@ -323,4 +328,47 @@ TEST_CASE("KbmPage: replacing conflicts swaps map wheel directions", "[UI][KbmPa
         CHECK(profile.HasBinding(UAMapZoomOut, InputCode::MouseWheelDown()));
         CHECK_FALSE(profile.HasBinding(UAMapZoomOut, InputCode::MouseWheelUp()));
     }
+}
+
+TEST_CASE("KbmPage: shared mouse capture preserves existing action assignments", "[UI][KbmPage]")
+{
+    UserKeysSnapshot snap;
+    TestableKbmPage page;
+    auto& profile = InputSubsystem::Instance().GetProfile(InputContext::Infantry);
+    const InputCode rightMouse = InputCode::MouseButton(1);
+
+    profile.ClearBindings(UALockTarget);
+    profile.ClearBindings(UARevealTarget);
+    profile.ClearBindings(UAZoomIn);
+    profile.Bind(UALockTarget, rightMouse);
+    profile.Bind(UARevealTarget, rightMouse);
+
+    page.Capture(UAZoomIn, 0, rightMouse.toLegacy());
+
+    CHECK(profile.HasBinding(UALockTarget, rightMouse));
+    CHECK(profile.HasBinding(UARevealTarget, rightMouse));
+    CHECK(profile.HasBinding(UAZoomIn, rightMouse));
+}
+
+TEST_CASE("KbmPage: capture reports every action using the same binding", "[UI][KbmPage]")
+{
+    UserKeysSnapshot snap;
+    TestableKbmPage page;
+    auto& profile = InputSubsystem::Instance().GetProfile(InputContext::Infantry);
+    const InputCode rightMouse = InputCode::MouseButton(1);
+
+    profile.ClearBindings(UALockTarget);
+    profile.ClearBindings(UARevealTarget);
+    profile.ClearBindings(UAZoomIn);
+    profile.ClearBindings(UAZoomOut);
+    profile.Bind(UALockTarget, rightMouse);
+    profile.Bind(UARevealTarget, rightMouse);
+    profile.Bind(UAZoomIn, rightMouse);
+
+    const auto conflicts = page.Conflicts(UAZoomOut, 0, rightMouse.toLegacy());
+
+    REQUIRE(conflicts.size() == 3);
+    CHECK(conflicts[0] == UALockTarget);
+    CHECK(conflicts[1] == UARevealTarget);
+    CHECK(conflicts[2] == UAZoomIn);
 }
