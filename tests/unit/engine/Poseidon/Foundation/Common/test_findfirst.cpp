@@ -3,6 +3,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <Poseidon/Foundation/platform.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 
 #include <cstdio>
 #include <cstring>
@@ -13,9 +14,9 @@
 #include <stdint.h>
 #include <system_error>
 
-#ifndef _WIN32 // These tests exercise the POSIX compat layer
-
 namespace fs = std::filesystem;
+
+#ifndef _WIN32 // These tests exercise the POSIX compat layer
 
 namespace
 {
@@ -154,3 +155,52 @@ TEST_CASE("_findclose: closing -1 handle is safe", "[platform][findfirst]")
 }
 
 #endif // !_WIN32
+
+// Runs on every platform: a name a scan hands back has to reopen the entry it came from.
+TEST_CASE("directory scan returns names that reopen the same entry", "[platform][findfirst][utf8]")
+{
+    // A name carrying characters outside any single legacy codepage. Windows best-fit maps what
+    // the active ANSI codepage cannot encode, so a converted name points at a directory of its own.
+    const std::string folder = "\xC3\x84\xC5\x92sla";
+    const std::string marker = "marker.txt";
+
+    const std::string root = (fs::temp_directory_path() / "cwr_scan_roundtrip").string();
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    REQUIRE(Poseidon::CreateDirectoryUtf8(root.c_str()));
+    const std::string nested = root + "/" + folder;
+    REQUIRE(Poseidon::CreateDirectoryUtf8(nested.c_str()));
+    REQUIRE(Poseidon::WriteFileUtf8((nested + "/" + marker).c_str(), "x", 1));
+
+    std::string scanned;
+    _finddata_t entry;
+    intptr_t handle = _findfirst((root + "/*").c_str(), &entry);
+    REQUIRE(handle != -1);
+    do
+    {
+        if ((entry.attrib & _A_SUBDIR) != 0 && entry.name[0] != '.')
+        {
+            scanned = entry.name;
+        }
+    } while (_findnext(handle, &entry) == 0);
+    _findclose(handle);
+
+    CHECK(scanned == folder);
+
+    bool foundMarker = false;
+    handle = _findfirst((root + "/" + scanned + "/*").c_str(), &entry);
+    if (handle != -1)
+    {
+        do
+        {
+            if (marker == entry.name)
+            {
+                foundMarker = true;
+            }
+        } while (_findnext(handle, &entry) == 0);
+        _findclose(handle);
+    }
+    CHECK(foundMarker);
+
+    fs::remove_all(root, ec);
+}

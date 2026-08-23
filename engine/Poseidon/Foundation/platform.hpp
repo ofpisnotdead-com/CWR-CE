@@ -53,6 +53,22 @@ const int MaxFileName = 2048;
 
 typedef int socklen_t;
 
+// Directory enumeration answers with UTF-8 names, the encoding every other narrow path in the
+// engine carries. The CRT answers in the active ANSI codepage, which cannot hold every name.
+#include <cstdint>
+#include <io.h>
+
+namespace Poseidon
+{
+intptr_t Utf8FindFirst(const char* pattern, _finddata_t* info);
+int Utf8FindNext(intptr_t handle, _finddata_t* info);
+int Utf8FindClose(intptr_t handle);
+} // namespace Poseidon
+
+#define _findfirst ::Poseidon::Utf8FindFirst
+#define _findnext ::Poseidon::Utf8FindNext
+#define _findclose ::Poseidon::Utf8FindClose
+
 #else
 
 #ifndef _GNU_SOURCE

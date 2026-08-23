@@ -10,6 +10,13 @@ triAssertEq [(triAssertListText [101, "Tri SP Loose"]), "OK"]
 // codepage cannot be a fixture here: such a path is not valid UTF-8 and macOS refuses to check
 // it out, so the byte-level decode is pinned by the codepage unit test instead.
 triAssertEq [(triAssertListText [101, "Čsla..."]), "OK"]
+// Mission files and folders named outside the ASCII range still open: the title comes from
+// mission.sqm rather than falling back to the raw name. These shapes ship in real mods - a
+// Czech category folder in CSLA, Finnish mission files in FDF, Cyrillic ones in Liberation.
+triAssertEq [(triAssertListText [101, "Tri SP Finnish Name"]), "OK"]
+triAssertEq [(triAssertListText [101, "Tri SP Cyrillic Name"]), "OK"]
+triAssertEq [(triAssertListText [101, "Tri SP Odd Name"]), "OK"]
+
 // The title comes from the mission's own stringtable.csv.
 triAssertEq [(triAssertListText [101, "Tri SP Local Title"]), "OK"]
 // A packed mission with no briefingName is listed under its own name.
