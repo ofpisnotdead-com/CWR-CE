@@ -13,7 +13,10 @@ set(CMAKE_SYSTEM_PROCESSOR aarch64 CACHE STRING "")
 # Force mimalloc armv8.0 for Raspberry Pi compatibility
 set(MI_NO_OPT_ARCH ON)
 
-set(SANITIZER_FLAGS "-fsanitize=address,undefined -fno-sanitize=alignment -fno-omit-frame-pointer -g")
+# vptr checks a downcast against RTTI for the target type. The core engine downcasts to
+# backend types such as TextureGL33 whose key function lives in a library the tool and
+# test binaries do not link, so the check leaves their typeinfo undefined at link time.
+set(SANITIZER_FLAGS "-fsanitize=address,undefined -fno-sanitize=alignment,vptr -fno-omit-frame-pointer -g")
 
 set(CMAKE_C_FLAGS_DEBUG_INIT "${SANITIZER_FLAGS}")
 set(CMAKE_CXX_FLAGS_DEBUG_INIT "${SANITIZER_FLAGS}")
