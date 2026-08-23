@@ -2,6 +2,7 @@
 
 #include <Poseidon/Asset/Probes/AssetInfo.hpp>
 #include <Poseidon/Core/ModArchive.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include "test_fixtures.hpp"
 
 #include <zstd.h>
@@ -145,6 +146,58 @@ TEST_CASE("ModArchive::Unpack extracts every PBO entry to disk", "[mods][pbo]")
 
     std::error_code ec;
     std::filesystem::remove_all(dest, ec);
+}
+
+TEST_CASE("ModArchive::Unpack writes an entry name as UTF-8", "[mods][pbo][utf8]")
+{
+    // Entry names are UTF-8. Reading them in the platform's narrow encoding renames what lands
+    // on disk, and the folder the game then looks for is not the one it wrote. CSLA ships
+    // `Missions\\CSLA` with a caron, which is how that mod arrived mangled on Windows.
+    const std::string entryName = "Missions\\\xC4\x8CSLA\\m.sqm";
+    const std::vector<uint8_t> payload = {'x', 'y', 'z'};
+
+    std::vector<uint8_t> pbo;
+    auto putU32 = [&pbo](uint32_t v)
+    {
+        for (int i = 0; i < 4; ++i)
+        {
+            pbo.push_back(static_cast<uint8_t>((v >> (8 * i)) & 0xFF));
+        }
+    };
+    pbo.insert(pbo.end(), entryName.begin(), entryName.end());
+    pbo.push_back(0);
+    putU32(0);
+    putU32(0);
+    putU32(0);
+    putU32(0);
+    putU32(static_cast<uint32_t>(payload.size()));
+    pbo.push_back(0); // header terminator
+    for (int i = 0; i < 5; ++i)
+    {
+        putU32(0);
+    }
+    pbo.insert(pbo.end(), payload.begin(), payload.end());
+
+    const std::filesystem::path dir = MakeTempDir();
+    const std::filesystem::path zst = dir / "utf8.pbo.zst";
+    const std::filesystem::path dest = dir / "out";
+
+    std::vector<uint8_t> compressed(ZSTD_compressBound(pbo.size()));
+    const size_t csz = ZSTD_compress(compressed.data(), compressed.size(), pbo.data(), pbo.size(), 3);
+    REQUIRE_FALSE(ZSTD_isError(csz));
+    WriteFileBytes(zst, compressed.data(), csz);
+
+    std::string error;
+    const bool ok = ModArchive::Unpack(zst.string().c_str(), dest.string().c_str(), &error);
+    INFO("unpack error: " << error);
+    REQUIRE(ok);
+
+    const std::filesystem::path expected = FilesystemPathFromUtf8((dest / "missions").string()) /
+                                           FilesystemPathFromUtf8("\xC4\x8Csla") / FilesystemPathFromUtf8("m.sqm");
+    CHECK(std::filesystem::exists(expected));
+
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
 }
 
 TEST_CASE("ModArchive::Unpack fails cleanly on a missing archive", "[mods][pbo]")

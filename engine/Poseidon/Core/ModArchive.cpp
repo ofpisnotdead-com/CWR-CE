@@ -2,6 +2,7 @@
 
 #include <Poseidon/Asset/Probes/AssetInfo.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
+#include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
 #include <Poseidon/IO/Streams/QStream.hpp>
 
@@ -224,13 +225,14 @@ bool ModArchive::Unpack(const char* archivePath, const char* destDir, std::strin
             break;
         }
 
-        const fs::path outPath = root / fs::path(NormalizeEntryName(entry.name));
+        // Entry names are UTF-8, and fs::path reads narrow bytes in the platform's own encoding.
+        const fs::path outPath = root / FilesystemPathFromUtf8(NormalizeEntryName(entry.name));
         fs::create_directories(outPath.parent_path(), ec);
 
-        FILE* out = std::fopen(outPath.string().c_str(), "wb");
+        FILE* out = OpenFileUtf8(FilesystemPathToUtf8(outPath).c_str(), "wb");
         if (out == nullptr)
         {
-            ok = fail(std::string("cannot write: ") + outPath.string());
+            ok = fail(std::string("cannot write: ") + FilesystemPathToUtf8(outPath));
             break;
         }
 
@@ -241,7 +243,7 @@ bool ModArchive::Unpack(const char* archivePath, const char* destDir, std::strin
             if (written != static_cast<size_t>(size))
             {
                 std::fclose(out);
-                ok = fail(std::string("short write: ") + outPath.string());
+                ok = fail(std::string("short write: ") + FilesystemPathToUtf8(outPath));
                 break;
             }
         }
