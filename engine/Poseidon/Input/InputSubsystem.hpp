@@ -207,9 +207,7 @@ class InputSubsystem
     // both code AND modifier match, so "Ctrl+W" doesn't conflict with bare
     // "W".  Returns UAN if no conflict.  Pass excludeSlot = -1 to scan
     // every slot of excludeAction too.  modifier = -1 means "no modifier".
-    UserAction FindBindingConflict(int packedCode,
-                                   UserAction excludeAction = UAN,
-                                   int excludeSlot = -1,
+    UserAction FindBindingConflict(int packedCode, UserAction excludeAction = UAN, int excludeSlot = -1,
                                    int modifier = -1) const;
 
     // Restore the engine defaults (UserActionDesc[i].keys) for every
@@ -237,6 +235,7 @@ class InputSubsystem
     // Profile management
     InputProfile& GetProfile(InputContext ctx);
     const InputProfile& GetProfile(InputContext ctx) const;
+    bool IsBindingActive(UserAction action, InputCode code, bool checkFocus = true) const;
 
   private:
     InputSubsystem();
@@ -270,4 +269,3 @@ class InputSubsystem
     float syntheticLeftStickY_ = 0.0f;
 };
 } // namespace Poseidon
-

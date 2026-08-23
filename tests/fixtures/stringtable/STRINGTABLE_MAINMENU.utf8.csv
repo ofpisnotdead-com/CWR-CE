@@ -45,3 +45,5 @@ STR_DISP_OPT_MOUSE_SENSITIVITY_X_DESC,Horizontal mouse sensitivity. Range 0.5x t
 STR_DISP_OPT_MOUSE_SENSITIVITY_Y_DESC,Vertical mouse sensitivity. Range 0.5x to 2.0x.
 STR_DISP_OPT_MOUSE_DPI,Mouse DPI
 STR_DISP_OPT_MOUSE_DPI_DESC,Set this to your mouse's DPI (or close). Fine-tune with sensitivity for a smoother feel.
+STR_INPUT_DEVICE_MOUSE_WHEEL_UP,Mouse wheel up
+STR_INPUT_DEVICE_MOUSE_WHEEL_DOWN,Mouse wheel down

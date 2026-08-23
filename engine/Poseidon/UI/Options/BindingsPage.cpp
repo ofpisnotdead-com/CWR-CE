@@ -212,7 +212,7 @@ void BindingsPage::ResetCurrentCategoryToDefaults()
         const KeyList& keys = descs[action].keys;
         for (int i = 0; i < keys.Size(); ++i)
         {
-            if (DeviceFilter(keys[i]) && keys[i] < INPUT_DEVICE_STICK)
+            if (DeviceFilter(keys[i]))
                 defaults.push_back(MakeBinding(keys[i], DefaultModifierForDefaultKey(action, keys[i])));
         }
 
@@ -503,8 +503,8 @@ void BindingsPage::Provider::OnBindingClicked(int row, int slot, Display& host)
         return UAN;
     };
 
-    shell->PushPage(m_owner->MakeCaptureModal(ControlActionLabel((UserAction)actionIdx), slot == 0 ? "Primary" : "Alt",
-                                              std::move(onSave), std::move(onConflict)));
+    shell->PushPage(m_owner->MakeCaptureModal((UserAction)actionIdx, ControlActionLabel((UserAction)actionIdx),
+                                              slot == 0 ? "Primary" : "Alt", std::move(onSave), std::move(onConflict)));
 }
 
 void BindingsPage::Provider::OnBindingCleared(int row, int slot)

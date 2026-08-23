@@ -136,6 +136,8 @@ TEST_CASE("GamepadPage: device filter rejects keyboard scancodes and mouse butto
     CHECK_FALSE(page.Filter((int)SDL_SCANCODE_LCTRL));
     CHECK_FALSE(page.Filter(INPUT_DEVICE_MOUSE + 1));
     CHECK_FALSE(page.Filter(INPUT_DEVICE_MOUSE + 2));
+    CHECK_FALSE(page.Filter(INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_UP));
+    CHECK_FALSE(page.Filter(INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_DOWN));
     CHECK_FALSE(page.Filter(-1));
     CHECK_FALSE(page.Filter(0));
 }

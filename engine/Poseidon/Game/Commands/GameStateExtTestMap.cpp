@@ -7,8 +7,6 @@
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Input/UserActionDesc.hpp>
 
-#include <SDL3/SDL_scancode.h>
-
 #include <cstdio>
 
 using namespace Poseidon;
@@ -61,8 +59,19 @@ GameValue TriMapGetScale(const GameState* /*state*/)
     return GameValue((GameScalarType)map->GetMap()->GetScale());
 }
 
-/// triBindAction ["<ActionName>", <scancode>] -> "OK" / "FAIL:<reason>". Replaces
-/// the action's binding with a single keyboard key in every context; a rebind hook.
+GameValue TriMapWheel(const GameState* /*state*/, GameValuePar arg)
+{
+    if (!GWorld)
+        return GameValue("FAIL:no_world");
+    auto* map = dynamic_cast<DisplayMap*>(GWorld->Map());
+    if (!map || !map->GetMap())
+        return GameValue("FAIL:no_map");
+    map->GetMap()->OnMouseZChanged((float)arg);
+    return GameValue("OK");
+}
+
+/// triBindAction ["<ActionName>", <packed-code>] -> "OK" / "FAIL:<reason>". Replaces
+/// the action's binding with one input code in every context.
 GameValue TriBindAction(const GameState* /*state*/, GameValuePar arg)
 {
     if (arg.GetType() != GameArray)
@@ -89,7 +98,7 @@ GameValue TriBindAction(const GameState* /*state*/, GameValuePar arg)
     {
         InputProfile& p = input.GetProfile(static_cast<InputContext>(c));
         p.ClearBindings(static_cast<UserAction>(action));
-        p.Bind(static_cast<UserAction>(action), InputCode::Key(static_cast<SDL_Scancode>(sc)));
+        p.Bind(static_cast<UserAction>(action), InputCode::FromLegacy(sc));
     }
     LOG_INFO(Core, "[tri] triBindAction {} sc=0x{:x}", (const char*)name, sc);
     return GameValue("OK");

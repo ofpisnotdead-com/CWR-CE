@@ -96,6 +96,47 @@ TEST_CASE("ContextControlsConfig: Save then Load preserves an empty positional s
     std::filesystem::remove(path);
 }
 
+TEST_CASE("ContextControlsConfig: version 3 adds map wheel bindings to available keyboard or mouse slots",
+          "[Settings][ContextControlsConfig]")
+{
+    REQUIRE_FIXTURE("cfg/contextControls_v3_map_wheel.cfg");
+    ContextControlsConfig migrated;
+    REQUIRE(migrated.Load(GET_FIXTURE("cfg/contextControls_v3_map_wheel.cfg")));
+    CHECK(migrated.migratedOnLoad);
+
+    const auto& infantryZoomIn = migrated.profiles[(int)InputContext::Infantry].GetBindingEntries(UAMapZoomIn);
+    REQUIRE(infantryZoomIn.size() == 2);
+    CHECK(infantryZoomIn[0].code == InputCode::Key(SDL_SCANCODE_KP_PLUS));
+    CHECK(infantryZoomIn[1].code == InputCode::MouseWheelDown());
+
+    const auto& infantryZoomOut = migrated.profiles[(int)InputContext::Infantry].GetBindingEntries(UAMapZoomOut);
+    REQUIRE(infantryZoomOut.size() == 2);
+    CHECK(infantryZoomOut[0].code == InputCode::Key(SDL_SCANCODE_KP_MINUS));
+    CHECK(infantryZoomOut[1].code == InputCode::MouseWheelUp());
+
+    const auto& menuZoomIn = migrated.profiles[(int)InputContext::Menu].GetBindingEntries(UAMapZoomIn);
+    REQUIRE(menuZoomIn.size() == 2);
+    CHECK(menuZoomIn[0].code == InputCode::Key(SDL_SCANCODE_KP_PLUS));
+    CHECK(menuZoomIn[1].code == InputCode::Key(SDL_SCANCODE_A));
+
+    const auto& editorZoomIn = migrated.profiles[(int)InputContext::Editor].GetBindingEntries(UAMapZoomIn);
+    REQUIRE(editorZoomIn.size() == 2);
+    CHECK(editorZoomIn[0].code == InputCode::MouseWheelDown());
+    CHECK(editorZoomIn[1].code == InputCode::Key(SDL_SCANCODE_A));
+    CHECK(migrated.profiles[(int)InputContext::Editor].BindingCount(UAMapZoomOut) == 0);
+
+    const std::string path = TmpPath("context_controls_v3_map_wheel_migrated.cfg");
+    REQUIRE(migrated.Save(path));
+
+    ContextControlsConfig reloaded;
+    REQUIRE(reloaded.Load(path));
+    CHECK_FALSE(reloaded.migratedOnLoad);
+    CHECK(reloaded.profiles[(int)InputContext::Infantry].BindingCount(UAMapZoomIn) == 2);
+    CHECK(reloaded.profiles[(int)InputContext::Infantry].BindingCount(UAMapZoomOut) == 2);
+
+    std::filesystem::remove(path);
+}
+
 // A real, full contextControls.cfg captured from a version-2 user profile, from
 // before several actions existed. Loading and copying the profiles is the path
 // InputSubsystem::LoadKeys runs: listed bindings are preserved, and actions the
@@ -137,7 +178,7 @@ TEST_CASE("ContextControlsConfig: an older config keeps its bindings and default
 // added since (map zoom, cheat entry). It parses across every context; the actions
 // it lists are kept, the ones it predates are seeded to their defaults, and a save
 // then reload comes up current with the fill persisted.
-TEST_CASE("ContextControlsConfig: a full version-2 config parses and migrates to 3",
+TEST_CASE("ContextControlsConfig: a full version-2 config parses and migrates to 4",
           "[Settings][ContextControlsConfig]")
 {
     REQUIRE_FIXTURE("cfg/contextControls_v2_full.cfg");

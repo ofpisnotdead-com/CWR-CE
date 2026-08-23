@@ -486,6 +486,10 @@ RString GetKeyName(int dikCode)
             return LocalizeString(IDS_INPUT_DEVICE_MOUSE_6);
         case INPUT_DEVICE_MOUSE + 7:
             return LocalizeString(IDS_INPUT_DEVICE_MOUSE_7);
+        case INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_UP:
+            return LocalizeStringWithFallback("STR_INPUT_DEVICE_MOUSE_WHEEL_UP", "Mouse wheel up");
+        case INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_DOWN:
+            return LocalizeStringWithFallback("STR_INPUT_DEVICE_MOUSE_WHEEL_DOWN", "Mouse wheel down");
 
         case INPUT_DEVICE_STICK:
             return LocalizeString(IDS_INPUT_DEVICE_STICK_0);

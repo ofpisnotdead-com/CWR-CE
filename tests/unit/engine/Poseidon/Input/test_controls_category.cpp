@@ -57,7 +57,7 @@ TEST_CASE("ControlsCategory: Fire shows in OnFoot/Vehicles/Pilot/Gunner, not Com
     CHECK_FALSE(IsActionInControlsCategory(UAFire, ControlsCategoryCommon));
 }
 
-TEST_CASE("ControlsCategory: MapZoom lives in Common with numpad defaults", "[Input][ControlsCategory]")
+TEST_CASE("ControlsCategory: MapZoom lives in Common with numpad and wheel defaults", "[Input][ControlsCategory]")
 {
     CHECK(IsActionInControlsCategory(UAMapZoomIn, ControlsCategoryCommon));
     CHECK(IsActionInControlsCategory(UAMapZoomOut, ControlsCategoryCommon));
@@ -72,7 +72,9 @@ TEST_CASE("ControlsCategory: MapZoom lives in Common with numpad defaults", "[In
         return false;
     };
     CHECK(hasKey(UAMapZoomIn, SDL_SCANCODE_KP_PLUS));
+    CHECK(hasKey(UAMapZoomIn, INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_DOWN));
     CHECK(hasKey(UAMapZoomOut, SDL_SCANCODE_KP_MINUS));
+    CHECK(hasKey(UAMapZoomOut, INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_UP));
 }
 
 TEST_CASE("ControlsCategory: Perform Action is bindable in Gunner (#133)", "[Input][ControlsCategory]")

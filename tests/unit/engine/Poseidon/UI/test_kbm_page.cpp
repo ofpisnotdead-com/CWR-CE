@@ -17,6 +17,7 @@
 #include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <filesystem>
 #include <SDL3/SDL_scancode.h>
 #include <catch2/catch_message.hpp>
@@ -34,14 +35,11 @@ namespace
 class UserKeysSnapshot
 {
   public:
-    UserKeysSnapshot()
-        : savedContext(InputSubsystem::Instance().GetContext()),
-          savedMenuProfile(InputSubsystem::Instance().GetProfile(InputContext::Menu)),
-          savedInfantryProfile(InputSubsystem::Instance().GetProfile(InputContext::Infantry)),
-          savedCarProfile(InputSubsystem::Instance().GetProfile(InputContext::CarDriver)),
-          savedTankProfile(InputSubsystem::Instance().GetProfile(InputContext::TankDriver)),
-          savedShipProfile(InputSubsystem::Instance().GetProfile(InputContext::ShipDriver))
+    UserKeysSnapshot() : savedContext(InputSubsystem::Instance().GetContext())
     {
+        auto& sub = InputSubsystem::Instance();
+        for (int c = 0; c < (int)InputContext::Count; ++c)
+            savedProfiles[c] = sub.GetProfile((InputContext)c);
         for (int i = 0; i < UAN; i++)
             saved[i] = GInput.userKeys[i];
     }
@@ -49,22 +47,15 @@ class UserKeysSnapshot
     {
         auto& sub = InputSubsystem::Instance();
         sub.SetContext(savedContext);
-        sub.GetProfile(InputContext::Menu) = savedMenuProfile;
-        sub.GetProfile(InputContext::Infantry) = savedInfantryProfile;
-        sub.GetProfile(InputContext::CarDriver) = savedCarProfile;
-        sub.GetProfile(InputContext::TankDriver) = savedTankProfile;
-        sub.GetProfile(InputContext::ShipDriver) = savedShipProfile;
+        for (int c = 0; c < (int)InputContext::Count; ++c)
+            sub.GetProfile((InputContext)c) = savedProfiles[c];
         for (int i = 0; i < UAN; i++)
             GInput.userKeys[i] = saved[i];
     }
 
   private:
     InputContext savedContext;
-    InputProfile savedMenuProfile;
-    InputProfile savedInfantryProfile;
-    InputProfile savedCarProfile;
-    InputProfile savedTankProfile;
-    InputProfile savedShipProfile;
+    std::array<InputProfile, (int)InputContext::Count> savedProfiles;
     AutoArray<int> saved[UAN];
 };
 
@@ -107,7 +98,7 @@ int RowForCommonAction(UserAction action)
 }
 } // namespace
 
-TEST_CASE("KbmPage: device filter accepts keyboard scancodes, mouse buttons", "[UI][KbmPage]")
+TEST_CASE("KbmPage: device filter accepts keyboard and mouse bindings", "[UI][KbmPage]")
 {
     TestableKbmPage page;
     // Keyboard scancodes (low values).
@@ -117,6 +108,8 @@ TEST_CASE("KbmPage: device filter accepts keyboard scancodes, mouse buttons", "[
     // Mouse buttons (INPUT_DEVICE_MOUSE = 0x40000).
     CHECK(page.Filter(INPUT_DEVICE_MOUSE + 1));
     CHECK(page.Filter(INPUT_DEVICE_MOUSE + 2));
+    CHECK(page.Filter(INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_UP));
+    CHECK(page.Filter(INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_DOWN));
     // Negative codes are rejected.
     CHECK_FALSE(page.Filter(-1));
 }
@@ -298,5 +291,36 @@ TEST_CASE("KbmPage: vehicle movement capture writes driver profiles", "[UI][KbmP
         CHECK(bindings[0].code.toLegacy() == doubleH);
         CHECK_FALSE(profile.HasBinding(UAMoveForward, InputCode::Key(SDL_SCANCODE_W)));
         CHECK(profile.HasBinding(UAMoveForward, InputCode::Key(SDL_SCANCODE_UP)));
+    }
+}
+
+TEST_CASE("KbmPage: replacing conflicts swaps map wheel directions", "[UI][KbmPage]")
+{
+    UserKeysSnapshot snap;
+    TestableKbmPage page;
+    page.Provider().SetRowValue(0, (int)ControlsCategoryCommon);
+
+    auto& sub = InputSubsystem::Instance();
+    for (int c = 0; c < (int)InputContext::Count; ++c)
+    {
+        InputProfile& profile = sub.GetProfile((InputContext)c);
+        profile.ClearBindings(UAMapZoomIn);
+        profile.Bind(UAMapZoomIn, InputCode::Key(SDL_SCANCODE_KP_PLUS));
+        profile.Bind(UAMapZoomIn, InputCode::MouseWheelDown());
+        profile.ClearBindings(UAMapZoomOut);
+        profile.Bind(UAMapZoomOut, InputCode::Key(SDL_SCANCODE_KP_MINUS));
+        profile.Bind(UAMapZoomOut, InputCode::MouseWheelUp());
+    }
+
+    page.Capture(UAMapZoomIn, 1, InputCode::MouseWheelUp().toLegacy(), -1, true);
+    page.Capture(UAMapZoomOut, 1, InputCode::MouseWheelDown().toLegacy(), -1, true);
+
+    for (int c = 0; c < (int)InputContext::Count; ++c)
+    {
+        const InputProfile& profile = sub.GetProfile((InputContext)c);
+        CHECK(profile.HasBinding(UAMapZoomIn, InputCode::MouseWheelUp()));
+        CHECK_FALSE(profile.HasBinding(UAMapZoomIn, InputCode::MouseWheelDown()));
+        CHECK(profile.HasBinding(UAMapZoomOut, InputCode::MouseWheelDown()));
+        CHECK_FALSE(profile.HasBinding(UAMapZoomOut, InputCode::MouseWheelUp()));
     }
 }

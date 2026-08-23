@@ -121,6 +121,18 @@ bool PressKeyPage::OnKeyDown(OptionsShell& shell, unsigned nChar)
 
 void PressKeyPage::OnSimulate(OptionsShell& shell)
 {
+    auto& input = InputSubsystem::Instance();
+    const float wheel = input.GetMouseWheel();
+    if (m_allowMouseWheel && IsListening() && wheel != 0.0f)
+    {
+        input.ConsumeCursorScroll();
+        TryCapture(shell,
+                   wheel > 0.0f ? INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_UP
+                                : INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_DOWN,
+                   -1);
+        return;
+    }
+
     const int mouse = CapturedMouseButtonInput();
     if (mouse < 0)
         return;

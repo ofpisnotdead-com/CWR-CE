@@ -1,6 +1,7 @@
 #include <Poseidon/UI/Settings/ContextControlsConfig.hpp>
 
 #include <Poseidon/Input/InputBinding.hpp>
+#include <Poseidon/Input/InputDeviceConstants.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Input/UserActionDesc.hpp>
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
@@ -8,11 +9,13 @@
 
 #include <Poseidon/Foundation/Strings/RString.hpp>
 
+#include <vector>
+
 namespace Poseidon
 {
 namespace
 {
-constexpr int kContextControlsVersion = 3;
+constexpr int kContextControlsVersion = 4;
 constexpr int kGamepadButtonA = 0;
 constexpr int kGamepadButtonB = 1;
 constexpr int kGamepadButtonX = 2;
@@ -206,6 +209,42 @@ void ApplyContextDefaults(InputContext ctx, InputProfile& profile)
             break;
     }
 }
+
+bool IsKeyboardMouseBinding(const InputBinding& binding)
+{
+    if (!binding.code.valid())
+        return true;
+    const int device = InputBindingDevice(binding.code.toLegacy());
+    return device == INPUT_DEVICE_KEYBOARD || device == INPUT_DEVICE_MOUSE || device == INPUT_DEVICE_MOUSE_AXIS;
+}
+
+void AddMapWheelToEmptySlot(InputProfile& profile, UserAction action, InputCode wheel)
+{
+    std::vector<InputBinding> bindings = profile.GetBindingEntries(action);
+    if (bindings.empty() || profile.HasBinding(action, wheel))
+        return;
+
+    int visibleCount = 0;
+    for (InputBinding& binding : bindings)
+    {
+        if (!IsKeyboardMouseBinding(binding))
+            continue;
+        if (visibleCount == 2)
+            break;
+        ++visibleCount;
+        if (!binding.code.valid())
+        {
+            binding = InputBinding(wheel);
+            profile.ClearBindings(action);
+            for (const InputBinding& replacement : bindings)
+                profile.Bind(action, replacement);
+            return;
+        }
+    }
+
+    if (visibleCount == 1)
+        profile.Bind(action, wheel);
+}
 } // namespace
 
 void ContextControlsConfig::LoadDefaults()
@@ -276,6 +315,12 @@ bool ContextControlsConfig::Load(const std::string& path)
 
                 profile.Bind(static_cast<UserAction>(a), InputBinding(code, modifier, ActivationMode::OnHold, scale));
             }
+        }
+
+        if (version < 4)
+        {
+            AddMapWheelToEmptySlot(profile, UAMapZoomIn, InputCode::MouseWheelDown());
+            AddMapWheelToEmptySlot(profile, UAMapZoomOut, InputCode::MouseWheelUp());
         }
     }
 

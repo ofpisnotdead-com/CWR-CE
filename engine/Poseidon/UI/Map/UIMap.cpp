@@ -2362,7 +2362,14 @@ void CStaticMap::OnMouseZChanged(float dz)
         return;
     }
     _moveKey = 0;
-    float scale = exp(0.1 * dz) * _scaleX;
+    auto& input = InputSubsystem::Instance();
+    const InputCode wheel = dz > 0 ? InputCode::MouseWheelUp() : InputCode::MouseWheelDown();
+    const bool zoomIn = input.IsBindingActive(UAMapZoomIn, wheel, false);
+    const bool zoomOut = input.IsBindingActive(UAMapZoomOut, wheel, false);
+    if (zoomIn == zoomOut)
+        return;
+
+    float scale = exp(0.1 * std::abs(dz) * (zoomIn ? -1.0f : 1.0f)) * _scaleX;
     saturate(scale, _scaleMin, _scaleMax);
     SetScale(scale);
 }
