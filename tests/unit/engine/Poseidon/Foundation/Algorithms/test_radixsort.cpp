@@ -86,6 +86,24 @@ TEST_CASE("RadixSortByFloatDesc - payload follows key", "[radixsort]")
     REQUIRE(data[4].id == 10);
 }
 
+TEST_CASE("RadixSortByFloatDesc - equal keys retain input order", "[radixsort]")
+{
+    struct Item
+    {
+        float key;
+        int id;
+    };
+    Item data[] = {{2.0f, 1}, {5.0f, 2}, {2.0f, 3}, {5.0f, 4}, {2.0f, 5}};
+
+    RadixSortByFloatDesc(data, 5, [](const Item& item) { return item.key; });
+
+    REQUIRE(data[0].id == 2);
+    REQUIRE(data[1].id == 4);
+    REQUIRE(data[2].id == 1);
+    REQUIRE(data[3].id == 3);
+    REQUIRE(data[4].id == 5);
+}
+
 TEST_CASE("FloatToOrderedU32 - order preserving", "[radixsort]")
 {
     SECTION("Monotonic across sign boundary")

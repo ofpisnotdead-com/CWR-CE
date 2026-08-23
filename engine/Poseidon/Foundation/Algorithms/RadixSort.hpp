@@ -45,7 +45,7 @@ void RadixSortByFloatDesc(T* items, int n, KeyFn key, RadixSortBuffers<T>& buffe
     Slot* out = buffers.b.Data();
     for (int i = 0; i < n; i++)
     {
-        in[i].key = FloatToOrderedU32(key(items[i]));
+        in[i].key = ~FloatToOrderedU32(key(items[i]));
         in[i].value = items[i];
     }
     for (int shift = 0; shift < 32; shift += 8)
@@ -70,10 +70,10 @@ void RadixSortByFloatDesc(T* items, int n, KeyFn key, RadixSortBuffers<T>& buffe
         in = out;
         out = tmp;
     }
-    // `in` holds ascending order; write back descending (largest first).
+    // Keys were inverted before sorting, so the result is already descending.
     for (int i = 0; i < n; i++)
     {
-        items[i] = in[n - 1 - i].value;
+        items[i] = in[i].value;
     }
 }
 
