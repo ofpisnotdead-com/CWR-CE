@@ -39,6 +39,20 @@
 
 namespace Poseidon
 {
+namespace
+{
+// The center channel is shared by every group on a side, so a command from another group is
+// expected there.
+void ReportForeignRadioCommand(bool fromThisGroup, bool channelCenter)
+{
+    if (fromThisGroup)
+        return;
+
+    const char* channel = channelCenter ? "center" : "group";
+    LOG_WARN_ONCE_PER(AI, channel, "Radio command in the {} channel was sent by another group", channel);
+}
+} // namespace
+
 using namespace Foundation;
 
 // Parameters
@@ -200,7 +214,7 @@ bool AIGroup::CommandSent(AIUnit* to, Command::Message message, bool channelCent
         AI_ERROR(dynamic_cast<RadioMessageCommand*>(msg));
         RadioMessageCommand* msgCmd = static_cast<RadioMessageCommand*>(msg);
         AI_ERROR(msgCmd);
-        AI_ERROR(msgCmd->GetFrom() == this);
+        ReportForeignRadioCommand(msgCmd->GetFrom() == this, channelCenter);
         if (msgCmd->IsTo(to) && msgCmd->GetCmdMessage() == message)
         {
             return true;
@@ -213,7 +227,7 @@ bool AIGroup::CommandSent(AIUnit* to, Command::Message message, bool channelCent
         AI_ERROR(dynamic_cast<RadioMessageCommand*>(msg));
         RadioMessageCommand* msgCmd = static_cast<RadioMessageCommand*>(msg);
         AI_ERROR(msgCmd);
-        AI_ERROR(msgCmd->GetFrom() == this);
+        ReportForeignRadioCommand(msgCmd->GetFrom() == this, channelCenter);
         if (msgCmd->IsTo(to) && msgCmd->GetCmdMessage() == message)
         {
             return true;
