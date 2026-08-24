@@ -118,19 +118,15 @@ const MotionEdge& MotionType::Edge(MoveId a, MoveId b) const
     return NoEdge;
 }
 
-int MotionType::EdgeCost(MoveId a, MoveId b) const
-{
-    const MotionEdge& edge = Edge(a, b);
-    if (edge.cost < 0)
-    {
-        return INT_MAX;
-    }
-    return edge.cost;
-}
-
 void MotionType::AddEdge(MoveId a, MoveId b, MotionEdgeType type, float cost)
 {
     int iCost = toInt(cost * 50);
+    if (iCost > SHRT_MAX || iCost < SHRT_MIN)
+    {
+        LOG_WARN(Physics, "Move transition cost from {} to {} is out of range: {}", (const char*)GetMoveName(a),
+                 (const char*)GetMoveName(b), cost);
+    }
+    saturate(iCost, SHRT_MIN, SHRT_MAX);
     MotionEdges& edges = _vertex[a];
     for (int i = 0; i < edges.Size(); i++)
     {

@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
 #include <Poseidon/IO/Streams/QStream.hpp>
@@ -166,4 +167,49 @@ TEST_CASE("MotionType ignores an out-of-range animation edge", "[Infantry][soldi
 
     REQUIRE_FALSE(motion.FindPath(path, idle, MotionPathItem(walk)));
     REQUIRE(path.Size() == 0);
+}
+
+// The shipped moves config weights every transition into DeadState at 10, and AddEdge
+// stores costs scaled by 50, so a real edge reaches 500.
+static constexpr const char* kTwoStateMoves = "class EmptyActions {};\n"
+                                              "class TestMoves {\n"
+                                              "  class States {\n"
+                                              "    class Idle {};\n"
+                                              "    class Walk {};\n"
+                                              "  };\n"
+                                              "  class Interpolations {};\n"
+                                              "  transitionsInterpolated[] = {};\n"
+                                              "  transitionsSimple[] = {};\n"
+                                              "  transitionsDisabled[] = {};\n"
+                                              "  vehicleActions = EmptyActions;\n"
+                                              "};\n";
+
+TEST_CASE("MotionType keeps the authored cost of an expensive edge", "[Infantry][soldierOld][motion]")
+{
+    ParamFile pf = ParseConfig(kTwoStateMoves);
+    MotionType motion;
+    motion.Load(pf >> "TestMoves");
+    MoveId idle = motion.GetMoveId("Idle");
+    MoveId walk = motion.GetMoveId("Walk");
+
+    motion.AddEdge(idle, walk, MEdgeSimple, 10.0f);
+
+    const MotionEdge& edge = motion.Edge(idle, walk);
+    REQUIRE(edge.cost == 500);
+    REQUIRE(edge.GetCost() == Catch::Approx(10.0f));
+}
+
+TEST_CASE("MotionType saturates a cost outside the edge field", "[Infantry][soldierOld][motion]")
+{
+    ParamFile pf = ParseConfig(kTwoStateMoves);
+    MotionType motion;
+    motion.Load(pf >> "TestMoves");
+    MoveId idle = motion.GetMoveId("Idle");
+    MoveId walk = motion.GetMoveId("Walk");
+
+    motion.AddEdge(idle, walk, MEdgeSimple, 100000.0f);
+    CHECK(motion.Edge(idle, walk).cost == 32767);
+
+    motion.AddEdge(idle, walk, MEdgeSimple, -100000.0f);
+    CHECK(motion.Edge(idle, walk).cost == -32768);
 }
