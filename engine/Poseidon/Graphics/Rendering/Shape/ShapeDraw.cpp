@@ -376,10 +376,16 @@ void LODShape::OptimizeRendering()
         if (optimizeHW)
         {
             const RStringB tentString("tent");
-            VBType type = shape->GetAllowAnimation() ? VBDynamic : VBStatic;
-            if (shape->GetPropertyDammage() == tentString)
+            VBType type = VBStatic;
+            if (shape->GetAllowAnimation())
             {
-                type = VBDynamic;
+                type = shape->IsLandClipOnlyAnim() ? VBOnDemand : VBDynamic;
+            }
+            if (type == VBStatic && shape->GetPropertyDammage() == tentString)
+            {
+                // The "tent" destruction type is used for many different objects, including bushes (and actual tents).
+                // Treat their vertex buffers as on-demand dynamic; they won't animate until they are destroyed.
+                type = VBOnDemand;
             }
             level->ConvertToVBuffer(type);
         }

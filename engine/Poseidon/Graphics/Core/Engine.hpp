@@ -359,6 +359,57 @@ class Engine : public IGraphicsEngine
     /// from the sun's NightEffect; the lit shaders fade the shadow darkness by it.
     virtual void SetShadowMapSunFactor(float /*factor01*/) {}
 
+    // Upload the terrain height grid as a GPU texture. Default no-op for headless backends.
+    virtual void SetTerrainHeightmap(const float* /*heights*/, int /*width*/, int /*height*/, float /*invGrid*/, float /*invLandGrid*/)
+    {
+    }
+
+    // One visible 8x8 land segment to draw
+    struct GroundSegment
+    {
+        int cellX, cellZ;  // segment's land cell corner
+        unsigned lightSet; // opaque handle from AddTerrainLightSet
+    };
+
+    // One terrain surface texture and how it tiles
+    struct TerrainTexture
+    {
+        Texture* texture;
+        bool simple; // tileable (repeat sampler) vs pre-blended (clamp)
+    };
+
+    // The map's terrain data, set up once per map load
+    struct TerrainSetup
+    {
+        int nTextures;
+        const TerrainTexture* textures;
+        int subdivCount;                // render-grid subdivisions per land cell, per axis
+        int segmentSize;                // land cells per segment, per axis
+        float landGrid;                 // land-cell size in metres
+        const float* jitter;            // 2 floats (u,v offset) per land-grid point, jitterW x jitterH row-major
+        int jitterW, jitterH;
+        const int* cellTexIndex;        // per-cell texture index, cellRange x cellRange row-major
+        const unsigned char* cellWater; // per-cell water flag, cellRange x cellRange row-major
+        int cellRange;
+    };
+
+    virtual void PrepareTerrain(const TerrainSetup& setup) {}
+    virtual void DrawTerrain(const GroundSegment* segments, size_t count, const TLMaterial& mat) {}
+    virtual void DrawWater(const GroundSegment* segments, size_t count, const TLMaterial& mat, Texture* surfaceTex, float seaLevel) {}
+
+    // Begins the frame's ground pass (land + water)
+    virtual void BeginGround(const LightList& lights) {}
+    // Adds a terrain light set and returns an opaque handle to it.
+    virtual unsigned AddTerrainLightSet(const LightList& lights) { return 0; }
+
+    // True when the backend snaps land-clipped geometry to the terrain in the vertex
+    // shader; when so, the render path skips the CPU land-clip deform. Default off.
+    virtual bool LandClipInVS() const { return false; }
+    // Land-clip params for the next draw: the deform mode (Object::LandClipMode) and the
+    // shape's model-space bounding centre, which mode 1 samples the terrain at as the
+    // ClipLandKeep reference and mode 2 uses as the model-space height origin.
+    virtual void SetLandClipParams(float /*mode*/, Vector3Par /*boundingCenter*/) {}
+
   private:
     Engine(const Engine& src); // no copy
     void operator=(const Engine& src);
@@ -430,9 +481,10 @@ class Engine : public IGraphicsEngine
     // once with K instances. Defaults keep unsupporting backends scalar
     // (InstancedRunAdd refusing = the scene never arms a batch).
     virtual void InstancedRunReset() {}
-    virtual bool InstancedRunAdd(const Matrix4& /*modelToWorld*/) { return false; }
+    virtual bool InstancedRunAdd(const Matrix4& /*modelToWorld*/, const LightList& /*lights*/) { return false; }
     virtual void BeginInstancedRunUpload() {}
     virtual bool EndInstancedRun() { return true; }
+    virtual bool InstancedRunActive() const { return false; }
 
     // Explicit pass-kind routing.  Producers (Man::DrawProxies for first-person,
     // vehicle cockpit draw, etc.) wrap a draw scope with `SetPassKindHint(Cockpit)`

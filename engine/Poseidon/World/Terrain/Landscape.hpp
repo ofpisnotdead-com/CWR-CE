@@ -449,8 +449,15 @@ class Landscape: public SerializeClass
 	// access to data and textures
 	Array2D<RawType> _data;
 
+	// re-upload _data to the GPU height texture on the next Draw
+	bool _heightmapDirty = true;
+
 	float GetData( int x, int z ) const {return RawToHeight(_data(x,z));}
-	void SetData( int x, int z, float data ) {_data(x,z)=HeightToRaw(data);}
+	void SetData( int x, int z, float data )
+	{
+		_data(x,z)=HeightToRaw(data);
+		_heightmapDirty=true;
+	}
 
 	int GetTex( int x, int z ) const {return _tex(x,z);}
 	void SetTex( int x, int z, int data ) {_tex(x,z)=data;}
@@ -695,11 +702,16 @@ class Landscape: public SerializeClass
 	void DrawClouds(Scene &scene);
 	void Draw( Scene &scene );
 
+	void FlushHeightmapToRenderer();
+
 	void DrawWater(const LandBegEnd &bigRect, Scene &scene);
 	void DrawGround
 	(
 		const LandBegEnd &bigRect, Scene &scene, const GroundLayerInfo &layer
 	);
+
+	void PrepareInstancedTerrain();
+	void DrawGroundInstanced(const LandBegEnd &bigRect, Scene &scene);
 
 	void SurfacePlane( Plane &plane, float x, float z ) const;
 

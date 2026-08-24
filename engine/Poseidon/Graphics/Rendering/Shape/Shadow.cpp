@@ -86,14 +86,7 @@ void RemmemberShadow::Init(Object* object, Vector3Par lightDir, int level, Matri
         _shadow->ReleaseVBuffer();
         // optimize it for HW rendering
         _shadow->FindSections();
-        if (_shadow->NVertex() > 1024)
-        {
-            _shadow->ConvertToVBuffer(VBBigDiscardable);
-        }
-        else
-        {
-            _shadow->ConvertToVBuffer(VBSmallDiscardable);
-        }
+        _shadow->ConvertToVBuffer(VBStatic);
 
         // table should be exact - for best memory usage
         _shadow->Compact();
