@@ -7,46 +7,36 @@ using namespace Poseidon;
 
 static constexpr float kEncTol = 0.001f;
 
-TEST_CASE("EncodeRot8b full range", "[network][rot8b]")
+// The encode truncates towards zero, so a round-trip lands within one H_PI/127 step.
+static constexpr float kRoundTripTol = static_cast<float>(H_PI) / 127.0f;
+
+TEST_CASE("EncodeRot8b saturates at the range ends", "[network][rot8b]")
 {
-    // At -PI should clamp to -127
-    signed char lo = EncodeRot8b(-static_cast<float>(H_PI) * 2.0f);
-    REQUIRE(lo == -127);
-
-    // At +PI should clamp to +127
-    signed char hi = EncodeRot8b(static_cast<float>(H_PI) * 2.0f);
-    REQUIRE(hi == 127);
-
-    // At 0 should encode to 0
-    signed char zero = EncodeRot8b(0.0f);
-    REQUIRE(zero == 0);
+    REQUIRE(EncodeRot8b(-static_cast<float>(H_PI) * 2.0f) == -127);
+    REQUIRE(EncodeRot8b(static_cast<float>(H_PI) * 2.0f) == 127);
+    REQUIRE(EncodeRot8b(0.0f) == 0);
 }
 
-TEST_CASE("DecodeRot8b round-trip endpoints", "[network][rot8b]")
+TEST_CASE("DecodeRot8b maps the range ends back to -PI and +PI", "[network][rot8b]")
 {
-    // -127 and +127 decode back to the expected range
-    float loDecoded = DecodeRot8b(-127);
-    float hiDecoded = DecodeRot8b(127);
-
-    REQUIRE(loDecoded == Catch::Approx(-static_cast<float>(H_PI)).margin(kEncTol));
-    REQUIRE(hiDecoded == Catch::Approx(static_cast<float>(H_PI)).margin(kEncTol));
-
-    float zeroDecoded = DecodeRot8b(0);
-    REQUIRE(zeroDecoded == Catch::Approx(0.0f).margin(kEncTol));
+    REQUIRE(DecodeRot8b(-127) == Catch::Approx(-static_cast<float>(H_PI)).margin(kEncTol));
+    REQUIRE(DecodeRot8b(127) == Catch::Approx(static_cast<float>(H_PI)).margin(kEncTol));
+    REQUIRE(DecodeRot8b(0) == Catch::Approx(0.0f).margin(kEncTol));
 }
 
-TEST_CASE("CompareRot8b consistency", "[network][rot8b]")
+TEST_CASE("EncodeRot8b and DecodeRot8b round-trip signed angles", "[network][rot8b]")
 {
-    // CompareRot8b(a, b) == DecodeRot8b(a) - DecodeRot8b(b)
-    signed char a = 64;
-    signed char b = -32;
+    const float angles[] = {-0.25f, -1.0f, -2.0f, -3.0f, 0.25f, 1.0f, 2.0f, 3.0f};
+    for (float angle : angles)
+    {
+        float decoded = DecodeRot8b(EncodeRot8b(angle));
+        REQUIRE(decoded == Catch::Approx(angle).margin(kRoundTripTol));
+    }
+}
 
-    float diff = CompareRot8b(a, b);
-    float expected = DecodeRot8b(a) - DecodeRot8b(b);
-
-    REQUIRE(diff == Catch::Approx(expected).margin(kEncTol));
-
-    // Symmetry: CompareRot8b(a, a) == 0
-    REQUIRE(CompareRot8b(a, a) == Catch::Approx(0.0f).margin(kEncTol));
-    REQUIRE(CompareRot8b(b, b) == Catch::Approx(0.0f).margin(kEncTol));
+TEST_CASE("CompareRot8b returns the decoded difference across zero", "[network][rot8b]")
+{
+    REQUIRE(CompareRot8b(64, -32) == Catch::Approx(DecodeRot8b(64) - DecodeRot8b(-32)).margin(kEncTol));
+    REQUIRE(CompareRot8b(-127, 127) == Catch::Approx(-2.0f * static_cast<float>(H_PI)).margin(kEncTol));
+    REQUIRE(CompareRot8b(64, 64) == Catch::Approx(0.0f).margin(kEncTol));
 }

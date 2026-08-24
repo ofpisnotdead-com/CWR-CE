@@ -397,6 +397,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     Network/test_wire_format.cpp
     Network/test_transport_io.cpp
     Network/test_encoded_matrix3.cpp
+    Network/test_rot8b.cpp
     Network/test_chat_utf8_wire.cpp
     Network/Legacy/test_network_channel.cpp
     Network/Legacy/test_network_message.cpp
