@@ -22,14 +22,14 @@ static int CmpMaps(const MapInfo* f0, const MapInfo* f1)
 static void GetLine(char* line, int size, QIStream& in)
 {
     char* l = line;
-    char c = in.get();
+    int c = in.get();
     while (c != EOF && c != '\n')
     {
         if (size > 1)
         {
             if (c != '\r')
             {
-                *l++ = c;
+                *l++ = static_cast<char>(c);
                 size--;
             }
         }
@@ -87,6 +87,12 @@ void MapFile::ParseMapFile()
     _name = sourceName;
 
     in.open(sourceName);
+    ParseMapStream(in);
+#endif
+}
+
+void MapFile::ParseMapStream(QIStream& in)
+{
     char line[1024];
     for (;;)
     {
@@ -164,7 +170,6 @@ void MapFile::ParseMapFile()
         _map.Add(info);
     }
     QSort(_map.Data(), _map.Size(), CmpMaps);
-#endif
 }
 
 const char* MapFile::MapName(int address, MapAddressId id, int* lower)

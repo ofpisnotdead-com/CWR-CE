@@ -369,6 +369,7 @@ list(APPEND POSEIDON_TEST_SOURCES
 
     # IO tests (batch-15)
     World/test_io_types.cpp
+    IO/test_mapFile.cpp
     IO/test_paramFileExt.cpp
     IO/test_paramFile_defaults.cpp
 
