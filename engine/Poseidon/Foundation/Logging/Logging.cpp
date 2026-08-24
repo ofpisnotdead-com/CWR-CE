@@ -22,6 +22,7 @@
 #include <ctime>
 #include <mutex>
 #include <ratio>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -816,4 +817,25 @@ void LoggingSystem::InitializeFromConfig(const char* appPrefix)
     }
 }
 
+} // namespace Poseidon::Foundation
+
+namespace Poseidon::Foundation
+{
+namespace
+{
+std::mutex g_logOnceLock;
+std::set<std::pair<const void*, std::string>, std::less<>> g_logOnceKeys;
+} // namespace
+
+bool LogOnceForKey(const void* site, const char* key)
+{
+    const std::lock_guard<std::mutex> lock(g_logOnceLock);
+    return g_logOnceKeys.emplace(site, key ? key : "").second;
+}
+
+void ForgetLogOnceKeys()
+{
+    const std::lock_guard<std::mutex> lock(g_logOnceLock);
+    g_logOnceKeys.clear();
+}
 } // namespace Poseidon::Foundation
