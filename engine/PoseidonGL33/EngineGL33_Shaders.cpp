@@ -782,6 +782,10 @@ static GLuint s_psUBO = 0;
 // Cached copy of s_worldUBO slot 0, used to dedupe matrix uploads
 static float s_worldSlot0[16] = {};
 static bool s_worldSlot0Valid = false;
+static float s_vsUploaded[sizeof(s_vsShadow) / sizeof(float)] = {};
+static bool s_vsEverUploaded = false;
+static GLuint s_vsUploadedUBO = 0;
+
 void EngineGL33::FlushVSConstants()
 {
     if (!s_vsUBO)
@@ -790,10 +794,7 @@ void EngineGL33::FlushVSConstants()
     }
 
     // Skip flushes that would re-upload identical contents
-    static float s_vsUploaded[sizeof(s_vsShadow) / sizeof(float)] = {};
-    static GLuint s_vsUploadedUBO = 0;
-
-    if (s_vsUploadedUBO == s_vsUBO && memcmp(s_vsShadow, s_vsUploaded, sizeof(s_vsShadow)) == 0)
+    if (s_vsEverUploaded && s_vsUploadedUBO == s_vsUBO && memcmp(s_vsShadow, s_vsUploaded, sizeof(s_vsShadow)) == 0)
     {
         return;
     }
@@ -806,6 +807,7 @@ void EngineGL33::FlushVSConstants()
 
     // Update the cached copy
     memcpy(s_vsUploaded, s_vsShadow, sizeof(s_vsShadow));
+    s_vsEverUploaded = true;
     s_vsUploadedUBO = s_vsUBO;
 }
 
@@ -857,6 +859,7 @@ void EngineGL33::InitVertexShaders()
     glBindBuffer(GL_UNIFORM_BUFFER, s_vsUBO);
     glBufferData(GL_UNIFORM_BUFFER, sizeof(s_vsShadow), nullptr, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, s_vsUBO);
+    s_vsEverUploaded = false;
 
     // WorldInstances array UBO (binding 2) — 256 mat4 = 16 KB, the GL 3.3
     // minimum guaranteed UBO size. Slot 0 = the classic per-draw world
