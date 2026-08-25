@@ -1459,7 +1459,7 @@ void ControlsContainer::DrawCursor()
     const int h = GLOB_ENGINE->Height2D();
     int mx = toInt((mouseScrX - hsX * mouseScrW) * w);
     int my = toInt((mouseScrY - hsY * mouseScrH) * h);
-    int mw = toInt(mouseScrW * w);
+    int mw = toInt(mouseScrW * (4.0f / 3.0f) * h);
     int mh = toInt(mouseScrH * h);
 
     CursorDrawDebug::Record(this, mx, my, mw, mh);
