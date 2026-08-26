@@ -37,10 +37,14 @@ triGpadPov 4            // Down -> Reset all to defaults
 triWaitFrames 5
 triAssert [(triGetControlFocused 1403)]
 
-triGpadButton 0         // A -> open confirm modal
+triGpadButton 0         // A -> open Presets page
 triWaitFrames 5
+triAssertIncludes [(triVisibleTexts), "Preset"]
+
+triGpadPov 4            // Down -> Reset all to preset
+triGpadButton 0         // A -> open confirm modal
 triAssert [(triGetControlFocused 9102)]   // Cancel default
-triAssertIncludes [(triVisibleTexts), "Reset all to defaults"]
+triAssertIncludes [(triVisibleTexts), "Reset all to ""Default"""]
 triAssertIncludes [(triVisibleTexts), "Cancel"]
 
 triGpadPov 6            // Left -> Reset
@@ -54,8 +58,8 @@ triScreenshot "02_reset_confirm_via_gamepad"
 
 triGpadButton 1         // B -> cancel modal
 triWaitFrames 5
-triAssert [(triGetControlFocused 1403)]
-triAssertIncludes [(triVisibleTexts), "Reset all to defaults"]
-triScreenshot "03_back_at_controls_after_gamepad_cancel"
+triAssert [(triGetControlFocused 711)]
+triAssertIncludes [(triVisibleTexts), "Preset"]
+triScreenshot "03_back_at_presets_after_gamepad_cancel"
 
 triEndTest
