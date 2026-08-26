@@ -6,6 +6,7 @@
 #include <Poseidon/Foundation/Framework/DebugLog.hpp>
 #include <Poseidon/Foundation/Types/Pointers.hpp>
 #include <thread>
+#include <utility>
 #include <vector>
 
 // Test Helper Classes
@@ -31,6 +32,32 @@ class TestRefCount : public RefCount
 
 int TestRefCount::constructCount = 0;
 int TestRefCount::destructCount = 0;
+
+class RefOperationProbe
+{
+  public:
+    int referenceCount = 0;
+    int addCount = 0;
+    int releaseCount = 0;
+
+    int AddRef()
+    {
+        addCount++;
+        return ++referenceCount;
+    }
+
+    int Release()
+    {
+        releaseCount++;
+        return --referenceCount;
+    }
+
+    void ResetOperations()
+    {
+        addCount = 0;
+        releaseCount = 0;
+    }
+};
 
 // Simple class for SRef testing
 class TestObject
@@ -195,6 +222,75 @@ TEST_CASE("Ref - Assignment", "[types][pointers]")
 
         REQUIRE(obj->RefCounter() == 1);
         REQUIRE(ptr->value == 500);
+    }
+}
+
+TEST_CASE("Ref - Move operations", "[types][pointers]")
+{
+    SECTION("Move construction transfers ownership")
+    {
+        RefOperationProbe object;
+        Ref<RefOperationProbe> source(&object);
+        object.ResetOperations();
+
+        Ref<RefOperationProbe> destination(std::move(source));
+
+        REQUIRE(source.IsNull());
+        REQUIRE(destination.GetRef() == &object);
+        REQUIRE(object.referenceCount == 1);
+        REQUIRE(object.addCount == 0);
+        REQUIRE(object.releaseCount == 0);
+    }
+
+    SECTION("Move assignment transfers ownership")
+    {
+        RefOperationProbe object;
+        Ref<RefOperationProbe> source(&object);
+        Ref<RefOperationProbe> destination;
+        object.ResetOperations();
+
+        destination = std::move(source);
+
+        REQUIRE(source.IsNull());
+        REQUIRE(destination.GetRef() == &object);
+        REQUIRE(object.referenceCount == 1);
+        REQUIRE(object.addCount == 0);
+        REQUIRE(object.releaseCount == 0);
+    }
+
+    SECTION("Move assignment releases existing ownership")
+    {
+        RefOperationProbe sourceObject;
+        RefOperationProbe destinationObject;
+        Ref<RefOperationProbe> source(&sourceObject);
+        Ref<RefOperationProbe> destination(&destinationObject);
+        sourceObject.ResetOperations();
+        destinationObject.ResetOperations();
+
+        destination = std::move(source);
+
+        REQUIRE(source.IsNull());
+        REQUIRE(destination.GetRef() == &sourceObject);
+        REQUIRE(sourceObject.referenceCount == 1);
+        REQUIRE(sourceObject.addCount == 0);
+        REQUIRE(sourceObject.releaseCount == 0);
+        REQUIRE(destinationObject.referenceCount == 0);
+        REQUIRE(destinationObject.releaseCount == 1);
+    }
+
+    SECTION("Self move retains ownership")
+    {
+        RefOperationProbe object;
+        Ref<RefOperationProbe> pointer(&object);
+        Ref<RefOperationProbe>& alias = pointer;
+        object.ResetOperations();
+
+        pointer = std::move(alias);
+
+        REQUIRE(pointer.GetRef() == &object);
+        REQUIRE(object.referenceCount == 1);
+        REQUIRE(object.addCount == 0);
+        REQUIRE(object.releaseCount == 0);
     }
 }
 

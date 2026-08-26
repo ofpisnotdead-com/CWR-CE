@@ -89,3 +89,23 @@ TEST_CASE("EncodedMatrix3 negative Z sign preserved", "[network][encoded_matrix3
     REQUIRE(decoded.Direction().X() == Catch::Approx(0.0f).margin(kEncTol));
     REQUIRE(decoded.Direction().Y() == Catch::Approx(0.0f).margin(kEncTol));
 }
+
+TEST_CASE("EncodedMatrix3 negative up sign preserved", "[network][encoded_matrix3]")
+{
+    // An up vector below the horizon is what drives _21sign negative.
+    Vector3 dir(1.0f, 0.0f, 0.0f);
+    Vector3 up(0.0f, 0.0f, -1.0f);
+
+    Matrix3 m;
+    m.SetDirectionAndUp(dir, up);
+
+    EncodedMatrix3 enc;
+    enc.Encode(m);
+
+    Matrix3 decoded;
+    enc.Decode(decoded);
+
+    REQUIRE(decoded.DirectionUp().Z() < 0.0f);
+    REQUIRE(decoded.DirectionUp().Z() == Catch::Approx(-1.0f).margin(kEncTol));
+    REQUIRE(decoded.Direction().X() == Catch::Approx(1.0f).margin(kEncTol));
+}

@@ -1615,7 +1615,23 @@ void C3DSlider::OnDraw(float alpha)
 
 C3DScrollBar::C3DScrollBar()
 {
+    _position = VZero;
+    _right = VZero;
+    _down = VZero;
+
+    _minPos = 0;
+    _maxPos = 0;
+    _curPos = 0;
+    _page = 0;
+    _lineStep = 1;
+    _pageStep = 1;
+
+    _thumbOffset = 0;
     _thumbLocked = false;
+
+    _enabled = false;
+
+    _color = PackedWhite;
 }
 
 void C3DScrollBar::OnLButtonDown(float v)

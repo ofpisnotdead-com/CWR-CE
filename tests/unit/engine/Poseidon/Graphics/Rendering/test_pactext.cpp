@@ -3,6 +3,9 @@
 #include <Poseidon/Graphics/Rendering/Font/Pactext.hpp>
 #include <Poseidon/Foundation/Logging/Logging.hpp>
 
+#include <cstring>
+#include <vector>
+
 TEST_CASE("pactext.hpp compiles", "[rendering][font]")
 {
     SUCCEED("header included successfully");
@@ -57,4 +60,49 @@ TEST_CASE("SelectTextureSourceFactory: empty-filename path is no-texture, not an
     }
 
     LS::ResetErrorCount();
+}
+
+// A PAA 16b mipmap is an LZSS stream followed by a 32b checksum over the decoded bytes,
+// each summed as a signed char.
+TEST_CASE("PacLevelMem::LoadPaa accepts the signed LZW checksum", "[rendering][font]")
+{
+    const unsigned char pixels[8] = {0x80, 0xff, 0x7f, 0x01, 0x90, 0x00, 0xc0, 0x40};
+    const int checksum = -113;
+
+    std::vector<unsigned char> file;
+    auto putWord = [&file](int v)
+    {
+        file.push_back(v & 0xff);
+        file.push_back((v >> 8) & 0xff);
+    };
+
+    // mipmap header: 16b width, 16b height, 24b compressed size
+    putWord(2);
+    putWord(2);
+    file.push_back(static_cast<unsigned char>(sizeof(pixels)));
+    file.push_back(0);
+    file.push_back(0);
+
+    file.push_back(0xff); // LZSS flag byte: the next eight tokens are literals
+    for (unsigned char b : pixels)
+    {
+        file.push_back(b);
+    }
+    for (int i = 0; i < 4; i++)
+    {
+        file.push_back((checksum >> (i * 8)) & 0xff);
+    }
+
+    Poseidon::PacLevelMem mip;
+    mip._w = 2;
+    mip._h = 2;
+    mip._sFormat = Poseidon::PacARGB4444;
+    mip.SetDestFormat(Poseidon::PacARGB4444, 1);
+
+    Poseidon::PacPalette palette;
+    Poseidon::QIStream in(file.data(), static_cast<int>(file.size()));
+
+    unsigned char decoded[sizeof(pixels)] = {};
+    REQUIRE(mip.LoadPaa(in, decoded, &palette) == 0);
+    REQUIRE(std::memcmp(decoded, pixels, sizeof(pixels)) == 0);
 }

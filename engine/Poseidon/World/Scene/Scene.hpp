@@ -58,6 +58,10 @@ class SortObject : public RefCount
 
     float zCoord; // alpha-pass sort key: camera-space depth; see AlphaSortOrder.hpp
 
+    // Cached sort keys, populated in Scene::AdjustComplexity
+    int sortComplexity; // GetShape()->Level(0)->NFaces()
+    int sortPassOrder;  // object->PassOrder(drawLOD)
+
     USE_FAST_ALLOCATOR
 };
 
