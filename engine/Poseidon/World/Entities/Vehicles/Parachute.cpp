@@ -85,14 +85,18 @@ void ParachuteType::InitShape()
     name.skeleton = _skeleton;
     name.name = "anim\\opening_para.rtm";
 
+    // gpuSkin=true: the parachute's view-LOD deformation is entirely skeletal
+    // (open/drop) — unlike the Scud/Car, which mix skeletal skinning with
+    // CPU direct-selection wheel/turret animation and so must stay CPU — so its
+    // graphical LODs are safe to GPU-skin. Retains a bone palette on Object.
     _open = new AnimationRT(name);
-    _open->Prepare(_shape, _skeleton, *_weights, false);
+    _open->Prepare(_shape, _skeleton, *_weights, false, true);
     _open->AddPreloadCount();
     _open->IntroduceStep();
 
     name.name = "anim\\opened_para_stat.rtm";
     _drop = new AnimationRT(name);
-    _drop->Prepare(_shape, _skeleton, *_weights, false);
+    _drop->Prepare(_shape, _skeleton, *_weights, false, true);
     _drop->IntroduceStep();
     _drop->AddPreloadCount();
 }
@@ -635,13 +639,13 @@ void Parachute::Animate(int level)
     {
         float time = _openState - 1;
         saturate(time, 0, 1);
-        Type()->_open->Apply(*Type()->_weights, _shape, level, time);
+        Type()->_open->Apply(*Type()->_weights, _shape, level, time, this);
     }
     else
     {
         float time = _openState - 2;
         saturate(time, 0, 1);
-        Type()->_drop->Apply(*Type()->_weights, _shape, level, time);
+        Type()->_drop->Apply(*Type()->_weights, _shape, level, time, this);
     }
 
     base::Animate(level);

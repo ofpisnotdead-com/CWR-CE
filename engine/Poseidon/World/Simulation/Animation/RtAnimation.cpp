@@ -12,6 +12,8 @@
 #include <Poseidon/Foundation/Math/MathDefs.hpp>
 #include <Poseidon/Foundation/Memory/FastAlloc.hpp>
 #include <Poseidon/Foundation/platform.hpp>
+#include <Poseidon/World/Scene/Object.hpp>       // RetainBonePalette (GPU-skin target)
+#include <Poseidon/Core/Config/EngineConfig.hpp> // ENGINE_CONFIG.enableGpuSkinning
 
 namespace Poseidon
 {
@@ -736,7 +738,7 @@ void AnimationRT::SetLooped(bool looped)
     RemoveLoopFrame();
 }
 
-void Skeleton::Prepare(LODShape* lShape, WeightInfo& weights)
+void Skeleton::Prepare(LODShape* lShape, WeightInfo& weights, bool gpuSkin)
 {
     for (int level = 0; level < lShape->NLevels(); level++)
     {
@@ -757,12 +759,51 @@ void Skeleton::Prepare(LODShape* lShape, WeightInfo& weights)
         }
         // normalize loaded weighting information
         weights[level].Normalize();
+
+        // Publish per-vertex bone bindings onto the shape for GPU skinning.  The
+        // quantization matches the CPU ApplyMatrices path exactly (bone index =
+        // AnimationRTPair::GetSel(), weight byte = _weight = weight*WeightScale),
+        // so the skinning VS reproduces the CPU skin bit-for-bit in intent.
+        // Unweighted vertices keep the all-zero binding AllocSkin() cleared them
+        // to (weight-sum 0 -> the VS falls back to bind pose).
+        //
+        // Only when the caller opts in (gpuSkin) and only for GRAPHICAL LODs
+        // (Resolution < 1000 — the drawn view LODs).  Special LODs (geometry,
+        // shadow-volume, memory: Resolution >= 1000) stay on the CPU path: they
+        // feed collision / shadow / bounding, which must remain bit-identical for
+        // MP determinism, and the shadow pass draws them with the non-skinned VS.
+        // gpuSkin is passed true by proxies whose graphical-LOD deformation is
+        // ENTIRELY skeletal and that retain a bone palette on Object
+        // (GetBonePalette): infantry (Man) and the parachute. Vehicles that mix
+        // skeletal skinning with CPU direct-selection vertex animation (the
+        // Scud/Car — wheels, turret) leave it default-false and stay CPU, else
+        // GPU skinning's static bind-pose VBO would freeze those deformations.
+        if (gpuSkin && lShape->Resolution(level) < 1000)
+        {
+            const AnimationRTWeights& w = weights[level];
+            shape->AllocSkin(shape->NPos());
+            for (int i = 0; i < shape->NPos(); i++)
+            {
+                const AnimationRTWeight& e = w[i];
+                SkinVertexBinding& b = shape->SkinRW(i);
+                int n = e.Size();
+                if (n > 4)
+                {
+                    n = 4;
+                }
+                for (int j = 0; j < n; j++)
+                {
+                    b.idx[j] = static_cast<unsigned char>(e[j].GetSel());
+                    b.weight[j] = e[j]._weight;
+                }
+            }
+        }
     }
 }
 
-void AnimationRT::Prepare(LODShape* lShape, Skeleton* skelet, WeightInfo& weights, bool looped)
+void AnimationRT::Prepare(LODShape* lShape, Skeleton* skelet, WeightInfo& weights, bool looped, bool gpuSkin)
 {
-    skelet->Prepare(lShape, weights);
+    skelet->Prepare(lShape, weights, gpuSkin);
     SetLooped(looped);
 }
 
@@ -1014,7 +1055,7 @@ void AnimationRT::ApplyMatrices(const WeightInfo& lWeights, LODShape* lShape, in
     }
 }
 
-void AnimationRT::Apply(const WeightInfo& lWeights, LODShape* lShape, int level, float time) const
+void AnimationRT::Apply(const WeightInfo& lWeights, LODShape* lShape, int level, float time, Object* skinTarget) const
 {
     if (_nPhases <= 0)
     {
@@ -1030,7 +1071,21 @@ void AnimationRT::Apply(const WeightInfo& lWeights, LODShape* lShape, int level,
     MATRIX_4_ARRAY(matrix, 128);
     PrepareMatrices(matrix, time, 1);
 
-    ApplyMatrices(lWeights, lShape, level, matrix);
+    // GPU-skinning-aware path (mirrors Man::Animate). When this LOD is
+    // GPU-skinned the VBO holds the static bind pose and the vertex shader skins
+    // from the retained palette, so the per-vertex CPU transform is pure waste —
+    // skip it and just retain the palette. HasSkin() is true only for graphical
+    // LODs the caller opted into (Skeleton::Prepare gpuSkin), so coarse
+    // collision/shadow LODs still CPU-skin here, bit-identical for MP determinism.
+    const bool gpuSkinned = skinTarget != nullptr && ENGINE_CONFIG.enableGpuSkinning && shape->HasSkin();
+    if (!gpuSkinned)
+    {
+        ApplyMatrices(lWeights, lShape, level, matrix);
+    }
+    if (skinTarget != nullptr && ENGINE_CONFIG.enableGpuSkinning)
+    {
+        skinTarget->RetainBonePalette(matrix.Data(), matrix.Size());
+    }
 }
 
 void AnimationRT::PrepareMatrices(Matrix4Array& matrix, float time, float factor) const

@@ -1665,6 +1665,21 @@ bool Object::GetAnimated(const Shape& src) const
     return _isDestroyed && _destroyPhase > 0 && GetDestructType() != DestructTree;
 }
 
+void Object::RetainBonePalette(const Matrix4* mats, int count)
+{
+    // Reallocate only when the bone count actually changes (it is constant per
+    // skeleton) — a per-frame Realloc for every unit was measurable heap churn.
+    if (_bonePalette.Size() != count)
+    {
+        _bonePalette.Realloc(count);
+        _bonePalette.Resize(count);
+    }
+    for (int i = 0; i < count; i++)
+    {
+        _bonePalette[i] = mats[i];
+    }
+}
+
 #if SUPPORT_RANDOM_SHAPES
 LODShapeWithShadow* Object::GetShapeOnPos(Vector3Val pos) const
 {

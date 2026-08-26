@@ -170,7 +170,10 @@ void ObjectViewer::SetExternalAnimation(const char* animPath)
     name.name = animPath;
     name.skeleton = _externalSkeleton;
     _externalAnim = new AnimationRT(name, false);
-    _externalAnim->Prepare(_shape, _externalSkeleton, _externalWeights, false);
+    // gpuSkin follows the CLI flag so `--viewer --gpu-skinning` exercises the
+    // real GPU-skin path (skin bindings on the graphical LODs) in isolation —
+    // the paired palette retention is in Animate(). Off => bit-identical CPU.
+    _externalAnim->Prepare(_shape, _externalSkeleton, _externalWeights, false, ENGINE_CONFIG.enableGpuSkinning);
     LOG_INFO(Core, "Viewer: bound external animation {}", animPath);
 }
 
@@ -178,7 +181,11 @@ void ObjectViewer::Animate(int level)
 {
     if (_externalAnim)
     {
-        _externalAnim->Apply(_externalWeights, _shape, level, _animPhase);
+        // Pass `this` as the GPU-skin target: when --gpu-skinning is on and this
+        // LOD has skin bindings, Apply skips the CPU skin and retains the bone
+        // palette on the Object base for the skinned draw (same seam as Man /
+        // Parachute). Null-effect otherwise.
+        _externalAnim->Apply(_externalWeights, _shape, level, _animPhase, this);
         return;
     }
     Shape* shape = _shape->Level(level);
