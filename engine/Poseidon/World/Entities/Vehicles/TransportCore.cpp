@@ -1891,7 +1891,11 @@ void Transport::Draw(int level, ClipFlags clipFlags, const FrameBase& pos)
                 // vehicle gunner optics are a 4:3 vignette — stretch when bars off.
                 const bool preserve4x3 = AspectRatio::ArePillarboxBarsEnabled();
                 Draw2D(oShape, 0, GetOpticsColor(person), /*preserveAspect4x3*/ preserve4x3);
-                Object::DrawWidescreenPillarbox();
+
+                // optics use alpha blending, while open sights use alpha cutout.
+                // preserving the 4:3 aspect ratio for optics adds black pillarboxes on the sides
+                if (preserve4x3 && oShape->LevelOpaque(0)->HasBlendSections())
+                    Object::DrawWidescreenPillarbox();
             }
         }
     }
