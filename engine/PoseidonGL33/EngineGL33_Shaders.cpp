@@ -1,6 +1,7 @@
 #include <Poseidon/Core/Application.hpp>
 #include <PoseidonGL33/EngineGL33.hpp>
 #include <PoseidonGL33/GL33BindCache.hpp>
+#include <PoseidonGL33/GL33UploadSnapshot.hpp>
 #include <Poseidon/Core/Global.hpp>
 #include <Poseidon/World/Scene/Scene.hpp>
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
@@ -782,9 +783,7 @@ static GLuint s_psUBO = 0;
 // Cached copy of s_worldUBO slot 0, used to dedupe matrix uploads
 static float s_worldSlot0[16] = {};
 static bool s_worldSlot0Valid = false;
-static float s_vsUploaded[sizeof(s_vsShadow) / sizeof(float)] = {};
-static bool s_vsEverUploaded = false;
-static GLuint s_vsUploadedUBO = 0;
+static Poseidon::GL33UploadSnapshot<sizeof(s_vsShadow)> s_vsUploadSnapshot;
 
 void EngineGL33::FlushVSConstants()
 {
@@ -793,8 +792,7 @@ void EngineGL33::FlushVSConstants()
         return;
     }
 
-    // Skip flushes that would re-upload identical contents
-    if (s_vsEverUploaded && s_vsUploadedUBO == s_vsUBO && memcmp(s_vsShadow, s_vsUploaded, sizeof(s_vsShadow)) == 0)
+    if (s_vsUploadSnapshot.Matches(s_vsUBO, s_vsShadow))
     {
         return;
     }
@@ -805,10 +803,7 @@ void EngineGL33::FlushVSConstants()
 #endif
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(s_vsShadow), s_vsShadow);
 
-    // Update the cached copy
-    memcpy(s_vsUploaded, s_vsShadow, sizeof(s_vsShadow));
-    s_vsEverUploaded = true;
-    s_vsUploadedUBO = s_vsUBO;
+    s_vsUploadSnapshot.Record(s_vsUBO, s_vsShadow);
 }
 
 void EngineGL33::FlushPSConstants()
@@ -859,7 +854,7 @@ void EngineGL33::InitVertexShaders()
     glBindBuffer(GL_UNIFORM_BUFFER, s_vsUBO);
     glBufferData(GL_UNIFORM_BUFFER, sizeof(s_vsShadow), nullptr, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, s_vsUBO);
-    s_vsEverUploaded = false;
+    s_vsUploadSnapshot.Invalidate();
 
     // WorldInstances array UBO (binding 2) — 256 mat4 = 16 KB, the GL 3.3
     // minimum guaranteed UBO size. Slot 0 = the classic per-draw world

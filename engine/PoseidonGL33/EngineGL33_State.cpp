@@ -1,5 +1,6 @@
 #include <PoseidonGL33/EngineGL33.hpp>
 #include <PoseidonGL33/GL33BindCache.hpp>
+#include <PoseidonGL33/GL33PipelineChanges.hpp>
 #include <PoseidonGL33/TextureGL33.hpp>
 #include <Poseidon/Graphics/Core/GLBlendState.hpp>
 #include <Poseidon/Graphics/Core/GLClear.hpp>
@@ -165,8 +166,7 @@ void EngineGL33::ApplyPipeline(const Poseidon::render::RenderPassDescriptor& d)
         vertexInput == _lastApplied.vertexInput && d == _lastApplied.d)
         return;
 
-    // Force full rebind after invalidation
-    const bool force = !_lastApplied.valid;
+    const auto changes = Poseidon::GL33Pipeline::Compare(_lastApplied.d, d, _lastApplied.valid);
 
     // Validate the descriptor against the invariants listed in
     // `ValidateRenderPassDescriptor.hpp`.  Violations come from a
@@ -193,11 +193,11 @@ void EngineGL33::ApplyPipeline(const Poseidon::render::RenderPassDescriptor& d)
     // static_cast through the underlying type keeps the conversion
     // trivial.  A switch would be more defensive against future
     // reordering, but the static_asserts further down would catch that.
-    if (force || d.depth != _lastApplied.d.depth)
+    if (changes.depth)
         ApplyDepthMode(static_cast<DepthMode>(static_cast<int>(d.depth)));
 
     // -- Blend ----------------------------------------------------------
-    if (force || d.blend != _lastApplied.d.blend)
+    if (changes.blend)
         ApplyBlendMode(static_cast<BlendMode>(static_cast<int>(d.blend)));
 
     // -- Fog ------------------------------------------------------------
@@ -310,7 +310,7 @@ void EngineGL33::ApplyPipeline(const Poseidon::render::RenderPassDescriptor& d)
 
     // OnSurface decals get polygon offset; shadows a stronger angle-independent bias.
     // Depends only on shader + surface, so skip when neither changed.
-    if (force || d.shader != _lastApplied.d.shader || d.surface != _lastApplied.d.surface)
+    if (changes.polygonOffset)
     {
         if (d.shader == Poseidon::render::ShaderFamily::Shadow)
             Poseidon::render::pipeline::SetPolygonOffsetForShadows(true);
@@ -320,7 +320,7 @@ void EngineGL33::ApplyPipeline(const Poseidon::render::RenderPassDescriptor& d)
 
     // -- Cull mode + winding (descriptor owns this; no force-bind) -----
     // Per-mode helpers in Poseidon::render::cull set both enable + face atomically.
-    if (force || d.cull != _lastApplied.d.cull)
+    if (changes.cull)
     {
         switch (d.cull)
         {
@@ -335,7 +335,7 @@ void EngineGL33::ApplyPipeline(const Poseidon::render::RenderPassDescriptor& d)
                 break;
         }
     }
-    if (force || d.frontFace != _lastApplied.d.frontFace)
+    if (changes.frontFace)
     {
         if (d.frontFace == Poseidon::render::FrontFaceMode::CW)
             Poseidon::render::cull::FrontFaceCW();
