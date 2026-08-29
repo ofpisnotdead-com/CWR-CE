@@ -108,7 +108,7 @@ void VertexBufferGL33::CopyVertices(const Shape& src)
         sData->t0 = *uv;
         uv++;
         ClipFlags clip = useOrig ? src.OrigClip(vi) : src.Clip(vi);
-        sData->landClip = (clip & ClipLandKeep) ? 1 : ((clip & ClipLandOn) ? 2 : 0);
+        sData->landClip = static_cast<uint8_t>(ClassifyLandClipVertex(clip));
         vi++;
         sData++;
     }

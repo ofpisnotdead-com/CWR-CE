@@ -146,6 +146,7 @@ set(POSEIDON_TEST_SOURCES
     Graphics/test_model_renderer.cpp
     Graphics/test_gl33_rendering.cpp
     Graphics/test_gl33_bind_cache.cpp
+    Graphics/test_gl33_land_clip.cpp
     Graphics/test_gl33_state_cache.cpp
     Graphics/test_fan_decompose.cpp
     Graphics/test_zbias_math.cpp

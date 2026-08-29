@@ -209,6 +209,22 @@ struct SVertex
     uint8_t landClip;
 };
 
+enum class LandClipVertexMode : uint8_t
+{
+    Rigid,
+    Keep,
+    On,
+};
+
+constexpr LandClipVertexMode ClassifyLandClipVertex(ClipFlags clip)
+{
+    if (clip & ClipLandKeep)
+        return LandClipVertexMode::Keep;
+    if (clip & ClipLandOn)
+        return LandClipVertexMode::On;
+    return LandClipVertexMode::Rigid;
+}
+
 // GPU upload contract: SVertex is uploaded verbatim and read by vsTransform through
 // the SetupSVertexLayout() VAO. sizeof is the attribute stride and the offsets must
 // match the glVertexAttribPointer calls for locations 0..3.
