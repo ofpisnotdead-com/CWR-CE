@@ -262,7 +262,7 @@ void CHead::Simulate()
     if (oldT < tChange && newT >= tChange)
     {
         int size = (Pars >> "CfgMimics" >> "States").GetEntryCount();
-        int i = toIntFloor(size * GRandGen.RandomValue());
+        int i = toIntFloor(size * GFxRandGen.RandomValue());
         GetHead()->SetMimic((Pars >> "CfgMimics" >> "States").GetEntry(i).GetName());
     }
 
@@ -1490,7 +1490,7 @@ inline bool OnKilled()
 DisplayMissionEnd::DisplayMissionEnd(ControlsContainer* parent /*, bool editor*/) : Display(parent)
 {
     int quotations = (IDS_QUOTE_LAST - IDS_QUOTE_1) / 2 + 1;
-    _quotation = toIntFloor(quotations * GRandGen.RandomValue());
+    _quotation = toIntFloor(quotations * GFxRandGen.RandomValue());
     Load("RscDisplayMissionEnd");
 
     GetCtrl(IDC_ME_LOAD)->ShowCtrl(false);
