@@ -101,7 +101,7 @@ cmake --preset linux-x64-clang-rwdi
 cmake --build build/linux-x64-clang-rwdi
 ```
 
-Note that these may take a while, especially the first time they are run. Afterwards, the binaries will be available in the `dist/linux-x64-clang-rwdi` directory. For example, `dist/linux-x64-clang-rwdi/PoseidonGame` is the full game binary.
+Note that these may take a while, especially the first time they are run. Afterwards, the binaries will be available in the `dist/x64-linux-rwdi` directory. For example, `dist/x64-linux-rwdi/PoseidonGame` is the full game binary.
 
 ## Install binaries alongside game data
 
