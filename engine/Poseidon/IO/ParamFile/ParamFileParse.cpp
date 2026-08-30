@@ -5,6 +5,7 @@
 #include <Poseidon/IO/Streams/SerializeBin.hpp>
 #include <Poseidon/Foundation/Framework/LogFlags.hpp>
 #include <ctype.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -281,12 +282,17 @@ LSError ParamFile::Parse(const char* name)
     SetName(name);
 
     // Log full absolute path of file being parsed
-    char fullPath[512];
 #ifdef _WIN32
+    char fullPath[512];
     ::GetFullPathNameA(name, sizeof(fullPath), fullPath, nullptr);
 #else
+    // realpath() may write up to PATH_MAX bytes into the buffer
+    char fullPath[PATH_MAX];
     if (!realpath(name, fullPath))
+    {
         strncpy(fullPath, name, sizeof(fullPath) - 1);
+        fullPath[sizeof(fullPath) - 1] = '\0';
+    }
 #endif
     LOG_DEBUG(Core, "ParamFile::Parse() - Loading config file: {}", fullPath);
 
