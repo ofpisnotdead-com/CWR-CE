@@ -30,6 +30,12 @@ class CountingObject : public ObjectPlain
 
     int AnimateCalls() const { return _animateCalls; }
 
+    void MarkDestroyed()
+    {
+        _isDestroyed = true;
+        _destroyPhase = 255;
+    }
+
   private:
     int _animateCalls = 0;
 };
@@ -65,4 +71,27 @@ TEST_CASE("Object caches undamaged land-clipped bounds", "[World][Object][Bounds
     object->SetDammage(0.5f);
     object->AnimatedMinMax(0, bounds);
     REQUIRE(object->AnimateCalls() == 2);
+}
+
+TEST_CASE("Destroyed objects report shared shape deformation", "[World][Object][Instancing]")
+{
+    Ref<LODShapeWithShadow> lod = new LODShapeWithShadow();
+    Shape* level = new Shape();
+    lod->AddShape(level, 0.0f);
+
+    Ref<CountingObject> object = new CountingObject(lod, 1);
+    CHECK_FALSE(object->DeformsSharedShape(0));
+
+    Poly face;
+    face.Init();
+    face.SetN(0);
+    level->AddFace(face);
+    CHECK_FALSE(object->DeformsSharedShape(0));
+
+    object->SetDestructType(DestructBuilding);
+    object->MarkDestroyed();
+    CHECK(object->DeformsSharedShape(0));
+
+    object->SetDestructType(DestructTree);
+    CHECK_FALSE(object->DeformsSharedShape(0));
 }

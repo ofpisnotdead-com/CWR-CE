@@ -306,6 +306,7 @@ public:
 
 	virtual bool IsAnimated( int level ) const; // appearence changed with Animate
 	virtual bool IsAnimatedShadow( int level ) const; // shadow changed with Animate
+	virtual bool DeformsSharedShape( int level ) const;
 
 	// True when the shape snaps to the landscape surface (ClipLandKeep/ClipLandOn).
 	virtual bool HasLandClip( int level ) const;

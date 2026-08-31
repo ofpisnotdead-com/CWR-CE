@@ -1675,10 +1675,10 @@ void Scene::DrawObjectsAndShadowsPass1()
             const bool cpuDeform = oi->object->IsAnimated(oi->drawLOD);
             const bool vsDeform =
                 GEngine->LandClipInVS() && oi->object->GetLandClipMode(oi->drawLOD) != Object::LandClipNone;
-            const bool cheapPass = (!cpuDeform || vsDeform) && oi->object->Static() && sShape->NProxies() == 0 &&
-                                   !render::Has(headSpec.routing, render::Routing::OnSurface) &&
-                                   !render::Has(headSpec.routing, render::Routing::IsColored) &&
-                                   oi->object != GWorld->CameraOn();
+            const bool cheapPass =
+                !oi->object->DeformsSharedShape(oi->drawLOD) && (!cpuDeform || vsDeform) && oi->object->Static() &&
+                sShape->NProxies() == 0 && !render::Has(headSpec.routing, render::Routing::OnSurface) &&
+                !render::Has(headSpec.routing, render::Routing::IsColored) && oi->object != GWorld->CameraOn();
             const bool lit = cheapPass && litByLocalLight(oi);
             const bool headBatchable = cheapPass && !lit;
             if (headBatchable)
@@ -1691,6 +1691,7 @@ void Scene::DrawObjectsAndShadowsPass1()
                         SortObject* oj = _drawMergers[runEnd];
                         if (oj->object->GetShape() != shape || oj->drawLOD != oi->drawLOD ||
                             oj->passNum != oi->passNum || !oj->object->Static() ||
+                            oj->object->DeformsSharedShape(oj->drawLOD) ||
                             (sShape->Special() | oj->object->GetObjSpecial()) != headSpecial || litByLocalLight(oj))
                         {
                             break;
