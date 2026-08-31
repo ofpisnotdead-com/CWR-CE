@@ -269,7 +269,7 @@ void World::ReloadViewerCore(LODShapeWithShadow* shape, const char* classDesc)
 
     Object* obj = _cameraOn;
     VehicleWithAI* camAI = dyn_cast<VehicleWithAI>(obj);
-    const char* camName = camAI ? camAI->GetType()->GetName() : "";
+    const RString camName = camAI ? camAI->GetType()->GetName() : RString();
     if (!strcmpi(camName, viewClass))
     {
         Object* cobj = _cameraOn;

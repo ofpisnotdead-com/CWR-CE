@@ -262,7 +262,8 @@ GameValue TriHornPlayerVehicle(const GameState* /*state*/)
     EntityAI* veh = GWorld->GetRealPlayer()->Brain()->GetVehicle();
     if (!veh)
         return GameValue("FAIL:no_vehicle");
-    const char* vtype = veh->GetType() ? (const char*)veh->GetType()->GetName() : "?";
+    const RString vtypeName = veh->GetType() ? veh->GetType()->GetName() : RString("?");
+    const char* vtype = vtypeName;
     if (veh == static_cast<EntityAI*>(GWorld->GetRealPlayer()))
     {
         LOG_INFO(Core, "[tri] triHornPlayerVehicle: on foot (vehicle='{}')", vtype);
