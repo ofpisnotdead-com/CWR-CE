@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
+#include <cstring>
+#include <new>
 #include <Poseidon/Graphics/Rendering/Primitives/Vertex.hpp>
 #include <Poseidon/Graphics/Rendering/Primitives/Poly.hpp>
 #include <Poseidon/Graphics/Rendering/Primitives/Edges.hpp>
@@ -45,6 +47,35 @@ TEST_CASE("VertexTable - construction and vertex management", "[rendering][verte
         VertexTable vt(3);
         VertexTable vt2(vt);
         REQUIRE(vt2.NVertex() == 3);
+    }
+}
+
+TEST_CASE("VertexTable - min/max cache state does not depend on prior memory", "[rendering][vertex]")
+{
+    // MinMaxDynamic either returns the cached box or rescans, decided by _minMaxDirty, so
+    // constructing over two differently filled buffers must still answer identically.
+    auto minMaxOver = [](unsigned char fill, Vector3& min, Vector3& max)
+    {
+        alignas(VertexTable) unsigned char storage[sizeof(VertexTable)];
+        memset(storage, fill, sizeof(storage));
+        VertexTable* vt = new (storage) VertexTable(2);
+        vt->SetPos(0) = Vector3(-1, -2, -3);
+        vt->SetPos(1) = Vector3(4, 5, 6);
+        Vector3 minMax[2];
+        vt->MinMaxDynamic(minMax);
+        min = minMax[0];
+        max = minMax[1];
+        vt->~VertexTable();
+    };
+
+    Vector3 zeroedMin, zeroedMax, poisonedMin, poisonedMax;
+    minMaxOver(0x00, zeroedMin, zeroedMax);
+    minMaxOver(0xBE, poisonedMin, poisonedMax);
+
+    for (int i = 0; i < 3; i++)
+    {
+        REQUIRE(poisonedMin[i] == Catch::Approx(zeroedMin[i]));
+        REQUIRE(poisonedMax[i] == Catch::Approx(zeroedMax[i]));
     }
 }
 
