@@ -6,6 +6,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <string>
+#ifndef _WIN32
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <system_error>
+#endif
 
 // Phase 2: ParamFile Text Parsing & Formatting
 // This file tests the parsing of text format config files and verifies that
@@ -1073,3 +1079,35 @@ TEST_CASE("ParamFile - Fixture file I/O", "[paramfile][parse][fixtures][save]")
 // - Harden parser against malformed input
 //
 // This completes Phase 2 of the ParamFile testing plan.
+
+#ifndef _WIN32
+TEST_CASE("ParamFile - Parse a file whose resolved path exceeds 512 bytes", "[paramfile][parse][paths]")
+{
+    namespace fs = std::filesystem;
+
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    fs::path root = fs::temp_directory_path() / ("poseidon_longpath_" + std::to_string(nonce));
+
+    fs::path nested = root;
+    while (nested.string().size() < 600)
+        nested /= std::string(120, 'd');
+    fs::create_directories(nested);
+
+    const fs::path configPath = nested / "config.cpp";
+    {
+        std::ofstream out(configPath, std::ios::binary);
+        out << "longPathValue = 7;\n";
+    }
+    REQUIRE(fs::canonical(configPath).string().size() > 512);
+
+    ParamFile pf;
+    REQUIRE(pf.Parse(configPath.string().c_str()) == LSOK);
+
+    ParamEntry* value = pf.FindEntry("longPathValue");
+    REQUIRE(value != nullptr);
+    REQUIRE(value->GetInt() == 7);
+
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+#endif
