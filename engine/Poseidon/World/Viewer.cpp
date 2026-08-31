@@ -15,9 +15,8 @@
 #include <Poseidon/Foundation/Platform/AppConfig.hpp>
 #include <cstdlib>
 
-#include <Poseidon/Asset/Formats/Common/FormatDetector.hpp>
+#include <Poseidon/Asset/Formats/P3D/P3DModelLoad.hpp>
 #include <cmath>
-#include <stdexcept>
 #include <string>
 #include <Poseidon/Foundation/Common/FltOpts.hpp>
 #include <Poseidon/Foundation/Framework/Log.hpp>
@@ -30,13 +29,6 @@
 #include <Poseidon/Foundation/platform.hpp>
 
 using namespace Poseidon;
-namespace Poseidon
-{
-using Poseidon::Asset::Formats::FormatInfo;
-using Poseidon::Asset::Formats::P3DFormatDetector;
-} // namespace Poseidon
-#include <Poseidon/Asset/Formats/P3D/ODOLLoader.hpp>
-#include <Poseidon/Asset/Formats/P3D/MLODLoader.hpp>
 #include <Poseidon/World/Model/ShapeAdapter.hpp>
 #include <Poseidon/Foundation/Logging/Logging.hpp>
 #include <Poseidon/World/Simulation/Animation/RtAnimation.hpp>
@@ -446,22 +438,13 @@ void World::ReloadViewer(void* buf, int len, const char* classDesc)
 
 void World::ReloadViewer(const char* filename, const char* classDesc)
 {
-    auto formatInfo = P3DFormatDetector::DetectFormat(filename);
-    if (!formatInfo.isSupported)
-    {
-        LOG_WARN(Core, "Unsupported P3D format for {}: {}", filename, formatInfo.errorMessage);
-        throw std::runtime_error(formatInfo.errorMessage);
-    }
-
     Poseidon::Model::Model model;
-    if (formatInfo.signature == "ODOL")
-        model = Poseidon::Asset::Formats::ODOLLoader::load(filename);
-    else if (formatInfo.signature == "MLOD")
-        model = Poseidon::Asset::Formats::MLODLoader::load(filename);
-    else
+    Poseidon::Asset::Formats::FormatInfo format;
+    std::string error;
+    if (!Poseidon::Asset::Formats::TryLoadP3D(filename, model, format, error))
     {
-        LOG_WARN(Core, "Unknown P3D signature '{}' for {}", formatInfo.signature, filename);
-        throw std::runtime_error("Unknown P3D signature: " + formatInfo.signature);
+        LOG_ERROR(Core, "Cannot load model {}: {}", filename, error);
+        return;
     }
 
     model.compile();
@@ -470,11 +453,12 @@ void World::ReloadViewer(const char* filename, const char* classDesc)
     if (!shape || shape->NLevels() == 0)
     {
         delete shape;
-        throw std::runtime_error("New pipeline produced empty shape for " + std::string(filename));
+        LOG_ERROR(Core, "Cannot load model {}: no levels of detail", filename);
+        return;
     }
 
-    LOG_INFO(Core, "New pipeline loaded {} ({} v{}, {} LODs)", filename, formatInfo.signature,
-             formatInfo.GetVersionString(), shape->NLevels());
+    LOG_INFO(Core, "New pipeline loaded {} ({} v{}, {} LODs)", filename, format.signature, format.GetVersionString(),
+             shape->NLevels());
 
     shape->OptimizeShapes();
     shape->CheckForcedProperties();

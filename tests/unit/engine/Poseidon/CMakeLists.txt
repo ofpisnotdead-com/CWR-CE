@@ -213,6 +213,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     Asset/Formats/test_wrp.cpp
     Asset/Formats/RTM/test_rtm_reader.cpp
     Asset/Formats/test_rtm.cpp
+    Asset/Formats/test_p3d_model_load.cpp
     Asset/Formats/test_paa.cpp
     Asset/Formats/test_pac.cpp
     
