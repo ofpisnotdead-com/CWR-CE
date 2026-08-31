@@ -671,7 +671,7 @@ layout(std140) uniform VSConstants {
     vec4 sunEn;         // c20
     vec4 vpScale;       // c21 — VSScreen only, declared for layout parity
     vec4 hmParams0;     // c22: terrain heightmap {invGrid, camX, camZ, camY}
-    vec4 hmParams1;     // c23: land clip {boundingCenter.xyz, enable}
+    vec4 hmParams1;     // c23: land clip {boundingCenter.xyz, mode}
     mat4 texMat0;       // c24-c27
     mat4 texMat1;       // c28-c31
     vec4 texCtrl;       // c32

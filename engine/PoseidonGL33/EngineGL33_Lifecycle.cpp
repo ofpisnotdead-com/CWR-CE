@@ -1084,6 +1084,13 @@ void EngineGL33::ShutdownGL()
     DestroyVBTL();
     DestroyVB();
 
+    if (_heightMapTex)
+    {
+        GL33Bind::OnTexDeleted(_heightMapTex);
+        glDeleteTextures(1, &_heightMapTex);
+        _heightMapTex = 0;
+    }
+
     if (_fallbackWhiteTex)
     {
         GL33Bind::OnTexDeleted(_fallbackWhiteTex);
