@@ -1210,7 +1210,7 @@ void EngineGL33::SetLandClipParams(float mode, Vector3Par boundingCenter)
     {
         return;
     }
-    glBindBuffer(GL_UNIFORM_BUFFER, s_vsUBO);
+    GL33Bind::UniformBuffer(s_vsUBO);
     glBufferSubData(GL_UNIFORM_BUFFER, VSConst::SlotHmParams1 * 4 * sizeof(float), sizeof(v), v);
 }
 
