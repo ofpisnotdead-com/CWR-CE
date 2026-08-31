@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <Poseidon/Graphics/Dummy/EngineDummy.hpp>
 #include <Poseidon/Graphics/Rendering/Shape/Shape.hpp>
 #include <Poseidon/World/Scene/Object.hpp>
 #include <Poseidon/World/Terrain/Landscape.hpp>
@@ -15,6 +16,22 @@ class GlobalLandscapeScope
 
   private:
     Landscape* _previous;
+};
+
+class GlobalEngineScope
+{
+  public:
+    explicit GlobalEngineScope(Engine* engine) : _previous(GEngine) { GEngine = engine; }
+    ~GlobalEngineScope() { GEngine = _previous; }
+
+  private:
+    Engine* _previous;
+};
+
+class LandClipEngine : public EngineDummy
+{
+  public:
+    bool LandClipInVS() const override { return true; }
 };
 
 class CountingObject : public ObjectPlain
@@ -94,4 +111,28 @@ TEST_CASE("Destroyed objects report shared shape deformation", "[World][Object][
 
     object->SetDestructType(DestructTree);
     CHECK_FALSE(object->DeformsSharedShape(0));
+}
+
+TEST_CASE("Animated bounds do not nest object animation", "[World][Object][Bounds]")
+{
+    LandClipEngine engine;
+    GlobalEngineScope globalEngine(&engine);
+    Landscape landscape(nullptr, nullptr);
+    GlobalLandscapeScope globalLandscape(&landscape);
+
+    Ref<LODShapeWithShadow> lod = new LODShapeWithShadow();
+    Shape* level = new Shape();
+    level->SetHints(ClipLandOn, ClipLandOn);
+    SetBounds(*level, Vector3(1, 2, 3), Vector3(4, 5, 6));
+    lod->AddShape(level, 0.0f);
+
+    Ref<CountingObject> object = new CountingObject(lod, 1);
+    object->SetDestructType(DestructBuilding);
+    object->MarkDestroyed();
+
+    Vector3 center;
+    float radius = 0;
+    object->AnimatedBSphere(0, center, radius, true);
+
+    CHECK(object->AnimateCalls() == 0);
 }

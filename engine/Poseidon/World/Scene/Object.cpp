@@ -485,19 +485,33 @@ void Object::ApplyLandClip(int level)
     }
 }
 
-void Object::AnimatedMinMax(int level, Vector3* minMax)
+bool Object::AnimBBoxCacheable(int level) const
 {
     // The engine reuses the "animate" path for both real animation and snapping a shape to the
     // landscape surface (ClipLand). A land-clipped shape does not move after level load, so its
     // bounds are fixed and can be cached (excluding damage/destruction).
     const bool destroying = _isDestroyed && _destroyPhase > 0;
-    const bool cacheable = HasLandClip(level) && GetTotalDammage() == 0 && !destroying;
-    if (cacheable && _animBBoxLevel == level)
+    return HasLandClip(level) && GetTotalDammage() == 0 && !destroying;
+}
+
+bool Object::CachedAnimatedMinMax(int level, Vector3* minMax) const
+{
+    if (_animBBoxLevel != level || !AnimBBoxCacheable(level))
     {
-        minMax[0] = _animBBoxMin;
-        minMax[1] = _animBBoxMax;
+        return false;
+    }
+    minMax[0] = _animBBoxMin;
+    minMax[1] = _animBBoxMax;
+    return true;
+}
+
+void Object::AnimatedMinMax(int level, Vector3* minMax)
+{
+    if (CachedAnimatedMinMax(level, minMax))
+    {
         return;
     }
+    const bool cacheable = AnimBBoxCacheable(level);
 
     {
         LandClipScope lc(false);
@@ -535,10 +549,18 @@ void Object::AnimatedBSphere(int level, Vector3& bCenter, float& bRadius, bool i
     if (GEngine->LandClipInVS() && HasLandClip(level))
     {
         Vector3 mm[2];
-        AnimatedMinMax(level, mm);
-        bCenter = (mm[0] + mm[1]) * 0.5f;
-        bRadius = (mm[1] - mm[0]).Size() * 0.5f;
-        return;
+        bool haveBounds = CachedAnimatedMinMax(level, mm);
+        if (!haveBounds && !isAnimated)
+        {
+            AnimatedMinMax(level, mm);
+            haveBounds = true;
+        }
+        if (haveBounds)
+        {
+            bCenter = (mm[0] + mm[1]) * 0.5f;
+            bRadius = (mm[1] - mm[0]).Size() * 0.5f;
+            return;
+        }
     }
     // isAnimated should be set
     // when function is called inside Animate/Deanimate block
