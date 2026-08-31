@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <Poseidon/Graphics/Rendering/Shape/Shape.hpp>
+#include <Poseidon/World/Scene/ObjectClasses.hpp>
 #include <PoseidonGL33/EngineGL33.hpp>
 
 using namespace Poseidon;
@@ -39,4 +40,21 @@ TEST_CASE("LODShape identifies land clip as its only animation", "[Graphics][GL3
 
     shape.SetHints(ClipLandKeep | ClipLightSky, ClipLandKeep | ClipLightSky);
     CHECK_FALSE(shape.IsLandClipOnlyAnim());
+}
+
+TEST_CASE("Objects select their GPU land-clip mode", "[Graphics][GL33][LandClip]")
+{
+    Ref<LODShapeWithShadow> lod = new LODShapeWithShadow();
+    Shape* level = new Shape();
+    level->SetHints(ClipNone, ClipNone);
+    lod->AddShape(level, 0.0f);
+
+    Ref<ObjectPlain> object = new ObjectPlain(lod, 1);
+    CHECK(object->GetLandClipMode(0) == Object::LandClipNone);
+
+    level->SetHints(ClipLandKeep, ClipNone);
+    CHECK(object->GetLandClipMode(0) == Object::LandClipVertex);
+
+    Ref<ForestPlain> forest = new ForestPlain(lod, 2);
+    CHECK(forest->GetLandClipMode(0) == Object::LandClipPlane);
 }

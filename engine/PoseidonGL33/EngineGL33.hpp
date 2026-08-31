@@ -128,7 +128,7 @@ enum : int
     SlotSunEn = 20,
     SlotVpScale = 21,
     SlotHmParams0 = 22, // terrain heightmap: {invGrid, camX, camZ, camY}
-    SlotHmParams1 = 23, // land clip: {boundingCenter.xyz, enable}
+    SlotHmParams1 = 23, // land clip: {boundingCenter.xyz, mode}
     SlotTexMat0 = 24, // 4 vec4s
     SlotTexMat1 = 28, // 4 vec4s
     SlotTexCtrl = 32,
@@ -139,6 +139,7 @@ enum : int
     SlotLightAmbient = 50, // MaxLocalLights vec4: ambient * nightEffect
     SlotLightDir = 58,     // MaxLocalLights vec4: xyz beam dir (world), w = isSpot
     SlotLightVP = 66,      // 4 vec4s: light view-projection for shadow-map sampling
+    SlotLandGrid = 70,     // {invLandGrid, heightmap texels per land square, 0, 0}
 };
 
 // Per-draw cap on local lights folded into the vertex shader.
@@ -161,6 +162,7 @@ static_assert(SlotLightDiffuse >= SlotLightPos + MaxLocalLights, "SlotLightDiffu
 static_assert(SlotLightAmbient >= SlotLightDiffuse + MaxLocalLights, "SlotLightAmbient overlaps SlotLightDiffuse");
 static_assert(SlotLightDir >= SlotLightAmbient + MaxLocalLights, "SlotLightDir overlaps SlotLightAmbient");
 static_assert(SlotLightVP >= SlotLightDir + MaxLocalLights, "SlotLightVP overlaps SlotLightDir");
+static_assert(SlotLandGrid >= SlotLightVP + 4, "SlotLandGrid overlaps SlotLightVP");
 }; // namespace VSConst
 
 struct TriQueue
@@ -621,9 +623,9 @@ class EngineGL33 : public Engine
     void InitDraw(bool clear = false, PackedColor color = PackedColor(0)) override;
     void FinishDraw() override;
     void NextFrame() override;
-    void SetTerrainHeightmap(const float* heights, int width, int height, float invGrid) override;
+    void SetTerrainHeightmap(const float* heights, int width, int height, float invGrid, float invLandGrid) override;
     bool LandClipInVS() const override;
-    void SetLandClipParams(float enable, Vector3Par boundingCenter) override;
+    void SetLandClipParams(float mode, Vector3Par boundingCenter) override;
     void DrawTestPattern(const char* name) override;
 
     void Pause() override;

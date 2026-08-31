@@ -308,7 +308,16 @@ public:
 	virtual bool IsAnimatedShadow( int level ) const; // shadow changed with Animate
 
 	// True when the shape snaps to the landscape surface (ClipLandKeep/ClipLandOn).
-	bool HasLandClip( int level ) const;
+	virtual bool HasLandClip( int level ) const;
+
+	enum LandClipMode
+	{
+		LandClipNone = 0,
+		LandClipVertex = 1,
+		LandClipPlane = 2,
+	};
+	virtual LandClipMode GetLandClipMode( int level ) const;
+	static bool RenderHandlesLandClip();
 
 	// Change object position. Used when object is already present in landscape.
 	virtual void Move(Matrix4Par transform);
