@@ -590,7 +590,10 @@ void LoggingSystem::Initialize(const char* logLevel, const char* categoryFilter,
                 std::filesystem::create_directories(p.parent_path(), ec);
             }
 
-            auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFile, true);
+            // Appended: a path given on the command line is one somebody keeps,
+            // and truncating it loses every session before the last restart. The
+            // per-run file below can truncate — its name is never reused.
+            auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFile, false);
             auto formatter = std::make_unique<spdlog::pattern_formatter>();
             formatter->add_flag<PoseidonFormatter>('*', this, /*colored=*/false);
             formatter->set_pattern("[%Y-%m-%d %H:%M:%S.%e] %*%v");
