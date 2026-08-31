@@ -14,11 +14,11 @@ class TextureDummy : public Texture
   private:
     SRef<ITextureSource> _src;
 
-    bool _glideEmulation;
-    int _aRatio;
-    int _w, _h;
+    bool _glideEmulation = false;
+    int _aRatio = 0;
+    int _w = 0, _h = 0;
 
-    int _nMipmaps;
+    int _nMipmaps = 0;
     PacLevelMem _mipmaps[MAX_MIPMAPS];
 
     int Init();
