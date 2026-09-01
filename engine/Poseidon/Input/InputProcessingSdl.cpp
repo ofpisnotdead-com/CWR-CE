@@ -22,6 +22,7 @@
 #include <Poseidon/Foundation/Framework/AppFrame.hpp>
 #include <Poseidon/Foundation/Time/Time.hpp>
 #include <Poseidon/Foundation/Types/Memtype.h>
+#include <Poseidon/Foundation/Logging/Logging.hpp>
 
 namespace Poseidon
 {
@@ -269,7 +270,58 @@ void ProcessMouse_SDL(DWORD timeDelta)
         GInput.keyboard.turnLastActive = Glob.uiTime;
 }
 
+// Every controller SDL exposes is a joystick; the subset carrying a gamepad mapping
+// is additionally opened through the gamepad API, which is what supplies labelled
+// sticks, triggers, rumble and menu navigation. A device with no mapping is still
+// fully usable through the raw handle alone.
 static SDL_Gamepad* sGamepad = nullptr;
+static SDL_Joystick* sJoystick = nullptr;
+static bool sJoystickIsMapped = false;
+
+static void CloseRawJoystick()
+{
+    if (sJoystick)
+        SDL_CloseJoystick(sJoystick);
+    sJoystick = nullptr;
+    sJoystickIsMapped = false;
+    GInput.joystick.Clear();
+    GInput.joystick.connected = false;
+    for (int i = 0; i < N_RAW_JOYSTICK_POV; i++)
+        GInput.joystick.povOld[i] = false;
+}
+
+// An unmapped device is served only by the raw handle, so it takes the slot from a
+// mapped one, which the gamepad handle already covers.
+static void OpenRawJoystick(SDL_JoystickID which, bool mapped)
+{
+    if (sJoystick)
+    {
+        if (mapped || !sJoystickIsMapped)
+            return;
+        CloseRawJoystick();
+    }
+    sJoystick = SDL_OpenJoystick(which);
+    sJoystickIsMapped = sJoystick != nullptr && mapped;
+    if (sJoystick)
+    {
+        LOG_INFO(Input, "Joystick opened: \"{}\" ({} axes, {} buttons, {} hats){}",
+                 SDL_GetJoystickName(sJoystick) ? SDL_GetJoystickName(sJoystick) : "unknown",
+                 SDL_GetNumJoystickAxes(sJoystick), SDL_GetNumJoystickButtons(sJoystick),
+                 SDL_GetNumJoystickHats(sJoystick), mapped ? ", has gamepad mapping" : "");
+    }
+}
+
+void SDLInput_JoystickAdded(SDL_JoystickID which)
+{
+    OpenRawJoystick(which, SDL_IsGamepad(which));
+}
+
+void SDLInput_JoystickRemoved(SDL_JoystickID which)
+{
+    if (!sJoystick || SDL_GetJoystickID(sJoystick) != which)
+        return;
+    CloseRawJoystick();
+}
 
 void SDLInput_GamepadAdded(SDL_JoystickID which)
 {
@@ -295,6 +347,84 @@ void SDLInput_GamepadRemoved(SDL_JoystickID which)
         GInput.gamepad.stickPov[i] = false;
         GInput.gamepad.stickPovToDo[i] = false;
         GInput.gamepad.stickPovOld[i] = false;
+    }
+}
+
+// SDL_HAT_* bitmask to the engine's 8-way POV index (0=N, 2=E, 4=S, 6=W).
+static int HatToPov8(Uint8 hat)
+{
+    switch (hat)
+    {
+        case SDL_HAT_UP:
+            return 0;
+        case SDL_HAT_RIGHTUP:
+            return 1;
+        case SDL_HAT_RIGHT:
+            return 2;
+        case SDL_HAT_RIGHTDOWN:
+            return 3;
+        case SDL_HAT_DOWN:
+            return 4;
+        case SDL_HAT_LEFTDOWN:
+            return 5;
+        case SDL_HAT_LEFT:
+            return 6;
+        case SDL_HAT_LEFTUP:
+            return 7;
+        default:
+            return -1;
+    }
+}
+
+static float ApplyDeadzone(float val, float dz);
+
+static void ReadRawJoystick()
+{
+    JoystickState& js = GInput.joystick;
+    static bool sPrevButton[N_RAW_JOYSTICK_BUTTONS] = {};
+
+    if (!sJoystick || !js.enabled)
+    {
+        js.connected = false;
+        for (int i = 0; i < N_RAW_JOYSTICK_BUTTONS; i++)
+            sPrevButton[i] = false;
+        for (int i = 0; i < N_RAW_JOYSTICK_POV; i++)
+            js.povOld[i] = false;
+        return;
+    }
+
+    js.connected = true;
+    js.axisCount = SDL_min(SDL_GetNumJoystickAxes(sJoystick), N_RAW_JOYSTICK_AXES);
+    js.buttonCount = SDL_min(SDL_GetNumJoystickButtons(sJoystick), N_RAW_JOYSTICK_BUTTONS);
+    js.hatCount = SDL_min(SDL_GetNumJoystickHats(sJoystick), N_RAW_JOYSTICK_HATS);
+
+    // Axes are signed, so a centred stick reads 0 and a throttle spans -1..+1 rather
+    // than resting at one end of a 0..1 range.
+    for (int i = 0; i < js.axisCount; i++)
+    {
+        const int slot = JoystickAxisSlot(js.axisCount, i);
+        if (slot >= 0)
+            js.axis[slot] = ApplyDeadzone(SDL_GetJoystickAxis(sJoystick, i) / 32767.0f, js.deadzone);
+    }
+
+    for (int i = 0; i < N_RAW_JOYSTICK_BUTTONS; i++)
+    {
+        const bool pressed = i < js.buttonCount && SDL_GetJoystickButton(sJoystick, i);
+        js.buttons[i] = pressed ? 1.0f : 0.0f;
+        js.buttonsToDo[i] = pressed && !sPrevButton[i];
+        sPrevButton[i] = pressed;
+    }
+
+    for (int h = 0; h < N_RAW_JOYSTICK_HATS; h++)
+    {
+        const int dir = h < js.hatCount ? HatToPov8(SDL_GetJoystickHat(sJoystick, h)) : -1;
+        for (int d = 0; d < 8; d++)
+        {
+            const int idx = h * 8 + d;
+            js.pov[idx] = (dir == d);
+            js.povToDo[idx] = js.pov[idx] && !js.povOld[idx];
+            js.povOld[idx] = js.pov[idx];
+        }
     }
 }
 
@@ -456,35 +586,48 @@ void ProcessJoystick_SDL()
     for (int i = 0; i < N_JOYSTICK_AXES; i++)
         GInput.gamepad.stickAxis[i] = 0;
 
-    if (!sGamepad)
+    GInput.joystick.Clear();
+
+    // Enumerate only while nothing is open. A device arriving later comes through
+    // SDL_EVENT_JOYSTICK_ADDED / SDL_EVENT_GAMEPAD_ADDED, so this is just the
+    // one-shot pickup for devices already connected at startup.
+    if (!sGamepad && !sJoystick)
     {
-        // Graphics backends call SDL_Init(SDL_INIT_VIDEO) only, so the
-        // gamepad subsystem isn't running by default — without this
-        // SDL_HasGamepad always returns false and the pad is invisible
-        // even when physically connected.  Init once, lazily.
+        // Graphics backends call SDL_Init(SDL_INIT_VIDEO) only, so neither
+        // controller subsystem is running by default, and without this the
+        // enumerators return nothing for a connected device.  Init once, lazily.
         if (!SDL_WasInit(SDL_INIT_GAMEPAD))
             SDL_InitSubSystem(SDL_INIT_GAMEPAD);
-        // Auto-open first available gamepad if not yet opened
-        if (SDL_HasGamepad())
+        if (!SDL_WasInit(SDL_INIT_JOYSTICK))
+            SDL_InitSubSystem(SDL_INIT_JOYSTICK);
+
+        int count = 0;
+        SDL_JoystickID* ids = SDL_GetJoysticks(&count);
+        if (ids)
         {
-            int count = 0;
-            SDL_JoystickID* ids = SDL_GetGamepads(&count);
-            if (ids && count > 0)
-                sGamepad = SDL_OpenGamepad(ids[0]);
-            SDL_free(ids);
+            for (int i = 0; i < count; i++)
+            {
+                const bool mapped = SDL_IsGamepad(ids[i]);
+                if (mapped && !sGamepad)
+                    sGamepad = SDL_OpenGamepad(ids[i]);
+                OpenRawJoystick(ids[i], mapped);
+            }
         }
+        SDL_free(ids);
     }
 
     float syntheticLx = 0.0f;
     float syntheticLy = 0.0f;
     const bool hasSyntheticLeftStick = InputSubsystem::Instance().GetSyntheticLeftStick(syntheticLx, syntheticLy);
 
-    if ((!sGamepad && !hasSyntheticLeftStick) || !GWorld->IsUserInputEnabled())
+    if ((!sGamepad && !sJoystick && !hasSyntheticLeftStick) || !GWorld->IsUserInputEnabled())
     {
         sControllerEditorUiLayout.ResetDirections();
         sRumble.Update(sGamepad);
         return;
     }
+
+    ReadRawJoystick();
 
     const float dzStick = GInput.gamepad.deadzoneStick;
     const float dzTrigger = GInput.gamepad.deadzoneTrigger;

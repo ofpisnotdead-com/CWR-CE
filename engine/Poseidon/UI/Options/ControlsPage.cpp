@@ -3,6 +3,7 @@
 #include <Poseidon/UI/Options/ConfirmPage.hpp>
 #include <Poseidon/UI/Options/GamepadPage.hpp>
 #include <Poseidon/UI/Options/GamepadTuningPage.hpp>
+#include <Poseidon/UI/Options/JoystickPage.hpp>
 #include <Poseidon/UI/Options/KbmPage.hpp>
 #include <Poseidon/UI/Options/MousePage.hpp>
 #include <Poseidon/UI/Options/OptionsShell.hpp>
@@ -42,6 +43,10 @@ bool ControlsPage::OnNav(OptionsShell& shell, int idc)
 
         case 1406: // Gamepad Tuning
             shell.PushPage(std::make_unique<GamepadTuningPage>());
+            return true;
+
+        case 1407: // Joystick bindings
+            shell.PushPage(std::make_unique<JoystickPage>());
             return true;
 
         case 1403: // Reset all to defaults — confirm first

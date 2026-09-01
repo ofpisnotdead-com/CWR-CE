@@ -15,7 +15,10 @@ namespace Poseidon
 {
 namespace
 {
-constexpr int kContextControlsVersion = 5;
+constexpr int kContextControlsVersion = 6;
+// Files written before joystick bindings existed list every action, so the ordinary
+// seed-then-override path cannot introduce them. They are re-added after the load.
+constexpr int kJoystickDefaultsVersion = 6;
 constexpr int kGamepadButtonA = 0;
 constexpr int kGamepadButtonB = 1;
 constexpr int kGamepadButtonX = 2;
@@ -39,6 +42,13 @@ constexpr int kGamepadAxisRightX = 3;
 constexpr int kGamepadAxisRightY = 4;
 constexpr int kGamepadAxisLeftTrigger = 5;
 constexpr int kGamepadAxisRightTrigger = 2;
+
+// Axis numbers are the fixed slots the device layer resolves a device's axes onto.
+constexpr int kJoyAxisX = 0;
+constexpr int kJoyAxisY = 1;
+constexpr int kJoyAxisZ = 2;
+constexpr int kJoyAxisRz = 5;
+constexpr int kJoyAxisSlider0 = 6;
 
 const char* ContextPrefix(InputContext ctx)
 {
@@ -120,6 +130,47 @@ void BindPov(InputProfile& profile, UserAction action, int pov, InputCode modifi
     profile.Bind(action, InputBinding(InputCode::GamepadPov(pov), modifier));
 }
 
+void BindJoystickButton(InputProfile& profile, UserAction action, int button)
+{
+    profile.Bind(action, InputCode::JoystickBtn(button));
+}
+
+void BindJoystickPov(InputProfile& profile, UserAction action, int dir)
+{
+    profile.Bind(action, InputCode::JoystickPov(0, dir));
+}
+
+void BindJoystickAxisAction(InputProfile& profile, UserAction action, int axis)
+{
+    profile.Bind(action, InputCode::JoystickAx(axis));
+}
+
+void ApplyJoystickDefaults(InputProfile& profile)
+{
+    BindJoystickButton(profile, UAFire, 0);
+    BindJoystickButton(profile, UALockTargets, 1);
+    BindJoystickButton(profile, UAToggleWeapons, 2);
+    BindJoystickButton(profile, UAZoomIn, 3);
+    BindJoystickButton(profile, UANextAction, 4);
+    BindJoystickButton(profile, UAAction, 5);
+    BindJoystickButton(profile, UAPrevAction, 6);
+
+    BindJoystickPov(profile, UALookUp, 0);
+    BindJoystickPov(profile, UALookRightUp, 1);
+    BindJoystickPov(profile, UALookRight, 2);
+    BindJoystickPov(profile, UALookRightDown, 3);
+    BindJoystickPov(profile, UALookDown, 4);
+    BindJoystickPov(profile, UALookLeftDown, 5);
+    BindJoystickPov(profile, UALookLeft, 6);
+    BindJoystickPov(profile, UALookLeftUp, 7);
+
+    BindJoystickAxisAction(profile, UAAxisTurn, kJoyAxisX);
+    BindJoystickAxisAction(profile, UAAxisDive, kJoyAxisY);
+    BindJoystickAxisAction(profile, UAAxisRudder, kJoyAxisRz);
+    BindJoystickAxisAction(profile, UAAxisThrust, kJoyAxisZ);
+    BindJoystickAxisAction(profile, UAAxisThrust, kJoyAxisSlider0);
+}
+
 void ApplyCommonGamepadDefaults(InputProfile& profile)
 {
     BindPov(profile, UAPrevAction, kGamepadPovUp);
@@ -189,6 +240,7 @@ void ApplyDriverGamepadDefaults(InputProfile& profile)
 void ApplyContextDefaults(InputContext ctx, InputProfile& profile)
 {
     ApplyCommonGamepadDefaults(profile);
+    ApplyJoystickDefaults(profile);
 
     switch (ctx)
     {
@@ -270,6 +322,7 @@ bool ContextControlsConfig::Load(const std::string& path)
     // each profile with defaults first so those actions come up bound, then let
     // the file override the actions it does list.
     const bool seedDefaults = version < kContextControlsVersion;
+    const bool seedJoystickDefaults = version < kJoystickDefaultsVersion;
     migratedOnLoad = seedDefaults;
 
     UserActionDesc* descs = InputSubsystem::GetUserActionDesc();
@@ -322,6 +375,9 @@ bool ContextControlsConfig::Load(const std::string& path)
             AddMapWheelToEmptySlot(profile, UAMapZoomIn, InputCode::MouseWheelDown());
             AddMapWheelToEmptySlot(profile, UAMapZoomOut, InputCode::MouseWheelUp());
         }
+
+        if (seedJoystickDefaults)
+            ApplyJoystickDefaults(profile);
     }
 
     return true;

@@ -549,6 +549,54 @@ RString GetKeyName(int dikCode)
             return LocalizeString(IDS_INPUT_DEVICE_POV_W);
         case INPUT_DEVICE_STICK_POV + 7:
             return LocalizeString(IDS_INPUT_DEVICE_POV_NW);
+
+        // Raw joystick axes are named by slot, which is what the bindings address.
+        case INPUT_DEVICE_JOYSTICK_AXIS + 0:
+            return LocalizeString(IDS_INPUT_DEVICE_STICK_AXIS_X);
+        case INPUT_DEVICE_JOYSTICK_AXIS + 1:
+            return LocalizeString(IDS_INPUT_DEVICE_STICK_AXIS_Y);
+        case INPUT_DEVICE_JOYSTICK_AXIS + 2:
+            return LocalizeString(IDS_INPUT_DEVICE_STICK_AXIS_Z);
+        case INPUT_DEVICE_JOYSTICK_AXIS + 3:
+            return LocalizeString(IDS_INPUT_DEVICE_STICK_ROT_X);
+        case INPUT_DEVICE_JOYSTICK_AXIS + 4:
+            return LocalizeString(IDS_INPUT_DEVICE_STICK_ROT_Y);
+        case INPUT_DEVICE_JOYSTICK_AXIS + 5:
+            return LocalizeString(IDS_INPUT_DEVICE_STICK_ROT_Z);
+        case INPUT_DEVICE_JOYSTICK_AXIS + 6:
+            return LocalizeString(IDS_INPUT_DEVICE_STICK_SLIDER_1);
+        case INPUT_DEVICE_JOYSTICK_AXIS + 7:
+            return LocalizeString(IDS_INPUT_DEVICE_STICK_SLIDER_2);
+        default:
+            break;
+    }
+
+    // Raw joystick buttons and hats are too numerous to enumerate, and the device
+    // reports no names for them, so they are labelled by index.
+    const int value = InputBindingValue(dikCode);
+    switch (InputBindingDevice(dikCode))
+    {
+        case INPUT_DEVICE_JOYSTICK:
+        {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "Joy Btn. #%d", value + 1);
+            return RString(buf);
+        }
+        case INPUT_DEVICE_JOYSTICK_POV:
+        {
+            static const int kPovNames[8] = {IDS_INPUT_DEVICE_POV_N,  IDS_INPUT_DEVICE_POV_NE, IDS_INPUT_DEVICE_POV_E,
+                                             IDS_INPUT_DEVICE_POV_SE, IDS_INPUT_DEVICE_POV_S,  IDS_INPUT_DEVICE_POV_SW,
+                                             IDS_INPUT_DEVICE_POV_W,  IDS_INPUT_DEVICE_POV_NW};
+            if (value < 0 || value >= N_RAW_JOYSTICK_POV)
+                return "";
+            const RString dir = LocalizeString(kPovNames[value % 8]);
+            const int hat = value / 8;
+            if (hat == 0)
+                return dir;
+            char buf[16];
+            snprintf(buf, sizeof(buf), "Hat %d ", hat + 1);
+            return RString(buf) + dir;
+        }
         default:
             return "";
     }

@@ -205,6 +205,57 @@ static bool QueryJoystickButtonToDo(Input& in, int index, bool reset, bool check
     return ret;
 }
 
+static float QueryRawJoystickButton(const Input& in, int index, bool checkFocus)
+{
+    if (checkFocus && in.gameFocusLost > 0)
+        return 0;
+    if (index < 0 || index >= N_RAW_JOYSTICK_BUTTONS)
+        return 0;
+    return in.joystick.buttons[index];
+}
+
+static bool QueryRawJoystickButtonToDo(Input& in, int index, bool reset, bool checkFocus)
+{
+    if (checkFocus && in.gameFocusLost > 0)
+        return false;
+    if (index < 0 || index >= N_RAW_JOYSTICK_BUTTONS)
+        return false;
+    bool ret = in.joystick.buttonsToDo[index];
+    if (reset)
+        in.joystick.buttonsToDo[index] = false;
+    return ret;
+}
+
+static float QueryRawJoystickAxis(const Input& in, int index, bool checkFocus)
+{
+    if (checkFocus && in.gameFocusLost > 0)
+        return 0;
+    if (index < 0 || index >= N_RAW_JOYSTICK_AXES)
+        return 0;
+    return in.joystick.axis[index];
+}
+
+static bool QueryRawJoystickPov(const Input& in, int index, bool checkFocus)
+{
+    if (checkFocus && in.gameFocusLost > 0)
+        return false;
+    if (index < 0 || index >= N_RAW_JOYSTICK_POV)
+        return false;
+    return in.joystick.pov[index];
+}
+
+static bool QueryRawJoystickPovToDo(Input& in, int index, bool reset, bool checkFocus)
+{
+    if (checkFocus && in.gameFocusLost > 0)
+        return false;
+    if (index < 0 || index >= N_RAW_JOYSTICK_POV)
+        return false;
+    bool ret = in.joystick.povToDo[index];
+    if (reset)
+        in.joystick.povToDo[index] = false;
+    return ret;
+}
+
 // Modifier check: a v1 binding can carry an optional held input in the
 // parallel userKeysModifiers[] array.  If set, the modifier must be
 // currently held for the binding to fire.  Returns true if no modifier
@@ -230,6 +281,12 @@ static bool ModifierHeld(const Input& in, UserAction action, int slot)
             return value >= 0 && value < N_JOYSTICK_AXES && std::fabs(in.gamepad.stickAxis[value]) > 0.8f;
         case INPUT_DEVICE_STICK_POV:
             return value >= 0 && value < N_JOYSTICK_POV && in.gamepad.stickPov[value];
+        case INPUT_DEVICE_JOYSTICK:
+            return QueryRawJoystickButton(in, value, false) > 0.0f;
+        case INPUT_DEVICE_JOYSTICK_AXIS:
+            return std::fabs(QueryRawJoystickAxis(in, value, false)) > 0.8f;
+        case INPUT_DEVICE_JOYSTICK_POV:
+            return QueryRawJoystickPov(in, value, false);
         default:
             return false;
     }
@@ -273,6 +330,15 @@ static float QueryAction(const Input& in, UserAction action, bool checkFocus)
                 sum += in.gamepad.stickPov[offset];
             }
             break;
+            case INPUT_DEVICE_JOYSTICK:
+                sum += QueryRawJoystickButton(in, value, checkFocus);
+                break;
+            case INPUT_DEVICE_JOYSTICK_AXIS:
+                sum += QueryRawJoystickAxis(in, value, checkFocus);
+                break;
+            case INPUT_DEVICE_JOYSTICK_POV:
+                sum += QueryRawJoystickPov(in, value, checkFocus) ? 1.0f : 0.0f;
+                break;
         }
     }
     return sum;
@@ -318,6 +384,14 @@ static bool QueryActionToDo(Input& in, UserAction action, bool reset, bool check
                         found = true;
                 }
                 break;
+            case INPUT_DEVICE_JOYSTICK:
+                if (QueryRawJoystickButtonToDo(in, value, false, checkFocus))
+                    found = true;
+                break;
+            case INPUT_DEVICE_JOYSTICK_POV:
+                if (QueryRawJoystickPovToDo(in, value, false, checkFocus))
+                    found = true;
+                break;
         }
     }
     return found;
@@ -341,6 +415,12 @@ static bool ProfileModifierHeld(const Input& in, InputCode modifier, bool checkF
             return value >= 0 && value < N_JOYSTICK_AXES && std::fabs(in.gamepad.stickAxis[value]) > 0.8f;
         case INPUT_DEVICE_STICK_POV:
             return value >= 0 && value < N_JOYSTICK_POV && in.gamepad.stickPov[value];
+        case INPUT_DEVICE_JOYSTICK:
+            return QueryRawJoystickButton(in, value, checkFocus) > 0.0f;
+        case INPUT_DEVICE_JOYSTICK_AXIS:
+            return std::fabs(QueryRawJoystickAxis(in, value, checkFocus)) > 0.8f;
+        case INPUT_DEVICE_JOYSTICK_POV:
+            return QueryRawJoystickPov(in, value, checkFocus);
         default:
             return false;
     }
@@ -366,6 +446,12 @@ static float QueryProfileCode(const Input& in, InputCode code, bool checkFocus)
             return value >= 0 && value < N_JOYSTICK_AXES ? in.gamepad.stickAxis[value] : 0.0f;
         case INPUT_DEVICE_STICK_POV:
             return value >= 0 && value < N_JOYSTICK_POV && in.gamepad.stickPov[value] ? 1.0f : 0.0f;
+        case INPUT_DEVICE_JOYSTICK:
+            return QueryRawJoystickButton(in, value, checkFocus);
+        case INPUT_DEVICE_JOYSTICK_AXIS:
+            return QueryRawJoystickAxis(in, value, checkFocus);
+        case INPUT_DEVICE_JOYSTICK_POV:
+            return QueryRawJoystickPov(in, value, checkFocus) ? 1.0f : 0.0f;
         default:
             return 0.0f;
     }
@@ -398,6 +484,10 @@ static bool QueryProfileCodeToDo(Input& in, InputCode code, bool reset, bool che
                     in.gamepad.stickPovToDo[value] = false;
                 return ret;
             }
+        case INPUT_DEVICE_JOYSTICK:
+            return QueryRawJoystickButtonToDo(in, value, reset, checkFocus);
+        case INPUT_DEVICE_JOYSTICK_POV:
+            return QueryRawJoystickPovToDo(in, value, reset, checkFocus);
         default:
             return false;
     }
@@ -1476,6 +1566,24 @@ bool InputSubsystem::GetSyntheticLeftStick(float& x, float& y) const
     x = syntheticLeftStickX_;
     y = syntheticLeftStickY_;
     return x != 0.0f || y != 0.0f;
+}
+bool InputSubsystem::IsJoystickConnected() const
+{
+    return GInput.joystick.connected;
+}
+bool InputSubsystem::GetJoystickButtonToDo(int i) const
+{
+    return i >= 0 && i < N_RAW_JOYSTICK_BUTTONS && GInput.joystick.buttonsToDo[i];
+}
+bool InputSubsystem::GetJoystickPovToDo(int i) const
+{
+    return i >= 0 && i < N_RAW_JOYSTICK_POV && GInput.joystick.povToDo[i];
+}
+bool InputSubsystem::IsJoystickAxisDeflected(int i) const
+{
+    if (i < 0 || i >= N_RAW_JOYSTICK_AXES)
+        return false;
+    return std::fabs(GInput.joystick.axis[i]) > 0.5f;
 }
 bool InputSubsystem::ConsumeAxisBigActive(int i)
 {

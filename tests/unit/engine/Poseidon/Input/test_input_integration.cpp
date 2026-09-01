@@ -5,6 +5,8 @@
 #include <Poseidon/Input/InputCode.hpp>
 #include <Poseidon/Input/KeyInput.hpp>
 #include <Poseidon/Input/UserAction.hpp>
+#include <Poseidon/Input/InputDeviceConstants.hpp>
+#include <Poseidon/UI/Settings/ContextControlsConfig.hpp>
 #include <Poseidon/World/WorldChatInput.hpp>
 #include <SDL3/SDL_scancode.h>
 #include <catch2/catch_test_macros.hpp>
@@ -37,6 +39,16 @@ class GamepadSnapshot
 
   private:
     GamepadState saved_;
+};
+
+class JoystickSnapshot
+{
+  public:
+    JoystickSnapshot() : saved_(GInput.joystick) {}
+    ~JoystickSnapshot() { GInput.joystick = saved_; }
+
+  private:
+    JoystickState saved_;
 };
 } // namespace
 
@@ -721,4 +733,99 @@ TEST_CASE("InputSubsystem joystick enabled and axis activity", "[input][integrat
     // IsActionBoundToRecentAxis with no bindings should return false
     REQUIRE_FALSE(sub.IsActionBoundToRecentAxis(UAAxisTurn));
     REQUIRE_FALSE(sub.IsActionBoundToRecentAxis(UAAxisThrust));
+}
+
+TEST_CASE("Raw joystick state drives bindings in its own device space", "[input][integration][joystick]")
+{
+    auto& sub = InputSubsystem::Instance();
+    ProfileSnapshot profileSnap(sub, InputContext::Infantry);
+    GamepadSnapshot gamepadSnap;
+    JoystickSnapshot joystickSnap;
+
+    InputProfile& profile = sub.GetProfile(InputContext::Infantry);
+    profile.ClearBindings(UAFire);
+    profile.ClearBindings(UAAxisRudder);
+    profile.ClearBindings(UALookUp);
+    profile.Bind(UAFire, InputCode::JoystickBtn(0));
+    profile.Bind(UAAxisRudder, InputCode::JoystickAx(5));
+    profile.Bind(UALookUp, InputCode::JoystickPov(0, 0));
+
+    GInput.joystick.Clear();
+    GInput.joystick.connected = true;
+    REQUIRE(sub.GetAction(InputContext::Infantry, UAFire, false) == 0.0f);
+
+    GInput.joystick.buttons[0] = 1.0f;
+    GInput.joystick.axis[5] = -0.75f;
+    GInput.joystick.pov[0] = true;
+
+    REQUIRE(sub.GetAction(InputContext::Infantry, UAFire, false) == 1.0f);
+    REQUIRE(sub.GetAction(InputContext::Infantry, UAAxisRudder, false) == -0.75f);
+    REQUIRE(sub.GetAction(InputContext::Infantry, UALookUp, false) == 1.0f);
+}
+
+TEST_CASE("Joystick and gamepad bindings do not cross-fire", "[input][integration][joystick]")
+{
+    auto& sub = InputSubsystem::Instance();
+    ProfileSnapshot profileSnap(sub, InputContext::Infantry);
+    GamepadSnapshot gamepadSnap;
+    JoystickSnapshot joystickSnap;
+
+    InputProfile& profile = sub.GetProfile(InputContext::Infantry);
+    profile.ClearBindings(UAFire);
+    profile.ClearBindings(UAReloadMagazine);
+    // Same index in each device space: a stick button 0 and a pad's A button.
+    profile.Bind(UAFire, InputCode::JoystickBtn(0));
+    profile.Bind(UAReloadMagazine, InputCode::GamepadBtn(0));
+
+    GInput.joystick.Clear();
+    GInput.joystick.connected = true;
+    for (int i = 0; i < N_JOYSTICK_BUTTONS; i++)
+        GInput.gamepad.stickButtons[i] = 0.0f;
+
+    GInput.joystick.buttons[0] = 1.0f;
+    REQUIRE(sub.GetAction(InputContext::Infantry, UAFire, false) == 1.0f);
+    // Pressing the stick must not fire the action bound to the pad.
+    REQUIRE(sub.GetAction(InputContext::Infantry, UAReloadMagazine, false) == 0.0f);
+
+    GInput.joystick.buttons[0] = 0.0f;
+    GInput.gamepad.stickButtons[0] = 1.0f;
+    REQUIRE(sub.GetAction(InputContext::Infantry, UAReloadMagazine, false) == 1.0f);
+    REQUIRE(sub.GetAction(InputContext::Infantry, UAFire, false) == 0.0f);
+}
+
+TEST_CASE("Stock joystick defaults match the original OFP layout", "[input][integration][joystick]")
+{
+    ContextControlsConfig defaults;
+    defaults.LoadDefaults();
+    const InputProfile& infantry = defaults.profiles[(int)InputContext::Infantry];
+
+    // Trigger fires, then the thumb buttons in order.
+    REQUIRE(infantry.HasBinding(UAFire, InputCode::JoystickBtn(0)));
+    REQUIRE(infantry.HasBinding(UALockTargets, InputCode::JoystickBtn(1)));
+    REQUIRE(infantry.HasBinding(UAToggleWeapons, InputCode::JoystickBtn(2)));
+    REQUIRE(infantry.HasBinding(UAZoomIn, InputCode::JoystickBtn(3)));
+    REQUIRE(infantry.HasBinding(UANextAction, InputCode::JoystickBtn(4)));
+    REQUIRE(infantry.HasBinding(UAAction, InputCode::JoystickBtn(5)));
+    REQUIRE(infantry.HasBinding(UAPrevAction, InputCode::JoystickBtn(6)));
+
+    // The hat is eight-way freelook.
+    REQUIRE(infantry.HasBinding(UALookUp, InputCode::JoystickPov(0, 0)));
+    REQUIRE(infantry.HasBinding(UALookRightUp, InputCode::JoystickPov(0, 1)));
+    REQUIRE(infantry.HasBinding(UALookRight, InputCode::JoystickPov(0, 2)));
+    REQUIRE(infantry.HasBinding(UALookRightDown, InputCode::JoystickPov(0, 3)));
+    REQUIRE(infantry.HasBinding(UALookDown, InputCode::JoystickPov(0, 4)));
+    REQUIRE(infantry.HasBinding(UALookLeftDown, InputCode::JoystickPov(0, 5)));
+    REQUIRE(infantry.HasBinding(UALookLeft, InputCode::JoystickPov(0, 6)));
+    REQUIRE(infantry.HasBinding(UALookLeftUp, InputCode::JoystickPov(0, 7)));
+
+    // Analog axes on their slots: X, Y, twist, and thrust on both Z and the slider.
+    REQUIRE(infantry.HasBinding(UAAxisTurn, InputCode::JoystickAx(0)));
+    REQUIRE(infantry.HasBinding(UAAxisDive, InputCode::JoystickAx(1)));
+    REQUIRE(infantry.HasBinding(UAAxisRudder, InputCode::JoystickAx(5)));
+    REQUIRE(infantry.HasBinding(UAAxisThrust, InputCode::JoystickAx(2)));
+    REQUIRE(infantry.HasBinding(UAAxisThrust, InputCode::JoystickAx(6)));
+
+    // The pad defaults are untouched by the joystick layer.
+    REQUIRE(infantry.HasBinding(UAFire, InputCode::GamepadBtn(7)));
+    REQUIRE(infantry.HasBinding(UAAction, InputCode::GamepadBtn(0)));
 }

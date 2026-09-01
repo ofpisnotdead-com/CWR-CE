@@ -13,6 +13,8 @@ extern void SDLInput_BufferMouseMotion(float dx, float dy);
 extern void SDLInput_BufferMouseWheel(float dy);
 extern void SDLInput_GamepadAdded(SDL_JoystickID which);
 extern void SDLInput_GamepadRemoved(SDL_JoystickID which);
+extern void SDLInput_JoystickAdded(SDL_JoystickID which);
+extern void SDLInput_JoystickRemoved(SDL_JoystickID which);
 extern void SDLInput_BufferUIKeyEvent(SDL_Keycode key, bool down);
 extern void SDLInput_BufferUICharEvent(const char* text);
 #include <Poseidon/Foundation/Framework/AppFrame.hpp>
@@ -249,6 +251,10 @@ class SDLEventWindow
                 SDLInput_GamepadAdded(event.gdevice.which);
             else if (event.type == SDL_EVENT_GAMEPAD_REMOVED)
                 SDLInput_GamepadRemoved(event.gdevice.which);
+            else if (event.type == SDL_EVENT_JOYSTICK_ADDED)
+                SDLInput_JoystickAdded(event.jdevice.which);
+            else if (event.type == SDL_EVENT_JOYSTICK_REMOVED)
+                SDLInput_JoystickRemoved(event.jdevice.which);
         }
     }
 

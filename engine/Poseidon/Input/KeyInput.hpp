@@ -5,6 +5,7 @@
 #include <Poseidon/Input/UserAction.hpp>
 #include <Poseidon/Input/UserActionDesc.hpp>
 #include <Poseidon/Input/GamepadState.hpp>
+#include <Poseidon/Input/JoystickState.hpp>
 #include <Poseidon/Input/MouseState.hpp>
 #include <Poseidon/Input/KeyboardState.hpp>
 
@@ -23,6 +24,7 @@ struct Input
     MouseState mouse;
     MouseState::CursorAccum cursor;
     GamepadState gamepad;
+    JoystickState joystick;
 
     bool lookAroundToggleEnabled = false;
     bool lookAroundEnabled = false;

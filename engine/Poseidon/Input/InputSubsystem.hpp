@@ -223,6 +223,14 @@ class InputSubsystem
     bool GetStickPovToDo(int i) const;
     bool ConsumeAxisBigActive(int i);
 
+    // Raw joystick capture. Axis capture takes a decisive deflection rather than
+    // the pad's timed hysteresis, because a stick rests centred and a slider does
+    // not, so an idle throttle must not read as a press.
+    bool IsJoystickConnected() const;
+    bool GetJoystickButtonToDo(int i) const;
+    bool GetJoystickPovToDo(int i) const;
+    bool IsJoystickAxisDeflected(int i) const;
+
     // Synthetic gamepad input used by harness tests (triGpadButton / triGpadPov).
     // Separate from GInput.gamepad.stickButtonsToDo so per-frame ProcessJoystick
     // doesn't wipe the flag before the consumer reads it.  Consumers read via

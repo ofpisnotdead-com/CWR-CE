@@ -13,6 +13,9 @@ enum class InputDevice : uint32_t
     GamepadButton = 0x00020000,
     GamepadAxis = 0x00030000,
     GamepadPOV = 0x00040000,
+    JoystickButton = 0x00050000,
+    JoystickAxis = 0x00060000,
+    JoystickPOV = 0x00070000,
     MouseAxis = 0x00100000,
 };
 
@@ -49,6 +52,18 @@ struct InputCode
     static constexpr InputCode GamepadPov(int pov)
     {
         return InputCode(static_cast<uint32_t>(InputDevice::GamepadPOV) | static_cast<uint32_t>(pov));
+    }
+    static constexpr InputCode JoystickBtn(int btn)
+    {
+        return InputCode(static_cast<uint32_t>(InputDevice::JoystickButton) | static_cast<uint32_t>(btn));
+    }
+    static constexpr InputCode JoystickAx(int axis)
+    {
+        return InputCode(static_cast<uint32_t>(InputDevice::JoystickAxis) | static_cast<uint32_t>(axis));
+    }
+    static constexpr InputCode JoystickPov(int hat, int dir)
+    {
+        return InputCode(static_cast<uint32_t>(InputDevice::JoystickPOV) | static_cast<uint32_t>(hat * 8 + dir));
     }
 
     static constexpr InputCode FromLegacy(int packed) { return InputCode(static_cast<uint32_t>(packed)); }

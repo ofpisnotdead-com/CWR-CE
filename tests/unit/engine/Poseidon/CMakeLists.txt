@@ -364,6 +364,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     Input/test_viewer_controls_apply.cpp
     Input/test_pilot_controller.cpp
     Input/test_gamepad_state.cpp
+    Input/test_joystick_state.cpp
     Input/test_mouse_state.cpp
     Input/test_keyboard_state.cpp
     Input/test_ui_key_repeat_sdl.cpp

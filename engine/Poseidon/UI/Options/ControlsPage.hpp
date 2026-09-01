@@ -4,7 +4,8 @@
 //
 // Rows: Keyboard & Mouse (binding rebinder), Mouse (sensitivity /
 // Y-invert / button swap), Gamepad (binding rebinder), Gamepad Tuning
-// (deadzones / sensitivity), Reset all to defaults, Close.  Mirrors
+// (deadzones / sensitivity), Joystick (binding rebinder for a device with
+// no gamepad mapping), Reset all to defaults, Close.  Mirrors
 // IndexPage's FlatMenuPage shape — see optionsShell.hpp's
 // "RscOptionsPageControls" for the resource bundle.
 
@@ -28,9 +29,10 @@ class ControlsPage : public FlatMenuPage
   private:
     // Cycle order matches the visible row layout in RscOptionsPageControls.
     // 1401 KB&M · 1402 Mouse · 1405 Gamepad · 1406 Gamepad Tuning ·
-    // 1403 Reset all · 1404 Close.  Stay in sync with the resource bundle
-    // when adding rows.
-    static constexpr int kCycle[] = {1401, 1402, 1405, 1406, 1403, 1404};
+    // 1407 Joystick · 1403 Reset all · 1404 Close.  Stay in sync with the
+    // resource bundle when adding rows; a row the bundle does not define is
+    // skipped by the focus cycle.
+    static constexpr int kCycle[] = {1401, 1402, 1405, 1406, 1407, 1403, 1404};
     static constexpr int kCycleSize = sizeof(kCycle) / sizeof(kCycle[0]);
 };
 

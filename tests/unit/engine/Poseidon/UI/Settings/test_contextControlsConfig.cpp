@@ -158,11 +158,13 @@ TEST_CASE("ContextControlsConfig: an older config keeps its bindings and default
     REQUIRE(von.size() == 1);
     CHECK(von[0].code.toLegacy() == 57);
 
-    // Multi-binding action (keyboard + gamepad) round-trips both codes in order.
+    // Multi-binding action (keyboard + gamepad) round-trips both codes in order,
+    // then migration appends the joystick trigger the file predates.
     const auto& fire = copy[(int)InputContext::Infantry].GetBindingEntries(UAFire);
-    REQUIRE(fire.size() == 2);
+    REQUIRE(fire.size() == 3);
     CHECK(fire[0].code.toLegacy() == 224);
     CHECK(fire[1].code.toLegacy() == 131079);
+    CHECK(fire[2].code == InputCode::JoystickBtn(0));
 
     // A binding in a different context, to prove per-context separation held.
     const auto& chat = copy[(int)InputContext::Chat].GetBindingEntries(UAChat);
@@ -172,13 +174,22 @@ TEST_CASE("ContextControlsConfig: an older config keeps its bindings and default
     // Push-to-talk was absent from the file; migration seeds its CapsLock default.
     CHECK(
         copy[(int)InputContext::Infantry].HasBinding(UAVoiceOverNetPushToTalk, InputCode::Key(SDL_SCANCODE_CAPSLOCK)));
+
+    // A file listing every action it knew still comes up with joystick bindings.
+    const auto& infantry = copy[(int)InputContext::Infantry];
+    CHECK(infantry.HasBinding(UAAxisTurn, InputCode::JoystickAx(0)));
+    CHECK(infantry.HasBinding(UAAxisDive, InputCode::JoystickAx(1)));
+    CHECK(infantry.HasBinding(UAAxisRudder, InputCode::JoystickAx(5)));
+    CHECK(infantry.HasBinding(UAAxisThrust, InputCode::JoystickAx(6)));
+    CHECK(infantry.HasBinding(UALookUp, InputCode::JoystickPov(0, 0)));
+    CHECK(infantry.HasBinding(UALookLeft, InputCode::JoystickPov(0, 6)));
 }
 
 // A complete version-2 config, as the current engine writes it minus the actions
 // added since (map zoom, cheat entry, chat navigation). It parses across every context; the actions
 // it lists are kept, the ones it predates are seeded to their defaults, and a save
 // then reload comes up current with the fill persisted.
-TEST_CASE("ContextControlsConfig: a full version-2 config parses and migrates to 5",
+TEST_CASE("ContextControlsConfig: a full version-2 config parses and migrates to 6",
           "[Settings][ContextControlsConfig]")
 {
     REQUIRE_FIXTURE("cfg/contextControls_v2_full.cfg");

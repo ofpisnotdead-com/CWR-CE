@@ -62,7 +62,8 @@ ContextList ContextsForCategory(ControlsCategory cat)
 
 bool IsGamepadCode(int packedCode)
 {
-    return packedCode >= INPUT_DEVICE_STICK;
+    const int device = InputBindingDevice(packedCode);
+    return device == INPUT_DEVICE_STICK || device == INPUT_DEVICE_STICK_AXIS || device == INPUT_DEVICE_STICK_POV;
 }
 
 bool IsFreelookDirection(UserAction action)
@@ -235,7 +236,7 @@ bool GamepadPage::ApplyCaptureOverride(ControlsCategory category, UserAction act
         else if (IsFreelookGroup(action))
         {
             InputCode mod;
-            if (modifier >= INPUT_DEVICE_STICK)
+            if (IsGamepadCode(modifier))
                 mod = InputCode::FromLegacy(modifier);
             else if (!UsesDirectFreelook(category))
                 mod = InputCode::GamepadBtn(kGamepadButtonLB);
