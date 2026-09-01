@@ -55,6 +55,26 @@ else()
     add_compile_options(-ffunction-sections -fdata-sections)
 endif()
 
+if(UNIX AND NOT APPLE)
+    # glibc bounds-checks the memory, string and stdio calls whose destination size
+    # it can see, at compile time where the overflow is provable and through the
+    # __*_chk entry points otherwise. Level 2 also rejects open() with O_CREAT and
+    # no mode.
+    #
+    # The fortified wrappers sit behind __OPTIMIZE__, so glibc warns and turns
+    # itself off in an unoptimized build; Debug is left out. Sanitizer builds are
+    # left out because ASan interposes the same entry points.
+    if(NOT "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}" MATCHES "-fsanitize")
+        set(CWR_FORTIFY_SOURCE "2" CACHE STRING "_FORTIFY_SOURCE level for optimized builds; 0 disables")
+        if(NOT CWR_FORTIFY_SOURCE STREQUAL "0")
+            add_compile_options(
+                $<$<NOT:$<CONFIG:Debug>>:-U_FORTIFY_SOURCE>
+                $<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=${CWR_FORTIFY_SOURCE}>
+            )
+        endif()
+    endif()
+endif()
+
 # Make __FILE__ repo-root-relative so log/assert lines (Fail(), DoAssert(), LOG_*)
 # read "engine/Poseidon/...:NN" instead of an absolute build-machine path. Affects only
 # the __FILE__ macro string, not debug info.
