@@ -56,6 +56,11 @@ else()
 endif()
 
 if(UNIX AND NOT APPLE)
+    # A canary on every frame that holds an array or an address-taken local.
+    # clang-cl enables the same check by default through /GS, so the Windows
+    # build already has it.
+    add_compile_options(-fstack-protector-strong)
+
     # glibc bounds-checks the memory, string and stdio calls whose destination size
     # it can see, at compile time where the overflow is provable and through the
     # __*_chk entry points otherwise. Level 2 also rejects open() with O_CREAT and
