@@ -1,5 +1,7 @@
 #include <Poseidon/UI/Settings/AspectRatio.hpp>
 
+#include <Poseidon/UI/LayoutCanvas.hpp>
+
 #include <cmath>
 #include <limits>
 
@@ -9,9 +11,9 @@ namespace AspectRatio
 {
 namespace
 {
-constexpr float kBaseLeftFov = 1.0f;
-constexpr float kBaseTopFov = 0.75f;
-constexpr float kBaseRatio = 4.0f / 3.0f;
+constexpr float kBaseLeftFov = LayoutCanvas::kBaseLeftFov;
+constexpr float kBaseTopFov = LayoutCanvas::kBaseTopFov;
+constexpr float kBaseRatio = LayoutCanvas::kRatio;
 constexpr float kModernFullWidthUiMaxRatio = 16.0f / 9.0f;
 // Tolerance band above the 16:9 ratio so a one-or-two-pixel surplus
 // in the actual surface (NVIDIA fullscreen sometimes resolves to
