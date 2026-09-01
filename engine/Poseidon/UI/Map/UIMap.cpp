@@ -3,6 +3,8 @@
 #include <Poseidon/Core/Config/EngineConfig.hpp>
 #include <Poseidon/Core/Config/UserConfig.hpp>
 #include <Poseidon/UI/Map/UIMap.hpp>
+#include <Poseidon/UI/Controls/CursorLayout.hpp>
+#include <Poseidon/UI/LayoutCanvas.hpp>
 #include <Poseidon/UI/Locale/Stringtable/CodepageTranscode.hpp>
 #include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
 // #include "win.h"
@@ -2162,8 +2164,8 @@ void CStaticMap::OnDraw(float alpha)
         {
             int wScreen = GLOB_ENGINE->Width2D();
             int hScreen = GLOB_ENGINE->Height2D();
-            const float mouseH = 16.0 / 600;
-            const float mouseW = 16.0 / 800;
+            const float mouseH = LayoutCanvas::FractionOfHeight(16.0f);
+            const float mouseW = CursorLayout::SquareWidthFraction(mouseH, wScreen, hScreen);
             float mouseX = 0.5 + InputSubsystem::Instance().GetCursorX() * 0.5;
             float mouseY = 0.5 + InputSubsystem::Instance().GetCursorY() * 0.5;
             PackedColor color = _parent->GetCursorColor();

@@ -467,6 +467,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     UI/Controls/test_progress_bar_widget.cpp
     UI/Controls/test_control_object_rotate_devmode.cpp
     UI/Controls/test_html_table_row.cpp
+    UI/Controls/test_cursor_layout.cpp
     UI/test_button_modal_page.cpp
     UI/test_capture_page.cpp
     UI/test_confirm_page.cpp

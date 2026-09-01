@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Poseidon/UI/Text/FontRenderer.hpp>
+#include <Poseidon/UI/LayoutCanvas.hpp>
 
 
 namespace Poseidon
@@ -35,7 +36,7 @@ inline bool ComputeScreenTextBaseScale(float viewportHeight2D, int surfaceWidthP
         legacyFontHeight <= 0.0f)
         return false;
 
-    out->sizeH = viewportHeight2D * sizeEx * (1.0f / 600.0f) / legacyFontHeight;
+    out->sizeH = viewportHeight2D * sizeEx * (1.0f / LayoutCanvas::kHeight) / legacyFontHeight;
     out->sizeW = out->sizeH * static_cast<float>(surfaceWidthPx) * topFOV /
                  (static_cast<float>(surfaceHeightPx) * leftFOV);
     return true;

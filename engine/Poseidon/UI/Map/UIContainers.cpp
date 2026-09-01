@@ -1,5 +1,6 @@
 
 #include <Poseidon/UI/Controls/UIControls.hpp>
+#include <Poseidon/UI/Controls/CursorLayout.hpp>
 #include <Poseidon/Input/ControllerUiLayout.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/Graphics/Core/Engine.hpp>
@@ -1448,24 +1449,23 @@ void ControlsContainer::DrawCursor()
     Texture* texture = GetCursorTexture();
 
     PackedColor color = GetCursorColor();
-    float hsX = GetCursorX();
-    float hsY = GetCursorY();
 
-    const float mouseScrH = GetCursorH() / 600;
-    const float mouseScrW = GetCursorW() / 800;
+    CursorLayout::Metrics metrics;
+    metrics.width = GetCursorW();
+    metrics.height = GetCursorH();
+    metrics.hotspotX = GetCursorX();
+    metrics.hotspotY = GetCursorY();
+
     float mouseScrX = InputSubsystem::Instance().GetCursorX() * 0.5 + 0.5;
     float mouseScrY = InputSubsystem::Instance().GetCursorY() * 0.5 + 0.5;
-    const int w = GLOB_ENGINE->Width2D();
-    const int h = GLOB_ENGINE->Height2D();
-    int mx = toInt((mouseScrX - hsX * mouseScrW) * w);
-    int my = toInt((mouseScrY - hsY * mouseScrH) * h);
-    int mw = toInt(mouseScrW * (4.0f / 3.0f) * h);
-    int mh = toInt(mouseScrH * h);
 
-    CursorDrawDebug::Record(this, mx, my, mw, mh);
+    const CursorLayout::Rect rect =
+        CursorLayout::ComputeRect(metrics, mouseScrX, mouseScrY, GLOB_ENGINE->Width2D(), GLOB_ENGINE->Height2D());
+
+    CursorDrawDebug::Record(this, rect.x, rect.y, rect.w, rect.h);
 
     MipInfo mip = GLOB_ENGINE->TextBank()->UseMipmap(texture, 0, 0);
-    GLOB_ENGINE->Draw2D(mip, color, Rect2DPixel(mx, my, mw, mh));
+    GLOB_ENGINE->Draw2D(mip, color, Rect2DPixel(rect.x, rect.y, rect.w, rect.h));
 }
 
 namespace CursorDrawDebug
