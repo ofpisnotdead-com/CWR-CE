@@ -10,9 +10,11 @@
 // split.
 // "Action inventory".
 //
-// Hidden in v1: AxisTurn / AxisDive / AxisRudder / AxisThrust (Gamepad
-// page disabled), Cheat1 / Cheat2 (always hidden in this UI regardless
-// of build).  Their entries simply don't appear in any category list.
+// AxisTurn / AxisDive / AxisRudder / AxisThrust head the Vehicles and Pilot
+// lists but are visible only on the Joystick page; a keyboard has no axis to
+// give them and a pad drives them through its fixed sticks and triggers.
+// Cheat1 / Cheat2 are always hidden in this UI regardless of build, and
+// simply don't appear in any category list.
 
 #include <Poseidon/Input/UserAction.hpp>
 
@@ -48,8 +50,10 @@ const char* GetControlsCategoryName(ControlsCategory cat);
 // Whether an action's row is shown on the Keyboard & Mouse / Gamepad controls page.
 // Both pages share the category lists; these encode the intentional per-device
 // differences (analog-stick group folding on gamepad, on-foot aim = mouse on KB&M).
-// The KbmPage / GamepadPage IsActionVisible overrides delegate here.
+// The KbmPage / GamepadPage / JoystickPage IsActionVisible overrides delegate here.
 bool IsActionVisibleOnKeyboard(UserAction action, ControlsCategory cat);
 bool IsActionVisibleOnGamepad(UserAction action, ControlsCategory cat);
+bool IsActionVisibleOnJoystick(UserAction action, ControlsCategory cat);
+bool IsAnalogAxisAction(UserAction action);
 } // namespace Poseidon
 

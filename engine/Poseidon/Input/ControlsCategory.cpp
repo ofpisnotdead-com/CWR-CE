@@ -27,21 +27,44 @@ const UserAction kOnFoot[] = {
     // HUD
     UABinocular, UANightVision, UAN};
 
-const UserAction kVehicles[] = {UAMoveForward,     UAMoveBack,     UAMoveFastForward,
-                                UAMoveSlowForward, UATurbo,        UATurnLeft,
-                                UATurnRight,       UAFire,         UALockTarget,
-                                UALockTargets,     UAAction,       UAZoomIn,
-                                UAZoomOut,         UALookAround,   UALookAroundToggle,
-                                UALookCenter,      UALookLeft,     UALookRight,
-                                UALookUp,          UALookDown,     UALookLeftUp,
-                                UALookRightUp,     UALookLeftDown, UALookRightDown,
-                                UAHeadlights,      UANightVision,  UAN};
+const UserAction kVehicles[] = {UAAxisTurn,
+                                UAAxisDive,
+                                UAAxisRudder,
+                                UAAxisThrust,
+                                UAMoveForward,
+                                UAMoveBack,
+                                UAMoveFastForward,
+                                UAMoveSlowForward,
+                                UATurbo,
+                                UATurnLeft,
+                                UATurnRight,
+                                UAFire,
+                                UALockTarget,
+                                UALockTargets,
+                                UAAction,
+                                UAZoomIn,
+                                UAZoomOut,
+                                UALookAround,
+                                UALookAroundToggle,
+                                UALookCenter,
+                                UALookLeft,
+                                UALookRight,
+                                UALookUp,
+                                UALookDown,
+                                UALookLeftUp,
+                                UALookRightUp,
+                                UALookLeftDown,
+                                UALookRightDown,
+                                UAHeadlights,
+                                UANightVision,
+                                UAN};
 
-const UserAction kPilot[] = {
-    UAMoveForward,      UAMoveBack,     UATurnLeft,      UATurnRight,   UAMoveLeft, UAMoveRight, UAMoveUp,
-    UAMoveDown,         UAFire,         UALockTarget,    UALockTargets, UAZoomIn,   UAZoomOut,   UALookAround,
-    UALookAroundToggle, UALookCenter,   UALookLeft,      UALookRight,   UALookUp,   UALookDown,  UALookLeftUp,
-    UALookRightUp,      UALookLeftDown, UALookRightDown, UAHeadlights,  UAN};
+const UserAction kPilot[] = {UAAxisTurn,    UAAxisDive,     UAAxisRudder,    UAAxisThrust,       UAMoveForward,
+                             UAMoveBack,    UATurnLeft,     UATurnRight,     UAMoveLeft,         UAMoveRight,
+                             UAMoveUp,      UAMoveDown,     UAFire,          UALockTarget,       UALockTargets,
+                             UAZoomIn,      UAZoomOut,      UALookAround,    UALookAroundToggle, UALookCenter,
+                             UALookLeft,    UALookRight,    UALookUp,        UALookDown,         UALookLeftUp,
+                             UALookRightUp, UALookLeftDown, UALookRightDown, UAHeadlights,       UAN};
 
 const UserAction kGunner[] = {UAFire,       UAReloadMagazine, UAToggleWeapons, UALockTarget,    UALockTargets,
                               UAAction,     UAOptics,         UAZoomIn,        UAZoomOut,       UAAimUp,
@@ -129,8 +152,17 @@ const char* GetControlsCategoryName(ControlsCategory cat)
     }
 }
 
+// The analog axis actions take a whole axis, which only a joystick offers directly;
+// a keyboard has none and a pad reaches them through its fixed sticks and triggers.
+bool IsAnalogAxisAction(UserAction action)
+{
+    return action == UAAxisTurn || action == UAAxisDive || action == UAAxisRudder || action == UAAxisThrust;
+}
+
 bool IsActionVisibleOnKeyboard(UserAction action, ControlsCategory cat)
 {
+    if (IsAnalogAxisAction(action))
+        return false;
     // On-foot aim is the mouse on keyboard, so the four aim rows are hidden there.
     if (cat == ControlsCategoryOnFoot &&
         (action == UAAimUp || action == UAAimDown || action == UAAimLeft || action == UAAimRight))
@@ -140,6 +172,8 @@ bool IsActionVisibleOnKeyboard(UserAction action, ControlsCategory cat)
 
 bool IsActionVisibleOnGamepad(UserAction action, ControlsCategory cat)
 {
+    if (IsAnalogAxisAction(action))
+        return false;
     // Analog-stick group heads (movement / aim / freelook) are always shown.
     const bool movementHead = cat == ControlsCategoryOnFoot && action == UAMoveForward;
     const bool aimHead = (cat == ControlsCategoryOnFoot || cat == ControlsCategoryGunner) && action == UAAimRight;
@@ -156,5 +190,12 @@ bool IsActionVisibleOnGamepad(UserAction action, ControlsCategory cat)
         action == UALookLeftUp || action == UALookRightUp || action == UALookLeftDown || action == UALookRightDown)
         return false;
     return true;
+}
+
+bool IsActionVisibleOnJoystick(UserAction action, ControlsCategory cat)
+{
+    if (IsAnalogAxisAction(action))
+        return true;
+    return IsActionVisibleOnKeyboard(action, cat);
 }
 } // namespace Poseidon

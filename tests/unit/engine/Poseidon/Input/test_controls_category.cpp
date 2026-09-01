@@ -133,7 +133,7 @@ bool IsFreelookDir(UserAction a)
 }
 } // namespace
 
-TEST_CASE("ControlsVisibility: no category action is hidden on both device pages", "[Input][ControlsCategory]")
+TEST_CASE("ControlsVisibility: no category action is hidden on every device page", "[Input][ControlsCategory]")
 {
     for (int c = 0; c < ControlsCategoryCount; c++)
     {
@@ -148,8 +148,8 @@ TEST_CASE("ControlsVisibility: no category action is hidden on both device pages
             bool aimFold = (cat == ControlsCategoryOnFoot || cat == ControlsCategoryGunner) &&
                            (a == UAAimUp || a == UAAimDown || a == UAAimLeft);
             CAPTURE(c, (int)a);
-            CHECK((IsActionVisibleOnKeyboard(a, cat) || IsActionVisibleOnGamepad(a, cat) || movementFold || aimFold ||
-                   IsFreelookDir(a)));
+            CHECK((IsActionVisibleOnKeyboard(a, cat) || IsActionVisibleOnGamepad(a, cat) ||
+                   IsActionVisibleOnJoystick(a, cat) || movementFold || aimFold || IsFreelookDir(a)));
         }
     }
     // The stick heads that cover the folded rows must stay gamepad-visible.
@@ -212,15 +212,26 @@ TEST_CASE("ControlsCategory: Map/Compass/Watch are Common-only", "[Input][Contro
     }
 }
 
+TEST_CASE("ControlsCategory: analog axes are bindable only on the joystick page", "[Input][ControlsCategory]")
+{
+    // The axis actions sit in the two vehicle categories, visible on the stick alone.
+    UserAction axes[] = {UAAxisTurn, UAAxisDive, UAAxisRudder, UAAxisThrust};
+    for (UserAction a : axes)
+    {
+        CHECK(IsActionInControlsCategory(a, ControlsCategoryVehicles));
+        CHECK(IsActionInControlsCategory(a, ControlsCategoryPilot));
+        CHECK_FALSE(IsActionInControlsCategory(a, ControlsCategoryOnFoot));
+        CHECK_FALSE(IsActionInControlsCategory(a, ControlsCategoryGunner));
+        CHECK_FALSE(IsActionInControlsCategory(a, ControlsCategoryCommon));
+
+        CHECK(IsActionVisibleOnJoystick(a, ControlsCategoryPilot));
+        CHECK_FALSE(IsActionVisibleOnKeyboard(a, ControlsCategoryPilot));
+        CHECK_FALSE(IsActionVisibleOnGamepad(a, ControlsCategoryPilot));
+    }
+}
+
 TEST_CASE("ControlsCategory: hidden actions appear in no category", "[Input][ControlsCategory]")
 {
-    // Joystick axes (Gamepad page disabled in v1) and cheat keys
-    // (always hidden in this UI) must not show up anywhere.
-    UserAction hidden[] = {UAAxisTurn, UAAxisDive, UAAxisRudder, UAAxisThrust};
-    for (UserAction a : hidden)
-        for (int c = 0; c < ControlsCategoryCount; c++)
-            CHECK_FALSE(IsActionInControlsCategory(a, (ControlsCategory)c));
-
 #if _ENABLE_CHEATS
     UserAction cheats[] = {UACheat1, UACheat2};
     for (UserAction a : cheats)
@@ -324,5 +335,8 @@ TEST_CASE("ControlsCategory: union of all categories covers > 30 unique actions"
             unique.insert((int)list[i]);
     }
     CHECK(unique.size() > 30);
-    CHECK(unique.size() < UAN); // should not include axes / cheats
+#if _ENABLE_CHEATS
+    CHECK(unique.count((int)UACheat1) == 0);
+    CHECK(unique.count((int)UACheat2) == 0);
+#endif
 }
