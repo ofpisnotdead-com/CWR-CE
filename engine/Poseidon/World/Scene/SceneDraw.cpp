@@ -55,6 +55,7 @@ using Poseidon::Foundation::Time;
 #include <Poseidon/UI/Locale/StringtableExt.hpp>
 #include <time.h>
 #include <Poseidon/Dev/Diag/DiagModes.hpp>
+#include <Poseidon/World/Scene/SceneDrawBuckets.hpp>
 #include <Poseidon/World/Terrain/Occlusion.hpp>
 
 using namespace Poseidon;
@@ -151,10 +152,10 @@ struct MergeShapeSlot
     unsigned int epoch = 0;
     std::vector<MergeSubBucket> subs;
 };
-}
+} // namespace
 
 // Groups _drawMergers so objects of equal (passNum, shape, drawLOD) are contiguous, for instancing.
-static void BucketDrawMergersByShape(SortObjectList& mergers)
+void Poseidon::SceneDraw::BucketDrawMergersByShape(SortObjectList& mergers)
 {
     const int n = mergers.Size();
     if (n < 2)
@@ -1670,7 +1671,7 @@ void Scene::DrawObjectsAndShadowsPass1()
         }
     }
 
-    BucketDrawMergersByShape(_drawMergers);
+    Poseidon::SceneDraw::BucketDrawMergersByShape(_drawMergers);
     // first of all draw non-alpha objects
 
 #if DRAW_OBJS

@@ -153,7 +153,7 @@ class LightList : public FindArray<ActiveLightPointer, Foundation::MemAllocSS>
 };
 
 // Max simultaneously active local lights.
-// The actual limit is the minimum between this and EngineConfig::maxLights. 
+// The actual limit is the minimum between this and EngineConfig::maxLights.
 static constexpr int MaxActiveLights = 64;
 
 class PreloadedTextures

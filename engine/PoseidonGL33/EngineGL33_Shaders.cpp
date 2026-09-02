@@ -1,6 +1,7 @@
 #include <Poseidon/Core/Application.hpp>
 #include <PoseidonGL33/EngineGL33.hpp>
 #include <PoseidonGL33/GL33BindCache.hpp>
+#include <PoseidonGL33/GL33LightIndices.hpp>
 #include <PoseidonGL33/GL33UploadSnapshot.hpp>
 #include <Poseidon/Core/Global.hpp>
 #include <Poseidon/World/Scene/Scene.hpp>
@@ -874,7 +875,9 @@ static GLuint s_localLightsUBO = 0;
 // scene's active-light cap. Bytes index it, and it must fit the GL 3.3 guaranteed min UBO size.
 static constexpr int kMaxLocalLights = MaxActiveLights;
 static_assert(kMaxLocalLights <= 256, "light index packing uses one byte per index");
-static_assert((1 + 4 * kMaxLocalLights) * 16 <= 16384, "LocalLights UBO exceeds GL 3.3 minimum guaranteed size (16 KB)");
+static_assert((1 + 4 * kMaxLocalLights) * 16 <= 16384,
+              "LocalLights UBO exceeds GL 3.3 minimum guaranteed size (16 KB)");
+static_assert(GL33LightIndices::Capacity == VSConst::MaxLocalLights);
 static float s_localLights[(1 + 4 * kMaxLocalLights) * 4] = {};
 
 void EngineGL33::FlushVSConstants()
@@ -968,7 +971,6 @@ void EngineGL33::InitVertexShaders()
     glBindBuffer(GL_UNIFORM_BUFFER, s_localLightsUBO);
     glBufferData(GL_UNIFORM_BUFFER, sizeof(s_localLights), nullptr, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_UNIFORM_BUFFER, 4, s_localLightsUBO);
-
 
     _vertexShaderSel = VSNone;
 }
@@ -1422,26 +1424,13 @@ int EngineGL33::ResolveLocalLightIndices(const LightList& lights, int* out) cons
     return n;
 }
 
-// Pack up to 8 light indices into 4 uint32_t values, with the count in dst[2] and dst[3] unused.
-static void PackLightIndices(uint32_t dst[4], const int* indices, int count)
-{
-    uint32_t packed[2] = {0, 0};
-    for (int i = 0; i < count; i++)
-        packed[i >> 2] |= static_cast<uint32_t>(indices[i] & 0xFF) << (8 * (i & 3));
-    dst[0] = packed[0];
-    dst[1] = packed[1];
-    dst[2] = static_cast<uint32_t>(count);
-    dst[3] = 0;
-}
-
 // Set the current draw's local-light selection. Only used for non-instanced draws.
 void EngineGL33::SetLocalLightIndices(const int* indices, int count)
 {
     if (count > VSConst::MaxLocalLights)
         count = VSConst::MaxLocalLights;
 
-    uint32_t packed[4];
-    PackLightIndices(packed, indices, count);
+    const auto packed = GL33LightIndices::Pack(indices, count);
 
     // slot 0
     uint32_t* dst = s_lightIndices;
@@ -1451,6 +1440,7 @@ void EngineGL33::SetLocalLightIndices(const int* indices, int count)
     dst[0] = packed[0];
     dst[1] = packed[1];
     dst[2] = packed[2];
+    dst[3] = packed[3];
 
     if (!s_lightIndicesUBO)
         return;
@@ -1459,14 +1449,14 @@ void EngineGL33::SetLocalLightIndices(const int* indices, int count)
     glBufferSubData(GL_UNIFORM_BUFFER, 0, 16, dst);
 }
 
-
 void EngineGL33::PackInstanceLights(int slot, const LightList& lights)
 {
     if (slot < 0 || slot >= 256)
         return;
     int idx[VSConst::MaxLocalLights];
     int n = ResolveLocalLightIndices(lights, idx);
-    PackLightIndices(_instLightIdx + slot * 4, idx, n);
+    const auto packed = GL33LightIndices::Pack(idx, n);
+    memcpy(_instLightIdx + slot * 4, packed.data(), sizeof(packed));
 }
 
 void EngineGL33::UploadInstanceLightIndices(int count)
