@@ -995,6 +995,22 @@ void EngineGL33::DeinitVertexShaders()
         glDeleteBuffers(1, &s_vsUBO);
         s_vsUBO = 0;
     }
+    if (s_worldUBO)
+    {
+        glDeleteBuffers(1, &s_worldUBO);
+        s_worldUBO = 0;
+    }
+    if (s_lightIndicesUBO)
+    {
+        glDeleteBuffers(1, &s_lightIndicesUBO);
+        s_lightIndicesUBO = 0;
+    }
+    if (s_localLightsUBO)
+    {
+        glDeleteBuffers(1, &s_localLightsUBO);
+        s_localLightsUBO = 0;
+    }
+    GL33Bind::Invalidate();
 }
 
 void EngineGL33::SelectVertexShader(VertexShaderID vs)
