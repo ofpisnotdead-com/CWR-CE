@@ -211,11 +211,20 @@ MipInfo TextBankGL33::UseMipmap(Texture* absTexture, int level, int top)
     return MipInfo(texture, level);
 }
 
+void TextBankGL33::ReleaseDetailTextures()
+{
+    _detail.Free();
+    _specular.Free();
+    _grass.Free();
+    _waterBump.Free();
+}
+
 void TextBankGL33::InitDetailTextures()
 {
     if (_detail)
         return;
 
+    _detailTextureLoads++;
     const ParamEntry& names = Remaster >> "CfgDetailTextures";
     RStringB detailName = names >> "detail";
     if (QIFStreamB::FileExist(detailName))
