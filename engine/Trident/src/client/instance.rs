@@ -6,9 +6,14 @@ use crate::protocol::Event;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::AsyncBufReadExt;
 use tokio::process::{Child, Command};
+
+/// Lines the game has written to stdout, in order. Filled by the same task that
+/// drains the stdout pipe into `game_stdout.log`.
+pub type LogTap = Arc<Mutex<Vec<String>>>;
 
 /// A running game instance with a connected harness client.
 pub struct GameInstance {
@@ -18,9 +23,24 @@ pub struct GameInstance {
     game_binary: PathBuf,
     work_dir: PathBuf,
     config: ClientConfig,
+    log_tap: LogTap,
 }
 
 impl GameInstance {
+    /// How many stdout lines the game has written so far. Pass the value back to
+    /// [`Self::log_lines_since`] to look at only what followed.
+    pub fn log_mark(&self) -> usize {
+        self.log_tap.lock().map_or(0, |tap| tap.len())
+    }
+
+    /// Stdout lines the game wrote after `mark`.
+    pub fn log_lines_since(&self, mark: usize) -> Vec<String> {
+        self.log_tap.lock().map_or_else(
+            |_| Vec::new(),
+            |tap| tap.get(mark..).unwrap_or_default().to_vec(),
+        )
+    }
+
     /// Spawn a game instance with `--harness <port>` and optional extra args.
     /// Uses the provided [`ClientConfig`] for connection timeouts and retry behaviour.
     ///
@@ -138,17 +158,23 @@ impl GameInstance {
             )
         })?;
 
+        let log_tap: LogTap = Arc::new(Mutex::new(Vec::new()));
         let actual_port = if auto_port {
-            read_harness_port(&mut process, stdout_log, config.connect_timeout)
-                .await
-                .with_context(|| {
-                    format!(
-                        "while waiting for HARNESS_PORT from '{}' cwd='{}' args='--harness {port} {}'",
-                        binary.display(),
-                        work_dir.display(),
-                        extra_args.join(" ")
-                    )
-                })?
+            read_harness_port(
+                &mut process,
+                stdout_log,
+                log_tap.clone(),
+                config.connect_timeout,
+            )
+            .await
+            .with_context(|| {
+                format!(
+                    "while waiting for HARNESS_PORT from '{}' cwd='{}' args='--harness {port} {}'",
+                    binary.display(),
+                    work_dir.display(),
+                    extra_args.join(" ")
+                )
+            })?
         } else {
             port
         };
@@ -160,6 +186,7 @@ impl GameInstance {
             game_binary: binary,
             work_dir,
             config: config.clone(),
+            log_tap,
         };
 
         instance.connect_with_retry().await?;
@@ -360,6 +387,7 @@ pub fn find_game_binary(game_dir: &Path, named: Option<&str>) -> Result<PathBuf>
 async fn read_harness_port(
     process: &mut Child,
     log_file: Option<std::fs::File>,
+    log_tap: LogTap,
     timeout: Duration,
 ) -> Result<u16> {
     let stdout = process
@@ -395,6 +423,9 @@ async fn read_harness_port(
                                 if let Some(w) = writer.as_mut() {
                                     use tokio::io::AsyncWriteExt;
                                     let _ = w.write_all(format!("{l}\n").as_bytes()).await;
+                                }
+                                if let Ok(mut tap) = log_tap.lock() {
+                                    tap.push(l);
                                 }
                             }
                         });
@@ -432,6 +463,7 @@ mod tests {
             game_binary: PathBuf::from("sh"),
             work_dir: PathBuf::new(),
             config: ClientConfig::default(),
+            log_tap: Arc::new(Mutex::new(Vec::new())),
         };
 
         let started = Instant::now();
