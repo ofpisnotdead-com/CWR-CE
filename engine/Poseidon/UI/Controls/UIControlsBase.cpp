@@ -614,6 +614,7 @@ ControlObjectContainer::ControlObjectContainer(ControlsContainer* parent, int id
     _indexL = -1;
     _indexR = -1;
     _indexMove = -1;
+    _indexTextInput = -1;
     LoadControls(cls);
     SetPosition(Position()); // update controls
 }
@@ -779,12 +780,44 @@ int ControlObjectContainer::GetFocusedIdc()
 
 bool ControlObjectContainer::WantsTextInput() const
 {
+    if (_indexTextInput >= 0 && _indexTextInput < _controls.Size())
+    {
+        IControl* ctrl = _controls[_indexTextInput]._control;
+        return ctrl && ctrl->WantsTextInput();
+    }
     if (_indexFocused < 0 || _indexFocused >= _controls.Size())
     {
         return false;
     }
     IControl* ctrl = _controls[_indexFocused]._control;
     return ctrl && ctrl->WantsTextInput();
+}
+
+bool ControlObjectContainer::CaptureTextInputCtrl(int idc)
+{
+    for (int i = 0; i < _controls.Size(); ++i)
+    {
+        IControl* ctrl = _controls[i]._control;
+        if (!ctrl || ctrl->IDC() != idc || !ctrl->WantsTextInput())
+            continue;
+        ReleaseTextInputCtrl();
+        _indexTextInput = i;
+        ctrl->SetTextInputCaptured(true);
+        UpdateTextInputState();
+        return true;
+    }
+    return false;
+}
+
+void ControlObjectContainer::ReleaseTextInputCtrl()
+{
+    if (_indexTextInput >= 0 && _indexTextInput < _controls.Size())
+    {
+        if (IControl* ctrl = _controls[_indexTextInput]._control)
+            ctrl->SetTextInputCaptured(false);
+    }
+    _indexTextInput = -1;
+    UpdateTextInputState();
 }
 
 bool ControlObjectContainer::CanBeDefault() const
@@ -880,6 +913,7 @@ bool ControlObjectContainer::RemoveControl(int idc)
         if (_controls[i]._control && _controls[i]._control->IDC() == idc)
         {
             const bool removedFocused = _indexFocused == i;
+            const bool removedTextInput = _indexTextInput == i;
             // Drop tracking indices that point at (or past) this slot
             // so input dispatch doesn't read a stale pointer or address
             // the wrong neighbour after the array shifts.
@@ -899,8 +933,12 @@ bool ControlObjectContainer::RemoveControl(int idc)
                 _indexMove = -1;
             else if (_indexMove > i)
                 _indexMove--;
+            if (_indexTextInput == i)
+                _indexTextInput = -1;
+            else if (_indexTextInput > i)
+                _indexTextInput--;
             _controls.Delete(i);
-            if (removedFocused)
+            if (removedFocused || removedTextInput)
                 UpdateTextInputState();
             return true;
         }
@@ -1355,7 +1393,8 @@ bool ControlObjectContainer::OnChar(unsigned nChar, unsigned nRepCnt, unsigned n
     {
         return false;
     }
-    if (_indexFocused >= 0 && _indexFocused < n && _controls[_indexFocused]._control->OnChar(nChar, nRepCnt, nFlags))
+    int index = _indexTextInput >= 0 ? _indexTextInput : _indexFocused;
+    if (index >= 0 && index < n && _controls[index]._control->OnChar(nChar, nRepCnt, nFlags))
     {
         return true;
     }
@@ -1369,7 +1408,8 @@ bool ControlObjectContainer::OnIMEChar(unsigned nChar, unsigned nRepCnt, unsigne
     {
         return false;
     }
-    if (_indexFocused >= 0 && _indexFocused < n && _controls[_indexFocused]._control->OnIMEChar(nChar, nRepCnt, nFlags))
+    int index = _indexTextInput >= 0 ? _indexTextInput : _indexFocused;
+    if (index >= 0 && index < n && _controls[index]._control->OnIMEChar(nChar, nRepCnt, nFlags))
     {
         return true;
     }
@@ -1383,7 +1423,8 @@ bool ControlObjectContainer::OnIMEComposition(unsigned nChar, unsigned nFlags)
     {
         return false;
     }
-    if (_indexFocused >= 0 && _indexFocused < n && _controls[_indexFocused]._control->OnIMEComposition(nChar, nFlags))
+    int index = _indexTextInput >= 0 ? _indexTextInput : _indexFocused;
+    if (index >= 0 && index < n && _controls[index]._control->OnIMEComposition(nChar, nFlags))
     {
         return true;
     }

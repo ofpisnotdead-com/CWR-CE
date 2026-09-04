@@ -112,6 +112,7 @@ TEST_CASE("OptionsScrollList row policy keeps disabled rows focusable but inert"
     CHECK(OptionsScrollList::CanRowAdjustValue(OptionsScrollList::KindStepper, false) == true);
     CHECK(OptionsScrollList::CanRowAdjustValue(OptionsScrollList::KindBoolean, false) == true);
     CHECK(OptionsScrollList::CanRowAdjustValue(OptionsScrollList::KindSlider, false) == true);
+    CHECK(OptionsScrollList::CanRowAdjustValue(OptionsScrollList::KindNumericSlider, false) == true);
     CHECK(OptionsScrollList::CanRowAdjustValue(OptionsScrollList::KindAction, false) == false);
     CHECK(OptionsScrollList::CanRowAdjustValue(OptionsScrollList::KindBinding, false) == false);
     CHECK(OptionsScrollList::CanRowAdjustValue(OptionsScrollList::KindStepper, true) == false);
@@ -120,6 +121,8 @@ TEST_CASE("OptionsScrollList row policy keeps disabled rows focusable but inert"
     CHECK(OptionsScrollList::CanRowInvokeAction(OptionsScrollList::KindAction, true) == false);
     CHECK(OptionsScrollList::CanRowOpenBinding(OptionsScrollList::KindBinding, false) == true);
     CHECK(OptionsScrollList::CanRowOpenBinding(OptionsScrollList::KindBinding, true) == false);
+    CHECK(OptionsScrollList::CanRowOpenNumericEntry(OptionsScrollList::KindNumericSlider, false) == true);
+    CHECK(OptionsScrollList::CanRowOpenNumericEntry(OptionsScrollList::KindNumericSlider, true) == false);
 }
 
 TEST_CASE("UITestEngine returns semantic text when controls render a clipped marquee", "[optionsUI][UI]")

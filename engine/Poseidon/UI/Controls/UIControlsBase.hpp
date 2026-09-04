@@ -44,6 +44,7 @@ protected:
 	RString _tooltip;
 	RString _semanticTestText;
 	bool _hasSemanticTestText = false;
+	bool _textInputCaptured = false;
 
 	PackedColor _tooltipColorText;
 	PackedColor _tooltipColorBox;
@@ -73,6 +74,8 @@ public:
 
 	void EnableCtrl(bool enable = true) {_enabled = enable;}
 	bool IsFocused() {return _focused;}
+	bool IsTextInputCaptured() const {return _textInputCaptured;}
+	void SetTextInputCaptured(bool captured) {_textInputCaptured = captured;}
 
 	virtual IControl *GetFocused() {return this;}
 
@@ -268,6 +271,7 @@ protected:
 	int _indexL;
 	int _indexR;
 	int _indexMove;
+	int _indexTextInput;
 
 public:
 
@@ -285,6 +289,8 @@ public:
 	int GetFocusedIdc();
 
 	bool FocusCtrlByIdc(int idc);
+	bool CaptureTextInputCtrl(int idc);
+	void ReleaseTextInputCtrl();
 
 	int GetLeftPressedIdc() const;
 

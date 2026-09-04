@@ -487,6 +487,7 @@ list(APPEND POSEIDON_TEST_SOURCES
     UI/test_meter_widget.cpp
     UI/Locale/test_mission_language_detector.cpp
     UI/test_mouse_page.cpp
+    UI/test_number_entry_page.cpp
     UI/test_mp_version_message_localization.cpp
     UI/test_main_menu_layout.cpp
     UI/test_notebook_theme.cpp
