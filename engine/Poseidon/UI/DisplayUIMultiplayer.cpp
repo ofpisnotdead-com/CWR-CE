@@ -500,7 +500,7 @@ void CSessions::DrawItem(Vector3Par position, Vector3Par down, int i, float alph
         float ver = 0.01f * _sessions[a].actualVersion;
         saturateMax(ver, 1.0f);
         const char* remoteTag = _sessions[a].versionTag.GetLength() > 0 ? (const char*)_sessions[a].versionTag : "";
-        snprintf(buffer, sizeof(buffer), "%.1f%s%s", ver, remoteTag[0] != 0 ? "-" : "", remoteTag);
+        snprintf(buffer, sizeof(buffer), "%.2f %s%s", ver, remoteTag[0] != 0 ? "-" : "", remoteTag);
         col = (_sessions[a].badActualVersion || _sessions[a].badTag) ? PackedColor(Color(1, 0, 0, alpha)) : color;
         GEngine->DrawText3D(row2.pos + row2.border * row2.dir, row2.up, row2.right, ClipAll, row2.font, col, DisableSun,
                             buffer, 0, row2.y1ct, x2c, row2.y2ct);
