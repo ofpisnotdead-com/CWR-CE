@@ -497,7 +497,7 @@ RString StringTable::Localize(int ids)
         // empty by design — return empty silently in that case.
         extern bool g_stringtableSystemAvailable;
         if (!g_stringtableSystemAvailable)
-            return "";
+            return RString();
 
         // Context: -1 usually means an uninitialized IDS_* global (STRING() entry
         // whose STR_* key was missing from stringtable.csv). Large positive values
@@ -509,9 +509,10 @@ RString StringTable::Localize(int ids)
 
         LOG_ERROR(Core, "String id {} is not registered (registered count = {}){}", ids, _registered.Size(), hint);
 #if _ENABLE_CHEATS
-        return "!!! UNREGISTERED STRING";
+        static const RString kUnregistered = "!!! UNREGISTERED STRING";
+        return kUnregistered;
 #else
-        return "";
+        return RString();
 #endif
     }
     return _registered[ids].value;
@@ -600,9 +601,10 @@ RString StringTable::Localize(const char* str)
 
     RptF("String %s not found", (const char*)str);
 #if _ENABLE_CHEATS
-    return "!!! MISSING STRING";
+    static const RString kMissing = "!!! MISSING STRING";
+    return kMissing;
 #else
-    return "";
+    return RString();
 #endif
 }
 
