@@ -1,0 +1,8 @@
+{
+  "name": "metal-cpp",
+  "version-string": "c595afef4a5dc388f4047cd0c69f9e7f9468d9ed",
+  "description": "Apple's header-only C++ interface for Metal",
+  "homepage": "https://github.com/apple/metal-cpp",
+  "license": "Apache-2.0",
+  "supports": "osx | ios"
+}
