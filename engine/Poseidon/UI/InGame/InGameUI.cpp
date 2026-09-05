@@ -1284,7 +1284,7 @@ void InGameUI::ResetVehicle(EntityAI* vehicle)
     int weapon = vehicle->FirstWeapon();
     weapon = ValidateWeapon(vehicle, weapon);
     // if the weapon is not weapon, but rather special item, do not select it
-    if (weapon >= 0)
+    if (weapon >= 0 && weapon < vehicle->NMagazineSlots())
     {
         const MagazineSlot& slot = vehicle->GetMagazineSlot(weapon);
         const WeaponType* type = slot._weapon;
@@ -2396,7 +2396,10 @@ void InGameUI::SendKilled(AIUnit* unit, PackedBoolArray list)
     {
         if (list.Get(i))
         {
-            grp->SendUnitDown(unit, grp->UnitWithID(i + 1));
+            if (AIUnit* down = grp->UnitWithID(i + 1))
+            {
+                grp->SendUnitDown(unit, down);
+            }
         }
     }
 }

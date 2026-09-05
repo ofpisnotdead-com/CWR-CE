@@ -813,7 +813,7 @@ void AddDropActions(AIUnit* unit, UIActions& actions)
         if (!findWeapons)
         {
             int index = veh->SelectedWeapon();
-            if (index >= 0)
+            if (index >= 0 && index < veh->NMagazineSlots())
             {
                 const MagazineSlot& slot = veh->GetMagazineSlot(index);
                 if (slot._weapon && slot._weapon->_canDrop)
@@ -825,7 +825,7 @@ void AddDropActions(AIUnit* unit, UIActions& actions)
         if (!findMagazines)
         {
             int index = veh->SelectedWeapon();
-            if (index >= 0)
+            if (index >= 0 && index < veh->NMagazineSlots())
             {
                 const MagazineSlot& slot = veh->GetMagazineSlot(index);
                 if (slot._magazine)

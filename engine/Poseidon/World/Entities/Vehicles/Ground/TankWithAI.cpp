@@ -124,6 +124,11 @@ bool Tank::FireWeapon(int weapon, TargetType* target)
 
 void Tank::FireWeaponEffects(int weapon, const Magazine* magazine, EntityAI* target)
 {
+    if (weapon < 0 || weapon >= NMagazineSlots())
+    {
+        return;
+    }
+
     const MagazineSlot& slot = GetMagazineSlot(weapon);
     if (!magazine || slot._magazine != magazine)
     {
@@ -244,6 +249,10 @@ bool Tank::CalculateAimWeapon(int weapon, Vector3& dir, Target* target)
             return false;
         }
         weapon = 0;
+    }
+    else if (weapon >= NMagazineSlots())
+    {
+        return false;
     }
     _fire.SetTarget(CommanderUnit(), target);
     const Magazine* magazine = GetMagazineSlot(weapon)._magazine;

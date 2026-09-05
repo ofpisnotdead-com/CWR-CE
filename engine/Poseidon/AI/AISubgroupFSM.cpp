@@ -1261,7 +1261,7 @@ static void CheckFireFire(AISubgroupContext* context)
                     continue;
                 }
                 EntityAI* vehicle = unit->GetVehicle();
-                if (cmd->_param >= 0)
+                if (cmd->_param >= 0 && cmd->_param < vehicle->NMagazineSlots())
                 {
                     const Magazine* magazine = vehicle->GetMagazineSlot(cmd->_param)._magazine;
                     if (magazine && magazine->_ammo > 0)
@@ -1295,7 +1295,7 @@ static void CheckFireFire(AISubgroupContext* context)
             {
                 continue;
             }
-            if (cmd->_param >= 0)
+            if (cmd->_param >= 0 && cmd->_param < unit->GetVehicle()->NMagazineSlots())
             {
                 EntityAI* vehicle = unit->GetVehicle();
                 const Magazine* magazine = vehicle->GetMagazineSlot(cmd->_param)._magazine;
