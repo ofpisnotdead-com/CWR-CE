@@ -1,6 +1,7 @@
 #include <PoseidonGL33/EngineGL33.hpp>
 #include <PoseidonGL33/TextureGL33.hpp>
 #include <PoseidonGL33/GL33BindCache.hpp>
+#include <PoseidonGL33/GL33TerrainSegments.hpp>
 #include <Poseidon/Graphics/Core/GLIndexBuffer.hpp>
 #include <Poseidon/Graphics/Core/GLCullState.hpp>
 #include <Poseidon/Graphics/Core/GLPipelineState.hpp>
@@ -295,13 +296,12 @@ void GroupSegmentsByBatch(TerrainInstancedGL33& t, const Engine::GroundSegment* 
     for (size_t i = 0; i < count; i++)
     {
         // Compute this segment's index within the segBatchMask array, and look up its batch bitmask
-        const int sx = segments[i].cellX / seg;
-        const int sz = segments[i].cellZ / seg;
-        if (sx < 0 || sz < 0 || sx >= sr || sz >= sr)
+        const auto segmentIndex = render::gl33::TerrainSegmentIndex(segments[i].cellX, segments[i].cellZ, seg, sr);
+        if (!segmentIndex || *segmentIndex >= t.segBatchMask.size())
         {
             continue;
         }
-        const uint64_t mask = t.segBatchMask[static_cast<size_t>(sz) * sr + sx];
+        const uint64_t mask = t.segBatchMask[*segmentIndex];
         // Iterate over the batches and add this segment to all matching batches
         for (int b = 0; b < nBatches; b++)
         {
@@ -767,11 +767,8 @@ void EngineGL33::DrawWater(const GroundSegment* segments, size_t count, const TL
     const int seg = t.segmentSize, sr = t.segRange;
     for (size_t i = 0; i < count; i++)
     {
-        const int sx = segments[i].cellX / seg;
-        const int sz = segments[i].cellZ / seg;
-        // Beyond the map edge there is no terrain, only open sea
-        const bool outside = sx < 0 || sz < 0 || sx >= sr || sz >= sr;
-        if (outside || t.segHasWater[static_cast<size_t>(sz) * sr + sx])
+        const auto segmentIndex = render::gl33::TerrainSegmentIndex(segments[i].cellX, segments[i].cellZ, seg, sr);
+        if (!segmentIndex || t.segHasWater[*segmentIndex])
         {
             wet.push_back(segments[i]);
         }
