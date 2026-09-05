@@ -66,7 +66,7 @@ source ~/.bash_profile
 Run the following command in a terminal to install the dependencies:
 
 ```shell
-sudo dnf install autoconf-archive ccache clang clang-tools-extra git libGL-devel libtool libtool-ltdl-devel libX11-devel libXcursor-devel libXext-devel libXi-devel libXinerama-devel libxkbcommon-devel libXrandr-devel libXtst-devel perl-FindBin perl-IPC-Cmd perl-Time-Piece pkgconf python3 vcpkg wayland-devel wayland-protocols-devel
+sudo dnf install autoconf-archive ccache clang clang-tools-extra git libGL-devel libtool libtool-ltdl-devel libX11-devel libXcursor-devel libXext-devel libXi-devel libXinerama-devel libxkbcommon-devel libXrandr-devel libXtst-devel perl-FindBin perl-IPC-Cmd perl-Time-Piece perl-open pkgconf python3 vcpkg wayland-devel wayland-protocols-devel
 ```
 
 After this has completed successfully, you will need to follow the instructions in the `README.fedora` file to complete the setup for vcpkg:
