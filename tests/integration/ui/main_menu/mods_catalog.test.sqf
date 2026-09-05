@@ -73,9 +73,11 @@ triAssertEq [(triGetModsSortColumn), 0]
 triSortMods 3
 triScreenshot "mods_table_wired"
 
+// The guidance sentence gets reworded, so pin it by stringtable row, not wording.
 triSetLanguage "Czech"
 triWaitFrames 2
-triAssertIncludes [(triVisibleTexts), "Enter stáhne (pokud nejsou stažené) a načte vybrané mody."]
+triAssertIncludes [(triVisibleTexts), "Hledat:"]
+triAssertIncludes [(triVisibleTexts), (localize "STR_DISP_MODS_GUIDANCE")]
 
 // Cancel closes the MODS notebook and returns to the main menu.
 triClick 2

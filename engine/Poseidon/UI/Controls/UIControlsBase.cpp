@@ -1,6 +1,7 @@
 #include <Poseidon/Foundation/Strings/Mbcs.hpp>
 #include <Poseidon/Foundation/Containers/Array.hpp>
 #include <Poseidon/Foundation/Framework/DebugLog.hpp>
+#include <Poseidon/Foundation/Framework/Log.hpp>
 #include <Poseidon/Foundation/Math/Interpol.hpp>
 #include <Poseidon/Foundation/Math/Math3D.hpp>
 #include <Poseidon/Foundation/Math/Math3DP.hpp>
@@ -192,6 +193,7 @@ void IControl::PlaySound(SoundPars& pars)
 {
     if (pars.name.GetLength() > 0)
     {
+        LOG_DEBUG(UI, "control sound '{}'", (const char*)pars.name);
         // float volume = GSoundsys->GetSpeechVolCoef();
         IWave* wave = GSoundScene->OpenAndPlayOnce2D(pars.name, pars.vol, pars.freq, false);
         if (wave)

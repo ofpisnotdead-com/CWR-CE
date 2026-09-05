@@ -4,6 +4,8 @@
 #include <Poseidon/AI/AI.hpp>
 #include <Poseidon/Input/InputSubsystem.hpp>
 #include <Poseidon/UI/InGame/InGameUIImpl.hpp>
+#include <Poseidon/UI/Controls/CursorLayout.hpp>
+#include <Poseidon/UI/LayoutCanvas.hpp>
 #include <Poseidon/Graphics/Core/Engine.hpp>
 #include <Poseidon/World/Scene/Camera/Camera.hpp>
 #include <Poseidon/World/Terrain/Visibility.hpp>
@@ -35,6 +37,9 @@
 
 namespace Poseidon
 {
+
+// Size the in-game cursors are drawn at, in layout units.
+static constexpr float kCursorUnits = 32.0f;
 
 AIUnit* GetSelectedUnit(int i);
 
@@ -179,12 +184,12 @@ bool InGameUI::DrawTargetInfo(const Camera& camera, AIUnit* unit, Vector3Par dir
 
     Vector3Val mDir = camInvTransform.Rotate(dir);
 
-    // width/height assume fovLeft/fovTop = 1/0.75
     AspectSettings asp;
     GEngine->GetAspectSettings(asp);
 
-    const float mScrH = 32.0f / (800 * asp.topFOV);
-    const float mScrW = 32.0f / (800 * asp.leftFOV);
+    const CursorLayout::Size cursorSize = CursorLayout::ProjectedSize(kCursorUnits, asp.leftFOV, asp.topFOV);
+    const float mScrH = cursorSize.h;
+    const float mScrW = cursorSize.w;
 
     float cx, cy;
     {
@@ -698,11 +703,11 @@ bool InGameUI::DrawTargetInfo(const Camera& camera, AIUnit* unit, Vector3Par dir
 void InGameUI::DrawCursor(const Camera& camera, EntityAI* vehicle, Vector3Val dir, float size, Texture* texture,
                           float width, float height, PackedColor color, bool drawInTD, CursorTexts texts)
 {
-    // width/height assume fovLeft/fovTop = 1/0.75
     AspectSettings asp;
     GEngine->GetAspectSettings(asp);
-    width *= 1.0f / asp.leftFOV;
-    height *= 0.75f / asp.topFOV;
+    const CursorLayout::Size drawn = CursorLayout::RescaleForFOV({width, height}, asp.leftFOV, asp.topFOV);
+    width = drawn.w;
+    height = drawn.h;
 
     const int w3d = GLOB_ENGINE->Width();
     const int h3d = GLOB_ENGINE->Height();
@@ -1006,8 +1011,12 @@ void InGameUI::DrawHUDNonAI(const Camera& camera, Entity* vehicle, CameraType ca
 
             Matrix4Val camInvTransform = camera.GetInvTransform();
 
-            const float mScrH = 32.0 / 600;
-            const float mScrW = 32.0 / 800;
+            AspectSettings asp;
+            GEngine->GetAspectSettings(asp);
+
+            const CursorLayout::Size cursorSize = CursorLayout::ProjectedSize(kCursorUnits, asp.leftFOV, asp.topFOV);
+            const float mScrH = cursorSize.h;
+            const float mScrW = cursorSize.w;
 
             float cx, cy;
             Vector3 pos = camInvTransform.Rotate(newDir);
@@ -1523,8 +1532,8 @@ void InGameUI::DrawHUD(const Camera& camera, EntityAI* vehicle, CameraType cam)
     if (_showCursors)
     {
         // draw weapon cursor
-        const float mouseScrH = 32.0 / 600;
-        const float mouseScrW = 32.0 / 800;
+        const float mouseScrH = LayoutCanvas::FractionOfHeight(kCursorUnits);
+        const float mouseScrW = LayoutCanvas::FractionOfWidth(kCursorUnits);
 
         int weapon = vehicle->SelectedWeapon();
         if (weapon >= 0 && weapon < vehicle->NMagazineSlots() && vehicle->GetMagazineSlot(weapon)._magazine &&
