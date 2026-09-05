@@ -519,6 +519,9 @@ void EngineGL33::ResetForRemount()
     if (_textBank)
     {
         _textBank->ReleaseAllTextures();
+        // The detail set is derived from `CfgDetailTextures`, which the reload replaces,
+        // and the bank rebuilds it only from an empty state.
+        _textBank->ReleaseDetailTextures();
     }
 }
 
