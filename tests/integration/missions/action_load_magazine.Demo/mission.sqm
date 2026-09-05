@@ -1,0 +1,85 @@
+version=11;
+class Mission
+{
+	randomSeed=9000009;
+	class Intel
+	{
+		startWeather=0.300000;
+		forecastWeather=0.300000;
+		hour=12.000000;
+	};
+	class Groups
+	{
+		items=1;
+		class Item0
+		{
+			side="WEST";
+			class Vehicles
+			{
+				items=2;
+				class Item0
+				{
+					position[]={9564.367188,29.834999,3926.905029};
+					id=0;
+					side="WEST";
+					vehicle="SoldierWB";
+					player="PLAYER COMMANDER";
+					leader=1;
+					skill=0.600000;
+				};
+				class Item1
+				{
+					position[]={9590.791016,29.834999,3928.112793};
+					special="NONE";
+					id=2;
+					side="WEST";
+					vehicle="SoldierWB";
+					skill=0.600000;
+					text="s1";
+				};
+			};
+		};
+	};
+	class Vehicles
+	{
+		items=1;
+		class Item0
+		{
+			position[]={9587.006836,29.834999,3926.117676};
+			id=1;
+			side="EMPTY";
+			vehicle="T72";
+			skill=0.600000;
+			text="m1";
+		};
+	};
+	class Markers
+	{
+		items=0;
+	};
+	class Sensors
+	{
+		items=0;
+	};
+};
+class Intro
+{
+	randomSeed=9000019;
+	class Intel
+	{
+	};
+};
+class OutroWin
+{
+	randomSeed=9000029;
+	class Intel
+	{
+	};
+};
+class OutroLoose
+{
+	randomSeed=9000039;
+	class Intel
+	{
+	};
+};
