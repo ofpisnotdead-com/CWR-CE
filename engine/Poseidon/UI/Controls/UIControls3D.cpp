@@ -557,7 +557,7 @@ void C3DEdit::OnDraw(float alpha)
     }
 
     // draw caret
-    if (!IsFocused())
+    if (!IsFocused() && !IsTextInputCaptured())
     {
         return;
     }

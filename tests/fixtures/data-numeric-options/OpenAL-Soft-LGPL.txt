@@ -1,0 +1,1 @@
+../../../packages/Demo/OpenAL-Soft-LGPL.txt

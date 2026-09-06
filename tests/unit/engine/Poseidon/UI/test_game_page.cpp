@@ -91,7 +91,7 @@ TEST_CASE("GamePage: row labels include view-distance controls", "[UI][GamePage]
     CHECK(std::string(p.RowLabel(3)) == "Respect mission visibility");
 }
 
-TEST_CASE("GamePage: view-distance row is a slider with metre text", "[UI][GamePage]")
+TEST_CASE("GamePage: view-distance row accepts exact numeric entry", "[UI][GamePage]")
 {
     GamePageStateSnapshot snap;
     LoadMainMenuStringtable();
@@ -100,7 +100,7 @@ TEST_CASE("GamePage: view-distance row is a slider with metre text", "[UI][GameP
 
     TestableGamePage page;
     auto& p = page.Provider();
-    CHECK(p.RowKind(2) == OptionsScrollList::KindSlider);
+    CHECK(p.RowKind(2) == OptionsScrollList::KindNumericSlider);
     CHECK(p.RowValue(2) == 16);
     CHECK(std::string(p.SliderValueText(2)) == "900 m");
 
