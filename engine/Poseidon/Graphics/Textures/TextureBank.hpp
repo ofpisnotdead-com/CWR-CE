@@ -137,6 +137,11 @@ class AbstractTextBank
     virtual int NTextures() const = 0;
     virtual Texture* GetTexture(int i) const = 0;
 
+    // How many times the bank has derived its detail / specular / grass / water-bump
+    // set from `CfgDetailTextures`. One per content load, since a re-mount swaps that
+    // config under the bank.
+    virtual int NDetailTextureLoads() const { return 0; }
+
     void PrepareMipmap(Texture* texture, int level, int levelTop)
     {
         // hint - if we will use mipmap, we will want this one

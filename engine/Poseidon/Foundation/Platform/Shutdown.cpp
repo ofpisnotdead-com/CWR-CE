@@ -48,6 +48,7 @@ using namespace Poseidon::Dev;
 #include <Poseidon/Audio/IAudioSystem.hpp>
 #include <Poseidon/Audio/SoundScene.hpp>
 #include <Poseidon/Graphics/Rendering/Draw/FontSystem.hpp>
+#include <Poseidon/World/Scene/ScenePreloader.hpp>
 
 #include <Poseidon/IO/ParamFile/ParamFile.hpp>
 
@@ -135,6 +136,9 @@ void UnloadGameData(bool keepEngine)
     // it must only be cleared here — a delete is a double-free + use-after-free of the World
     // (Scene::~Scene re-runs the landscape teardown and SaveConfig() reads the freed World).
     GScene = nullptr;
+    // Those preloaded shapes belonged to the Scene just destroyed. The preloader fills a
+    // new Scene only from a shut-down state, so reset it here for the next load.
+    ScenePreloader::Instance().Shutdown();
     if (GEngine)
     {
         GEngine->ClearFontCache();

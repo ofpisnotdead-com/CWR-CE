@@ -114,6 +114,8 @@ GameValue TriDisplay(const GameState*);
 GameValue TriEditorMode(const GameState*);
 GameValue TriRemount(const GameState*);
 GameValue TriLoadedShapeCount(const GameState*);
+GameValue TriScenePreloadCount(const GameState*);
+GameValue TriDetailTextureLoads(const GameState*);
 GameValue TriClick(const GameState*, GameValuePar);
 GameValue TriClickAt(const GameState*, GameValuePar);
 GameValue TriInvokeButton(const GameState*, GameValuePar);
@@ -2120,6 +2122,31 @@ GameValue TriLoadedShapeCount(const GameState* /*state*/)
     return GameValue(static_cast<float>(n));
 }
 
+/// triScenePreloadCount - number of populated CfgScenePreload shape slots on the live
+/// Scene (crater decals, cloudlets, footsteps, sky clouds, light halos). A re-mount
+/// destroys the Scene and builds a new one, so the count must come back afterwards.
+GameValue TriScenePreloadCount(const GameState* /*state*/)
+{
+    if (GScene == nullptr)
+        return GameValue(0.0f);
+    int n = 0;
+    for (int i = 0; i < Poseidon::MaxPreloadedShape; i++)
+    {
+        if (GScene->Preloaded(static_cast<Poseidon::PreloadedShape>(i)))
+            n++;
+    }
+    return GameValue(static_cast<float>(n));
+}
+
+/// triDetailTextureLoads - how many times the texture bank has derived its detail /
+/// specular / grass / water-bump set from `CfgDetailTextures`. One per content load.
+GameValue TriDetailTextureLoads(const GameState* /*state*/)
+{
+    if (GEngine == nullptr || GEngine->TextBank() == nullptr)
+        return GameValue(0.0f);
+    return GameValue(static_cast<float>(GEngine->TextBank()->NDetailTextureLoads()));
+}
+
 /// triFontTune ["prefix", renderPx, widthScale]
 /// triFontTune ["prefix", renderPx, widthScale, baselineOffset]
 /// triFontTune ["prefix", renderPx, widthScale, baselineOffset, syntheticBold]
@@ -3046,6 +3073,8 @@ INIT_MODULE(GameStateExtTest, 3)
     GGameState.NewNularOp(GameNular(GameString, "triHornPlayerVehicle", TriHornPlayerVehicle));
     GGameState.NewNularOp(GameNular(GameString, "triRemount", TriRemount));
     GGameState.NewNularOp(GameNular(GameScalar, "triLoadedShapeCount", TriLoadedShapeCount));
+    GGameState.NewNularOp(GameNular(GameScalar, "triScenePreloadCount", TriScenePreloadCount));
+    GGameState.NewNularOp(GameNular(GameScalar, "triDetailTextureLoads", TriDetailTextureLoads));
     GGameState.NewNularOp(GameNular(GameScalar, "triIsEndForced", TriIsEndForced));
     GGameState.NewNularOp(GameNular(GameString, "triCheatStorePosition", TriCheatStorePosition));
     GGameState.NewNularOp(GameNular(GameString, "triCheatSaveGame", TriCheatSaveGame));
