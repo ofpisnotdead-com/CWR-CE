@@ -52,7 +52,7 @@ Thing::Thing(VehicleType* name) : base(name), _doCrash(CrashNone)
 
     _isStopped = true;
     _objectContact = true;
-    _landContact = true;
+    _landContact = false;
     SetSimulationPrecision(1.0f / 15);
     _destrType = GetType()->GetDestructType();
 }

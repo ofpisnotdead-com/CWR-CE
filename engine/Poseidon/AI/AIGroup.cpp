@@ -1311,7 +1311,12 @@ bool AIGroup::Think()
             {
                 continue;
             }
-            if (!unit->IsUnit())
+            EntityAI* veh = unit->GetVehicleIn();
+            if (!veh)
+            {
+                continue;
+            }
+            if (!unit->IsUnit() && (veh->GetGroup() == this || veh->GunnerUnit() != unit))
             {
                 continue;
             }

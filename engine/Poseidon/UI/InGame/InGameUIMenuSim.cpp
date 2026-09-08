@@ -948,7 +948,7 @@ void InGameUI::SimulateHUD(const Camera& camera, EntityAI* vehicle, CameraType c
                             // in not driver, click can be command to driver
                             // rule is to fire only when target is locked
                             (_lockTarget || isPilot) && !GWorld->HasMap() &&
-                            (!ModeIsStrategy(_mode) || _modeAuto == UIStrategyFire) && input.GetMouseLToDo())
+                            (!ModeIsStrategy(_mode) || _modeAuto == UIStrategyFire) && input.GetMouseL())
                         {
                             fire = true;
                         }
@@ -959,7 +959,7 @@ void InGameUI::SimulateHUD(const Camera& camera, EntityAI* vehicle, CameraType c
                         if (
                             // in not driver, click can be command to driver
                             // rule is to fire only when target is locked
-                            (_lockTarget || isPilot) && !GWorld->HasMap() && input.GetMouseL())
+                            (_lockTarget || isPilot) && !GWorld->HasMap() && input.GetMouseLToDo())
                         {
                             fire = true;
                         }
