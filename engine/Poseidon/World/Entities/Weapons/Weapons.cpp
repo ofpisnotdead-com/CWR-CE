@@ -658,7 +658,17 @@ RStringB WeaponType::GetPictureName() const
 
 bool WeaponType::IsBinocular() const
 {
-    return (_weaponType & MaskSlotBinocular) != 0 && stricmp(GetName(), "binocular") == 0;
+    if ((_weaponType & MaskSlotBinocular) == 0)
+        return false;
+
+    // 2.01 feature. Allow assigning "isBinocular = 1" to define many binoculars
+    {
+        const ParamEntry* param = _parClass->FindEntry("isBinocular");
+        if (param && (param->IsFloatValue() || param->IsIntValue()) && 1.0f == (float)*param)
+            return true;
+    }
+
+    return stricmp(GetName(), "binocular") == 0;
 }
 
 // The hand proxies carry any item in the binocular slot. Several classes can

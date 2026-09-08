@@ -958,9 +958,21 @@ void Man::MinimalWeapons()
     }
 }
 
-void Man::ScanNVG()
+namespace
 {
-    bool found = false;
+bool isNVG(const WeaponType& type)
+{
+    const ParamEntry* param = type._parClass->FindEntry("isNVG");
+    if (param && (param->IsFloatValue() || param->IsIntValue()) && 1.0f == (float)*param)
+        return true;
+    if (!strcmpi(type.GetName(), "NVGoggles"))
+        return true;
+    return false;
+}
+} // anonymous namespace
+
+int Man::getNvgIdx() const
+{
     for (int i = 0; i < NWeaponSystems(); i++)
     {
         const WeaponType* w = GetWeaponSystem(i);
@@ -968,11 +980,15 @@ void Man::ScanNVG()
         {
             continue;
         }
-        if (!strcmpi(w->GetName(), "NVGoggles"))
-        {
-            found = true;
-        }
+        if (isNVG(*w))
+            return i;
     }
+    return -1;
+}
+
+void Man::ScanNVG()
+{
+    bool found = getNvgIdx() != -1;
     _hasNVG = found;
     if (!_hasNVG)
     {
