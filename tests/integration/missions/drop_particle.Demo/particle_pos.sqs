@@ -1,0 +1,3 @@
+dropReports = dropReports + 1
+dropReportedZ = _this select 2
+exit

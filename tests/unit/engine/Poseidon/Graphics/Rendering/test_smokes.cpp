@@ -15,7 +15,7 @@ TEST_CASE("smokes.hpp compiles", "[rendering][effects]")
     SUCCEED("header included successfully");
 }
 
-TEST_CASE("drop absolute-position particle arrays use legacy vector parsing", "[rendering][effects][drop]")
+TEST_CASE("drop vector arrays map script axes onto engine axes", "[rendering][effects][drop]")
 {
     GameArrayType array;
     array.Add(GameValue(100.0f));
