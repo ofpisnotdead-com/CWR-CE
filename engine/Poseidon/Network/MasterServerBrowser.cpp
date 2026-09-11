@@ -164,6 +164,7 @@ void ClearMasterServerBrowser(MasterServerBrowser* browser)
 {
     if (browser != nullptr)
     {
+        browser->joinWorker();
         browser->serviceSessions.clear();
         browser->pendingFetch.reset();
     }
