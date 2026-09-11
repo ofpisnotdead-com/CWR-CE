@@ -579,6 +579,9 @@ bool Man::IsActionInProgress(MoveFinishF action) const
 
 bool Man::ReloadMagazine(int slotIndex, int iMagazine)
 {
+    if (slotIndex < 0 || slotIndex >= NMagazineSlots())
+        return false;
+
     const MagazineSlot& slot = GetMagazineSlot(slotIndex);
     const MuzzleType* muzzle = slot._muzzle;
 
@@ -1374,6 +1377,13 @@ const WeaponModeType* Man::GetCurrentWeaponMode() const
         return mode;
     }
     // fall back to first mode of the first typical magazine (LAW-style weapons have no direct mode)
+
+    // Logic will continue if GetWeaponMode above returns NULL thus it can't guarantee _currentWeapon is valid
+    if (_currentWeapon >= NMagazineSlots())
+    {
+        return nullptr;
+    }
+
     const MagazineSlot& slot = GetMagazineSlot(_currentWeapon);
     const MuzzleType* muzzle = slot._muzzle;
     if (!muzzle)

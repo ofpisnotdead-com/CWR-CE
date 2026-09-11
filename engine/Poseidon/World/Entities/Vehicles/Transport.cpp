@@ -1123,7 +1123,7 @@ void ResourceSupply::GetActions(UIActions& actions, AIUnit* unit, bool now)
         }
         {
             int index = veh->SelectedWeapon();
-            if (index >= 0 && !_parent->GetType()->_showWeaponCargo)
+            if (index >= 0 && index < veh->NMagazineSlots() && !_parent->GetType()->_showWeaponCargo)
             {
                 const MagazineSlot& slot = veh->GetMagazineSlot(index);
                 if (GetFreeWeaponCargo() > 0 && slot._weapon && slot._weapon->_canDrop)

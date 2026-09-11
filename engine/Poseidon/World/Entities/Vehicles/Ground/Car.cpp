@@ -2053,6 +2053,11 @@ void Car::FireWeaponEffects(int weapon, const Magazine* magazine, EntityAI* targ
 {
     if (HasTurret())
     {
+        if (weapon < 0 || weapon >= NMagazineSlots())
+        {
+            return;
+        }
+
         const MagazineSlot& slot = GetMagazineSlot(weapon);
         if (!magazine || slot._magazine != magazine)
         {
@@ -2129,6 +2134,10 @@ bool Car::AimWeapon(int weapon, Vector3Par direction)
             return false;
         }
         weapon = 0;
+    }
+    else if (weapon >= NMagazineSlots())
+    {
+        return false;
     }
     SelectWeapon(weapon);
     Vector3 relDir(VMultiply, DirWorldToModel(), direction);
