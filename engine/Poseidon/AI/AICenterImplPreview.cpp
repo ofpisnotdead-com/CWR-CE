@@ -526,12 +526,12 @@ void AICenter::UpdateGroup()
 
 void AICenter::Think()
 {
-    PoseidonAssert(AssertValid());
+    AI_HEAVY_CHECK(AssertValid());
 
     if (_side == TLogic)
     {
         UpdateGroup();
-        PoseidonAssert(AssertValid());
+        AI_HEAVY_CHECK(AssertValid());
         return;
     }
 
@@ -568,7 +568,7 @@ void AICenter::Think()
     UpdateGroup();
     AddNewExposures();
 
-    PoseidonAssert(AssertValid());
+    AI_HEAVY_CHECK(AssertValid());
 }
 
 void AICenter::SendMission(AIGroup* to, Mission& mis)

@@ -1234,7 +1234,7 @@ void AISubgroup::AddUnitWithCargo(AIUnit* unit)
         return;
     }
 
-    PoseidonAssert(AssertValid());
+    AI_HEAVY_CHECK(AssertValid());
 
     Transport* veh = unit->GetVehicleIn();
     if (veh)
@@ -1278,7 +1278,7 @@ void AISubgroup::AddUnitWithCargo(AIUnit* unit)
     SelectLeader();
     RefreshPlan();
 
-    PoseidonAssert(AssertValid());
+    AI_HEAVY_CHECK(AssertValid());
 }
 
 } // namespace Poseidon
@@ -1397,7 +1397,7 @@ void AISubgroup::SelectLeader(AIUnit* unit)
 
     _doRefresh = true; // process DoRefresh in next Think
 
-    PoseidonAssert(AssertValid());
+    AI_HEAVY_CHECK(AssertValid());
 }
 namespace Poseidon
 {
@@ -1434,7 +1434,7 @@ void AISubgroup::JoinToSubgroup(AISubgroup* subgrp)
     }
     AI_ERROR(this != GetGroup()->MainSubgroup());
 
-    PoseidonAssert(AssertValid());
+    AI_HEAVY_CHECK(AssertValid());
 
     ClearAllCommands();
 
@@ -1461,7 +1461,7 @@ void AISubgroup::JoinToSubgroup(AISubgroup* subgrp)
     subgrp->RefreshPlan();
     subgrp->UpdateFormationPos();
 
-    PoseidonAssert(subgrp->AssertValid());
+    AI_HEAVY_CHECK(subgrp->AssertValid());
 }
 
 // Mind
@@ -1562,7 +1562,7 @@ bool AISubgroup::Think(ThinkImportance prec)
 #endif
         }
 
-        PoseidonAssert(GLOB_WORLD->CheckVehicleStructure());
+        AI_HEAVY_CHECK(GLOB_WORLD->CheckVehicleStructure());
 
         // Refresh command
         if (Leader() && Leader()->GetExposureChange() >= CRITICAL_EXPOSURE_CHANGE || Glob.time >= _refreshTime)
@@ -1578,7 +1578,7 @@ bool AISubgroup::Think(ThinkImportance prec)
             Leader()->ClearExposureChange();
         }
 
-        PoseidonAssert(GLOB_WORLD->CheckVehicleStructure());
+        AI_HEAVY_CHECK(GLOB_WORLD->CheckVehicleStructure());
     }
 
     bool path = false;
@@ -1595,7 +1595,7 @@ bool AISubgroup::Think(ThinkImportance prec)
         }
     }
 
-    PoseidonAssert(GLOB_WORLD->CheckVehicleStructure());
+    AI_HEAVY_CHECK(GLOB_WORLD->CheckVehicleStructure());
 
     return path; // OperPath called - return busy
 }
@@ -1617,7 +1617,7 @@ void AISubgroup::ReceiveAnswer(AIUnit* from, Answer answer)
         case AI::UnitDestroyed:
         {
             AICenter* center = GetGroup()->GetCenter();
-            PoseidonAssert(center->AssertValid());
+            AI_HEAVY_CHECK(center->AssertValid());
             {
                 Ref<AIGroup> group = GetGroup(); // group may be removed from center
                 AI_ERROR(group);
@@ -1697,7 +1697,7 @@ void AISubgroup::ReceiveAnswer(AIUnit* from, Answer answer)
                 }
                 // group are not destroyed even when all units are destroyed
             }
-            PoseidonAssert(center->AssertValid());
+            AI_HEAVY_CHECK(center->AssertValid());
         }
         break;
         default:
