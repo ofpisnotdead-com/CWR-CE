@@ -78,6 +78,20 @@ class ConflictStatus final : public C3DStatic
   private:
     std::string m_colorMask;
 };
+
+class CaptureButton final : public C3DActiveText
+{
+  public:
+    CaptureButton(ControlsContainer* parent, int idc, const ParamEntry& cls) : C3DActiveText(parent, idc, cls) {}
+
+    void OnMouseMove(float x, float y, bool active = true) override
+    {
+        if (active && IsVisible() && IsEnabled())
+            _parent->FocusCtrl(IDC());
+
+        C3DActiveText::OnMouseMove(x, y, active);
+    }
+};
 } // namespace
 
 CapturePage::CapturePage(Idcs idcs, std::string actionLabel, std::string slotName, SaveCallback onSave,
@@ -144,9 +158,8 @@ bool CapturePage::OnKeyDown(OptionsShell& shell, unsigned nChar)
         return false;
     if (nChar == SDLK_ESCAPE)
     {
-        if (m_state == Listening)
-            Resolve(shell, false);
-        return true; // eat in Captured state — avoids race with synthetic key tap from triGpadButton
+        Resolve(shell, false);
+        return true;
     }
 
     if (m_state != Listening)
@@ -182,6 +195,10 @@ Control* CapturePage::OnCreateControl(OptionsShell& shell, int /*type*/, int idc
 {
     if (idc == m_idcs.status)
         return new ConflictStatus(&shell, idc, cls);
+
+    if (idc == m_idcs.save || idc == m_idcs.retry || idc == m_idcs.cancel)
+        return new CaptureButton(&shell, idc, cls);
+
     return nullptr;
 }
 
