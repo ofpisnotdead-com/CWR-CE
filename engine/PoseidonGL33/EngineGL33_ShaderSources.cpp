@@ -980,20 +980,10 @@ uint64_t HashShaderSources()
             h *= 0x100000001b3ull;
         }
     };
-    add(s_vsScreenGLSL);
-    add(s_vsTransformGLSL);
-    add(s_vsShadowGLSL);
-    add(s_psNormalGLSL);
-    add(s_psDetailGLSL);
-    add(s_psGrassGLSL);
-    add(s_psWaterGLSL);
-    add(s_psFlatGLSL);
-    add(s_psShadowGLSL);
-    add(s_vsTerrainGLSL);
-    add(s_psTerrainGLSL);
-    add(s_vsWaterInstGLSL);
-    add(s_vsGammaGLSL);
-    add(s_psGammaGLSL);
+    for (const auto& shader : AllShaders())
+    {
+        add(shader.source);
+    }
     // Hash the fragment bodies too so editing one invalidates the binary cache
     for (const auto& c : s_glslChunks)
     {
