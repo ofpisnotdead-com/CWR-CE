@@ -50,6 +50,11 @@ Tank::Tank(VehicleType* name, Person* driver)
       _backwardUsedAsBrake(false), _forwardUsedAsBrake(false), _parkingBrake(false)
 {
     _rpm = 0.1f, _rpmWanted = 0.1f;
+    // Tank::Sound reads _doGearSound every simulation tick (`if (_doGearSound &&
+    // !_gearSound)`); the entity is heap-allocated with non-zeroing operator new
+    // and the ctor never set this bitfield, so it was read uninitialised. It is
+    // only meant to be raised on a gear change (see Simulate), so default false.
+    _doGearSound = false;
     // init gear box
     AutoArray<float> gears;
     gears.Add(0);
