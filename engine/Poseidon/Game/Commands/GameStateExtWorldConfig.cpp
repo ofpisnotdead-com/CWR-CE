@@ -740,18 +740,17 @@ GameValue MarkerCreate(const GameState* state, GameValuePar oper1)
         return RString();
     }
 
-    for (int i = 0; i < markersMap.Size(); i++)
+    // Important: The same-name validation applies only to MarkerCreate, not to markers from mission.sqm.
+    ArcadeMarkerInfo* pInfo = markersMap.Find(name);
+    if (pInfo)
     {
-        if (stricmp(markersMap[i].name, name) == 0)
-        {
-            return RString();
-        }
+        return RString();
     }
 
-    int index = markersMap.Add();
-    ArcadeMarkerInfo& marker = markersMap[index];
+    ArcadeMarkerInfo marker{};
     marker.name = name;
     marker.position = pos;
+    markersMap.Add(marker);
 
     return array[0];
 }
@@ -759,13 +758,10 @@ GameValue MarkerCreate(const GameState* state, GameValuePar oper1)
 GameValue MarkerDelete(const GameState* state, GameValuePar oper1)
 {
     GameStringType name = oper1;
-    for (int i = 0; i < markersMap.Size(); i++)
+    const int i = markersMap.FindIdx(name);
+    if (markersMap.ValidIdx(i))
     {
-        if (stricmp(markersMap[i].name, name) == 0)
-        {
-            markersMap.Delete(i);
-            break;
-        }
+        markersMap.Delete(i);
     }
     return NOTHING;
 }
@@ -773,13 +769,10 @@ GameValue MarkerDelete(const GameState* state, GameValuePar oper1)
 GameValue MarkerSetText(const GameState* state, GameValuePar oper1, GameValuePar oper2)
 {
     GameStringType name = oper1;
-    for (int i = 0; i < markersMap.Size(); i++)
+    ArcadeMarkerInfo* pInfo = markersMap.Find(name);
+    if (pInfo)
     {
-        if (stricmp(markersMap[i].name, name) == 0)
-        {
-            markersMap[i].text = oper2;
-            break;
-        }
+        pInfo->text = oper2;
     }
     return NOTHING;
 }
@@ -787,14 +780,11 @@ GameValue MarkerSetText(const GameState* state, GameValuePar oper1, GameValuePar
 GameValue MarkerSetShape(const GameState* state, GameValuePar oper1, GameValuePar oper2)
 {
     GameStringType name = oper1;
-    for (int i = 0; i < markersMap.Size(); i++)
+    ArcadeMarkerInfo* pInfo = markersMap.Find(name);
+    if (pInfo)
     {
-        if (stricmp(markersMap[i].name, name) == 0)
-        {
-            GameStringType type = oper2;
-            markersMap[i].markerType = GetEnumValue<MarkerType>((const char*)type);
-            break;
-        }
+        GameStringType type = oper2;
+        pInfo->markerType = GetEnumValue<MarkerType>((const char *)type);
     }
     return NOTHING;
 }
@@ -802,14 +792,11 @@ GameValue MarkerSetShape(const GameState* state, GameValuePar oper1, GameValuePa
 GameValue MarkerSetBrush(const GameState* state, GameValuePar oper1, GameValuePar oper2)
 {
     GameStringType name = oper1;
-    for (int i = 0; i < markersMap.Size(); i++)
+    ArcadeMarkerInfo* pInfo = markersMap.Find(name);
+    if (pInfo)
     {
-        if (stricmp(markersMap[i].name, name) == 0)
-        {
-            markersMap[i].fillName = oper2;
-            markersMap[i].OnFillChanged();
-            break;
-        }
+        pInfo->fillName = oper2;
+        pInfo->OnFillChanged();
     }
     return NOTHING;
 }
@@ -817,12 +804,10 @@ GameValue MarkerSetBrush(const GameState* state, GameValuePar oper1, GameValuePa
 GameValue MarkerGetDir(const GameState* state, GameValuePar oper1)
 {
     GameStringType name = oper1;
-    for (int i = 0; i < markersMap.Size(); i++)
+    ArcadeMarkerInfo* pInfo = markersMap.Find(name);
+    if (pInfo)
     {
-        if (stricmp(markersMap[i].name, name) == 0)
-        {
-            return markersMap[i].angle;
-        }
+        return pInfo->angle;
     }
     return 0.0f;
 }
@@ -830,13 +815,10 @@ GameValue MarkerGetDir(const GameState* state, GameValuePar oper1)
 GameValue MarkerSetDir(const GameState* state, GameValuePar oper1, GameValuePar oper2)
 {
     GameStringType name = oper1;
-    for (int i = 0; i < markersMap.Size(); i++)
+    ArcadeMarkerInfo* pInfo = markersMap.Find(name);
+    if (pInfo)
     {
-        if (stricmp(markersMap[i].name, name) == 0)
-        {
-            markersMap[i].angle = oper2;
-            break;
-        }
+        pInfo->angle = oper2;
     }
     return NOTHING;
 }
