@@ -418,6 +418,14 @@ Object::LandClipMode Object::GetLandClipMode(int level) const
     return shape && shape->HasDeformingLandClip() ? LandClipVertex : LandClipNone;
 }
 
+void Object::UpdateLandClipParams(int level)
+{
+    if (GEngine->LandClipInVS())
+    {
+        GEngine->SetLandClipParams(float(GetLandClipMode(level)), _shape->BoundingCenter());
+    }
+}
+
 void Object::ApplyLandClip(int level)
 {
     if (LandClipScope::SkipCpuLandClip())
@@ -1045,15 +1053,17 @@ void Object::Draw(int forceLOD, ClipFlags clipFlags, const FrameBase& pos)
         const LightList& lights = GScene->SelectLights(pos, this, forceLOD, work);
         Matrix4Val invTransform = pos.GetInvTransform();
 
+        // Proxies that reach Shape::Draw directly (infantry weapons, building guns) inherit
+        // the current land clip mode, and a nested Object::Draw leaves its own mode behind,
+        // so this object's mode is established on both sides of DrawProxies.
+        UpdateLandClipParams(forceLOD);
+
         DrawProxies(forceLOD, clipFlags, pos.Transform(), invTransform, dist2, z2, lights);
 
         sShape->PrepareTextures(z2, special);
         // perform actual drawing
 
-        if (GEngine->LandClipInVS())
-        {
-            GEngine->SetLandClipParams(float(GetLandClipMode(forceLOD)), _shape->BoundingCenter());
-        }
+        UpdateLandClipParams(forceLOD);
 
         // if neccessary, split it
         if (render::Has(specT.routing, render::Routing::OnSurface) &&
