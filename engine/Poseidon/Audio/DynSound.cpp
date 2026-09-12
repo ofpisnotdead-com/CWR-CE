@@ -330,7 +330,7 @@ void DynSoundObject::Simulate(Object* source, float deltaT, SimulationImportance
         return; // continue playing or pause
     }
     // select sound source
-    float rand = GRandGen.RandomValue();
+    float rand = GFxRandGen.RandomValue();
     const SoundEntry& pars = _dynSound->SelectSound(rand);
     bool loop = _dynSound->IsOneLoopingSound();
     // play selected sound
@@ -341,11 +341,11 @@ void DynSoundObject::Simulate(Object* source, float deltaT, SimulationImportance
         float rndVol = 1;
         if (pars.freqRnd)
         {
-            rndFreq = 1 + GRandGen.RandomValue() * pars.freqRnd - pars.freqRnd * 0.5;
+            rndFreq = 1 + GFxRandGen.RandomValue() * pars.freqRnd - pars.freqRnd * 0.5;
         }
         if (pars.volRnd)
         {
-            rndVol = 1 + GRandGen.RandomValue() * pars.volRnd - pars.volRnd * 0.5;
+            rndVol = 1 + GFxRandGen.RandomValue() * pars.volRnd - pars.volRnd * 0.5;
         }
         if (loop)
         {
@@ -365,7 +365,7 @@ void DynSoundObject::Simulate(Object* source, float deltaT, SimulationImportance
     // random time to live
     if (!loop)
     {
-        float delay = GRandGen.Gauss(pars._min_delay, pars._mid_delay, pars._max_delay);
+        float delay = GFxRandGen.Gauss(pars._min_delay, pars._mid_delay, pars._max_delay);
         if (wave)
         {
             delay += wave->GetLength();
