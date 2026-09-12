@@ -26,10 +26,7 @@
 // references) trips the parser with "undeclared identifier" at the
 // reference site.
 //
-// Limitation: we don't run the linker (no `glslang::TProgram`) —
-// individual stages compile, cross-stage `in`/`out` matching is
-// not verified here.  That's I-NEW territory if it ever becomes a
-// failure mode.
+// Most cases compile individual stages. The instanced ground pairs are also linked below.
 
 using Poseidon::render::gl33::AllShaders;
 using Poseidon::render::gl33::PreprocessShaderSource;
@@ -57,6 +54,37 @@ CompileOutcome CompileGLSL(const std::string& src, EShLanguage stage)
     out.success = ok;
     out.info = shader.getInfoLog();
     return out;
+}
+
+CompileOutcome LinkGLSL(const ShaderModule& vertex, const ShaderModule& fragment)
+{
+    const std::string vertexSource = PreprocessShaderSource(vertex.source);
+    const std::string fragmentSource = PreprocessShaderSource(fragment.source);
+    const char* vertexStrings[] = {vertexSource.c_str()};
+    const char* fragmentStrings[] = {fragmentSource.c_str()};
+
+    glslang::TShader vertexShader(EShLangVertex);
+    vertexShader.setStrings(vertexStrings, 1);
+    vertexShader.setEnvInput(glslang::EShSourceGlsl, EShLangVertex, glslang::EShClientNone, 330);
+    glslang::TShader fragmentShader(EShLangFragment);
+    fragmentShader.setStrings(fragmentStrings, 1);
+    fragmentShader.setEnvInput(glslang::EShSourceGlsl, EShLangFragment, glslang::EShClientNone, 330);
+
+    const TBuiltInResource* resources = GetDefaultResources();
+    if (!vertexShader.parse(resources, 330, false, EShMsgDefault))
+    {
+        return {false, vertexShader.getInfoLog()};
+    }
+    if (!fragmentShader.parse(resources, 330, false, EShMsgDefault))
+    {
+        return {false, fragmentShader.getInfoLog()};
+    }
+
+    glslang::TProgram program;
+    program.addShader(&vertexShader);
+    program.addShader(&fragmentShader);
+    const bool success = program.link(EShMsgDefault);
+    return {success, program.getInfoLog()};
 }
 
 EShLanguage ToGlslang(ShaderStage stage)
@@ -117,6 +145,29 @@ TEST_CASE("I-28: every shipped GL33 shader compiles cleanly under glslang", "[Gr
         const std::string assembled = PreprocessShaderSource(m.source);
         CAPTURE(assembled);
         const auto outcome = CompileGLSL(assembled, ToGlslang(m.stage));
+        CAPTURE(outcome.info);
+        REQUIRE(outcome.success);
+    }
+}
+
+TEST_CASE("Instanced ground shader stages link", "[Graphics][Shaders][Terrain]")
+{
+    GlslangInit init;
+
+    const char* pairs[][2] = {
+        {"vsTerrain", "psTerrain"},
+        {"vsWaterInst", "psDetail"},
+    };
+    for (const auto& pair : pairs)
+    {
+        const ShaderModule* vertex = FindModule(pair[0]);
+        const ShaderModule* fragment = FindModule(pair[1]);
+        REQUIRE(vertex != nullptr);
+        REQUIRE(fragment != nullptr);
+        REQUIRE(vertex->stage == ShaderStage::Vertex);
+        REQUIRE(fragment->stage == ShaderStage::Fragment);
+        CAPTURE(vertex->name, fragment->name);
+        const CompileOutcome outcome = LinkGLSL(*vertex, *fragment);
         CAPTURE(outcome.info);
         REQUIRE(outcome.success);
     }
