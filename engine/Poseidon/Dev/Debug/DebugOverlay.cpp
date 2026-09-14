@@ -1369,10 +1369,6 @@ void DrawShadowsTab()
     if (changed)
         GEngine->SetShadowMapTuning(t);
 
-    ImGui::Separator();
-    ImGui::Checkbox("Instanced terrain (GL33 A/B)", &Poseidon::GGl33TerrainInstanced);
-    ImGui::TextDisabled("  ON = instanced heightmap land; OFF = per-segment baked meshes");
-
     // Read-back: a one-line summary the user can copy and paste back so the
     // values they tuned by eye can be baked into the engine defaults.
     ImGui::Separator();
@@ -1486,6 +1482,9 @@ void DrawRenderTab()
     bool flat = GEngine->GetDebugFlatColor();
     if (ImGui::Checkbox("Flat shading (objects -> solid red; shading-vs-geometry probe)", &flat))
         GEngine->SetDebugFlatColor(flat);
+
+    ImGui::Checkbox("Instanced terrain (GL33 A/B)", &Poseidon::GGl33TerrainInstanced);
+    ImGui::TextDisabled("  ON = instanced heightmap land; OFF = per-segment baked meshes");
 
     ImGui::Separator();
     ImGui::Text("window  %d x %d", GEngine->Width(), GEngine->Height());
