@@ -28,6 +28,10 @@ target_link_libraries(PoseidonTetrisTests PRIVATE
     Catch2::Catch2WithMain
 )
 
+if(APPLE)
+    target_link_libraries(PoseidonTetrisTests PRIVATE PoseidonMTL)
+endif()
+
 if(WIN32)
     target_link_libraries(PoseidonTetrisTests PRIVATE
         ws2_32 winmm version comctl32 ole32 shell32

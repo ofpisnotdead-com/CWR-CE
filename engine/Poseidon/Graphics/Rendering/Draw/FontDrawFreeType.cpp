@@ -1,5 +1,4 @@
 #include <Poseidon/Graphics/Core/Engine.hpp>
-#include <PoseidonGL33/TextureGL33.hpp>
 #include <Poseidon/Graphics/Rendering/Draw/Font.hpp>
 #include <Poseidon/Graphics/Textures/TextureBank.hpp>
 #include <Poseidon/World/Scene/Scene.hpp>
@@ -38,16 +37,16 @@ void ClearFreeTypeAtlasTextures()
 // Detect a Texture whose backing GPU surface has been freed (e.g.
 // after TextBankGL33::ForceReloadAll dropped every handle in the
 // bank for an F5 hot-reload).  The CPU-side atlas pixels in
-// FontRenderer's pages are still valid, but our cached
-// Ref<Texture> points at a TextureGL33 with _surface.GetTexture()=0
-// — UpdateDynamic on that would write to a dead handle and the
-// next bind samples zero alpha (= invisible text).
+// FontRenderer's pages are still valid, but our cached Ref<Texture>
+// points at a dead GPU handle — UpdateDynamic on that would write to
+// it and the next bind samples zero alpha (= invisible text).
+// Texture::IsGpuValid() is backend-specific (TextureGL33/TextureMTL
+// each know their own handle); this used to reach in via a hardcoded
+// static_cast<TextureGL33*>, which is undefined behavior under any
+// other backend (e.g. TextureMTL) sharing this code path.
 static bool IsTextureGpuValid(Texture* tex)
 {
-    if (!tex)
-        return false;
-    auto* gl = static_cast<class TextureGL33*>(tex);
-    return gl->GetHandle() != 0;
+    return tex && tex->IsGpuValid();
 }
 
 static void SyncAtlasTextures(Engine* engine, Poseidon::ui::FontRenderer* fr)

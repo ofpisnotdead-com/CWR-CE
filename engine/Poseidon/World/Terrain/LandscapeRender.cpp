@@ -1367,6 +1367,14 @@ void Landscape::DrawGround(const LandBegEnd& bigRect, Scene& scene, const Ground
 
 void Landscape::DrawHorizont(Scene& scene)
 {
+    // Optional, like the other sky slots (see DrawSky's null guards above) --
+    // LOG_WARN("...has no model configured", Landscape.cpp:64) means a
+    // landscape config can omit "horizont", in which case _horizontObject is
+    // never constructed. Every line below depends on it, so a single early
+    // return covers the whole function instead of guarding each use.
+    if (!_horizontObject)
+        return;
+
     GEngine->EnableReorderQueues(false);
     GEngine->FlushQueues();
 
@@ -1639,11 +1647,23 @@ void Landscape::DrawSky(Scene& scene)
     // calculate sun position
     LightSun* sun = scene.MainLight();
     Vector3Val skyPosition = camera.Position();
-    _skyObject->SetPosition(skyPosition + _skyObject->GetShape()->BoundingCenter());
-    _starsObject->SetPosition(skyPosition + _starsObject->GetShape()->BoundingCenter());
-    // rotate stars
-    _starsObject->SetOrientation(sun->StarsOrientation());
+
+    // Each of these is independently optional: LOG_WARN("...has no model
+    // configured", Landscape.cpp:64) already tells us a landscape config can
+    // omit any sky slot, in which case the corresponding object is never
+    // constructed (stays null) -- DrawClouds already guards _cloudObj[i] the
+    // same way (LandscapeRender.cpp:1795), this just extends the same
+    // defensive pattern to sky/stars/sun/moon instead of assuming all four
+    // are always present.
+    if (_skyObject)
+        _skyObject->SetPosition(skyPosition + _skyObject->GetShape()->BoundingCenter());
+    if (_starsObject)
+    {
+        _starsObject->SetPosition(skyPosition + _starsObject->GetShape()->BoundingCenter());
+        _starsObject->SetOrientation(sun->StarsOrientation());
+    }
     const float sunScale = 120.0 / 12000;
+    if (_sunObject)
     {
         Vector3 relPos = sun->SunDirection() * 12000 * sunScale;
         Vector3 sunPosition = camera.Position() - relPos;
@@ -1652,6 +1672,7 @@ void Landscape::DrawSky(Scene& scene)
 
         // LOG_DEBUG(World, "Sun rel pos {:.2f},{:.2f},{:.2f}",relPos[0],relPos[1],relPos[2]);
     }
+    if (_moonObject)
     {
         Point3 moonPosition = camera.Position() - sun->MoonDirection() * 12000 * sunScale;
         _moonObject->SetPosition(moonPosition);
@@ -1673,21 +1694,27 @@ void Landscape::DrawSky(Scene& scene)
     float clipLevel = skyPosition.Y();
     scene.GetCamera()->SetUserClipPars(VUp, -clipLevel);
 
-    _skyObject->Draw(0, ClipAll & ~ClipBack | ClipUser0, *_skyObject);
-    float starsVisibility = (
-        // see TLVertexMesh::DoStarLighting
-        // overcast limitation
-        (1.5 * SkyThrough() - 0.5) *
-        // daytime limitation
-        sun->StarsVisibility());
-    if (starsVisibility >= 0.1)
+    if (_skyObject)
+        _skyObject->Draw(0, ClipAll & ~ClipBack | ClipUser0, *_skyObject);
+    if (_starsObject)
     {
-        _starsObject->DrawPoints(0, ClipAll & ~ClipBack | ClipUser0, *_starsObject);
+        float starsVisibility = (
+            // see TLVertexMesh::DoStarLighting
+            // overcast limitation
+            (1.5 * SkyThrough() - 0.5) *
+            // daytime limitation
+            sun->StarsVisibility());
+        if (starsVisibility >= 0.1)
+        {
+            _starsObject->DrawPoints(0, ClipAll & ~ClipBack | ClipUser0, *_starsObject);
+        }
     }
     scene.GetCamera()->CancelUserClip();
 
-    _sunObject->Draw(0, ClipAll & ~ClipBack, *_sunObject);
-    _moonObject->Draw(0, ClipAll & ~ClipBack, *_moonObject);
+    if (_sunObject)
+        _sunObject->Draw(0, ClipAll & ~ClipBack, *_sunObject);
+    if (_moonObject)
+        _moonObject->Draw(0, ClipAll & ~ClipBack, *_moonObject);
 }
 
 // there are three separate clouds levels
