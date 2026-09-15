@@ -26,6 +26,7 @@
 #include <Poseidon/Foundation/Containers/Array.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 #include <Poseidon/Foundation/Types/Pointers.hpp>
+#include "test_fixtures.hpp"
 
 namespace
 {
@@ -1637,7 +1638,7 @@ static const int32_t JIPS_VERSION = 1;
 
 TEST_CASE("World state file format -- valid header round-trip", "[network][jip][worldstate]")
 {
-    const char* tmpfile = "/tmp/jip_test_worldstate_valid.jips";
+    const char* tmpfile = TestFixtures::GetTempFilePath("jip_test_worldstate_valid.jips");
 
     // Write valid header
     FILE* f = fopen(tmpfile, "wb");
@@ -1671,12 +1672,12 @@ TEST_CASE("World state file format -- valid header round-trip", "[network][jip][
     REQUIRE(rObj == 15);
     REQUIRE(rJip == 8);
 
-    remove(tmpfile);
+    TestFixtures::CleanupTempFile(tmpfile);
 }
 
 TEST_CASE("World state file format -- wrong magic rejected", "[network][jip][worldstate]")
 {
-    const char* tmpfile = "/tmp/jip_test_worldstate_badmagic.jips";
+    const char* tmpfile = TestFixtures::GetTempFilePath("jip_test_worldstate_badmagic.jips");
 
     FILE* f = fopen(tmpfile, "wb");
     REQUIRE(f != nullptr);
@@ -1696,12 +1697,12 @@ TEST_CASE("World state file format -- wrong magic rejected", "[network][jip][wor
 
     REQUIRE(rMagic != JIPS_MAGIC);
 
-    remove(tmpfile);
+    TestFixtures::CleanupTempFile(tmpfile);
 }
 
 TEST_CASE("World state file format -- wrong version rejected", "[network][jip][worldstate]")
 {
-    const char* tmpfile = "/tmp/jip_test_worldstate_badversion.jips";
+    const char* tmpfile = TestFixtures::GetTempFilePath("jip_test_worldstate_badversion.jips");
 
     FILE* f = fopen(tmpfile, "wb");
     REQUIRE(f != nullptr);
@@ -1721,12 +1722,12 @@ TEST_CASE("World state file format -- wrong version rejected", "[network][jip][w
     REQUIRE(rMagic == JIPS_MAGIC);
     REQUIRE(rVersion != JIPS_VERSION);
 
-    remove(tmpfile);
+    TestFixtures::CleanupTempFile(tmpfile);
 }
 
 TEST_CASE("World state file format -- truncated header detected", "[network][jip][worldstate]")
 {
-    const char* tmpfile = "/tmp/jip_test_worldstate_truncated.jips";
+    const char* tmpfile = TestFixtures::GetTempFilePath("jip_test_worldstate_truncated.jips");
 
     // Write only magic (incomplete header)
     FILE* f = fopen(tmpfile, "wb");
@@ -1744,12 +1745,12 @@ TEST_CASE("World state file format -- truncated header detected", "[network][jip
     REQUIRE(read == 0); // truncated -- can't read version
     fclose(f);
 
-    remove(tmpfile);
+    TestFixtures::CleanupTempFile(tmpfile);
 }
 
 TEST_CASE("World state file format -- empty file detected", "[network][jip][worldstate]")
 {
-    const char* tmpfile = "/tmp/jip_test_worldstate_empty.jips";
+    const char* tmpfile = TestFixtures::GetTempFilePath("jip_test_worldstate_empty.jips");
 
     FILE* f = fopen(tmpfile, "wb");
     REQUIRE(f != nullptr);
@@ -1762,12 +1763,12 @@ TEST_CASE("World state file format -- empty file detected", "[network][jip][worl
     REQUIRE(read == 0); // empty
     fclose(f);
 
-    remove(tmpfile);
+    TestFixtures::CleanupTempFile(tmpfile);
 }
 
 TEST_CASE("World state file format -- zero time and counts valid", "[network][jip][worldstate]")
 {
-    const char* tmpfile = "/tmp/jip_test_worldstate_zeros.jips";
+    const char* tmpfile = TestFixtures::GetTempFilePath("jip_test_worldstate_zeros.jips");
 
     FILE* f = fopen(tmpfile, "wb");
     REQUIRE(f != nullptr);
@@ -1797,12 +1798,12 @@ TEST_CASE("World state file format -- zero time and counts valid", "[network][ji
     REQUIRE(rObj == 0);
     REQUIRE(rJip == 0);
 
-    remove(tmpfile);
+    TestFixtures::CleanupTempFile(tmpfile);
 }
 
 TEST_CASE("World state file format -- large counts preserved", "[network][jip][worldstate]")
 {
-    const char* tmpfile = "/tmp/jip_test_worldstate_large.jips";
+    const char* tmpfile = TestFixtures::GetTempFilePath("jip_test_worldstate_large.jips");
 
     FILE* f = fopen(tmpfile, "wb");
     REQUIRE(f != nullptr);
@@ -1834,12 +1835,12 @@ TEST_CASE("World state file format -- large counts preserved", "[network][jip][w
     REQUIRE(rObj == 50000);
     REQUIRE(rJip == 100000);
 
-    remove(tmpfile);
+    TestFixtures::CleanupTempFile(tmpfile);
 }
 
 TEST_CASE("World state file format -- partial data truncation detected", "[network][jip][worldstate]")
 {
-    const char* tmpfile = "/tmp/jip_test_worldstate_partdata.jips";
+    const char* tmpfile = TestFixtures::GetTempFilePath("jip_test_worldstate_partdata.jips");
 
     // Write magic + version + timeElapsed (missing objectCount and jipCount)
     FILE* f = fopen(tmpfile, "wb");
@@ -1862,7 +1863,7 @@ TEST_CASE("World state file format -- partial data truncation detected", "[netwo
     REQUIRE(read == 0); // truncated at data section
     fclose(f);
 
-    remove(tmpfile);
+    TestFixtures::CleanupTempFile(tmpfile);
 }
 
 // JIP queue pattern tests -- simulating server message queueing behavior
