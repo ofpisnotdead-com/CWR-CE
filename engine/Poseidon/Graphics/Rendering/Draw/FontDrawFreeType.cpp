@@ -108,11 +108,23 @@ void Engine::DrawTextFreeType(const Point2DAbs& pos, float sizeEx, const Rect2DA
 
     auto quads = Poseidon::ui::LayoutScreenText(*fr, screenScale, text, pos.x, pos.y);
 
+    if (quads.empty())
+        return;
+
     SyncAtlasTextures(this, fr);
 
     Draw2DPars pars;
     pars.spec = NoZBuf | IsAlpha | ClampU | ClampV | IsAlphaFog;
     pars.SetColor(color);
+
+    Rect2DAbs textClip = clip;
+
+    const Poseidon::ui::GlyphBounds glyphBounds = fr->MeasureGlyphBounds(quads);
+
+    const float clipBottom = clip.y + clip.h;
+
+    textClip.y = std::min(clip.y, glyphBounds.top);
+    textClip.h = std::max(clipBottom, glyphBounds.bottom) - textClip.y;
 
     auto& textures = GetAtlasMap()[fr];
     for (const auto& q : quads)
@@ -128,7 +140,7 @@ void Engine::DrawTextFreeType(const Point2DAbs& pos, float sizeEx, const Rect2DA
         pars.SetU(q.u0, q.u1);
         pars.SetV(q.v0, q.v1);
 
-        Draw2D(pars, Rect2DAbs(q.x, q.y, q.w, q.h), clip);
+        Draw2D(pars, Rect2DAbs(q.x, q.y, q.w, q.h), textClip);
     }
 }
 
@@ -177,16 +189,32 @@ void Engine::DrawTextFreeType3D(Vector3Par pos, Vector3Par up, Vector3Par dir, C
     int pixelSize = font->FTPixelSizeForSizeH(sizeHEq);
     float renderScale = static_cast<float>(font->FTReferencePx()) / static_cast<float>(pixelSize);
 
-    float ascent = fr->GetAscent(pixelSize) + font->FTBaselineOffset();
-    auto quads = fr->LayoutText(text, 0, ascent, pixelSize, font->FTWidthScale(), font->FTLetterSpacing());
+    // renderScale in invMH keeps world geometry invariant of pixelSize bucketing.
+    float invMH = renderScale / static_cast<float>(font->_maxHeight);
+
+    // Layout once at baseline 0 to obtain the actual rendered glyph bounds.
+    // Unlike font-wide ascent/descent metrics, these bounds describe the
+    // visible glyphs that are actually being drawn.
+    auto quads = fr->LayoutText(text, 0, 0, pixelSize, font->FTWidthScale(), font->FTLetterSpacing());
+
     if (quads.empty())
         return;
 
+    const ui::GlyphBounds glyphBounds = fr->MeasureGlyphBounds(quads);
+
+    // Convert the glyph bounds to the same em-space used by y1c/y2c.
+    float glyphCenter = 0.5f * (glyphBounds.top + glyphBounds.bottom) * invMH;
+    float cellCenter = 0.5f * (y1c + y2c);
+
+    // Shift the baseline so the actual visible glyph bounds are centered
+    // inside the requested text cell.
+    float baseline = (cellCenter - glyphCenter) / invMH;
+
+    // Layout again at the calculated baseline.
+    quads = fr->LayoutText(text, 0, baseline, pixelSize, font->FTWidthScale(), font->FTLetterSpacing());
+
     SyncAtlasTextures(this, fr);
     auto& textures = GetAtlasMap()[fr];
-
-    // renderScale in invMH keeps world geometry invariant of pixelSize bucketing.
-    float invMH = renderScale / static_cast<float>(font->_maxHeight);
 
     static Ref<ObjectColored> objText3DFT;
     if (!objText3DFT)
