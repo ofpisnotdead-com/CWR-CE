@@ -5,6 +5,7 @@
 // on Linux.
 
 #include <catch2/catch_test_macros.hpp>
+#include <Poseidon/Core/ModSystem.hpp>
 #include <Poseidon/IO/Filesystem/Utf8Paths.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
 #include <Poseidon/IO/Streams/QStream.hpp>
@@ -276,6 +277,29 @@ TEST_CASE("QIFStream FileExists - backslash path on Linux", "[qstream][path][fil
 #endif
 
 // QIFStreamB::FileExist – bank + filesystem lookup
+
+// A path naming its mod folder through a parent escape resolves into that mod.
+TEST_CASE("QIFStreamB FileExist - mod path escaping its prefix", "[qstream][path][bankexist][mod]")
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / "cwr_modescape";
+    const std::filesystem::path voiceDir = root / "@voicemod" / "voice" / "Jari";
+    const char payload[] = "wss";
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    REQUIRE(std::filesystem::create_directories(voiceDir, ec));
+    REQUIRE(Poseidon::WriteFileUtf8((voiceDir / "reportstatus.wss").string().c_str(), payload, sizeof(payload)));
+
+    Poseidon::ModSystem::SetModPath((root / "@voicemod").string().c_str());
+
+    CHECK(QIFStreamB::FileExist("@voicemod\\voice\\Jari\\reportstatus.wss"));
+    CHECK(QIFStreamB::FileExist("voice\\..\\@voicemod\\voice\\Jari\\reportstatus.wss"));
+    CHECK_FALSE(QIFStreamB::FileExist("voice\\..\\@voicemod\\voice\\Adam\\reportstatus.wss"));
+    CHECK_FALSE(QIFStreamB::FileExist("..\\@voicemod\\voice\\Jari\\reportstatus.wss"));
+
+    Poseidon::ModSystem::SetModPath("");
+    std::filesystem::remove_all(root, ec);
+}
 
 TEST_CASE("QIFStreamB FileExist - filesystem fallback", "[qstream][path][bankexist]")
 {

@@ -1,4 +1,5 @@
 #include <Poseidon/IO/Filesystem/DirScanner.hpp>
+#include <Poseidon/Foundation/platform.hpp>
 #include <io.h>
 #include <cstdio>
 #include <string.h>

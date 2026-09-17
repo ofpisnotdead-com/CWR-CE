@@ -1,0 +1,2 @@
+extra_args = ["--log-level", "debug", "--log-categories", "ui"]
+timeout = 60

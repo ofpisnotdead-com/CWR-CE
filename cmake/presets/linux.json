@@ -29,6 +29,36 @@
       }
     },
     {
+      "name": "linux-arm64-clang",
+      "displayName": "Linux arm64 Clang Debug",
+      "inherits": "linux-clang-debug",
+      "binaryDir": "${sourceDir}/build/linux-arm64-clang",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-linux-clang",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-arm64-clang.cmake"
+      }
+    },
+    {
+      "name": "linux-arm64-clang-rwdi",
+      "displayName": "Linux arm64 Clang RelWithDebInfo",
+      "inherits": "linux-clang-relwithdebinfo",
+      "binaryDir": "${sourceDir}/build/linux-arm64-clang-rwdi",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-linux-clang",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-arm64-clang.cmake"
+      }
+    },
+    {
+      "name": "linux-arm64-clang-rel",
+      "displayName": "Linux arm64 Clang Release",
+      "inherits": "linux-clang-release",
+      "binaryDir": "${sourceDir}/build/linux-arm64-clang-rel",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-linux-clang",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-arm64-clang.cmake"
+      }
+    },
+    {
       "name": "linux-x64-clang",
       "displayName": "Linux x64 Clang Debug",
       "inherits": "linux-clang-debug",

@@ -180,7 +180,7 @@ void EngineGL33::InitDraw(bool clear, PackedColor color)
     invalidMat.specFlags = 0;
 
     LightList lights;
-    DoSetMaterial(invalidMat, lights, Poseidon::render::LegacySpec{});
+    DoSetMaterialAndLights(invalidMat, lights, Poseidon::render::LegacySpec{});
 }
 
 void EngineGL33::FinishDraw()
@@ -519,6 +519,9 @@ void EngineGL33::ResetForRemount()
     if (_textBank)
     {
         _textBank->ReleaseAllTextures();
+        // The detail set is derived from `CfgDetailTextures`, which the reload replaces,
+        // and the bank rebuilds it only from an empty state.
+        _textBank->ReleaseDetailTextures();
     }
 }
 
@@ -1083,6 +1086,13 @@ void EngineGL33::ShutdownGL()
     DestroySamplerStates();
     DestroyVBTL();
     DestroyVB();
+
+    if (_heightMapTex)
+    {
+        GL33Bind::OnTexDeleted(_heightMapTex);
+        glDeleteTextures(1, &_heightMapTex);
+        _heightMapTex = 0;
+    }
 
     if (_fallbackWhiteTex)
     {

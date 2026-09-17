@@ -14,10 +14,7 @@ namespace Poseidon
 
 const char* ControlActionLabel(UserAction action)
 {
-    if (action < 0 || action >= UAN)
-        return "";
-    UserActionDesc* descs = InputSubsystem::GetUserActionDesc();
-    return LocalizeString(descs[action].desc);
+    return InputSubsystem::GetUserActionLabel(action);
 }
 
 void OptionsPage::SetCtrlText(Display& display, int idc, const char* text)

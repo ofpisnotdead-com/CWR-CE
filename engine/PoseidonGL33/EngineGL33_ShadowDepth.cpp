@@ -385,7 +385,7 @@ bool RenderCascadeArray(void* glContext, const float* lightVPs, int numCascades,
             {
                 if (batches[b].vertexCount < 3)
                     continue;
-                GL33Bind::Tex2D(0, batches[b].handle);
+                GL33Bind::Tex2DForSampling(0, batches[b].handle);
                 glDrawArrays(GL_TRIANGLES, batches[b].firstVertex, batches[b].vertexCount);
             }
         }

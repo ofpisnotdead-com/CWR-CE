@@ -376,7 +376,11 @@ void LODShape::OptimizeRendering()
         if (optimizeHW)
         {
             const RStringB tentString("tent");
-            VBType type = shape->GetAllowAnimation() ? VBDynamic : VBStatic;
+            VBType type = VBStatic;
+            if (shape->GetAllowAnimation())
+            {
+                type = shape->IsLandClipOnlyAnim() ? VBOnDemand : VBDynamic;
+            }
             if (shape->GetPropertyDammage() == tentString)
             {
                 type = VBDynamic;

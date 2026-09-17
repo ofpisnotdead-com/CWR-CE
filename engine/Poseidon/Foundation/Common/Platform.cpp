@@ -157,7 +157,7 @@ bool fileCopy(const char* src, const char* dest)
     int f1 = open(sfn, O_RDONLY);
     if (f1 < 0)
         return false;
-    int f2 = open(dfn, O_CREAT | O_WRONLY | O_TRUNC);
+    int f2 = open(dfn, O_CREAT | O_WRONLY | O_TRUNC, 0666);
     if (f2 < 0)
     {
         close(f1);

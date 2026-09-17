@@ -29,7 +29,7 @@
 #include <functional>
 #include <memory>
 #include <string>
-
+#include <vector>
 
 namespace Poseidon
 {
@@ -38,8 +38,8 @@ class BindingsPage : public ScrollListPage
   public:
     BindingsPage() = default;
 
-    using SaveCallback     = std::function<void(int packedCode, int modifier, bool replaceConflict)>;
-    using ConflictCallback = std::function<UserAction(int packedCode, int modifier)>;
+    using SaveCallback = std::function<void(int packedCode, int modifier, bool replaceConflict)>;
+    using ConflictCallback = std::function<std::vector<UserAction>(int packedCode, int modifier)>;
 
     void RefreshAfterCapture();
 
@@ -50,18 +50,13 @@ class BindingsPage : public ScrollListPage
     virtual bool IsActionVisible(UserAction action, ControlsCategory category) const;
     virtual const char* ActionLabelOverride(UserAction action, ControlsCategory category) const;
     virtual const char* BindingDisplayOverride(UserAction action, ControlsCategory category, int slot) const;
-    virtual bool ApplyCaptureOverride(ControlsCategory category,
-                                      UserAction action,
-                                      int slot,
-                                      int packedCode,
+    virtual bool ApplyCaptureOverride(ControlsCategory category, UserAction action, int slot, int packedCode,
                                       int modifier);
     virtual bool ClearCaptureOverride(ControlsCategory category, UserAction action, int slot);
     virtual bool ResetCategoryOverride(ControlsCategory category);
-    virtual std::unique_ptr<OptionsPage> MakeCaptureModal(
-        std::string actionLabel,
-        std::string slotName,
-        SaveCallback onSave,
-        ConflictCallback onConflict) = 0;
+    virtual std::unique_ptr<OptionsPage> MakeCaptureModal(UserAction action, std::string actionLabel,
+                                                          std::string slotName, SaveCallback onSave,
+                                                          ConflictCallback onConflict) = 0;
 
     OptionsScrollList::Provider& ProviderRef() override final { return m_withClose; }
 
@@ -81,6 +76,7 @@ class BindingsPage : public ScrollListPage
     void ResetCurrentCategoryToDefaults();
     void ApplyCapture(int actionIdx, int slot, int packedCode, int modifier, bool replaceConflict);
     void ClearCapture(int actionIdx, int slot);
+    std::vector<UserAction> FindCaptureConflicts(UserAction action, int slot, int packedCode, int modifier) const;
 
   private:
     class Provider : public OptionsScrollList::Provider
@@ -99,10 +95,7 @@ class BindingsPage : public ScrollListPage
         const char* RowLabel(int row) const override;
         const char* RowDescription(int row) const override;
         OptionsScrollList::RowDef RowFor(int row) const override;
-        int RowValue(int row) const override
-        {
-            return (row == 0) ? (int)m_owner->m_category : 0;
-        }
+        int RowValue(int row) const override { return (row == 0) ? (int)m_owner->m_category : 0; }
         void SetRowValue(int row, int value) override;
         OptionsScrollList::Kind RowKind(int row) const override;
         const char* BindingPrimary(int row) const override;
@@ -110,15 +103,10 @@ class BindingsPage : public ScrollListPage
         void OnBindingClicked(int row, int slot, Display& host) override;
         void OnBindingCleared(int row, int slot) override;
         void OnRowAction(int row, Display& host) override;
-        const char* FindBindingConflict(const char* formatted,
-                                        int excludeRow,
-                                        int excludeSlot) const override;
+        const char* FindBindingConflict(const char* formatted, int excludeRow, int excludeSlot) const override;
 
       private:
-        bool IsActionRow(int row) const
-        {
-            return row >= 1 && row <= VisibleActionCount();
-        }
+        bool IsActionRow(int row) const { return row >= 1 && row <= VisibleActionCount(); }
         int ActionIndex(int row) const
         {
             // Returns the UserAction enum value for a given row, or UAN if
@@ -138,10 +126,7 @@ class BindingsPage : public ScrollListPage
             }
             return UAN;
         }
-        bool IsResetRow(int row) const
-        {
-            return row == 1 + VisibleActionCount();
-        }
+        bool IsResetRow(int row) const { return row == 1 + VisibleActionCount(); }
         int VisibleActionCount() const;
 
         // Buffer for the most recently formatted Primary / Alt cells —

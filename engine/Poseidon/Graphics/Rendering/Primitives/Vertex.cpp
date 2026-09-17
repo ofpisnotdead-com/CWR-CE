@@ -18,6 +18,7 @@ VertexTable::VertexTable()
     _minMax[1] = VZero;
     _bCenter = VZero;
     _bRadius = 0;
+    _minMaxDirty = false;
 }
 
 VertexTable::VertexTable(int nPos)
@@ -27,6 +28,7 @@ VertexTable::VertexTable(int nPos)
     _minMax[1] = VZero;
     _bCenter = VZero;
     _bRadius = 0;
+    _minMaxDirty = false;
 }
 
 VertexTable::VertexTable(const VertexTable& src)
@@ -121,6 +123,7 @@ void VertexTable::DoConstruct(const VertexTable& src)
     _minMax[1] = src._minMax[1];
     _bCenter = src._bCenter;
     _bRadius = src._bRadius;
+    _minMaxDirty = src._minMaxDirty;
 }
 
 int VertexTable::AddVertex(Vector3Par pos, Vector3Par norm, ClipFlags clip, float u, float v,

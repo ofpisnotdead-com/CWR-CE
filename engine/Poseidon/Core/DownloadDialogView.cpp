@@ -17,13 +17,6 @@ std::string PercentText(float fraction01)
     return buf;
 }
 
-std::string Pluralize(const char* noun, int count)
-{
-    std::string s = noun ? noun : "item";
-    if (count != 1)
-        s += "s";
-    return s;
-}
 } // namespace
 
 std::string FormatAnimatedActivity(const char* label, uint64_t elapsedMs)
@@ -33,8 +26,7 @@ std::string FormatAnimatedActivity(const char* label, uint64_t elapsedMs)
     return text;
 }
 
-DownloadDialogView BuildDownloadDialogView(const DownloadSnapshot& snapshot, const char* unitNoun,
-                                           const DownloadDialogLabels& labels)
+DownloadDialogView BuildDownloadDialogView(const DownloadSnapshot& snapshot, const DownloadDialogLabels& labels)
 {
     DownloadDialogView view;
     view.currentFraction = snapshot.currentFraction;
@@ -54,14 +46,14 @@ DownloadDialogView BuildDownloadDialogView(const DownloadSnapshot& snapshot, con
         int doneCount =
             snapshot.done ? snapshot.itemCount : std::clamp(snapshot.currentIndex + 1, 0, snapshot.itemCount);
         char buf[64];
-        snprintf(buf, sizeof(buf), "%d / %d %s   %s", doneCount, snapshot.itemCount,
-                 Pluralize(unitNoun, snapshot.itemCount).c_str(), PercentText(snapshot.overallFraction).c_str());
+        snprintf(buf, sizeof(buf), "%d / %d   %s", doneCount, snapshot.itemCount,
+                 PercentText(snapshot.overallFraction).c_str());
         view.overallLine = buf;
     }
 
     if (snapshot.failed)
     {
-        view.statusLine = snapshot.error.empty() ? labels.failed : (std::string(labels.failed) + ": " + snapshot.error);
+        view.statusLine = snapshot.failureKind == DownloadFailureKind::Install ? labels.installFailed : labels.failed;
     }
     else if (snapshot.done)
     {
@@ -74,7 +66,7 @@ DownloadDialogView BuildDownloadDialogView(const DownloadSnapshot& snapshot, con
     else if (snapshot.itemCount > 0)
     {
         if (snapshot.speedBytesPerSec > 0.0)
-            view.statusLine = DownloadProgress::FormatSpeed(snapshot.speedBytesPerSec) + "   ETA " +
+            view.statusLine = DownloadProgress::FormatSpeed(snapshot.speedBytesPerSec) + "   " + labels.eta + " " +
                               DownloadProgress::FormatEta(snapshot.etaSeconds);
         else
             view.statusLine = labels.starting;

@@ -179,6 +179,27 @@ void LODShape::CalculateHints()
     }
 }
 
+bool LODShape::IsLandClipOnlyAnim() const
+{
+    // Land clip is the only reason the shape is animated, so a land-clip vertex shader can
+    // position it and the render geometry stays stable. Decals (CPU-conformed) and animated
+    // lights disqualify it.
+    bool otherAnim = (_orHints & ClipDecalMask) != 0;
+    if ((_orHints & ClipLightMask) == (_andHints & ClipLightMask))
+    {
+        switch (_orHints & ClipLightMask)
+        {
+            case ClipLightSky:
+            case ClipLightCloud:
+            case ClipLightStars:
+            case ClipLightLine:
+                otherAnim = true;
+                break;
+        }
+    }
+    return _allowAnimation && (_orHints & ClipLandMask) != 0 && !otherAnim;
+}
+
 void LODShape::DefineMinMax(int level)
 {
     Shape* oShape = LevelOpaque(level);

@@ -53,8 +53,8 @@ static Image makeGradient(int w, int h)
 struct TempFile
 {
     std::string path;
-    TempFile(const char* name) : path(std::string("/tmp/paa_test_") + name) {}
-    ~TempFile() { std::remove(path.c_str()); }
+    TempFile(const char* name) : path(TestFixtures::GetTempFilePath(name)) {}
+    ~TempFile() { TestFixtures::CleanupTempFile(path.c_str()); }
 };
 
 // --- Write DXT1 PAA, read back ---

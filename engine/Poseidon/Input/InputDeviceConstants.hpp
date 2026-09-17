@@ -14,6 +14,10 @@ namespace Poseidon
 #define INPUT_DEVICE_STICK 0x00020000
 #define INPUT_DEVICE_STICK_AXIS 0x00030000
 #define INPUT_DEVICE_STICK_POV 0x00040000
+#define INPUT_DEVICE_MOUSE_AXIS 0x00100000
+
+#define INPUT_MOUSE_WHEEL_UP 4
+#define INPUT_MOUSE_WHEEL_DOWN 5
 
 // Binding mode bits live below INPUT_DEVICE_MASK so the existing packed
 // device class stays stable on disk and in conflict checks.

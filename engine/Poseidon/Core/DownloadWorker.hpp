@@ -12,6 +12,7 @@
 // DownloadWorker is the thin thread + mutex wrapper around it; the UI only
 // touches Poll().
 
+#include <Poseidon/Core/DownloadFile.hpp>
 #include <Poseidon/Core/DownloadProgress.hpp>
 
 #include <atomic>
@@ -38,20 +39,22 @@ struct DownloadTask
 
 // Transport: fetch task.url -> task.destPath.  Call onBytes(received, total) as
 // the file streams (received/total are for THIS file).  Poll cancelled() and
-// abort early if it returns true.  Return false and set `error` on failure.
-using DownloadFileFn =
-    std::function<bool(const DownloadTask& task, const std::function<void(int64_t received, int64_t total)>& onBytes,
-                       const std::function<bool()>& cancelled, std::string& error)>;
+// abort early if it returns true.  Set `error` on failure.
+using DownloadFileFn = std::function<DownloadFileResult(
+    const DownloadTask& task, const std::function<void(int64_t received, int64_t total)>& onBytes,
+    const std::function<bool()>& cancelled, std::string& error)>;
+using DownloadRetryWaitFn = std::function<void(int retryNumber, const std::function<bool()>& cancelled)>;
 
 // Pure orchestration: drives `progress` (guarded by `mtx` so a concurrent
 // reader can Poll it) through every task using the injected `download` and
 // `now`.  Stops early — leaving progress neither done nor failed — when
 // `cancel` flips true between or during a file.  Sets progress failed on the
-// first download/post-step failure and skips the rest.  Finishes when all
-// tasks complete.
+// first permanent download/post-step failure and skips the rest.  Transient
+// failures retry until the task succeeds or is cancelled.
 void RunDownloadJobs(const std::vector<DownloadTask>& tasks, DownloadProgress& progress, std::mutex& mtx,
                      const DownloadFileFn& download, const std::function<double()>& now,
-                     const std::atomic<bool>& cancel, std::atomic<bool>* postProcessing = nullptr);
+                     const std::atomic<bool>& cancel, std::atomic<bool>* postProcessing = nullptr,
+                     const DownloadRetryWaitFn& retryWait = {});
 
 struct DownloadSnapshot
 {
@@ -68,6 +71,7 @@ struct DownloadSnapshot
     bool failed = false;
     bool cancelled = false;
     bool postProcessing = false;
+    DownloadFailureKind failureKind = DownloadFailureKind::None;
     std::string error;
 };
 

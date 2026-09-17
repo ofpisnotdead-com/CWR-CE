@@ -342,6 +342,7 @@ void EngineGL33::BeginPass(PassId passId)
         _currentDrawItem = DrawItem{};
 
         UploadFrameConstants(_frameState);
+        UploadLocalLights(GScene->ActiveLights());
         // Bind the (previous frame's) shadow depth map + light-VP for the lit
         // shaders.  No-op until a depth pass has run with shadow maps enabled.
         UpdateShadowMapLitState();

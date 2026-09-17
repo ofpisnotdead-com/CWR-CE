@@ -246,7 +246,7 @@ bool Preproc::Process(QOStream* out, const char* name)
     QIStream* in = OnEnterInclude(name);
     if (in == nullptr)
     {
-        LOG_DEBUG(Core, "Cannot include file {}", name);
+        LOG_ERROR(Config, "Cannot include file {}", name);
         error = prStreamOpenError;
         return false;
     }

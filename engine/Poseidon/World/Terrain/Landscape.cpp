@@ -843,15 +843,12 @@ void Landscape::ReleaseAllVBuffers()
 void Landscape::CreateAllVBuffers()
 {
     _segCache._cache.ForEach(
-        [](LandCacheSlot& slot)
+        [this](LandCacheSlot& slot)
         {
             if (!slot.segment)
                 return;
             LandSegment* segi = slot.segment;
-            if (!segi->_onlyWater)
-                segi->_table.ConvertToVBuffer(VBBigDiscardable);
-            if (segi->_someWater)
-                segi->_wTable.ConvertToVBuffer(VBBigDiscardable);
+            FinalizeSegmentGPU(segi);
             segi->_needsGPU = false;
         });
 }
@@ -873,10 +870,8 @@ void Landscape::CreateNearVBuffers(float cx, float cz, float radius)
             float dx = sx - cx, dz = sz - cz;
             if (dx * dx + dz * dz > r2)
                 return;
-            if (!segi->_onlyWater)
-                segi->_table.ConvertToVBuffer(VBBigDiscardable);
-            if (segi->_someWater)
-                segi->_wTable.ConvertToVBuffer(VBBigDiscardable);
+            // See CreateAllVBuffers.
+            FinalizeSegmentGPU(segi);
             segi->_needsGPU = false;
             created++;
         });
@@ -2846,7 +2841,7 @@ void RestoreVBuffers()
         for (int l = 0; l < lShape->NLevels(); l++)
         {
             Shape* shape = lShape->Level(l);
-            shape->ConvertToVBuffer(VBSmallDiscardable);
+            shape->ConvertToVBuffer(VBStatic);
         }
     }
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Poseidon/Core/DownloadFile.hpp>
+
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
@@ -703,20 +705,20 @@ bool FetchMasterServerServiceModServers(const char* masterServerHost, const char
                                         std::vector<MasterServerServiceModUsageServer>& servers);
 
 // Streams an HTTP GET body straight to destPath (written to "<destPath>.part"
-// then atomically renamed on a 2xx response). progress, when non-null, is
-// called with (instance, bytesReceived, contentLength) — contentLength is 0
-// when the server sends no Content-Length. Returns true only on a fully
-// received 2xx download. HTTPS is unsupported on non-Windows (mirrors the JSON
-// transport).
+// then atomically renamed on a complete 2xx response). progress, when non-null, is
+// called with (instance, bytesReceived, contentLength) - contentLength is 0
+// when the server sends no Content-Length. A validator-backed partial file is
+// resumed on the next call.
 using MasterServerServiceDownloadProgressCallback = void (*)(void* instance, int64_t received, int64_t total);
 
 // Polled during the transfer; return true to abort the download promptly (so a
 // cancelled download stops instead of running to completion). nullptr = never abort.
 using MasterServerServiceDownloadCancelCheck = bool (*)(void* instance);
 
-bool DownloadMasterServerServiceFile(const char* url, const char* proxyServer, const char* destPath, void* instance,
-                                     MasterServerServiceDownloadProgressCallback progress,
-                                     MasterServerServiceDownloadCancelCheck cancelCheck = nullptr);
+DownloadFileResult DownloadMasterServerServiceFile(const char* url, const char* proxyServer, const char* destPath,
+                                                   void* instance, MasterServerServiceDownloadProgressCallback progress,
+                                                   MasterServerServiceDownloadCancelCheck cancelCheck = nullptr,
+                                                   std::string* error = nullptr);
 
 template <class FetchFn>
 bool RefreshMasterServerServiceBrowserFromDirectory(const char* masterServerHost,

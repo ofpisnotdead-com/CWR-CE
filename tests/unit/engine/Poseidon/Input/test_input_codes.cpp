@@ -1,6 +1,7 @@
 #include <SDL3/SDL_scancode.h>
 #include <SDL3/SDL_keycode.h>
 #include <Poseidon/Input/InputDeviceConstants.hpp>
+#include <Poseidon/Input/InputCode.hpp>
 #include <Poseidon/Input/KeyInput.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -60,6 +61,9 @@ TEST_CASE("Input device masks are distinct", "[input]")
     REQUIRE(INPUT_DEVICE_STICK == 0x00020000);
     REQUIRE(INPUT_DEVICE_STICK_AXIS == 0x00030000);
     REQUIRE(INPUT_DEVICE_STICK_POV == 0x00040000);
+    REQUIRE(INPUT_DEVICE_MOUSE_AXIS == 0x00100000);
     REQUIRE((INPUT_DEVICE_MOUSE & INPUT_DEVICE_MASK) == INPUT_DEVICE_MOUSE);
     REQUIRE((INPUT_DEVICE_STICK & INPUT_DEVICE_MASK) == INPUT_DEVICE_STICK);
+    REQUIRE(InputCode::MouseWheelUp().toLegacy() == 0x00100004);
+    REQUIRE(InputCode::MouseWheelDown().toLegacy() == 0x00100005);
 }

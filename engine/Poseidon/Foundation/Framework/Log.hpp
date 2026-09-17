@@ -49,6 +49,15 @@ inline spdlog::logger* Get(Poseidon::Foundation::LogCategory cat)
 }
 } // namespace LogDetail
 
+namespace Poseidon::Foundation
+{
+// True the first time a call site is reached with a given key. Keys accumulate for the process
+// lifetime, so log with a bounded key set such as a config class name.
+bool LogOnceForKey(const void* site, const char* key);
+
+void ForgetLogOnceKeys();
+} // namespace Poseidon::Foundation
+
 #define LOG_TRACE(category, ...) \
     LogDetail::Get(::Poseidon::Foundation::LogCategory::category)->log(spdlog::source_loc{}, spdlog::level::trace, __VA_ARGS__)
 #define LOG_DEBUG(category, ...) \
@@ -59,3 +68,10 @@ inline spdlog::logger* Get(Poseidon::Foundation::LogCategory cat)
     LogDetail::Get(::Poseidon::Foundation::LogCategory::category)->log(spdlog::source_loc{}, spdlog::level::warn, __VA_ARGS__)
 #define LOG_ERROR(category, ...) \
     LogDetail::Get(::Poseidon::Foundation::LogCategory::category)->log(spdlog::source_loc{}, spdlog::level::err, __VA_ARGS__)
+
+#define LOG_WARN_ONCE_PER(category, key, ...)                           \
+    {                                                                   \
+        static const char logOnceSite = 0;                              \
+        if (::Poseidon::Foundation::LogOnceForKey(&logOnceSite, (key))) \
+            LOG_WARN(category, __VA_ARGS__);                            \
+    }

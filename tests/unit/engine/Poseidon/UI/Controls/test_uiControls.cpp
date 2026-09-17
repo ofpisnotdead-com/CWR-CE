@@ -5,6 +5,7 @@
 #include <Poseidon/IO/Streams/QStream.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <new>
 #include <stdint.h>
 #include <string.h>
 #include <string>
@@ -323,6 +324,26 @@ TEST_CASE("C3DScrollBar disabled when content fits", "[ui][scrollbar]")
     sb.OnLButtonDown(0.99f);
     REQUIRE(sb.GetPos() == 0.0f); // saturated — max-page = 0
     sb.OnLButtonUp();
+}
+
+TEST_CASE("C3DScrollBar construction overwrites stale storage", "[ui][scrollbar]")
+{
+    alignas(C3DScrollBar) unsigned char storage[sizeof(C3DScrollBar)];
+    memset(storage, 0xff, sizeof(storage)); // every float in there reads back as NaN
+
+    C3DScrollBar* sb = new (storage) C3DScrollBar();
+    sb->SetPosition(Vector3(0, 0, 0), Vector3(0.035f, 0, 0), Vector3(0, 0.585f, 0));
+    REQUIRE(sb->GetPos() == 0.0f);
+    REQUIRE_FALSE(sb->IsLocked());
+    REQUIRE_FALSE(sb->IsEnabled());
+
+    sb->SetRange(0, 5, 5);
+    sb->SetPos(0);
+    sb->OnLButtonDown(0.02f);
+    REQUIRE(sb->GetPos() == 0.0f);
+    sb->OnLButtonUp();
+
+    sb->~C3DScrollBar();
 }
 
 TEST_CASE("C3DScrollBar Enable toggle", "[ui][scrollbar]")

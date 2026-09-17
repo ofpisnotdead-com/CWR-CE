@@ -216,7 +216,7 @@ RString SelectMenuInitWorld(RString initWorld, RString demoWorld, bool preferDem
     return demoWorld;
 }
 
-static bool MenuWorldLandscapeExists(RString worldClass)
+bool WorldInstalled(RString worldClass)
 {
     if (worldClass.GetLength() == 0)
         return false;
@@ -237,8 +237,8 @@ RString GetMenuInitWorld()
     RString initWorld = Pars >> "CfgWorlds" >> "initWorld";
     RString demoWorld = Pars >> "CfgWorlds" >> "demoWorld";
     const bool preferDemoWorld = GApp && GApp->UseDemoWorld();
-    const bool initWorldExists = MenuWorldLandscapeExists(initWorld);
-    const bool demoWorldExists = MenuWorldLandscapeExists(demoWorld);
+    const bool initWorldExists = WorldInstalled(initWorld);
+    const bool demoWorldExists = WorldInstalled(demoWorld);
 
     RString selected = SelectMenuInitWorld(initWorld, demoWorld, preferDemoWorld, initWorldExists, demoWorldExists);
     if (!preferDemoWorld && selected != initWorld)

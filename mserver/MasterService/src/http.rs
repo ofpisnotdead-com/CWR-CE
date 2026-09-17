@@ -9,7 +9,7 @@ use axum::http::header::{CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_TYPE, LOCA
 use axum::http::HeaderMap;
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use utoipa::OpenApi;
 
@@ -18,6 +18,7 @@ use crate::model::{
     ModUsageServer, ObserveServerRequest, PruneServersRequest, PruneServersResponse,
     RegisterServerRequest, ServerDetail, ServerModReference, ServerPlayer, ServerPopulationSample,
     ServerRecentSession, ServerVersionGroup, ServiceMetadata, ServiceSummary,
+    SetModCompatibilityRequest,
 };
 use crate::mods::ModUploadMeta;
 use crate::repository::{SqliteServerDirectory, TokenRelocation};
@@ -56,6 +57,7 @@ fn max_mod_upload_bytes() -> usize {
         get_mod,
         list_mod_revisions,
         get_mod_revision,
+        set_mod_revision_compatibility,
         download_mod_revision,
         list_mod_versions,
         list_mod_servers,
@@ -81,6 +83,7 @@ fn max_mod_upload_bytes() -> usize {
         ModUsageServer,
         ModCatalogEntry,
         ModPackage,
+        SetModCompatibilityRequest,
         PruneServersRequest,
         PruneServersResponse,
         ServiceMetadata,
@@ -190,6 +193,10 @@ fn build_router_for_service(
         .route(
             "/v1/mods/:mod_id/revisions/:revision",
             get(get_mod_revision),
+        )
+        .route(
+            "/v1/mods/:mod_id/revisions/:revision/compatibility",
+            put(set_mod_revision_compatibility),
         )
         .route(
             "/v1/mods/:mod_id/revisions/:revision/download",
@@ -610,6 +617,38 @@ async fn get_mod_revision(
 }
 
 #[utoipa::path(
+    put,
+    path = "/v1/mods/{modId}/revisions/{revision}/compatibility",
+    request_body = SetModCompatibilityRequest,
+    params(
+        ("modId" = String, Path, description = "Stable mod identifier"),
+        ("revision" = u64, Path, description = "Package revision")
+    ),
+    responses(
+        (status = 200, description = "Updated revision compatibility", body = ModCatalogEntry),
+        (status = 401, description = "Missing or invalid administrator key"),
+        (status = 404, description = "Revision not found")
+    )
+)]
+async fn set_mod_revision_compatibility(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((mod_id, revision)): Path<(String, u64)>,
+    payload: Result<Json<SetModCompatibilityRequest>, JsonRejection>,
+) -> Result<Json<ModCatalogEntry>, (StatusCode, String)> {
+    require_admin_api_key(&state, &headers)?;
+    let Json(request) = payload.map_err(|rejection| (rejection.status(), rejection.body_text()))?;
+    let entry = state
+        .service
+        .set_mod_revision_compatibility(&mod_id, revision, &request.compatible_actvers)
+        .await
+        .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
+    entry
+        .map(Json)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "revision not found".to_string()))
+}
+
+#[utoipa::path(
     get,
     path = "/v1/mods/{modId}/servers",
     params(
@@ -679,8 +718,10 @@ async fn upload_mod(
     };
 
     let mut name: Option<String> = None;
+    let mut mod_id: Option<String> = None;
     let mut app_name: Option<String> = None;
     let mut actver: Option<String> = None;
+    let mut compatible_actvers: Vec<String> = Vec::new();
     let mut version_tag: Option<String> = None;
     let mut version: Option<String> = None;
     let mut folder_name: Option<String> = None;
@@ -697,8 +738,10 @@ async fn upload_mod(
         let field_name = field.name().map(str::to_string);
         match field_name.as_deref() {
             Some("name") => name = Some(read_text_field(field).await?),
+            Some("modId") => mod_id = Some(read_text_field(field).await?),
             Some("app") => app_name = Some(read_text_field(field).await?),
             Some("actver") => actver = Some(read_text_field(field).await?),
+            Some("compatibleActver") => compatible_actvers.push(read_text_field(field).await?),
             Some("vertag") => version_tag = Some(read_text_field(field).await?),
             Some("version") => version = Some(read_text_field(field).await?),
             Some("folderName") => folder_name = Some(read_text_field(field).await?),
@@ -737,10 +780,28 @@ async fn upload_mod(
         ));
     }
 
+    let compatible_actvers = compatible_actvers
+        .into_iter()
+        .map(|value| {
+            value
+                .trim()
+                .parse::<i32>()
+                .ok()
+                .filter(|value| *value > 0)
+                .ok_or_else(|| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        format!("invalid compatibleActver '{value}'"),
+                    )
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     let meta = ModUploadMeta {
+        mod_id: mod_id.filter(|value| !value.trim().is_empty()),
         name: name.unwrap_or_default(),
         app_name: app_name.filter(|value| !value.trim().is_empty()),
         actver: actver.and_then(|value| value.trim().parse().ok()),
+        compatible_actvers,
         version_tag: version_tag.filter(|value| !value.trim().is_empty()),
         version: version.filter(|value| !value.trim().is_empty()),
         folder_name: folder_name.filter(|value| !value.trim().is_empty()),

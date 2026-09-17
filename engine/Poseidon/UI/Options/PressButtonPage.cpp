@@ -110,6 +110,7 @@ bool PressButtonPage::OnKeyDown(OptionsShell& shell, unsigned nChar)
 
 void PressButtonPage::OnSimulate(OptionsShell& shell)
 {
+    CapturePage::OnSimulate(shell);
     if (!IsListening())
         return;
 

@@ -284,9 +284,11 @@ void StringTableDynamic::Load(const char* filename, std::set<std::string>& appli
     f.AutoOpen(filename);
     bool fileIsUtf8 = HasUtf8CsvSuffix(filename);
     int column = -1;
+    int englishColumn = -1;
     int headerColumns = 0;
     int legacyCommaColumn = -1;
     Poseidon::Codepage columnCp = Poseidon::Codepage::CP1252;
+    Poseidon::Codepage englishColumnCp = Poseidon::Codepage::CP1252;
     std::set<std::string> seenNames;
     while (true)
     {
@@ -310,11 +312,16 @@ void StringTableDynamic::Load(const char* filename, std::set<std::string>& appli
                 {
                     legacyCommaColumn = c;
                 }
+                if (stricmp(row[c].c_str(), "English") == 0)
+                {
+                    englishColumn = c - 1;
+                    englishColumnCp =
+                        fileIsUtf8 ? Poseidon::Codepage::Utf8 : Poseidon::CodepageForLanguage(row[c].c_str());
+                }
                 if (stricmp(row[c].c_str(), (const char*)GLanguage) == 0)
                 {
                     column = c - 1; // column index into value columns (0-based after key)
                     columnCp = fileIsUtf8 ? Poseidon::Codepage::Utf8 : Poseidon::CodepageForLanguage(row[c].c_str());
-                    break;
                 }
             }
             break;
@@ -323,8 +330,9 @@ void StringTableDynamic::Load(const char* filename, std::set<std::string>& appli
     if (column < 0)
     {
         RptF("Unsupported language %s in %s", (const char*)GLanguage, filename);
-        column = 0;
-        columnCp = fileIsUtf8 ? Poseidon::Codepage::Utf8 : Poseidon::Codepage::CP1252;
+        column = englishColumn >= 0 ? englishColumn : 0;
+        columnCp =
+            englishColumn >= 0 ? englishColumnCp : (fileIsUtf8 ? Poseidon::Codepage::Utf8 : Poseidon::Codepage::CP1252);
     }
 
     while (!f.eof())
@@ -354,9 +362,15 @@ void StringTableDynamic::Load(const char* filename, std::set<std::string>& appli
 
         // column is 0-based index into value columns (row[1], row[2], ...)
         int valueIdx = column + 1;
+        Poseidon::Codepage valueCp = columnCp;
+        if ((valueIdx >= static_cast<int>(row.size()) || row[valueIdx].empty()) && englishColumn >= 0)
+        {
+            valueIdx = englishColumn + 1;
+            valueCp = englishColumnCp;
+        }
         if (valueIdx < static_cast<int>(row.size()) && !row[valueIdx].empty())
         {
-            std::string value = Poseidon::DecodeLegacyTextToUtf8(row[valueIdx], columnCp);
+            std::string value = Poseidon::DecodeLegacyTextToUtf8(row[valueIdx], valueCp);
             Add(RString(name.c_str()), RString(value.c_str()), fileIsUtf8, appliedInBatch);
         }
     }
@@ -660,31 +674,8 @@ RString Localize(RString str)
     return str;
 }
 
-RString LookupStringtableCsv(RString csvPath, const char* key)
+static RString ReadStringtableCsvValue(QIFStreamB& f, bool fileIsUtf8, const char* key)
 {
-    if (csvPath.GetLength() == 0 || !key || !*key)
-    {
-        return RString();
-    }
-    // Match LoadStringtable's preference: <stem>.utf8.csv wins when present.
-    RString resolved = csvPath;
-    if (HasCsvSuffix(csvPath) && !HasUtf8CsvSuffix(csvPath))
-    {
-        const int n = csvPath.GetLength() - static_cast<int>(strlen(".csv"));
-        std::string candidate(static_cast<const char*>(csvPath), n);
-        candidate += ".utf8.csv";
-        if (QIFStreamB::FileExist(candidate.c_str()))
-        {
-            resolved = RString(candidate.c_str());
-        }
-    }
-    if (!QIFStreamB::FileExist(resolved))
-    {
-        return RString();
-    }
-    QIFStreamB f;
-    f.AutoOpen(resolved);
-    const bool fileIsUtf8 = HasUtf8CsvSuffix(resolved);
     int column = -1;
     int englishColumn = -1;
     int headerColumns = 0;
@@ -769,6 +760,54 @@ RString LookupStringtableCsv(RString csvPath, const char* key)
         return RString();
     }
     return RString();
+}
+
+RString LookupStringtableCsv(RString csvPath, const char* key)
+{
+    if (csvPath.GetLength() == 0 || !key || !*key)
+    {
+        return RString();
+    }
+    // Match LoadStringtable's preference: <stem>.utf8.csv wins when present.
+    RString resolved = csvPath;
+    if (HasCsvSuffix(csvPath) && !HasUtf8CsvSuffix(csvPath))
+    {
+        const int n = csvPath.GetLength() - static_cast<int>(strlen(".csv"));
+        std::string candidate(static_cast<const char*>(csvPath), n);
+        candidate += ".utf8.csv";
+        if (QIFStreamB::FileExist(candidate.c_str()))
+        {
+            resolved = RString(candidate.c_str());
+        }
+    }
+    if (!QIFStreamB::FileExist(resolved))
+    {
+        return RString();
+    }
+    QIFStreamB f;
+    f.AutoOpen(resolved);
+    return ReadStringtableCsvValue(f, HasUtf8CsvSuffix(resolved), key);
+}
+
+RString LookupStringtableCsvInBank(const QFBank& bank, const char* key)
+{
+    if (!key || !*key)
+    {
+        return RString();
+    }
+    QIFStreamB utf8;
+    utf8.open(bank, "stringtable.utf8.csv");
+    if (utf8.rest() > 0)
+    {
+        return ReadStringtableCsvValue(utf8, true, key);
+    }
+    QIFStreamB legacy;
+    legacy.open(bank, "stringtable.csv");
+    if (legacy.rest() <= 0)
+    {
+        return RString();
+    }
+    return ReadStringtableCsvValue(legacy, false, key);
 }
 
 void ClearStringtable()

@@ -107,7 +107,7 @@ Scene::Scene()
       _preferredViewDistance(GetSelectedPreferredViewDistance())
 {
     static StaticStorage<ActiveLightPointer> aLightsS;
-    _aLights.SetStorage(aLightsS.Init(64));
+    _aLights.SetStorage(aLightsS.Init(MaxActiveLights));
 
     LoadConfig();
 
@@ -421,13 +421,13 @@ LightList::LightList(bool staticStorage)
 {
     if (staticStorage)
     {
-        SetStorage(LightStorage.Init(64));
+        SetStorage(LightStorage.Init(MaxActiveLights));
     }
 }
 
 LightList::LightList(const LightList& src)
 {
-    SetStorage(LightStorage.Init(64));
+    SetStorage(LightStorage.Init(MaxActiveLights));
     Realloc(src.Size());
     Resize(src.Size());
     // note: we assume LightList does not need any destruction

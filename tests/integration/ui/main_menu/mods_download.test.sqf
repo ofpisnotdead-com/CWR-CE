@@ -5,7 +5,7 @@
 //
 //  Part 2: triOpenModDownload injects synthetic
 //  tasks + a FAKE in-process transport (no network/disk) so the two bars, the
-//  "N / N addons" overall line and the Complete path are exercised offline and
+//  "N / N" overall line and the Complete path are exercised offline and
 //  deterministically. The agnostic DownloadProgress/Worker/View components are
 //  unit-tested; this proves they render through the real notebook controls.
 
@@ -41,7 +41,7 @@ triClick 125                 // IDC_MODS_DOWNLOAD_GO — start the (fake) downlo
 triAssertIncludes [(triVisibleTexts), "Estrazione."] // unpacking remains visibly active after download
 triScreenshot "03_unpacking"
 triAssertIncludes [(triVisibleTexts), "Completato"]   // localized status line; auto-retries until the worker finishes + is polled
-triAssertIncludes [(triVisibleTexts), "3 / 3 addons   100%"]
+triAssertIncludes [(triVisibleTexts), "3 / 3   100%"]
 triAssertIncludes [(triVisibleTexts), "Continua"]     // the action button relabels on success
 triAssertIncludes [(triVisibleTexts), "Indietro"]     // completed downloads can return without activation
 triScreenshot "04_download_complete"

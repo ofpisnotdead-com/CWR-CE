@@ -66,7 +66,7 @@ source ~/.bash_profile
 Run the following command in a terminal to install the dependencies:
 
 ```shell
-sudo dnf install autoconf-archive ccache clang clang-tools-extra git libGL-devel libtool libtool-ltdl-devel libX11-devel libXcursor-devel libXext-devel libXi-devel libXinerama-devel libxkbcommon-devel libXrandr-devel libXtst-devel perl-FindBin perl-IPC-Cmd perl-Time-Piece pkgconf python3 vcpkg wayland-devel wayland-protocols-devel
+sudo dnf install autoconf-archive ccache clang clang-tools-extra git libGL-devel libtool libtool-ltdl-devel libX11-devel libXcursor-devel libXext-devel libXi-devel libXinerama-devel libxkbcommon-devel libXrandr-devel libXtst-devel perl-FindBin perl-IPC-Cmd perl-Time-Piece perl-open pkgconf python3 vcpkg wayland-devel wayland-protocols-devel
 ```
 
 After this has completed successfully, you will need to follow the instructions in the `README.fedora` file to complete the setup for vcpkg:
@@ -101,7 +101,7 @@ cmake --preset linux-x64-clang-rwdi
 cmake --build build/linux-x64-clang-rwdi
 ```
 
-Note that these may take a while, especially the first time they are run. Afterwards, the binaries will be available in the `dist/linux-x64-clang-rwdi` directory. For example, `dist/linux-x64-clang-rwdi/PoseidonGame` is the full game binary.
+Note that these may take a while, especially the first time they are run. Afterwards, the binaries will be available in the `dist/x64-linux-rwdi` directory. For example, `dist/x64-linux-rwdi/PoseidonGame` is the full game binary.
 
 ## Install binaries alongside game data
 

@@ -189,3 +189,27 @@ TEST_CASE("NET_ERROR / AI_ERROR log and continue", "[network][logerror][.]")
     AI_ERROR(2 + 2 == 5);  // fails — LOG_ERROR(AI,      "... check failed: 2 + 2 == 5")
     SUCCEED("neither macro aborted the process");
 }
+
+// One log line per key at a call site, however many times that site is reached.
+TEST_CASE("LogOnceForKey - one report per key per site", "[logging][logonce]")
+{
+    using Poseidon::Foundation::ForgetLogOnceKeys;
+    using Poseidon::Foundation::LogOnceForKey;
+
+    static const char siteA = 0;
+    static const char siteB = 0;
+
+    ForgetLogOnceKeys();
+
+    CHECK(LogOnceForKey(&siteA, "FDF_MastoLightRed"));
+    CHECK_FALSE(LogOnceForKey(&siteA, "FDF_MastoLightRed"));
+    CHECK_FALSE(LogOnceForKey(&siteA, "FDF_MastoLightRed"));
+
+    CHECK(LogOnceForKey(&siteA, "FDF_MastoLightWhite"));
+    CHECK_FALSE(LogOnceForKey(&siteA, "FDF_MastoLightWhite"));
+
+    CHECK(LogOnceForKey(&siteB, "FDF_MastoLightRed"));
+
+    ForgetLogOnceKeys();
+    CHECK(LogOnceForKey(&siteA, "FDF_MastoLightRed"));
+}

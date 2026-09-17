@@ -252,4 +252,10 @@ struct ArcadeTemplate : public SerializeClass
 	void RequiredAddons(FindArrayRStringCI &addOns);
 };
 
+void FindMissingAddons(const FindArrayRStringCI &addOns, FindArrayRStringCI &missing);
+void ReadMissionAddons(const ParamEntry &mission, FindArrayRStringCI &addOns);
+// One sentence listing every missing addon, or only the first maxListed followed by "..."
+// when maxListed > 0.
+RString MissingAddonMessage(const FindArrayRStringCI &missing, int maxListed = 0);
+
 }  // namespace Poseidon

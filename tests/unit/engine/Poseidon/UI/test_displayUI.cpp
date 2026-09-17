@@ -34,6 +34,12 @@ TEST_CASE("displayUI names double-tap keyboard and mouse bindings", "[UI][displa
     CHECK(std::string((const char*)GetKeyName(InputBindingDoubleTapCode(INPUT_DEVICE_MOUSE + 1))).find("2x ") == 0);
 }
 
+TEST_CASE("displayUI names mouse wheel bindings", "[UI][displayUI]")
+{
+    CHECK(std::string((const char*)GetKeyName(INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_UP)) == "Mouse wheel up");
+    CHECK(std::string((const char*)GetKeyName(INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_DOWN)) == "Mouse wheel down");
+}
+
 TEST_CASE("stalled client abort uses a disconnect-only debriefing", "[UI][multiplayer][disconnect]")
 {
     CHECK(ResolveClientDebriefingMode(true, true, false) == ClientDebriefingMode::DisconnectOnly);

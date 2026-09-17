@@ -1,11 +1,15 @@
 #include <catch2/catch_test_macros.hpp>
 #include <Poseidon/Core/ModSystem.hpp>
+#include <Poseidon/Foundation/Framework/Log.hpp>
 #include <Poseidon/IO/PreprocC/PreprocC.hpp>
 #include <Poseidon/IO/Streams/QStream.hpp>
+#include <spdlog/sinks/callback_sink.h>
 #include "../Support/test_fixtures.hpp"
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <cstdio>
 #include <string.h>
 #include <string>
@@ -578,6 +582,32 @@ TEST_CASE("PreprocC - Malformed include", "[preprocC][error]")
 
     // Should fail gracefully
     REQUIRE(result == false);
+}
+
+TEST_CASE("PreprocC - Missing include is logged at error level", "[preprocC][error][logging]")
+{
+    const char* path = CreateTestFile("missing_include.txt", "#include \"missing_detail.hpp\"\n");
+    std::vector<std::pair<spdlog::level::level_enum, std::string>> entries;
+    auto sink = std::make_shared<spdlog::sinks::callback_sink_mt>(
+        [&](const spdlog::details::log_msg& msg)
+        { entries.emplace_back(msg.level, std::string(msg.payload.data(), msg.payload.size())); });
+    auto logger = spdlog::default_logger();
+    const auto previousLevel = logger->level();
+    logger->sinks().push_back(sink);
+    logger->set_level(spdlog::level::info);
+
+    CPreprocessorFunctions preproc;
+    QOStream output;
+    const bool result = preproc.Preprocess(output, path);
+
+    logger->set_level(previousLevel);
+    auto& sinks = logger->sinks();
+    sinks.erase(std::remove(sinks.begin(), sinks.end(), sink), sinks.end());
+
+    CHECK_FALSE(result);
+    CHECK(std::any_of(
+        entries.begin(), entries.end(), [](const auto& entry)
+        { return entry.first == spdlog::level::err && entry.second == "Cannot include file missing_detail.hpp"; }));
 }
 
 TEST_CASE("PreprocC - Unmatched endif", "[preprocC][error]")

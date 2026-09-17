@@ -14,6 +14,9 @@
 #include <Poseidon/Network/Network.hpp>
 
 #include <Poseidon/Foundation/Enums/EnumNames.hpp>
+#include <algorithm>
+#include <string>
+#include <vector>
 #include <stdio.h>
 #include <Poseidon/Foundation/Common/FltOpts.hpp>
 #include <Poseidon/Foundation/Containers/RStringArray.hpp>
@@ -1875,17 +1878,27 @@ void ArcadeTemplate::RequiredAddons(FindArrayRStringCI& addOns)
 void CheckPatch(FindArrayRStringCI& addOns, FindArrayRStringCI& missing)
 {
     using namespace Poseidon;
+    if (Pars.FindEntry("CfgPatches"))
+    {
+        // activate all addons requested by given mission
+        GWorld->ActivateAddons(addOns);
+    }
+    FindMissingAddons(addOns, missing);
+}
+
+namespace Poseidon
+{
+
+void FindMissingAddons(const FindArrayRStringCI& addOns, FindArrayRStringCI& missing)
+{
     const ParamEntry* patches = Pars.FindEntry("CfgPatches");
     if (!patches)
     {
         missing = addOns;
         return;
     }
-    // activate all addons requested by given mission
-    GWorld->ActivateAddons(addOns);
 
-    int m = patches->GetEntryCount();
-
+    const int m = patches->GetEntryCount();
     for (int i = 0; i < addOns.Size(); i++)
     {
         RString addOn = addOns[i];
@@ -1904,8 +1917,58 @@ void CheckPatch(FindArrayRStringCI& addOns, FindArrayRStringCI& missing)
         }
     }
 }
-namespace Poseidon
+
+void ReadMissionAddons(const ParamEntry& mission, FindArrayRStringCI& addOns)
 {
+    const ParamEntry* list = mission.FindEntry("addOns");
+    if (!list || !list->IsArray())
+    {
+        return;
+    }
+    for (int i = 0; i < list->GetSize(); i++)
+    {
+        RString addOn = (*list)[i].GetValue();
+        if (addOn.GetLength() > 0)
+        {
+            addOns.AddUnique(addOn);
+        }
+    }
+}
+
+RString MissingAddonMessage(const FindArrayRStringCI& missing, int maxListed)
+{
+    std::vector<std::string> names;
+    names.reserve(missing.Size());
+    for (int i = 0; i < missing.Size(); i++)
+    {
+        names.emplace_back((const char*)missing[i]);
+    }
+    std::sort(names.begin(), names.end(),
+              [](const std::string& a, const std::string& b) { return stricmp(a.c_str(), b.c_str()) < 0; });
+    names.erase(std::unique(names.begin(), names.end(), [](const std::string& a, const std::string& b)
+                            { return stricmp(a.c_str(), b.c_str()) == 0; }),
+                names.end());
+
+    const int listed = maxListed > 0 ? std::min((int)names.size(), maxListed) : (int)names.size();
+    RString message = LocalizeString(IDS_MSG_ADDON_MISSING);
+    for (int i = 0; i < listed; i++)
+    {
+        if (i > 0)
+        {
+            message = message + RString(", ");
+        }
+        message = message + RString(names[i].c_str());
+    }
+    if ((int)names.size() > listed)
+    {
+        message = message + RString(", ...");
+    }
+    else if (listed > 0)
+    {
+        message = message + RString(".");
+    }
+    return message;
+}
 
 void ArcadeTemplate::ScanRequiredAddons()
 {

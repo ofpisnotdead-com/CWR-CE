@@ -68,6 +68,11 @@ extern void SetVisibility(float distance);
 #include <functional>
 #include <vector>
 
+namespace Poseidon
+{
+extern bool GGl33TerrainInstanced;
+}
+
 namespace Poseidon::Dev
 {
 namespace DebugOverlay
@@ -1477,6 +1482,9 @@ void DrawRenderTab()
     bool flat = GEngine->GetDebugFlatColor();
     if (ImGui::Checkbox("Flat shading (objects -> solid red; shading-vs-geometry probe)", &flat))
         GEngine->SetDebugFlatColor(flat);
+
+    ImGui::Checkbox("Instanced terrain (GL33 A/B)", &Poseidon::GGl33TerrainInstanced);
+    ImGui::TextDisabled("  ON = instanced heightmap land; OFF = per-segment baked meshes");
 
     ImGui::Separator();
     ImGui::Text("window  %d x %d", GEngine->Width(), GEngine->Height());

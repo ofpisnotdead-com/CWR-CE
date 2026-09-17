@@ -187,6 +187,8 @@ class ForestPlain: public Object
 	void Animate( int level ) override;
 	Vector3 AnimatePoint( int level, int index ) const override;
 	void Deanimate( int level ) override;
+	bool HasLandClip( int level ) const override;
+	LandClipMode GetLandClipMode( int level ) const override;
 
 	float ViewDensity() const override;
 

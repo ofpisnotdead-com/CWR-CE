@@ -24,15 +24,15 @@ RString ModName(const UserActionDesc& desc)
     return RString("key") + RString(desc.name) + RString("_mod");
 }
 
-// True if the packed binding belongs in controls.cfg (keyboard scancodes
-// or mouse buttons).  Joystick-class entries (STICK / STICK_AXIS /
+// True if the packed binding belongs in controls.cfg (keyboard or mouse).
+// Joystick-class entries (STICK / STICK_AXIS /
 // STICK_POV) are persisted via GamepadConfig instead.
 bool IsKbmCode(int packedCode)
 {
     if (packedCode < 0)
         return false;
     int dev = packedCode & INPUT_DEVICE_MASK;
-    return dev == INPUT_DEVICE_KEYBOARD || dev == INPUT_DEVICE_MOUSE;
+    return dev == INPUT_DEVICE_KEYBOARD || dev == INPUT_DEVICE_MOUSE || dev == INPUT_DEVICE_MOUSE_AXIS;
 }
 } // namespace
 

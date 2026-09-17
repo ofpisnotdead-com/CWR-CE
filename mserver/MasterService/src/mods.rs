@@ -70,6 +70,7 @@ pub struct PublishModInput {
     pub name: String,
     pub app_name: Option<String>,
     pub actver: Option<i32>,
+    pub compatible_actvers: Vec<i32>,
     pub version_tag: Option<String>,
     pub version: Option<String>,
     pub description: Option<String>,
@@ -83,9 +84,11 @@ pub struct PublishModInput {
 /// `ModCatalogEntry`.
 #[derive(Default)]
 pub struct ModUploadMeta {
+    pub mod_id: Option<String>,
     pub name: String,
     pub app_name: Option<String>,
     pub actver: Option<i32>,
+    pub compatible_actvers: Vec<i32>,
     pub version_tag: Option<String>,
     pub version: Option<String>,
     pub folder_name: Option<String>,
@@ -94,7 +97,7 @@ pub struct ModUploadMeta {
     pub homepage_url: Option<String>,
 }
 
-/// Object-store-backed mod artifact store. Immutable artifacts and metadata live under
+/// Object-store-backed mod artifact store. Immutable artifacts and revision metadata live under
 /// `<modId>/revisions/<revision>/`, with a conditional `current` object selecting the catalog
 /// entry. The local filesystem backend serves development and S3 lets stateless replicas share
 /// one store.
@@ -281,6 +284,7 @@ impl ModStore {
             mod_id: slug.clone(),
             app_name: input.app_name.clone(),
             actver: input.actver,
+            compatible_actvers: normalize_actvers(&input.compatible_actvers),
             version_tag: input.version_tag.clone(),
             compatible: false,
             name: input.name.clone(),
@@ -486,14 +490,11 @@ impl ModStore {
             .await
             .with_context(|| format!("finishing upload {temp}"))?;
 
-        let slug = slugify(&meta.name);
-        if slug.is_empty() || size == 0 {
+        let slug = meta.mod_id.unwrap_or_else(|| slugify(&meta.name));
+        if !is_safe_segment(&slug) || size == 0 {
             let _ = self.store.delete(&temp).await;
-            if slug.is_empty() {
-                bail!(
-                    "mod name '{}' has no usable characters for an id",
-                    meta.name
-                );
+            if !is_safe_segment(&slug) {
+                bail!("invalid mod id '{slug}'");
             }
             bail!("mod artifact is empty");
         }
@@ -524,6 +525,7 @@ impl ModStore {
             mod_id: slug.clone(),
             app_name: meta.app_name,
             actver: meta.actver,
+            compatible_actvers: normalize_actvers(&meta.compatible_actvers),
             version_tag: meta.version_tag,
             compatible: false,
             name: meta.name,
@@ -622,6 +624,13 @@ impl ModStore {
             mod_id: mod_id.to_string(),
             app_name: meta.app_name.or(latest.app_name),
             actver: meta.actver.or(latest.actver),
+            compatible_actvers: if !meta.compatible_actvers.is_empty() {
+                normalize_actvers(&meta.compatible_actvers)
+            } else if let Some(actver) = meta.actver {
+                vec![actver]
+            } else {
+                latest.compatible_actvers
+            },
             version_tag: meta.version_tag.or(latest.version_tag),
             compatible: false,
             name: if meta.name.trim().is_empty() {
@@ -786,7 +795,7 @@ impl ModStore {
     }
 
     pub async fn list_mods(&self, query: &ListModsQuery) -> Result<Vec<ModCatalogEntry>> {
-        let mut mods = self.read_all().await?;
+        let mut mods = self.read_all(query).await?;
         apply_mod_filters(&mut mods, query);
         Ok(mods)
     }
@@ -848,7 +857,38 @@ impl ModStore {
         Ok(revisions)
     }
 
-    async fn read_all(&self) -> Result<Vec<ModCatalogEntry>> {
+    pub async fn set_revision_compatibility(
+        &self,
+        mod_id: &str,
+        revision: u64,
+        compatible_actvers: &[i32],
+    ) -> Result<Option<ModCatalogEntry>> {
+        if compatible_actvers.is_empty() || compatible_actvers.iter().any(|value| *value <= 0) {
+            bail!("at least one positive compatible game version is required");
+        }
+        let Some(mut entry) = self.get_revision(mod_id, revision).await? else {
+            return Ok(None);
+        };
+        entry.compatible_actvers = normalize_actvers(compatible_actvers);
+        let revision_path = self.store_path(Self::revision_metadata_path(mod_id, revision));
+        let metadata_path = match self.store.head(&revision_path).await {
+            Ok(_) => revision_path,
+            Err(object_store::Error::NotFound { .. }) if revision == 1 => {
+                self.store_path(Self::metadata_path(mod_id))
+            }
+            Err(error) => return Err(error.into()),
+        };
+        self.store
+            .put(
+                &metadata_path,
+                Bytes::from(serde_json::to_vec_pretty(&entry)?).into(),
+            )
+            .await
+            .with_context(|| format!("updating revision {revision} metadata for {mod_id}"))?;
+        Ok(Some(entry))
+    }
+
+    async fn read_all(&self, query: &ListModsQuery) -> Result<Vec<ModCatalogEntry>> {
         let mut mod_ids = std::collections::BTreeSet::new();
         let mut listing = self.store.list(self.list_prefix());
         while let Some(meta) = listing.next().await {
@@ -865,7 +905,12 @@ impl ModStore {
 
         let mut mods = Vec::with_capacity(mod_ids.len());
         for mod_id in mod_ids {
-            if let Some(entry) = self.get_mod(&mod_id).await? {
+            let entry = if has_compatibility_filter(query) {
+                self.latest_compatible_revision(&mod_id, query).await?
+            } else {
+                self.get_mod(&mod_id).await?
+            };
+            if let Some(entry) = entry {
                 mods.push(entry);
             }
         }
@@ -877,6 +922,24 @@ impl ModStore {
                 .then_with(|| lhs.mod_id.cmp(&rhs.mod_id))
         });
         Ok(mods)
+    }
+
+    async fn latest_compatible_revision(
+        &self,
+        mod_id: &str,
+        query: &ListModsQuery,
+    ) -> Result<Option<ModCatalogEntry>> {
+        let Some(current) = self.current_state(mod_id).await? else {
+            return Ok(None);
+        };
+        for revision in (1..=current.revision).rev() {
+            if let Some(entry) = self.get_revision(mod_id, revision).await? {
+                if is_mod_compatible(&entry, query) {
+                    return Ok(Some(entry));
+                }
+            }
+        }
+        Ok(None)
     }
 
     async fn parse_metadata(
@@ -904,27 +967,21 @@ impl ModStore {
         } else {
             Self::revision_artifact_path(&metadata.mod_id, revision)
         };
+        let stored_artifact_path = self.store_path(artifact_path);
+        let artifact_head = match self.store.head(&stored_artifact_path).await {
+            Ok(head) => Some(head),
+            Err(object_store::Error::NotFound { .. }) => None,
+            Err(error) => return Err(error.into()),
+        };
         if metadata.size_bytes.unwrap_or(0) == 0 {
-            if let Ok(head) = self
-                .store
-                .head(&self.store_path(artifact_path.clone()))
-                .await
-            {
+            if let Some(head) = &artifact_head {
                 metadata.size_bytes = Some(head.size as u64);
                 changed = true;
             }
         }
-        if metadata.sha256.is_none() {
-            if let Ok(result) = self.store.get(&self.store_path(artifact_path)).await {
-                metadata.sha256 = Some(sha256_stream(result.into_stream()).await?);
-                changed = true;
-            }
-        }
-        if metadata.download_url.is_none() {
-            metadata.download_url = Some(format!(
-                "/v1/mods/{}/revisions/{revision}/download",
-                metadata.mod_id
-            ));
+        if metadata.sha256.is_none() && artifact_head.is_some() {
+            let result = self.store.get(&stored_artifact_path).await?;
+            metadata.sha256 = Some(sha256_stream(result.into_stream()).await?);
             changed = true;
         }
         if legacy && changed {
@@ -935,6 +992,12 @@ impl ModStore {
                 )
                 .await
                 .with_context(|| format!("updating legacy metadata for {dir_id}"))?;
+        }
+        if artifact_head.is_some() {
+            metadata.download_url = Some(format!(
+                "/v1/mods/{}/revisions/{revision}/download",
+                metadata.mod_id
+            ));
         }
 
         Ok(metadata)
@@ -1004,6 +1067,21 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+fn normalize_actvers(values: &[i32]) -> Vec<i32> {
+    let mut values = values
+        .iter()
+        .copied()
+        .filter(|value| *value > 0)
+        .collect::<Vec<_>>();
+    values.sort_unstable();
+    values.dedup();
+    values
+}
+
+fn has_compatibility_filter(query: &ListModsQuery) -> bool {
+    query.app_name.is_some() || query.actver.is_some() || query.version_tag.is_some()
+}
+
 fn apply_mod_filters(mods: &mut Vec<ModCatalogEntry>, query: &ListModsQuery) {
     let text_filter = query.q.as_ref().map(|value| value.to_lowercase());
 
@@ -1043,10 +1121,15 @@ fn is_mod_compatible(entry: &ModCatalogEntry, query: &ListModsQuery) -> bool {
         }
     }
     if let Some(actver) = query.actver {
-        if let Some(entry_actver) = entry.actver {
-            if entry_actver != actver {
+        if !entry.compatible_actvers.is_empty() {
+            if !entry.compatible_actvers.contains(&actver) {
                 return false;
             }
+        } else if entry
+            .actver
+            .is_some_and(|entry_actver| entry_actver != actver)
+        {
+            return false;
         }
     }
     if let Some(version_tag) = query
@@ -1064,7 +1147,7 @@ fn is_mod_compatible(entry: &ModCatalogEntry, query: &ListModsQuery) -> bool {
             }
         }
     }
-    query.app_name.is_some() || query.actver.is_some() || query.version_tag.is_some()
+    has_compatibility_filter(query)
 }
 
 #[cfg(test)]
@@ -1077,7 +1160,7 @@ mod tests {
     use sha2::{Digest, Sha256};
 
     use super::{sha256_stream, ArtifactStream, ModStore, ModUploadMeta};
-    use crate::model::ListModsQuery;
+    use crate::model::{ListModsQuery, ModCatalogEntry};
     use tempfile::tempdir;
 
     struct TrackedChunk {
@@ -1171,6 +1254,7 @@ mod tests {
                 name: "Synthetic Core Pack".to_string(),
                 app_name: Some("CWR".to_string()),
                 actver: Some(302),
+                compatible_actvers: Vec::new(),
                 version_tag: Some("rc1".to_string()),
                 version: Some("1.0".to_string()),
                 description: Some("demo".to_string()),
@@ -1302,6 +1386,7 @@ mod tests {
                 name: "Temp Mod".to_string(),
                 app_name: None,
                 actver: None,
+                compatible_actvers: Vec::new(),
                 version_tag: None,
                 version: Some("1.0".to_string()),
                 description: None,
@@ -1344,6 +1429,7 @@ mod tests {
                 name: "Stable Mod".to_string(),
                 app_name: Some("CWR".to_string()),
                 actver: Some(302),
+                compatible_actvers: Vec::new(),
                 version_tag: Some("rc1".to_string()),
                 version: Some("1.0".to_string()),
                 description: Some("first".to_string()),
@@ -1410,6 +1496,112 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn catalog_selects_latest_compatible_revision() {
+        let root = tempdir().unwrap();
+        let store = ModStore::local(root.path()).unwrap();
+        store
+            .publish_mod(&super::PublishModInput {
+                name: "Compatible Mod".to_string(),
+                app_name: Some("CWR".to_string()),
+                actver: Some(303),
+                compatible_actvers: vec![303, 305],
+                version_tag: None,
+                version: Some("1.0".to_string()),
+                description: None,
+                authors: Vec::new(),
+                homepage_url: None,
+                file: vec![1, 2, 3],
+            })
+            .await
+            .unwrap();
+        store
+            .add_revision(
+                "compatible-mod",
+                vec![4, 5, 6],
+                super::ModUploadMeta {
+                    actver: Some(305),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+
+        let for_303 = store
+            .list_mods(&ListModsQuery {
+                app_name: Some("CWR".to_string()),
+                actver: Some(303),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(for_303.len(), 1);
+        assert_eq!(for_303[0].package_revision, 1);
+        assert_eq!(
+            for_303[0].download_url.as_deref(),
+            Some("/v1/mods/compatible-mod/revisions/1/download")
+        );
+
+        let for_305 = store
+            .list_mods(&ListModsQuery {
+                app_name: Some("CWR".to_string()),
+                actver: Some(305),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(for_305.len(), 1);
+        assert_eq!(for_305[0].package_revision, 2);
+        assert_eq!(for_305[0].compatible_actvers, [305]);
+
+        let for_306 = store
+            .list_mods(&ListModsQuery {
+                app_name: Some("CWR".to_string()),
+                actver: Some(306),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert!(for_306.is_empty());
+    }
+
+    #[tokio::test]
+    async fn legacy_revision_compatibility_updates_metadata() {
+        let root = tempdir().unwrap();
+        let mod_dir = root.path().join("legacy-compatible");
+        std::fs::create_dir_all(&mod_dir).unwrap();
+        std::fs::write(
+            mod_dir.join("mod.json"),
+            r#"{"modId":"legacy-compatible","app":"CWR","actver":303,"name":"Legacy Compatible","version":"1.0","description":"fixture","downloadUrl":"/v1/mods/legacy-compatible/download"}"#,
+        )
+        .unwrap();
+        std::fs::write(mod_dir.join("legacy-compatible.pbo.zst"), [1, 2, 3]).unwrap();
+
+        let store = ModStore::local(root.path()).unwrap();
+        let query = ListModsQuery {
+            app_name: Some("CWR".to_string()),
+            actver: Some(305),
+            ..Default::default()
+        };
+        assert!(store.list_mods(&query).await.unwrap().is_empty());
+
+        let migrated = store
+            .set_revision_compatibility("legacy-compatible", 1, &[305, 303, 305])
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(migrated.compatible_actvers, [303, 305]);
+        assert_eq!(
+            store.list_mods(&query).await.unwrap()[0]
+                .download_url
+                .as_deref(),
+            Some("/v1/mods/legacy-compatible/revisions/1/download")
+        );
+        let metadata: ModCatalogEntry =
+            serde_json::from_slice(&std::fs::read(mod_dir.join("mod.json")).unwrap()).unwrap();
+        assert_eq!(metadata.compatible_actvers, [303, 305]);
+    }
+
+    #[tokio::test]
     async fn identical_current_upload_is_idempotent() {
         let root = tempdir().unwrap();
         let store = ModStore::local(root.path()).unwrap();
@@ -1418,6 +1610,7 @@ mod tests {
                 name: "Idempotent Mod".to_string(),
                 app_name: None,
                 actver: None,
+                compatible_actvers: Vec::new(),
                 version_tag: None,
                 version: Some("1.0".to_string()),
                 description: None,
@@ -1452,6 +1645,7 @@ mod tests {
                 name: "Concurrent Mod".to_string(),
                 app_name: None,
                 actver: None,
+                compatible_actvers: Vec::new(),
                 version_tag: None,
                 version: Some("1.0".to_string()),
                 description: None,

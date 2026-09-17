@@ -1,0 +1,69 @@
+version=11;
+class Mission
+{
+	randomSeed=417001;
+	class Intel
+	{
+	};
+	class Groups
+	{
+		items=2;
+		class Item0
+		{
+			side="WEST";
+			class Vehicles
+			{
+				items=1;
+				class Item0
+				{
+					position[]={6510.000000,150.000000,6470.000000};
+					id=0;
+					side="WEST";
+					vehicle="SoldierWB";
+					player="PLAYER COMMANDER";
+					leader=1;
+					skill=0.600000;
+				};
+			};
+		};
+		class Item1
+		{
+			side="WEST";
+			class Vehicles
+			{
+				items=1;
+				class Item0
+				{
+					position[]={6515.000000,150.000000,6475.000000};
+					id=1;
+					side="WEST";
+					vehicle="SoldierWB";
+					player="PLAYER COMMANDER";
+					leader=1;
+					skill=0.600000;
+				};
+			};
+		};
+	};
+};
+class Intro
+{
+	randomSeed=417002;
+	class Intel
+	{
+	};
+};
+class OutroWin
+{
+	randomSeed=417003;
+	class Intel
+	{
+	};
+};
+class OutroLoose
+{
+	randomSeed=417004;
+	class Intel
+	{
+	};
+};

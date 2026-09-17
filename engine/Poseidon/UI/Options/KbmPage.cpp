@@ -25,12 +25,8 @@ bool KbmPage::DeviceFilter(int packedCode) const
 {
     if (packedCode < 0)
         return false;
-    // Keyboard scancodes occupy 0..0xFFFF; mouse buttons live above
-    // INPUT_DEVICE_MOUSE.  Joystick / stick / pov / axis use higher
-    // device offsets (INPUT_DEVICE_STICK / STICK_POV / STICK_AXIS) —
-    // those are filtered out so the KB&M page only shows / writes
-    // keyboard + mouse entries.
-    return (packedCode < INPUT_DEVICE_STICK);
+    const int device = InputBindingDevice(packedCode);
+    return device == INPUT_DEVICE_KEYBOARD || device == INPUT_DEVICE_MOUSE || device == INPUT_DEVICE_MOUSE_AXIS;
 }
 
 bool KbmPage::IsActionVisible(UserAction action, ControlsCategory category) const
@@ -38,11 +34,11 @@ bool KbmPage::IsActionVisible(UserAction action, ControlsCategory category) cons
     return IsActionVisibleOnKeyboard(action, category);
 }
 
-std::unique_ptr<OptionsPage> KbmPage::MakeCaptureModal(std::string actionLabel, std::string slotName,
+std::unique_ptr<OptionsPage> KbmPage::MakeCaptureModal(UserAction action, std::string actionLabel, std::string slotName,
                                                        SaveCallback onSave, ConflictCallback onConflict)
 {
     return std::make_unique<PressKeyPage>(std::move(actionLabel), std::move(slotName), std::move(onSave),
-                                          std::move(onConflict));
+                                          std::move(onConflict), action == UAMapZoomIn || action == UAMapZoomOut);
 }
 
 } // namespace Poseidon

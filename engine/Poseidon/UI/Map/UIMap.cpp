@@ -3,6 +3,8 @@
 #include <Poseidon/Core/Config/EngineConfig.hpp>
 #include <Poseidon/Core/Config/UserConfig.hpp>
 #include <Poseidon/UI/Map/UIMap.hpp>
+#include <Poseidon/UI/Controls/CursorLayout.hpp>
+#include <Poseidon/UI/LayoutCanvas.hpp>
 #include <Poseidon/UI/Locale/Stringtable/CodepageTranscode.hpp>
 #include <Poseidon/UI/Locale/Stringtable/Stringtable.hpp>
 // #include "win.h"
@@ -2162,8 +2164,8 @@ void CStaticMap::OnDraw(float alpha)
         {
             int wScreen = GLOB_ENGINE->Width2D();
             int hScreen = GLOB_ENGINE->Height2D();
-            const float mouseH = 16.0 / 600;
-            const float mouseW = 16.0 / 800;
+            const float mouseH = LayoutCanvas::FractionOfHeight(16.0f);
+            const float mouseW = CursorLayout::SquareWidthFraction(mouseH, wScreen, hScreen);
             float mouseX = 0.5 + InputSubsystem::Instance().GetCursorX() * 0.5;
             float mouseY = 0.5 + InputSubsystem::Instance().GetCursorY() * 0.5;
             PackedColor color = _parent->GetCursorColor();
@@ -2362,7 +2364,14 @@ void CStaticMap::OnMouseZChanged(float dz)
         return;
     }
     _moveKey = 0;
-    float scale = exp(0.1 * dz) * _scaleX;
+    auto& input = InputSubsystem::Instance();
+    const InputCode wheel = dz > 0 ? InputCode::MouseWheelUp() : InputCode::MouseWheelDown();
+    const bool zoomIn = input.IsBindingActive(UAMapZoomIn, wheel, false);
+    const bool zoomOut = input.IsBindingActive(UAMapZoomOut, wheel, false);
+    if (zoomIn == zoomOut)
+        return;
+
+    float scale = exp(0.1 * std::abs(dz) * (zoomIn ? -1.0f : 1.0f)) * _scaleX;
     saturate(scale, _scaleMin, _scaleMax);
     SetScale(scale);
 }

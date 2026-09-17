@@ -486,6 +486,10 @@ RString GetKeyName(int dikCode)
             return LocalizeString(IDS_INPUT_DEVICE_MOUSE_6);
         case INPUT_DEVICE_MOUSE + 7:
             return LocalizeString(IDS_INPUT_DEVICE_MOUSE_7);
+        case INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_UP:
+            return LocalizeStringWithFallback("STR_INPUT_DEVICE_MOUSE_WHEEL_UP", "Mouse wheel up");
+        case INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_DOWN:
+            return LocalizeStringWithFallback("STR_INPUT_DEVICE_MOUSE_WHEEL_DOWN", "Mouse wheel down");
 
         case INPUT_DEVICE_STICK:
             return LocalizeString(IDS_INPUT_DEVICE_STICK_0);
@@ -914,11 +918,10 @@ void DisplayConfigure::RefreshLanguage()
 {
     if (!_keys)
         return;
-    UserActionDesc* userActionDesc = InputSubsystem::GetUserActionDesc();
     int n = _keys->GetSize();
     for (int i = 0; i < n && i < UAN; i++)
     {
-        _keys->Set(i).text = LocalizeString(userActionDesc[i].desc);
+        _keys->Set(i).text = InputSubsystem::GetUserActionLabel(static_cast<UserAction>(i));
     }
 
     // Also refresh the three C3DActiveText labels that reflect input state.
@@ -1055,10 +1058,9 @@ Control* DisplayConfigure::OnCreateCtrl(int type, int idc, const ParamEntry& cls
         case IDC_CONFIG_KEYS:
             _keys = new CKeys(this, idc, cls);
             {
-                UserActionDesc* userActionDesc = InputSubsystem::GetUserActionDesc();
                 for (int i = 0; i < UAN; i++)
                 {
-                    _keys->AddString(LocalizeString(userActionDesc[i].desc));
+                    _keys->AddString(InputSubsystem::GetUserActionLabel(static_cast<UserAction>(i)));
                     _keys->SetKeys(i, input.GetUserKeys(static_cast<UserAction>(i)));
                 }
             }

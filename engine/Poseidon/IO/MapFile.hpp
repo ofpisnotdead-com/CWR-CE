@@ -6,6 +6,8 @@
 
 namespace Poseidon
 {
+class QIStream;
+
 struct MapInfo
 {
 	BString<512> name;
@@ -24,6 +26,8 @@ class MapFile
 
 	public:
 	void ParseMapFile();
+	// Parses an already-open linker map; ParseMapFile locates the file and calls this.
+	void ParseMapStream( QIStream &in );
 	const char *GetName() const {return _name;}
 	const char *MapName( int address, MapAddressId id, int *lower=nullptr );
 	const char *MapNameFromPhysical( int fAddress, int *lower=nullptr )

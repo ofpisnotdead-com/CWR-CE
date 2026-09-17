@@ -54,7 +54,8 @@ TEST_CASE("ControlsConfig: LoadDefaults seeds keyboard / mouse entries from User
         {
             int code = descs[i].keys[j];
             int dev = code & 0x00ff0000;
-            if (code >= 0 && (dev == 0x00000000 || dev == 0x00010000))
+            if (code >= 0 &&
+                (dev == INPUT_DEVICE_KEYBOARD || dev == INPUT_DEVICE_MOUSE || dev == INPUT_DEVICE_MOUSE_AXIS))
                 expected++;
         }
         CAPTURE(i, expected);
@@ -64,7 +65,7 @@ TEST_CASE("ControlsConfig: LoadDefaults seeds keyboard / mouse entries from User
         for (int j = 0; j < c.bindings[i].Size(); j++)
         {
             int dev = c.bindings[i][j] & 0x00ff0000;
-            CHECK((dev == 0x00000000 || dev == 0x00010000));
+            CHECK((dev == INPUT_DEVICE_KEYBOARD || dev == INPUT_DEVICE_MOUSE || dev == INPUT_DEVICE_MOUSE_AXIS));
         }
     }
 }
@@ -79,6 +80,8 @@ TEST_CASE("ControlsConfig: Save filters out joystick-class entries", "[Settings]
     src.bindings[UAFire].Add(29);          // SDL_SCANCODE_LCTRL
     src.bindings[UAFire].Add(0x20000 + 7); // STICK + 7 — should be dropped on save
     src.bindings[UAFire].Add(0x10000 + 1); // mouse btn 1 — kept (KB&M class)
+    src.bindings[UAFire].Add(INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_UP);
+    src.modifiers[UAFire].Add(-1);
     src.modifiers[UAFire].Add(-1);
     src.modifiers[UAFire].Add(-1);
     src.modifiers[UAFire].Add(-1);
@@ -88,9 +91,10 @@ TEST_CASE("ControlsConfig: Save filters out joystick-class entries", "[Settings]
     ControlsConfig dst;
     REQUIRE(dst.Load(path));
     // Joystick-class entry got filtered; keyboard + mouse survive.
-    REQUIRE(dst.bindings[UAFire].Size() == 2);
+    REQUIRE(dst.bindings[UAFire].Size() == 3);
     CHECK(dst.bindings[UAFire][0] == 29);
     CHECK(dst.bindings[UAFire][1] == 0x10000 + 1);
+    CHECK(dst.bindings[UAFire][2] == INPUT_DEVICE_MOUSE_AXIS + INPUT_MOUSE_WHEEL_UP);
 
     std::filesystem::remove(path);
 }

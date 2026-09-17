@@ -16,8 +16,12 @@ namespace GL33Bind
 {
 
 void Vao(unsigned int vao);
-void Tex2D(int unit, unsigned int tex); // leaves the active unit = `unit`
+// Bind a texture the GPU will only read (sample) during a draw.
+void Tex2DForSampling(int unit, unsigned int tex);
+// Bind a texture for any use, including modification.
+void Tex2D(int unit, unsigned int tex);
 void ActiveUnit(int unit);
+void UniformBuffer(unsigned int buf);
 void OnVaoDeleted(unsigned int vao);
 void OnTexDeleted(unsigned int tex);
 void Invalidate();

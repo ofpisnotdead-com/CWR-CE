@@ -1,9 +1,16 @@
-// Unit tests for PoseidonBase platform path utilities
+// Unit tests for PoseidonBase platform utilities
 
 #include <catch2/catch_test_macros.hpp>
 #include <Poseidon/Foundation/platform.hpp>
 #include <string.h>
 #include <string>
+#ifndef _WIN32
+#include <sys/stat.h>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <system_error>
+#endif
 
 TEST_CASE("PATH_SEP is correct for platform", "[platform]")
 {
@@ -96,3 +103,33 @@ TEST_CASE("platformPath (std::string) normalizes separators", "[platform]")
         REQUIRE(platformPath(std::string("")).empty());
     }
 }
+
+#ifndef _WIN32
+TEST_CASE("fileCopy creates the destination with a mode the umask narrows", "[platform]")
+{
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / ("poseidon_filecopy_" + std::to_string(nonce));
+    std::filesystem::create_directories(root);
+
+    const std::string source = (root / "source.txt").string();
+    const std::string destination = (root / "destination.txt").string();
+    {
+        std::ofstream out(source, std::ios::binary);
+        out << "payload";
+    }
+
+    const mode_t previousMask = umask(022);
+    const bool copied = fileCopy(source.c_str(), destination.c_str());
+    umask(previousMask);
+
+    REQUIRE(copied);
+
+    struct stat info;
+    REQUIRE(stat(destination.c_str(), &info) == 0);
+    REQUIRE((info.st_mode & 07777) == 0644);
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+}
+#endif

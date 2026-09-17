@@ -1,5 +1,6 @@
 #include <Poseidon/Core/DownloadWorker.hpp>
 
+#include <array>
 #include <chrono>
 #include <utility>
 
@@ -7,16 +8,30 @@ namespace Poseidon
 {
 namespace
 {
+using namespace std::chrono_literals;
+
+constexpr std::array kDownloadRetryDelays = {500ms, 1500ms, 5000ms};
+constexpr auto kDownloadRetryCancelPollInterval = 50ms;
+
 double DefaultMonotonicSeconds()
 {
     using namespace std::chrono;
     return duration_cast<duration<double>>(steady_clock::now().time_since_epoch()).count();
 }
+
+void WaitBeforeDownloadRetry(int retryNumber, const std::function<bool()>& cancelled)
+{
+    const auto delay = kDownloadRetryDelays[static_cast<size_t>(retryNumber - 1)];
+    const auto deadline = std::chrono::steady_clock::now() + delay;
+    while (!cancelled() && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(kDownloadRetryCancelPollInterval);
+}
 } // namespace
 
 void RunDownloadJobs(const std::vector<DownloadTask>& tasks, DownloadProgress& progress, std::mutex& mtx,
                      const DownloadFileFn& download, const std::function<double()>& now,
-                     const std::atomic<bool>& cancel, std::atomic<bool>* postProcessing)
+                     const std::atomic<bool>& cancel, std::atomic<bool>* postProcessing,
+                     const DownloadRetryWaitFn& retryWait)
 {
     {
         std::lock_guard<std::mutex> g(mtx);
@@ -46,15 +61,30 @@ void RunDownloadJobs(const std::vector<DownloadTask>& tasks, DownloadProgress& p
         auto cancelled = [&]() { return cancel.load(); };
 
         std::string error;
-        const bool ok = download(task, onBytes, cancelled, error);
-
-        if (cancel.load())
-            return; // aborted mid-file — treated as cancel, not failure
-
-        if (!ok)
+        DownloadFileResult result = DownloadFileResult::PermanentFailure;
+        int retryNumber = 0;
+        while (true)
         {
+            error.clear();
+            result = download(task, onBytes, cancelled, error);
+            if (cancel.load() || result == DownloadFileResult::Cancelled)
+                return;
+            if (result != DownloadFileResult::TransientFailure)
+                break;
+            if (retryNumber < static_cast<int>(kDownloadRetryDelays.size()))
+                ++retryNumber;
+            if (retryWait)
+                retryWait(retryNumber, cancelled);
+            if (cancel.load())
+                return;
+        }
+
+        if (result != DownloadFileResult::Success)
+        {
+            if (error.empty())
+                error = "download failed";
             std::lock_guard<std::mutex> g(mtx);
-            progress.SetFailed(error.empty() ? "download failed" : error);
+            progress.SetFailed(std::move(error));
             return;
         }
 
@@ -68,7 +98,7 @@ void RunDownloadJobs(const std::vector<DownloadTask>& tasks, DownloadProgress& p
                 if (postProcessing != nullptr)
                     postProcessing->store(false);
                 std::lock_guard<std::mutex> g(mtx);
-                progress.SetFailed(postError.empty() ? "install failed" : postError);
+                progress.SetFailed(postError.empty() ? "install failed" : postError, DownloadFailureKind::Install);
                 return;
             }
             if (postProcessing != nullptr)
@@ -122,7 +152,7 @@ void DownloadWorker::Start(std::vector<DownloadTask> tasks)
         [session]()
         {
             RunDownloadJobs(session->tasks, session->progress, session->mtx, session->download, session->now,
-                            session->cancel, &session->postProcessing);
+                            session->cancel, &session->postProcessing, WaitBeforeDownloadRetry);
             session->active.store(false);
         });
 }
@@ -164,6 +194,7 @@ DownloadSnapshot DownloadWorker::Poll() const
     s.failed = p.IsFailed();
     s.cancelled = _session->cancel.load() && !p.IsDone() && !p.IsFailed();
     s.postProcessing = _session->postProcessing.load();
+    s.failureKind = p.FailureKind();
     s.error = p.Error();
     return s;
 }

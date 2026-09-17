@@ -1,0 +1,51 @@
+version=11;
+class Mission
+{
+    addOns[]={};
+    randomSeed=20260620;
+    class Intel
+    {
+        briefingName="Tri SP Odd Name";
+        briefingDescription="placeholder";
+        startWeather=0;
+        forecastWeather=0;
+        year=1985;
+        month=6;
+        day=20;
+        hour=12;
+        minute=0;
+    };
+    class Groups
+    {
+        items=2;
+        class Item0
+        {
+            side="WEST";
+            class Vehicles
+            {
+                items=5;
+                class Item0 { position[]={6680,83,5410}; azimut=90; id=0; side="WEST"; vehicle="SoldierWB"; player="PLAYER COMMANDER"; leader=1; rank="SERGEANT"; skill=0.600000; };
+                class Item1 { position[]={6676,83,5406}; azimut=90; id=1; side="WEST"; vehicle="SoldierWB"; player="PLAY CDG"; rank="CORPORAL"; skill=0.500000; };
+                class Item2 { position[]={6676,83,5414}; azimut=90; id=2; side="WEST"; vehicle="SoldierWB"; player="PLAY CDG"; rank="CORPORAL"; skill=0.500000; };
+                class Item3 { position[]={6672,83,5402}; azimut=90; id=3; side="WEST"; vehicle="SoldierWB"; player="PLAY CDG"; rank="PRIVATE"; skill=0.500000; };
+                class Item4 { position[]={6672,83,5418}; azimut=90; id=4; side="WEST"; vehicle="SoldierWB"; player="PLAY CDG"; rank="PRIVATE"; skill=0.500000; };
+            };
+        };
+        class Item1
+        {
+            side="EAST";
+            class Vehicles
+            {
+                items=5;
+                class Item0 { position[]={6740,83,5410}; azimut=270; id=5; side="EAST"; vehicle="SoldierEB"; player="PLAY CDG"; leader=1; rank="SERGEANT"; skill=0.600000; };
+                class Item1 { position[]={6744,83,5406}; azimut=270; id=6; side="EAST"; vehicle="SoldierEB"; player="PLAY CDG"; rank="CORPORAL"; skill=0.500000; };
+                class Item2 { position[]={6744,83,5414}; azimut=270; id=7; side="EAST"; vehicle="SoldierEB"; player="PLAY CDG"; rank="CORPORAL"; skill=0.500000; };
+                class Item3 { position[]={6748,83,5402}; azimut=270; id=8; side="EAST"; vehicle="SoldierEB"; player="PLAY CDG"; rank="PRIVATE"; skill=0.500000; };
+                class Item4 { position[]={6748,83,5418}; azimut=270; id=9; side="EAST"; vehicle="SoldierEB"; player="PLAY CDG"; rank="PRIVATE"; skill=0.500000; };
+            };
+        };
+    };
+};
+class Intro { randomSeed=20260621; class Intel {}; };
+class OutroWin { randomSeed=20260622; class Intel {}; };
+class OutroLoose { randomSeed=20260623; class Intel {}; };

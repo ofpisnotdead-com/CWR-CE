@@ -132,9 +132,9 @@ bool ResolveModOverrideCallback(RStringB dir, void* opaque)
     return true;
 }
 
-// Collapse "<seg>/.." and strip a leading "addons" so a root-relative intro path
-// ("anims/..\addons\<island>\intro.<world>\...") maps into island <island>'s bank; "" otherwise.
-std::string NormalizeAddonBankPath(const char* name)
+// Collapse "<seg>/.." pairs into a backslash-joined path. Empty when the name holds no "..",
+// or when a ".." would climb above the first component.
+std::string CollapseParentDirs(const char* name)
 {
     if (!name || !strstr(name, ".."))
         return {};
@@ -159,17 +159,26 @@ std::string NormalizeAddonBankPath(const char* name)
         p = sep + 1;
     }
 
-    if (parts.size() < 2 || !EqualPathComponent(parts[0], "addons", 6))
-        return {};
-
     std::string out;
-    for (size_t i = 1; i < parts.size(); ++i)
+    for (const std::string& part : parts)
     {
         if (!out.empty())
             out += '\\';
-        out += parts[i];
+        out += part;
     }
     return out;
+}
+
+// Strip a leading "addons" off a collapsed path so a root-relative intro path
+// ("anims/..\addons\<island>\intro.<world>\...") maps into island <island>'s bank; "" otherwise.
+std::string NormalizeAddonBankPath(const char* name)
+{
+    const std::string collapsed = CollapseParentDirs(name);
+    const size_t sep = collapsed.find('\\');
+    if (sep == std::string::npos || !EqualPathComponent(collapsed.substr(0, sep), "addons", 6))
+        return {};
+
+    return collapsed.substr(sep + 1);
 }
 } // namespace
 
@@ -1540,6 +1549,28 @@ void QIFStreamB::AutoOpen(const char* name, IQFBankContext* context)
         }
     }
 
+    // A path can leave its own prefix and re-enter by mod folder name
+    // ("voice\..\<mod>\voice\..."); only the collapsed form names a mod root.
+    const std::string collapsed = CollapseParentDirs(name0);
+    if (!collapsed.empty())
+    {
+        QIFStream::open(collapsed.c_str());
+        if (_sharedData && !_sharedData->GetError())
+        {
+            return;
+        }
+
+        std::string collapsedAlias = ResolveModRootAlias(collapsed.c_str());
+        if (!collapsedAlias.empty())
+        {
+            QIFStream::open(collapsedAlias.c_str());
+            if (_sharedData && !_sharedData->GetError())
+            {
+                return;
+            }
+        }
+    }
+
     if (GUseFileBanks)
     {
         std::string norm = NormalizeAddonBankPath(name0);
@@ -1606,6 +1637,19 @@ bool QIFStreamB::FileExist(const char* name, IQFBankContext* context)
     if (!modAlias.empty())
     {
         return true;
+    }
+
+    const std::string collapsed = CollapseParentDirs(name);
+    if (!collapsed.empty())
+    {
+        if (QIFStream::FileExists(collapsed.c_str()))
+        {
+            return true;
+        }
+        if (!ResolveModRootAlias(collapsed.c_str()).empty())
+        {
+            return true;
+        }
     }
 
     if (GUseFileBanks)

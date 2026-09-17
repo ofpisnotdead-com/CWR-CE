@@ -245,6 +245,11 @@ class Object: public NetworkObject, public FrameBase, public IAnimator
 	bool _isDestroyed:1; // object is already destructed
 	bool _static:1; // object is static (never changing position)
 
+	// Cached animated bbox for static terrain-conform objects (invalidated on Move); level -1 = invalid.
+	int _animBBoxLevel = -1;
+	Vector3 _animBBoxMin;
+	Vector3 _animBBoxMax;
+
 	SRef<DammageRegions> _dammage; // dammage information
 
 	// optimizes inserting/deleting from the list of objects drawn during Scene rendering
@@ -288,13 +293,35 @@ class Object: public NetworkObject, public FrameBase, public IAnimator
 	virtual void Animate( int level );
 	virtual void Deanimate( int level );
 
+protected:
+	// Snap ClipLand vertices onto the landscape surface, or restore them.
+	void ApplyLandClip( int level );
+	void RestoreLandClip( int level );
+public:
+
 	// Get min-max of object after animate. Default (generic) implementation may be slow when shape is complex.
 	virtual void AnimatedMinMax( int level, Vector3 *minMax );
+	bool AnimBBoxCacheable( int level ) const;
+	bool CachedAnimatedMinMax( int level, Vector3 *minMax ) const;
 	// Get bounding sphere of object after animate. Default (generic) implementation may be slow when shape is complex.
 	virtual void AnimatedBSphere( int level, Vector3 &bCenter, float &bRadius, bool isAnimated );
 
 	virtual bool IsAnimated( int level ) const; // appearence changed with Animate
 	virtual bool IsAnimatedShadow( int level ) const; // shadow changed with Animate
+	virtual bool DeformsSharedShape( int level ) const;
+
+	// True when the shape snaps to the landscape surface (ClipLandKeep/ClipLandOn).
+	virtual bool HasLandClip( int level ) const;
+
+	enum LandClipMode
+	{
+		LandClipNone = 0,
+		LandClipVertex = 1,
+		LandClipPlane = 2,
+	};
+	virtual LandClipMode GetLandClipMode( int level ) const;
+	void UpdateLandClipParams( int level );
+	static bool RenderHandlesLandClip();
 
 	// Change object position. Used when object is already present in landscape.
 	virtual void Move(Matrix4Par transform);

@@ -59,7 +59,9 @@ void WarningMessageLevel(Foundation::ErrorMessageLevel level, const char* format
     {
         return;
     }
-    WarningLevel = (Foundation::ErrorMessageLevel)(level + 1);
+    // InitVehicles refuses a mission once this reads EMError, so the latch records the level
+    // actually reached.
+    WarningLevel = level;
 #endif
 
     static int avoidRecursion = 0;

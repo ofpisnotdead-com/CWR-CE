@@ -24,21 +24,32 @@ TEST_CASE("crash handler preserves the exception context in a minidump", "[platf
     REQUIRE(GetModuleFileNameA(nullptr, executable, MAX_PATH) > 0);
 
     std::string command = std::string("\"") + executable + "\" \"crash handler child process\" --reporter compact";
-    std::vector<char> mutableCommand(command.begin(), command.end());
-    mutableCommand.push_back('\0');
 
-    STARTUPINFOA startup = {};
-    startup.cb = sizeof(startup);
-    PROCESS_INFORMATION process = {};
-    REQUIRE(CreateProcessA(executable, mutableCommand.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup,
-                           &process));
-    CloseHandle(process.hThread);
-    REQUIRE(WaitForSingleObject(process.hProcess, 30000) == WAIT_OBJECT_0);
-    CloseHandle(process.hProcess);
+    // dbghelp refuses the write transiently; one child without a dump is not a failure.
+    std::filesystem::path dumpPath;
+    for (int attempt = 0; attempt < 3 && dumpPath.empty(); ++attempt)
+    {
+        std::vector<char> mutableCommand(command.begin(), command.end());
+        mutableCommand.push_back('\0');
 
-    const std::filesystem::path dumpPath =
-        std::filesystem::path(executable).parent_path() / ("crash-" + std::to_string(process.dwProcessId) + ".dmp");
-    REQUIRE(std::filesystem::exists(dumpPath));
+        STARTUPINFOA startup = {};
+        startup.cb = sizeof(startup);
+        PROCESS_INFORMATION process = {};
+        REQUIRE(CreateProcessA(executable, mutableCommand.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr,
+                               &startup, &process));
+        CloseHandle(process.hThread);
+        REQUIRE(WaitForSingleObject(process.hProcess, 30000) == WAIT_OBJECT_0);
+        CloseHandle(process.hProcess);
+
+        const std::filesystem::path candidate =
+            std::filesystem::path(executable).parent_path() / ("crash-" + std::to_string(process.dwProcessId) + ".dmp");
+        if (std::filesystem::exists(candidate))
+        {
+            dumpPath = candidate;
+        }
+    }
+    INFO("no minidump written; see the child's \"minidump failed\" line for the Win32 error");
+    REQUIRE_FALSE(dumpPath.empty());
 
     std::ifstream input(dumpPath, std::ios::binary | std::ios::ate);
     REQUIRE(input.good());

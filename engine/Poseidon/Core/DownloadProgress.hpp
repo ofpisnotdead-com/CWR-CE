@@ -7,6 +7,13 @@
 
 namespace Poseidon
 {
+enum class DownloadFailureKind
+{
+    None,
+    Download,
+    Install
+};
+
 /// Agnostic progress model for a sequential multi-file download — a set of mod PBOs,
 /// or a single MP mission file (one item). Pure: no I/O, no threading, no clock. The
 /// download worker feeds it (BeginItem / OnBytes / CompleteItem) passing a monotonic
@@ -34,7 +41,7 @@ class DownloadProgress
     void OnBytes(int64_t receivedForCurrentItem, double now);
     void CompleteItem(double now);
     void Finish(); ///< the whole job succeeded
-    void SetFailed(std::string error);
+    void SetFailed(std::string error, DownloadFailureKind kind = DownloadFailureKind::Download);
 
     // --- derived state (the UI reads these) ---
     int ItemCount() const { return static_cast<int>(_items.size()); }
@@ -50,6 +57,7 @@ class DownloadProgress
     double EtaSeconds() const;       ///< remaining / speed; < 0 if unknown
     bool IsDone() const { return _done; }
     bool IsFailed() const { return _failed; }
+    DownloadFailureKind FailureKind() const { return _failureKind; }
     const std::string& Error() const { return _error; }
 
     // --- formatting (pure, static) ---
@@ -68,6 +76,7 @@ class DownloadProgress
     int64_t _overallTotal = 0;
     bool _done = false;
     bool _failed = false;
+    DownloadFailureKind _failureKind = DownloadFailureKind::None;
     std::string _error;
 
     double _speedWindow = 3.0;

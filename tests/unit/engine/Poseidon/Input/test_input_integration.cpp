@@ -5,6 +5,7 @@
 #include <Poseidon/Input/InputCode.hpp>
 #include <Poseidon/Input/KeyInput.hpp>
 #include <Poseidon/Input/UserAction.hpp>
+#include <Poseidon/World/WorldChatInput.hpp>
 #include <SDL3/SDL_scancode.h>
 #include <catch2/catch_test_macros.hpp>
 
@@ -271,6 +272,47 @@ TEST_CASE("InputSubsystem context profile action edges are context-local", "[inp
     GInput.keyboard.keys[SDL_SCANCODE_V] = savedV;
     GInput.keyboard.keysToDo[SDL_SCANCODE_C] = savedCToDo;
     GInput.keyboard.keysToDo[SDL_SCANCODE_V] = savedVToDo;
+}
+
+TEST_CASE("InputSubsystem resolves shared chat bindings in the chat context", "[input][integration][chat]")
+{
+    auto& sub = InputSubsystem::Instance();
+    ProfileSnapshot chatSnap(sub, InputContext::Chat);
+    const bool savedPrevDone = GInput.actionDone[UAChatPrevChannel];
+    const bool savedHistoryDone = GInput.actionDone[UAChatHistoryUp];
+    const bool savedHistoryDownDone = GInput.actionDone[UAChatHistoryDown];
+    const bool savedF8ToDo = GInput.keyboard.keysToDo[SDL_SCANCODE_F8];
+    const bool savedMouseToDo = GInput.mouse.buttonsToDo[2];
+    const int savedFocusLost = GInput.gameFocusLost;
+
+    auto& chat = sub.GetProfile(InputContext::Chat);
+    chat.ClearBindings(UAChatPrevChannel);
+    chat.ClearBindings(UAChatHistoryUp);
+    chat.ClearBindings(UAChatHistoryDown);
+    chat.Bind(UAChatPrevChannel, InputCode::Key(SDL_SCANCODE_F8));
+    chat.Bind(UAChatHistoryUp, InputCode::Key(SDL_SCANCODE_F8));
+    chat.Bind(UAChatHistoryDown, InputCode::MouseButton(2));
+
+    GInput.actionDone[UAChatPrevChannel] = false;
+    GInput.actionDone[UAChatHistoryUp] = false;
+    GInput.actionDone[UAChatHistoryDown] = false;
+    GInput.keyboard.keysToDo[SDL_SCANCODE_F8] = true;
+    GInput.mouse.buttonsToDo[2] = true;
+    GInput.gameFocusLost = 1;
+
+    const ChatInputActions actions = PollChatInputActions(sub);
+    CHECK(actions.previousChannel);
+    CHECK(actions.historyUp);
+    CHECK_FALSE(actions.nextChannel);
+    CHECK(actions.historyDown);
+    CHECK_FALSE(chat.HasBinding(UAChatPrevChannel, InputCode::Key(SDL_SCANCODE_DOWN)));
+
+    GInput.actionDone[UAChatPrevChannel] = savedPrevDone;
+    GInput.actionDone[UAChatHistoryUp] = savedHistoryDone;
+    GInput.actionDone[UAChatHistoryDown] = savedHistoryDownDone;
+    GInput.keyboard.keysToDo[SDL_SCANCODE_F8] = savedF8ToDo;
+    GInput.mouse.buttonsToDo[2] = savedMouseToDo;
+    GInput.gameFocusLost = savedFocusLost;
 }
 
 TEST_CASE("InputSubsystem Update computes movement from active context profile", "[input][integration]")

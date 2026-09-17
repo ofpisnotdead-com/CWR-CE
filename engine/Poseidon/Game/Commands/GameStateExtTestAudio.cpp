@@ -114,6 +114,8 @@ GameValue TriDisplay(const GameState*);
 GameValue TriEditorMode(const GameState*);
 GameValue TriRemount(const GameState*);
 GameValue TriLoadedShapeCount(const GameState*);
+GameValue TriScenePreloadCount(const GameState*);
+GameValue TriDetailTextureLoads(const GameState*);
 GameValue TriClick(const GameState*, GameValuePar);
 GameValue TriClickAt(const GameState*, GameValuePar);
 GameValue TriInvokeButton(const GameState*, GameValuePar);
@@ -123,6 +125,7 @@ GameValue TriSeedMods(const GameState*, GameValuePar);
 GameValue TriSeedWorkshopMods(const GameState*, GameValuePar);
 GameValue TriFetchWorkshopMods(const GameState*);
 GameValue TriReadWorkshopFile(const GameState*, GameValuePar);
+GameValue TriDownloadFile(const GameState*, GameValuePar);
 GameValue TriSortMods(const GameState*, GameValuePar);
 GameValue TriModsVisibleCount(const GameState*);
 GameValue TriModsFreshness(const GameState*, GameValuePar);
@@ -203,6 +206,7 @@ GameValue TriOpenMap(const GameState*);
 GameValue TriShowMap(const GameState*, GameValuePar);
 GameValue TriMapSetScale(const GameState*, GameValuePar);
 GameValue TriMapGetScale(const GameState*);
+GameValue TriMapWheel(const GameState*, GameValuePar);
 GameValue TriBindAction(const GameState*, GameValuePar);
 GameValue TriShowVoiceOverlay(const GameState*, GameValuePar);
 GameValue TriClickBriefingLink(const GameState*, GameValuePar);
@@ -2118,6 +2122,31 @@ GameValue TriLoadedShapeCount(const GameState* /*state*/)
     return GameValue(static_cast<float>(n));
 }
 
+/// triScenePreloadCount - number of populated CfgScenePreload shape slots on the live
+/// Scene (crater decals, cloudlets, footsteps, sky clouds, light halos). A re-mount
+/// destroys the Scene and builds a new one, so the count must come back afterwards.
+GameValue TriScenePreloadCount(const GameState* /*state*/)
+{
+    if (GScene == nullptr)
+        return GameValue(0.0f);
+    int n = 0;
+    for (int i = 0; i < Poseidon::MaxPreloadedShape; i++)
+    {
+        if (GScene->Preloaded(static_cast<Poseidon::PreloadedShape>(i)))
+            n++;
+    }
+    return GameValue(static_cast<float>(n));
+}
+
+/// triDetailTextureLoads - how many times the texture bank has derived its detail /
+/// specular / grass / water-bump set from `CfgDetailTextures`. One per content load.
+GameValue TriDetailTextureLoads(const GameState* /*state*/)
+{
+    if (GEngine == nullptr || GEngine->TextBank() == nullptr)
+        return GameValue(0.0f);
+    return GameValue(static_cast<float>(GEngine->TextBank()->NDetailTextureLoads()));
+}
+
 /// triFontTune ["prefix", renderPx, widthScale]
 /// triFontTune ["prefix", renderPx, widthScale, baselineOffset]
 /// triFontTune ["prefix", renderPx, widthScale, baselineOffset, syntheticBold]
@@ -3011,6 +3040,7 @@ INIT_MODULE(GameStateExtTest, 3)
     GGameState.NewFunction(GameFunction(GameBool, "triSeedWorkshopMods", TriSeedWorkshopMods, GameScalar));
     GGameState.NewNularOp(GameNular(GameBool, "triFetchWorkshopMods", TriFetchWorkshopMods));
     GGameState.NewFunction(GameFunction(GameString, "triReadWorkshopFile", TriReadWorkshopFile, GameArray));
+    GGameState.NewFunction(GameFunction(GameString, "triDownloadFile", TriDownloadFile, GameString));
     GGameState.NewFunction(GameFunction(GameBool, "triSortMods", TriSortMods, GameScalar));
     GGameState.NewNularOp(GameNular(GameScalar, "triModsVisibleCount", TriModsVisibleCount));
     GGameState.NewFunction(GameFunction(GameString, "triModsFreshness", TriModsFreshness, GameScalar));
@@ -3043,6 +3073,8 @@ INIT_MODULE(GameStateExtTest, 3)
     GGameState.NewNularOp(GameNular(GameString, "triHornPlayerVehicle", TriHornPlayerVehicle));
     GGameState.NewNularOp(GameNular(GameString, "triRemount", TriRemount));
     GGameState.NewNularOp(GameNular(GameScalar, "triLoadedShapeCount", TriLoadedShapeCount));
+    GGameState.NewNularOp(GameNular(GameScalar, "triScenePreloadCount", TriScenePreloadCount));
+    GGameState.NewNularOp(GameNular(GameScalar, "triDetailTextureLoads", TriDetailTextureLoads));
     GGameState.NewNularOp(GameNular(GameScalar, "triIsEndForced", TriIsEndForced));
     GGameState.NewNularOp(GameNular(GameString, "triCheatStorePosition", TriCheatStorePosition));
     GGameState.NewNularOp(GameNular(GameString, "triCheatSaveGame", TriCheatSaveGame));
@@ -3268,6 +3300,7 @@ INIT_MODULE(GameStateExtTest, 3)
     GGameState.NewNularOp(GameNular(GameString, "triUnpauseGame", TriUnpauseGame));
     GGameState.NewNularOp(GameNular(GameString, "triOpenMap", TriOpenMap));
     GGameState.NewNularOp(GameNular(GameScalar, "triMapGetScale", TriMapGetScale));
+    GGameState.NewFunction(GameFunction(GameString, "triMapWheel", TriMapWheel, GameScalar));
     GGameState.NewFunction(GameFunction(GameString, "triBindAction", TriBindAction, GameArray));
     GGameState.NewFunction(GameFunction(GameString, "triShowMap", TriShowMap, GameScalar));
     GGameState.NewFunction(GameFunction(GameString, "triMapSetScale", TriMapSetScale, GameScalar));

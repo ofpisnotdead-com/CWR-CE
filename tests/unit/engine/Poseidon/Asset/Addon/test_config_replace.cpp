@@ -12,7 +12,9 @@
 namespace Poseidon
 {
 bool ParseConfig(RStringB dir, void* context);
+bool ParseResource(RStringB dir, void* context);
 bool IsConfigOverriddenByMod();
+bool IsMenuOverriddenByMod();
 void MergeBaseConfigExtra();
 } // namespace Poseidon
 
@@ -27,6 +29,14 @@ bool LoadConfigModThenBase(const char* modDir)
     if (Poseidon::ParseConfig(modDir, nullptr))
         return true;
     Poseidon::ParseConfig("", nullptr);
+    return false;
+}
+
+bool LoadResourceModThenBase(const char* modDir)
+{
+    if (Poseidon::ParseResource(modDir, nullptr))
+        return true;
+    Poseidon::ParseResource("", nullptr);
     return false;
 }
 
@@ -120,4 +130,13 @@ TEST_CASE("with no config-replacement mod the base loads and applies its own con
         registry.LoadFromConfig(*cfgLangs);
     CHECK(registry.Find("Tundra") != nullptr);
     registry.ResetToDefaults();
+}
+
+TEST_CASE("a malformed mod resource falls back to the base resource", "[config][mods][replace]")
+{
+    CwdGuard cwd(FixtureRoot());
+
+    CHECK_FALSE(LoadResourceModThenBase("mod"));
+    CHECK_FALSE(Poseidon::IsMenuOverriddenByMod());
+    CHECK(Res.FindEntry("RscDisplayLoadMission") != nullptr);
 }

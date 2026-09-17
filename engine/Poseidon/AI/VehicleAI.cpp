@@ -1121,7 +1121,12 @@ EntityAI::EntityAI(EntityAIType* type, bool fullCreate)
     }
 
     AI_ERROR(type);
-    AI_ERROR(!type->IsAbstract());
+    // Islands legitimately place scope-0 objects.
+    if (type && type->IsAbstract())
+    {
+        LOG_WARN_ONCE_PER(AI, type->GetName(), "Entity created from abstract type '{}' (logged once per type)",
+                          (const char*)type->GetName());
+    }
     AI_ERROR(_shape == type->_shape);
 
     if (fullCreate)

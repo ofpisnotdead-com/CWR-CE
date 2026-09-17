@@ -7,6 +7,7 @@
 #include <Poseidon/Network/NetworkImpl.hpp>
 #include <Poseidon/Network/NetworkManagerState.hpp>
 #include <Poseidon/Network/NetworkMissionTransfer.hpp>
+#include <Poseidon/Network/NetworkJIPQueue.hpp>
 #include <Poseidon/Network/NetworkServerCommon.hpp>
 #include <Poseidon/Network/NetworkSoundReplication.hpp>
 #include <Poseidon/IO/Streams/QBStream.hpp>
@@ -851,59 +852,11 @@ TEST_CASE("NetworkObjectInfo has create field for JIP", "[network][networkServer
     REQUIRE(info.create.from == 1);
 }
 
-// JIPInitMessage is protected in NetworkServer, so test the same pattern:
-// a struct with Ref<NetworkMessage> + ClassIsMovable stored in AutoArray
 namespace
 {
-struct TestJIPMsg
-{
-    NetworkMessageType type;
-    Ref<NetworkMessage> msg;
-    RString key;
-};
-
-// Helper: simulate JIP queue add/replace logic (mirrors server code)
-bool AddOrReplaceJIPMessage(AutoArray<TestJIPMsg>& queue, NetworkMessageType type, Ref<NetworkMessage> msg,
-                            const RString& key, int maxMessages = 10000)
-{
-    if ((type == NMTPublicVariable || type == NMTRemoteExec) && key.GetLength() > 0)
-    {
-        for (int i = 0; i < queue.Size(); i++)
-        {
-            if (queue[i].type == type && queue[i].key == key)
-            {
-                queue[i].msg = msg;
-                return true; // replaced
-            }
-        }
-    }
-    if (queue.Size() < maxMessages)
-    {
-        TestJIPMsg jipMsg;
-        jipMsg.type = type;
-        jipMsg.msg = msg;
-        jipMsg.key = key;
-        queue.Add(jipMsg);
-        return true; // added
-    }
-    return false; // dropped
-}
-
-bool RemoveJIPMessage(AutoArray<TestJIPMsg>& queue, NetworkMessageType type, const RString& key)
-{
-    bool removed = false;
-    for (int i = 0; i < queue.Size();)
-    {
-        if (queue[i].type == type && queue[i].key == key)
-        {
-            queue.Delete(i);
-            removed = true;
-            continue;
-        }
-        ++i;
-    }
-    return removed;
-}
+using TestJIPMsg = Poseidon::NetworkJIPMessage;
+using Poseidon::AddOrReplaceJIPMessage;
+using Poseidon::RemoveJIPMessage;
 
 struct RemoteExecDispatchFixture
 {
@@ -1113,7 +1066,7 @@ TEST_CASE("remoteExec target resolver -- JIP replay re-resolves object owner", "
                                                               { return id == NetworkId(7, 42) ? 12 : 0; }));
 }
 
-TEST_CASE("JIPInitMessage pattern works with AutoArray", "[network][networkServer][jip]")
+TEST_CASE("NetworkJIPMessage stores and clears queued entries", "[network][networkServer][jip]")
 {
     AutoArray<TestJIPMsg> queue;
 
@@ -1135,6 +1088,44 @@ TEST_CASE("JIPInitMessage pattern works with AutoArray", "[network][networkServe
     // Clear queue (like InitMission does)
     queue.Resize(0);
     REQUIRE(queue.Size() == 0);
+}
+
+TEST_CASE("JIP play entry runs local initialization hooks in order", "[network][jip][hooks]")
+{
+    auto entry = Poseidon::ComputeNetworkMissionPlayEntry(13, 13, 14, true, -40);
+    int clientInfo = 0;
+    int state = 13;
+    int hideBodies = 0;
+    bool created = false;
+    bool cleared = false;
+    std::vector<std::string> scripts;
+
+    Poseidon::ApplyNetworkMissionPlayEntry(
+        entry, clientInfo, [&](int&) { created = true; }, [&](const char* script) { scripts.emplace_back(script); },
+        [&]() { cleared = true; }, state, hideBodies);
+
+    REQUIRE(created);
+    REQUIRE(cleared);
+    REQUIRE(state == 14);
+    REQUIRE(hideBodies == -40);
+    REQUIRE((scripts == std::vector<std::string>{"initPlayerLocal.sqs", "initJIP.sqs"}));
+}
+
+TEST_CASE("Initial play entry omits JIP initialization hooks", "[network][jip][hooks]")
+{
+    auto entry = Poseidon::ComputeNetworkMissionPlayEntry(13, 13, 14, false, -20);
+    int clientInfo = 0;
+    int state = 13;
+    int hideBodies = 0;
+    std::vector<std::string> scripts;
+
+    Poseidon::ApplyNetworkMissionPlayEntry(
+        entry, clientInfo, [](int&) {}, [&](const char* script) { scripts.emplace_back(script); }, []() {}, state,
+        hideBodies);
+
+    REQUIRE(state == 14);
+    REQUIRE(hideBodies == -20);
+    REQUIRE(scripts.empty());
 }
 
 TEST_CASE("JIP queue grows and clears correctly", "[network][networkServer][jip]")
@@ -2298,13 +2289,17 @@ TEST_CASE("MissionHeader -- joinInProgress serialization with different states",
 TEST_CASE("JIP queue -- publicVariable deduplication replaces by name", "[network][jip][dedup]")
 {
     AutoArray<TestJIPMsg> queue;
+    Ref<NetworkMessage> first = new NetworkMessage;
+    Ref<NetworkMessage> replacement = new NetworkMessage;
 
-    AddOrReplaceJIPMessage(queue, NMTPublicVariable, nullptr, "score");
+    AddOrReplaceJIPMessage(queue, NMTPublicVariable, first, "score");
     REQUIRE(queue.Size() == 1);
+    REQUIRE(queue[0].msg == first);
 
     // Same variable name -- should replace, not append
-    AddOrReplaceJIPMessage(queue, NMTPublicVariable, nullptr, "score");
+    AddOrReplaceJIPMessage(queue, NMTPublicVariable, replacement, "score");
     REQUIRE(queue.Size() == 1);
+    REQUIRE(queue[0].msg == replacement);
 
     // Different variable name -- should append
     AddOrReplaceJIPMessage(queue, NMTPublicVariable, nullptr, "lives");
@@ -2415,12 +2410,15 @@ TEST_CASE("JIP queue -- remoteExecRemove deletes keyed remoteExec entries", "[ne
     AddOrReplaceJIPMessage(queue, NMTRemoteExec, nullptr, "state");
     AddOrReplaceJIPMessage(queue, NMTRemoteExec, nullptr, "marker");
     AddOrReplaceJIPMessage(queue, NMTRemoteExec, nullptr, "");
-    REQUIRE(queue.Size() == 3);
+    AddOrReplaceJIPMessage(queue, NMTPublicVariable, nullptr, "state");
+    REQUIRE(queue.Size() == 4);
 
     REQUIRE(RemoveJIPMessage(queue, NMTRemoteExec, "state"));
-    REQUIRE(queue.Size() == 2);
+    REQUIRE(queue.Size() == 3);
     REQUIRE(queue[0].key == RString("marker"));
     REQUIRE(queue[1].key == RString(""));
+    REQUIRE(queue[2].type == NMTPublicVariable);
+    REQUIRE(queue[2].key == RString("state"));
     REQUIRE_FALSE(RemoveJIPMessage(queue, NMTRemoteExec, "missing"));
 }
 

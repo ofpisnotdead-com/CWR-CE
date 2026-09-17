@@ -788,26 +788,29 @@ fn normalize_condition_failure(result: &str) -> String {
     }
 }
 
-fn parse_triscreenshot_label(stmt: &str) -> Option<String> {
-    let rest = stmt.trim().strip_prefix("triScreenshot")?.trim_start();
+fn parse_quoted_argument(stmt: &str, verb: &str) -> Option<String> {
+    let rest = stmt.trim().strip_prefix(verb)?.trim_start();
     let mut chars = rest.chars();
     if chars.next()? != '"' {
         return None;
     }
-
-    let mut label = String::new();
+    let mut arg = String::new();
     while let Some(c) = chars.next() {
         if c == '"' {
             if matches!(chars.clone().next(), Some('"')) {
                 chars.next();
-                label.push('"');
+                arg.push('"');
                 continue;
             }
-            return Some(label);
+            return Some(arg);
         }
-        label.push(c);
+        arg.push(c);
     }
     None
+}
+
+fn parse_triscreenshot_label(stmt: &str) -> Option<String> {
+    parse_quoted_argument(stmt, "triScreenshot")
 }
 
 async fn wait_for_screenshot_file(
@@ -1554,6 +1557,7 @@ async fn run_sqf_test(
     let statements = parse_statements(&sqf_code);
     let mut post_check_ran = false;
     let mut screenshot_seq = 0usize;
+    let mut log_mark = 0usize;
     for (i, stmt) in statements.iter().enumerate() {
         // Pre-shutdown injection: before sending a known game-exit
         // verb, run the I-20 post-check while the connection is live.
@@ -1610,6 +1614,41 @@ async fn run_sqf_test(
             .await;
             if let Some(message) = finish_condition_failure(&mut game, start, stmt, outcome).await {
                 return Ok(message);
+            }
+            continue;
+        }
+
+        // Harness-side statements: the game never sees these.  They read the
+        // stdout the runner already captures, so a scenario can assert on what
+        // the game logged.
+        if stmt.trim() == "triLogMark" {
+            log_mark = game.log_mark();
+            continue;
+        }
+        if let Some(needle) = parse_quoted_argument(stmt, "triAssertLogAbsent") {
+            // The drain task reads the stdout pipe on its own schedule, so a
+            // line the game wrote during the previous statement can still be in
+            // flight.  Let it land before deciding the log is clean.
+            tokio::time::sleep(effective_cfg.poll_interval).await;
+            let hits: Vec<String> = game
+                .log_lines_since(log_mark)
+                .into_iter()
+                .filter(|line| line.contains(&needle))
+                .collect();
+            if !hits.is_empty() {
+                game.kill_after_failure().await;
+                let elapsed = start.elapsed();
+                return Ok(ScenarioResult {
+                    passed: false,
+                    message: format!(
+                        "{} — FAIL:logged {} time(s), first: {} ({:.1}s)",
+                        stmt,
+                        hits.len(),
+                        hits[0].trim(),
+                        elapsed.as_secs_f64()
+                    ),
+                    duration: elapsed,
+                });
             }
             continue;
         }
@@ -2878,6 +2917,25 @@ triAssertDisplay 9099
         assert_eq!(
             parse_condition_statement("triSimUntil { triSceneReady }", "triSimUntil"),
             Some(String::from("triSceneReady"))
+        );
+    }
+
+    #[test]
+    fn parse_quoted_argument_reads_needle_and_rejects_other_verbs() {
+        assert_eq!(
+            parse_quoted_argument(
+                r#"triAssertLogAbsent "control sound""#,
+                "triAssertLogAbsent"
+            ),
+            Some("control sound".to_string())
+        );
+        assert_eq!(
+            parse_quoted_argument("triAssertLogAbsent", "triAssertLogAbsent"),
+            None
+        );
+        assert_eq!(
+            parse_quoted_argument(r#"triScreenshot "shot""#, "triAssertLogAbsent"),
+            None
         );
     }
 

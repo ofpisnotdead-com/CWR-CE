@@ -411,6 +411,20 @@ bool ForestPlain::IsAnimatedShadow(int level) const
     return false;
 }
 
+bool ForestPlain::HasLandClip(int level) const
+{
+    return base::HasLandClip(level) || !(_singleMatrixT1 || _singleMatrixT2);
+}
+
+Object::LandClipMode ForestPlain::GetLandClipMode(int level) const
+{
+    if (_singleMatrixT1 || _singleMatrixT2)
+    {
+        return LandClipNone;
+    }
+    return LandClipPlane;
+}
+
 Matrix4 ForestPlain::GetInvTransform() const
 {
     if (!_singleMatrixT1 && !_singleMatrixT2)
@@ -511,6 +525,11 @@ namespace Poseidon
 {
 void ForestPlain::Animate(int level)
 {
+    if (RenderHandlesLandClip())
+    {
+        return;
+    }
+
     Shape* shape = _shape->Level(level);
     if (!shape)
     {
@@ -557,6 +576,7 @@ void ForestPlain::Animate(int level)
         float d0111 = y01 - y11;
 
         shape->InvalidateNormals();
+        shape->InvalidateBuffer();
 
         Matrix4Val toWorld = Transform();
         Matrix4Val fromWorld = GetInvTransform();
@@ -660,7 +680,19 @@ namespace Poseidon
 {
 void ForestPlain::Deanimate(int level)
 {
-    // base::Deanimate(level);
+    if (RenderHandlesLandClip() || !GEngine->LandClipInVS() || _singleMatrixT1 || _singleMatrixT2)
+    {
+        return;
+    }
+    Shape* shape = _shape->Level(level);
+    if (!shape || !shape->OriginalPosValid())
+    {
+        return;
+    }
+    shape->RestoreOriginalPos();
+    shape->RestoreMinMax();
+    shape->InvalidateNormals();
+    shape->InvalidateBuffer();
 }
 
 RoadType::RoadType() = default;

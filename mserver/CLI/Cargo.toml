@@ -25,6 +25,7 @@ ureq = { version = "2", default-features = false, features = ["native-tls", "jso
 # zstdmt: multi-threaded compression so large mods (rcwc is 11 GB) pack in minutes, not ~30.
 zstd = { version = "0.13", features = ["zstdmt"] }
 tempfile = "3"
+unicode-normalization = "0.1"
 
 [dev-dependencies]
 tempfile = "3"

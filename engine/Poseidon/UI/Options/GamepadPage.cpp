@@ -175,11 +175,8 @@ bool GamepadPage::DeviceFilter(int packedCode) const
 {
     if (packedCode < 0)
         return false;
-    // Show only joystick-class entries: STICK buttons, STICK_AXIS,
-    // STICK_POV.  Keyboard scancodes and mouse buttons live below
-    // INPUT_DEVICE_STICK and are filtered out so the Gamepad page only
-    // surfaces / edits gamepad bindings.
-    return (packedCode >= INPUT_DEVICE_STICK);
+    const int device = InputBindingDevice(packedCode);
+    return device == INPUT_DEVICE_STICK || device == INPUT_DEVICE_STICK_AXIS || device == INPUT_DEVICE_STICK_POV;
 }
 
 bool GamepadPage::IsActionVisible(UserAction action, ControlsCategory category) const
@@ -284,7 +281,7 @@ bool GamepadPage::ResetCategoryOverride(ControlsCategory category)
     return true;
 }
 
-std::unique_ptr<OptionsPage> GamepadPage::MakeCaptureModal(std::string actionLabel, std::string slotName,
+std::unique_ptr<OptionsPage> GamepadPage::MakeCaptureModal(UserAction, std::string actionLabel, std::string slotName,
                                                            SaveCallback onSave, ConflictCallback onConflict)
 {
     return std::make_unique<PressButtonPage>(std::move(actionLabel), std::move(slotName), std::move(onSave),

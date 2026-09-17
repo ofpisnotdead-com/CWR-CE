@@ -3,6 +3,8 @@
 #include <Poseidon/UI/DisplayUI.hpp>
 #include <Poseidon/Network/Network.hpp>
 #include <Poseidon/Game/Chat.hpp>
+#include <map>
+#include <optional>
 #include <set>
 #include <string>
 
@@ -119,12 +121,29 @@ struct ContinueInfo
 
 class DisplaySingleMission : public Display
 {
+  public:
+    // Why a listed mission cannot be played, empty when it can. The preview pane takes a
+    // shortened list of missing addons, the message box and the log take all of them.
+    struct MissionBlock
+    {
+        RString brief;
+        RString full;
+    };
+
   protected:
     int _exitWhenClose;
 
     int _langCbToken = -1;
 
     RString _directory;
+
+    // Keyed as in ScanMissionDirectory, kept until another folder is listed because the answer
+    // costs a mission.sqm parse.
+    std::map<std::string, MissionBlock> _blockedMissions;
+
+    // The pane's configured text colour: SetTextColor sticks, so every selection restores it
+    // and only a blocked mission is drawn in red.
+    std::optional<PackedColor> _overviewTextColor;
 
   public:
     bool _cadetMode;
@@ -146,6 +165,8 @@ class DisplaySingleMission : public Display
     void SaveParams();
     void LoadDirectory();
     void ScanMissionDirectory(const RString& dir, C3DListBox* lbox, std::set<std::string>& seen);
+    RString MissionDirectory(RString mission, int missionType) const;
+    MissionBlock BlockedMissionReason(RString mission, int missionType);
     void RefreshLanguage();
 };
 

@@ -971,7 +971,7 @@ ChatList GChatList;
 
 bool DisplayChatLine::OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
 {
-    // catch submit/cancel/channel/scroll keys so they don't transmit into the game
+    // catch submit/cancel keys so they don't transmit into the game
     if (Poseidon::IsChatConsumedKey(nChar))
     {
         return true;
@@ -979,8 +979,6 @@ bool DisplayChatLine::OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlag
 
     return Display::OnKeyDown(nChar, nRepCnt, nFlags);
 }
-
-bool IsPlayerDead();
 
 bool DisplayChatLine::OnKeyUp(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
 {
@@ -994,51 +992,6 @@ bool DisplayChatLine::OnKeyUp(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
         OnButtonClicked(IDC_CANCEL);
         return true;
     }
-    else if (nChar == SDLK_DOWN)
-    {
-        if (Poseidon::ShouldSwitchMultiplayerChannelFromChatInput() && !IsPlayerDead())
-        {
-            PrevChatChannel();
-            if (GWorld->ChatChannel())
-            {
-                GWorld->ChatChannel()->ResetHUD();
-            }
-            if (GWorld->VoiceChat())
-            {
-                GWorld->VoiceChat()->ResetHUD();
-            }
-            GWorld->OnChannelChanged();
-        }
-        return true;
-    }
-    else if (nChar == SDLK_UP)
-    {
-        if (Poseidon::ShouldSwitchMultiplayerChannelFromChatInput() && !IsPlayerDead())
-        {
-            NextChatChannel();
-            if (GWorld->ChatChannel())
-            {
-                GWorld->ChatChannel()->ResetHUD();
-            }
-            if (GWorld->VoiceChat())
-            {
-                GWorld->VoiceChat()->ResetHUD();
-            }
-            GWorld->OnChannelChanged();
-        }
-        return true;
-    }
-    else if (nChar == SDLK_PAGEUP)
-    {
-        GChatList.BrowseUp();
-        return true;
-    }
-    else if (nChar == SDLK_PAGEDOWN)
-    {
-        GChatList.BrowseDown();
-        return true;
-    }
-
     return Display::OnKeyUp(nChar, nRepCnt, nFlags);
 }
 

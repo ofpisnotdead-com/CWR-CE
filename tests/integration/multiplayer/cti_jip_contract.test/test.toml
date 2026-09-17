@@ -1,0 +1,31 @@
+mission = "tests/integration/missions/cti_jip_contract.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 150
+tags = ["network"]
+
+[[instances]]
+extra_args = ["--no-strict", "--log-format", "jsonl"]
+name = "server"
+type = "server"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "cti-early", "--log-format", "jsonl"]
+name = "early"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+mp_assign = "WEST:1"
+machine_id = "trident:cti_jip_contract:early"
+
+[[instances]]
+extra_args = ["--no-strict", "--name", "cti-late", "--log-format", "jsonl"]
+name = "late"
+type = "client"
+connect = "server"
+after = "server"
+wait_ngs = 13
+start_delay_ms = 25000
+mp_assign = "WEST:2"
+machine_id = "trident:cti_jip_contract:late"

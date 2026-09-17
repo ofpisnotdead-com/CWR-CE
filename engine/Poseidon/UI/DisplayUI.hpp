@@ -187,7 +187,6 @@ class DisplayModDownload : public Display
   protected:
     std::vector<DownloadTask> _tasks;
     DownloadWorker _worker;
-    RString _unitNoun;
     RString _prompt;
     enum Phase
     {
@@ -207,8 +206,8 @@ class DisplayModDownload : public Display
 
   public:
     DisplayModDownload(ControlsContainer* parent, std::vector<DownloadTask> tasks, DownloadFileFn transport,
-                       const char* unitNoun = "addon", std::function<double()> now = std::function<double()>(),
-                       const char* promptKey = "STR_DISP_MODS_DOWNLOAD_PROMPT");
+                       std::function<double()> now = std::function<double()>(),
+                       const char* promptKey = "STR_DISP_MODS_DOWNLOAD_SUMMARY");
 
     void OnButtonClicked(int idc) override;
     void OnSimulate(EntityAI* vehicle) override;
@@ -693,8 +692,13 @@ class DisplayServer : public Display
     void OnChildDestroyed(int idd, int exit) override;
 
   protected:
-    void UpdateMissions(RString filename = "");
+    // Category folder the mission list is showing, empty at the MPMissions root.
+    RString _missionFolder;
+
+    // filename/filenameValue name the row to select once the list is rebuilt.
+    void UpdateMissions(RString filename = "", int filenameValue = 2);
     void OnMissionChanged(int sel);
+    RString MissionSubdir() const;
 
     bool SetMission(bool editor);
 

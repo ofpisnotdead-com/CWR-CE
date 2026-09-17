@@ -99,6 +99,7 @@ set(MERGED_SUPPORT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Threads/PoThread.cpp
     $<IF:$<PLATFORM_ID:Windows>,${CMAKE_CURRENT_SOURCE_DIR}/IO/Filesystem/platform/DirScanner_win.cpp,${CMAKE_CURRENT_SOURCE_DIR}/IO/Filesystem/platform/DirScanner_posix.cpp>
     $<IF:$<PLATFORM_ID:Windows>,${CMAKE_CURRENT_SOURCE_DIR}/IO/Filesystem/platform/FileOps_win.cpp,${CMAKE_CURRENT_SOURCE_DIR}/IO/Filesystem/platform/FileOps_posix.cpp>
+    $<$<PLATFORM_ID:Windows>:${CMAKE_CURRENT_SOURCE_DIR}/IO/Filesystem/platform/Utf8Find_win.cpp>
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Enums/EnumNames.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/Platform.cpp
     $<IF:$<PLATFORM_ID:Windows>,${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/PlatformPaths_win.cpp,${CMAKE_CURRENT_SOURCE_DIR}/Foundation/Common/PlatformPaths_posix.cpp>

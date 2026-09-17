@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Poseidon/Input/InputSubsystem.hpp>
 #include <SDL3/SDL_keycode.h>
 
 namespace Poseidon
@@ -14,12 +15,10 @@ inline bool IsChatSubmitKey(unsigned keyCode)
 }
 
 // Keys the chat line consumes so they never leak into game controls while typing:
-// submit, cancel, channel switch (up/down), and history scroll (page up/down). The
-// set must match what DisplayChatLine::OnKeyUp acts on.
+// submit and cancel. The set must match what DisplayChatLine::OnKeyUp acts on.
 inline bool IsChatConsumedKey(unsigned keyCode)
 {
-    return IsChatSubmitKey(keyCode) || keyCode == SDLK_ESCAPE || keyCode == SDLK_UP || keyCode == SDLK_DOWN ||
-           keyCode == SDLK_PAGEUP || keyCode == SDLK_PAGEDOWN;
+    return IsChatSubmitKey(keyCode) || keyCode == SDLK_ESCAPE;
 }
 
 inline bool ShouldHandleMultiplayerChatShortcut(bool chatInputActive)
@@ -27,9 +26,22 @@ inline bool ShouldHandleMultiplayerChatShortcut(bool chatInputActive)
     return !chatInputActive;
 }
 
-inline bool ShouldSwitchMultiplayerChannelFromChatInput()
+struct ChatInputActions
 {
-    return false;
+    bool previousChannel;
+    bool nextChannel;
+    bool historyUp;
+    bool historyDown;
+};
+
+inline ChatInputActions PollChatInputActions(InputSubsystem& input)
+{
+    return {
+        input.GetActionToDo(InputContext::Chat, UAChatPrevChannel, true, false),
+        input.GetActionToDo(InputContext::Chat, UAChatNextChannel, true, false),
+        input.GetActionToDo(InputContext::Chat, UAChatHistoryUp, true, false),
+        input.GetActionToDo(InputContext::Chat, UAChatHistoryDown, true, false),
+    };
 }
 
 inline bool ShouldUseExplicitMultiplayerVoiceTargets(int channel, int unitCount, int globalChannel, int directChannel)

@@ -24,6 +24,7 @@ struct FrameState
     float fogParams[4] = {};       // start, invRange, enabled, 0
     float fogColor[4] = {};        // rgb, a=1
     float sunDir[4] = {};          // sun direction (xyz, w=0)
+    float nightEffect = 0.0f;      // local-light strength (0 = day, 1 = night)
     bool sunEnabled = false;
 };
 
@@ -52,6 +53,7 @@ enum class FogMode
 enum class PassId
 {
     Opaque,
+    Terrain,
     Cutout,
     Transparent,
     Shadow,
@@ -71,6 +73,8 @@ constexpr const char* PassIdName(PassId id)
     {
         case PassId::Opaque:
             return "Opaque";
+        case PassId::Terrain:
+            return "Terrain";
         case PassId::Cutout:
             return "Cutout";
         case PassId::Transparent:

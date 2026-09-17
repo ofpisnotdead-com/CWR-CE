@@ -477,6 +477,8 @@ EngineGL33::~EngineGL33()
 
     DebugOverlay::Shutdown();
 
+    FreeTerrainInstanced();
+
     ShutdownGL();
 
     _eventWindow.Detach();

@@ -159,7 +159,63 @@ std::string MissionKey(const char* name)
         c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
     return key;
 }
+
 } // namespace
+
+// A packed mission is placed by the last dot in its name (CreateSingleMissionBank), an unpacked
+// one by the first (ProcessTemplateName).
+static RString SPMissionWorld(RString missionName, bool packed)
+{
+    const char* dot = packed ? strrchr(missionName, '.') : strchr(missionName, '.');
+    if (!dot)
+    {
+        return RString();
+    }
+    std::string world(dot + 1);
+    if (!packed)
+    {
+        const size_t next = world.find('.');
+        if (next != std::string::npos)
+        {
+            world.resize(next);
+        }
+    }
+    return RString(world.c_str());
+}
+
+const int kPreviewAddonLimit = 8;
+
+// Empty when the mission can be played, otherwise what stops it, ready to show.
+static DisplaySingleMission::MissionBlock MissionBlockedReason(RString missionName, bool packed, RString missionPrefix)
+{
+    RString world = SPMissionWorld(missionName, packed);
+    if (!WorldInstalled(world))
+    {
+        char message[256];
+        snprintf(message, sizeof(message), LocalizeString(IDS_MSG_NO_WORLD), (const char*)world);
+        return {RString(message), RString(message)};
+    }
+
+    ParamFile file;
+    if (missionPrefix.GetLength() == 0 || !file.ParseBinOrTxt(missionPrefix + RString("mission.sqm")))
+    {
+        return {};
+    }
+    const ParamEntry* mission = file.FindEntry("Mission");
+    if (!mission)
+    {
+        return {};
+    }
+    FindArrayRStringCI addOns;
+    FindArrayRStringCI missing;
+    ReadMissionAddons(*mission, addOns);
+    FindMissingAddons(addOns, missing);
+    if (missing.Size() == 0)
+    {
+        return {};
+    }
+    return {MissingAddonMessage(missing, kPreviewAddonLimit), MissingAddonMessage(missing)};
+}
 
 // Every active mod's Missions/ (mods first, so a mod mission wins dedup) then the game root,
 // matching the load side where CreateSingleMissionBank prefers a mod PBO.
@@ -227,6 +283,7 @@ void DisplaySingleMission::LoadDirectory()
     }
 
     lbox->ClearStrings();
+    _blockedMissions.clear();
 
     if (_directory.GetLength() > 0)
     {
@@ -261,10 +318,11 @@ void DisplaySingleMission::ScanMissionDirectory(const RString& dir, C3DListBox* 
             if ((info.attrib & _A_SUBDIR) == 0)
             {
                 // remove extension (.pbo)
-                RString name = info.name;
-                int n = name.GetLength() - 4;
-                PoseidonAssert(stricmp(name + n, ".pbo") == 0);
-                RString nameNoExt = name.Substring(0, n);
+                RString fileName = info.name;
+                int n = fileName.GetLength() - 4;
+                PoseidonAssert(stricmp(fileName + n, ".pbo") == 0);
+                RString nameNoExt = fileName.Substring(0, n);
+                RString name = nameNoExt;
 
                 if (!seen.insert(MissionKey(nameNoExt)).second)
                 {
@@ -341,7 +399,22 @@ void DisplaySingleMission::ScanMissionDirectory(const RString& dir, C3DListBox* 
                     }
                 }
 
-                int index = lbox->AddString(Localize(name));
+                // No mission is open at scan time, so the global tables know nothing about a
+                // key that ships inside the PBO.
+                RString displayName;
+                if (name[0] == '$' || name[0] == '@')
+                {
+                    displayName = LookupStringtableCsvInBank(bank, (const char*)name + 1);
+                }
+                if (displayName.GetLength() == 0)
+                {
+                    displayName = Localize(name);
+                }
+                if (displayName.GetLength() == 0)
+                {
+                    displayName = nameNoExt;
+                }
+                int index = lbox->AddString(DecodeLegacyTextToRString(displayName, GLanguage));
                 lbox->SetData(index, nameNoExt);
                 lbox->SetValue(index, 1); // bank
             }
@@ -463,14 +536,14 @@ void DisplaySingleMission::ScanMissionDirectory(const RString& dir, C3DListBox* 
                         // syntax to the player.
                         displayName = info.name;
                     }
-                    int index = lbox->AddString(displayName);
+                    int index = lbox->AddString(DecodeLegacyTextToRString(displayName, GLanguage));
                     lbox->SetData(index, info.name);
                     lbox->SetValue(index, 0); // directory
                 }
                 else
                 {
                     // Subdirectory
-                    int index = lbox->AddString(name + RString("..."));
+                    int index = lbox->AddString(DecodeLegacyTextToRString(name, GLanguage) + RString("..."));
                     lbox->SetData(index, name);
                     lbox->SetValue(index, -1); // subdirectory
                 }
@@ -533,6 +606,29 @@ void EnsureContinueSave(RString dir)
     }
 }
 
+RString DisplaySingleMission::MissionDirectory(RString mission, int missionType) const
+{
+    const RString subDir =
+        missionType == 1 ? RString("Missions\\") + _directory : ResolveSPMissionSubdir(_directory, mission);
+    return subDir + mission;
+}
+
+DisplaySingleMission::MissionBlock DisplaySingleMission::BlockedMissionReason(RString mission, int missionType)
+{
+    const std::string key = MissionKey(mission);
+    const auto it = _blockedMissions.find(key);
+    if (it != _blockedMissions.end())
+    {
+        return it->second;
+    }
+
+    const RString directory = MissionDirectory(mission, missionType);
+    const RString prefix = missionType == 1 ? CreateSingleMissionBank(directory) : directory + RString("\\");
+    const MissionBlock reason = MissionBlockedReason(mission, missionType == 1, prefix);
+    _blockedMissions[key] = reason;
+    return reason;
+}
+
 void DisplaySingleMission::OnChangeMission()
 {
     C3DHTML* html = dynamic_cast<C3DHTML*>(GetCtrl(IDC_SINGLE_OVERVIEW));
@@ -541,6 +637,11 @@ void DisplaySingleMission::OnChangeMission()
         return;
     }
     html->Init();
+    if (!_overviewTextColor.has_value())
+    {
+        _overviewTextColor = html->GetTextColor();
+    }
+    html->SetTextColor(*_overviewTextColor);
     C3DListBox* lbox = dynamic_cast<C3DListBox*>(GetCtrl(IDC_SINGLE_MISSION));
     if (!lbox)
     {
@@ -554,9 +655,7 @@ void DisplaySingleMission::OnChangeMission()
 
     RString mission = lbox->GetData(sel);
     const int missionType = lbox->GetValue(sel);
-    const RString missionSubdir =
-        missionType == 1 ? RString("Missions\\") + _directory : ResolveSPMissionSubdir(_directory, mission);
-    RString directory = missionSubdir + mission;
+    RString directory = MissionDirectory(mission, missionType);
 
     if (missionType < 0)
     {
@@ -582,28 +681,40 @@ void DisplaySingleMission::OnChangeMission()
         return;
     }
 
-    RString filename;
-    MissionLanguageDetector::MissionPreviewInfo preview;
-    if (missionType == 1)
+    const MissionBlock blocked = BlockedMissionReason(mission, missionType);
+    if (blocked.brief.GetLength() > 0)
     {
-        RString bank = CreateSingleMissionBank(directory);
-        if (bank.GetLength() == 0)
-        {
-            return;
-        }
-        preview = MissionLanguageDetector::DetectPreview(bank);
-        filename = GetOverviewFile(bank);
+        html->SetTextColor(PackedColor(Color(0.6, 0, 0, 1)));
+        html->LoadBuffer(RString(),
+                         RString("<html><body><br/><br/><p align=\"center\">") + blocked.brief +
+                             RString("</p></body></html>"),
+                         false);
     }
     else
     {
-        preview = MissionLanguageDetector::DetectPreview(directory + RString("\\"));
-        filename = GetOverviewFile(directory + RString("\\"));
-    }
-    if (filename.GetLength() > 0 || preview.missionViewDistance.has_value() ||
-        MissionLanguageDetector::FormatTextLanguages(preview.languages) != RString("-") ||
-        MissionLanguageDetector::FormatVoiceLanguages(preview.languages) != RString("-"))
-    {
-        LoadMissionPreviewHtml(html, filename, preview);
+        RString filename;
+        MissionLanguageDetector::MissionPreviewInfo preview;
+        if (missionType == 1)
+        {
+            RString bank = CreateSingleMissionBank(directory);
+            if (bank.GetLength() == 0)
+            {
+                return;
+            }
+            preview = MissionLanguageDetector::DetectPreview(bank);
+            filename = GetOverviewFile(bank);
+        }
+        else
+        {
+            preview = MissionLanguageDetector::DetectPreview(directory + RString("\\"));
+            filename = GetOverviewFile(directory + RString("\\"));
+        }
+        if (filename.GetLength() > 0 || preview.missionViewDistance.has_value() ||
+            MissionLanguageDetector::FormatTextLanguages(preview.languages) != RString("-") ||
+            MissionLanguageDetector::FormatVoiceLanguages(preview.languages) != RString("-"))
+        {
+            LoadMissionPreviewHtml(html, filename, preview);
+        }
     }
 
     // update buttons
@@ -728,6 +839,13 @@ void DisplaySingleMission::OnButtonClicked(int idc)
                     _directory = "";
                 }
                 LoadDirectory();
+                return;
+            }
+            else if (const MissionBlock blocked = BlockedMissionReason(lbox->GetData(sel), value);
+                     blocked.full.GetLength() > 0)
+            {
+                LOG_WARN(Mission, "Cannot play {}: {}", (const char*)lbox->GetData(sel), (const char*)blocked.full);
+                CreateMsgBox(MB_BUTTON_OK, blocked.full);
                 return;
             }
             else

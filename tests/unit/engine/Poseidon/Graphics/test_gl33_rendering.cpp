@@ -238,14 +238,6 @@ TEST_CASE("PSConstants: constColor slot and white default", "[Graphics][GL33][su
     REQUIRE(def.constColor[3] == 1.0f);
 }
 
-TEST_CASE("SVertex: correct size for static mesh upload", "[Graphics][GL33]")
-{
-    REQUIRE(sizeof(SVertex) == 32);
-    REQUIRE(offsetof(SVertex, pos) == 0);
-    REQUIRE(offsetof(SVertex, norm) == 12);
-    REQUIRE(offsetof(SVertex, t0) == 24);
-}
-
 // Engine Constants Tests (shared across backends)
 
 TEST_CASE("SpecToPassId covers all spec flag bits", "[Graphics][GL33]")
@@ -576,12 +568,13 @@ TEST_CASE("PSConstants: default fogColor alpha is 1", "[Graphics][GL33]")
 
 // Shader/TexGen Enum Value Tests
 
-TEST_CASE("VertexShaderID: VSScreen=0, VSTransform=1, VSShadow=2", "[Graphics][GL33]")
+TEST_CASE("VertexShaderID: VSScreen=0, VSTransform=1, VSShadow=2, VSTerrain=3", "[Graphics][GL33]")
 {
     REQUIRE(VSScreen == 0);
     REQUIRE(VSTransform == 1);
     REQUIRE(VSShadow == 2);
-    REQUIRE(NVertexShaders == 3);
+    REQUIRE(VSTerrain == 3);
+    REQUIRE(NVertexShaders == 4);
     REQUIRE(VSNone == NVertexShaders);
 }
 
@@ -620,7 +613,6 @@ TEST_CASE("VSConst: register indices are non-overlapping", "[Graphics][GL33]")
 #include <glad/gl.h>
 
 extern int MipmapSizeGL33(PacFormat format, int w, int h);
-extern void InitGLPixelFormat(TextureDescGL33& desc, PacFormat format, bool enableDXT);
 
 TEST_CASE("TextureDescGL33: struct has expected fields", "[Graphics][GL33][Texture]")
 {
@@ -867,11 +859,8 @@ TEST_CASE("SurfaceInfoGL33::CalculateSize: non-square texture", "[Graphics][GL33
 }
 
 // SVertex Layout Tests — must match vsTransform GLSL attribute layout
-
-TEST_CASE("SVertex: size is 32 bytes (pos+norm+uv)", "[GL33][VertexBuffer]")
-{
-    REQUIRE(sizeof(SVertex) == 32);
-}
+// (size and offsets are enforced at compile time by static_asserts next to the
+// SVertex definition in EngineGL33.hpp)
 
 TEST_CASE("SVertex: member offsets match VAO attribute pointers", "[GL33][VertexBuffer]")
 {
