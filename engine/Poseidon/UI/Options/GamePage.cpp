@@ -1,5 +1,8 @@
 #include <Poseidon/UI/Options/GamePage.hpp>
 
+#include <Poseidon/UI/Options/NumberEntryPage.hpp>
+#include <Poseidon/UI/Options/OptionsShell.hpp>
+
 #include <Poseidon/Core/Config/EngineConfig.hpp>
 #include <Poseidon/Core/Config/UserConfig.hpp>
 #include <Poseidon/Core/Global.hpp>
@@ -12,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <stdio.h>
 #include <vector>
 #include <Poseidon/Foundation/Strings/RString.hpp>
@@ -246,10 +250,28 @@ void GamePage::GameProvider::SetRowValue(int row, int value)
 OptionsScrollList::Kind GamePage::GameProvider::RowKind(int row) const
 {
     if (row == kRowViewDistance)
-        return OptionsScrollList::KindSlider;
+        return OptionsScrollList::KindNumericSlider;
     if (row == kRowBlood || row == kRowSubtitles || row == kRowRadioSubtitles || row == kRowRespectMissionViewDistance)
         return OptionsScrollList::KindBoolean;
     return OptionsScrollList::Provider::RowKind(row);
+}
+
+void GamePage::GameProvider::OnNumericEntry(int row, Display& host)
+{
+    if (row != kRowViewDistance)
+        return;
+    auto* shell = dynamic_cast<OptionsShell*>(&host);
+    if (!shell)
+        return;
+
+    shell->PushPage(std::make_unique<NumberEntryPage>(RowLabel(row), GetSelectedPreferredViewDistance(),
+                                                      GameSettingsConfig::kMinViewDistance,
+                                                      GameSettingsConfig::kMaxViewDistance, 0, "m",
+                                                      [](float value)
+                                                      {
+                                                          SetSelectedPreferredViewDistance(value);
+                                                          ApplyCurrentMissionViewDistance();
+                                                      }));
 }
 
 const char* GamePage::GameProvider::SliderValueText(int row) const
