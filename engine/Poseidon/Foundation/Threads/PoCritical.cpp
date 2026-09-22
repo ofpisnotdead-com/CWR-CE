@@ -82,7 +82,8 @@ void PoCriticalSection::enter() const
     lockEnter(id);
 #endif
 #else
-    error = (pthread_mutex_lock(&mutex) != 0);
+    if (pthread_mutex_lock(&mutex) != 0)
+        error = true;
 #endif
 }
 
@@ -100,7 +101,6 @@ bool PoCriticalSection::tryEnter() const
     return true;
 #endif
 #else
-    error = false;
     return (pthread_mutex_trylock(&mutex) == 0);
 #endif
 }
@@ -117,7 +117,8 @@ void PoCriticalSection::leave() const
 #endif
     LeaveCriticalSection(&cs);
 #else
-    error = (pthread_mutex_unlock(&mutex) != 0);
+    if (pthread_mutex_unlock(&mutex) != 0)
+        error = true;
 #endif
 }
 
