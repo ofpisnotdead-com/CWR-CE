@@ -208,23 +208,26 @@ void Soldier::KeyboardPilot(float deltaT, SimulationImportance prec)
             const MagazineSlot& slot = GetMagazineSlot(_currentWeapon);
             const Magazine* magazine = slot._magazine;
             const MagazineType* mType = magazine ? magazine->_type : nullptr;
-            int best = FindMagazineByType(slot._muzzle, mType);
-            if (best >= 0)
+            if (magazine->_ammo < mType->_maxAmmo)
             {
-                const Magazine* magazine = GetMagazine(best);
-                RString muzzleID = slot._weapon->GetName() + RString("|") + slot._muzzle->GetName();
-                Ref<ActionContextDefault> context = new ActionContextDefault;
-                context->function = MFReload;
-                context->param = magazine->_creator;
-                context->param2 = magazine->_id;
-                context->param3 = muzzleID;
-                if (PlayAction(magazine->_type->_reloadAction, context))
+                int best = FindBestMagazine(mType, magazine->_ammo);
+                if (best >= 0)
                 {
-                    PlayReloadMagazineSound(_currentWeapon, slot._muzzle);
-                }
-                else
-                {
-                    ReloadMagazineTimed(_currentWeapon, best, false);
+                    const Magazine* magazine = GetMagazine(best);
+                    RString muzzleID = slot._weapon->GetName() + RString("|") + slot._muzzle->GetName();
+                    Ref<ActionContextDefault> context = new ActionContextDefault;
+                    context->function = MFReload;
+                    context->param = magazine->_creator;
+                    context->param2 = magazine->_id;
+                    context->param3 = muzzleID;
+                    if (PlayAction(magazine->_type->_reloadAction, context))
+                    {
+                        PlayReloadMagazineSound(_currentWeapon, slot._muzzle);
+                    }
+                    else
+                    {
+                        ReloadMagazineTimed(_currentWeapon, best, false);
+                    }
                 }
             }
         }
