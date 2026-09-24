@@ -2447,7 +2447,7 @@ bool EntityAI::FireWeapon(int weapon, TargetType* target)
 
     if (magazine->_burstLeft == 1 || mode->_burst == 0)
     {
-        AIUnit* unit = GunnerUnit();
+        AIUnit* unit = EffectiveGunnerUnit();
         if (!unit)
         {
             unit = CommanderUnit();
