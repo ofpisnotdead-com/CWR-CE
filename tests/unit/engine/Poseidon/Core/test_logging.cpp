@@ -284,6 +284,42 @@ TEST_CASE("AttachFileSink captures log lines into the file", "[logging][file]")
     fs::remove(path, ec);
 }
 
+TEST_CASE("A --log-file survives a restart", "[logging][file]")
+{
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "cwr_logfile_append";
+    const fs::path path = dir / "server.log";
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+
+    // Two runs writing to the same path, which is what a dedicated server
+    // restarted nightly does. Opened with truncate, the second one leaves the
+    // first session gone and the file the same length it was.
+    {
+        Poseidon::Foundation::LoggingSystem logSys;
+        REQUIRE_NOTHROW(logSys.Initialize("info", "", "text", path.string().c_str()));
+        LOG_INFO(Core, "first session marker 11111");
+        logSys.Shutdown();
+    }
+    {
+        Poseidon::Foundation::LoggingSystem logSys;
+        REQUIRE_NOTHROW(logSys.Initialize("info", "", "text", path.string().c_str()));
+        LOG_INFO(Core, "second session marker 22222");
+        logSys.Shutdown();
+    }
+
+    std::ifstream in(path);
+    std::stringstream contents;
+    contents << in.rdbuf();
+    const std::string text = contents.str();
+
+    CHECK(text.find("first session marker 11111") != std::string::npos);
+    CHECK(text.find("second session marker 22222") != std::string::npos);
+
+    in.close();
+    fs::remove_all(dir, ec);
+}
+
 TEST_CASE("Initialize survives a --log-file path it cannot open", "[logging][file]")
 {
     namespace fs = std::filesystem;
