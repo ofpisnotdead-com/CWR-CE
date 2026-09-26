@@ -1803,6 +1803,7 @@ void DisplayMap::OnChildDestroyed(int idd, int exit)
         int index = markersMap.Add();
         ArcadeMarkerInfo& marker = markersMap[index];
         marker.position = _map->ScreenToWorld(DrawCoord(display->_x, display->_y));
+        marker.angle = display->m_dir;
         char buffer[256];
         snprintf(buffer, sizeof(buffer), "_USER_DEFINED #%d/%d", GetNetworkManager().GetPlayer(), index);
         marker.name = buffer;
