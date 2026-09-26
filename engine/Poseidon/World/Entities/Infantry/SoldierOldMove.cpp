@@ -723,6 +723,7 @@ void Man::ResetMovement(float speed, int action)
 static ArcadeMarkerInfo* FindMarker(RString name)
 {
     AUTO_STATIC_ARRAY(int, indices, 16);
+    // Note: Marker lookup remains linear (not hash-based) to maintain legacy behavior, as mission.sqm allows duplicate marker names.
     int len = name.GetLength();
     for (int i = 0; i < markersMap.Size(); i++)
     {
