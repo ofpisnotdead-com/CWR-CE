@@ -1,0 +1,4 @@
+tags = ["scripting", "headless"]
+binary = "PoseidonGame"
+mission = "tests/integration/missions/single_player.Demo"
+timeout = 60
