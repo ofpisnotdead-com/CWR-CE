@@ -58,12 +58,25 @@ runs:
         arch: 'x64'
         directory: 'C:\Program Files\LLVM'
 
+    # clang-cl bakes the cl.exe file version into the PCH target triple, but
+    # ccache does not hash it, so a runner image with a patched MSVC would
+    # restore PCHs that every translation unit then rejects.
+    - name: Detect MSVC version
+      id: msvc
+      if: runner.os == 'Windows' && inputs.use-ccache == 'true'
+      shell: pwsh
+      run: |
+        $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        $tools = (Get-Content "$vs\VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt").Trim()
+        $cl = (Get-Item "$vs\VC\Tools\MSVC\$tools\bin\Hostx64\x64\cl.exe").VersionInfo
+        "key=msvc$($cl.FileMajorPart).$($cl.FileMinorPart).$($cl.FileBuildPart)-" >> $env:GITHUB_OUTPUT
+
     - name: Setup compiler cache
       if: inputs.use-ccache == 'true'
       uses: hendrikmuhs/ccache-action@v1.2.23
       with:
         variant: ccache
-        key: ${{ runner.os }}-${{ inputs.preset }}-pch-${{ hashFiles('engine/Poseidon/Foundation/PoseidonPCH.hpp', 'engine/Poseidon/Foundation/platform.hpp') }}
+        key: ${{ runner.os }}-${{ inputs.preset }}-${{ steps.msvc.outputs.key }}pch-${{ hashFiles('engine/Poseidon/Foundation/PoseidonPCH.hpp', 'engine/Poseidon/Foundation/platform.hpp') }}
         max-size: ${{ inputs.ccache-max-size }}
 
     - name: Setup CMake and Ninja
