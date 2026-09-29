@@ -216,6 +216,73 @@ GameValue TriGetPixelMaxDiff(const GameState* /*state*/, GameValuePar arg)
     return GameValue(static_cast<float>(mx));
 }
 
+/// triGetRegionChroma [u0, v0, u1, v1, minBrightness] - mean per-pixel chroma
+/// (brightest channel minus darkest) over pixels in the normalized rectangle
+/// at or above minBrightness. Grey reads 0 at any brightness, so this reads
+/// color independently of exposure. -1 when nothing clears the threshold.
+GameValue TriGetRegionChroma(const GameState* /*state*/, GameValuePar arg)
+{
+    if (!GEngine)
+        return GameValue(static_cast<float>(-1));
+    const GameArrayType& a = arg;
+    if (a.Size() < 5)
+        return GameValue(static_cast<float>(-1));
+    const float u0 = static_cast<float>(static_cast<GameScalarType>(a[0]));
+    const float v0 = static_cast<float>(static_cast<GameScalarType>(a[1]));
+    const float u1 = static_cast<float>(static_cast<GameScalarType>(a[2]));
+    const float v1 = static_cast<float>(static_cast<GameScalarType>(a[3]));
+    const int minBright = static_cast<int>(static_cast<GameScalarType>(a[4]));
+
+    const int w = GEngine->Width();
+    const int h = GEngine->Height();
+    if (w <= 0 || h <= 0)
+        return GameValue(static_cast<float>(-1));
+    int x0 = static_cast<int>(u0 * static_cast<float>(w - 1));
+    int x1 = static_cast<int>(u1 * static_cast<float>(w - 1));
+    int y0 = static_cast<int>(v0 * static_cast<float>(h - 1));
+    int y1 = static_cast<int>(v1 * static_cast<float>(h - 1));
+    if (x1 < x0)
+    {
+        const int t = x0;
+        x0 = x1;
+        x1 = t;
+    }
+    if (y1 < y0)
+    {
+        const int t = y0;
+        y0 = y1;
+        y1 = t;
+    }
+
+    double sum = 0;
+    int counted = 0;
+    for (int y = y0; y <= y1; ++y)
+        for (int x = x0; x <= x1; ++x)
+        {
+            uint8_t rgb[3] = {0, 0, 0};
+            if (!GEngine->SamplePixel(x, y, rgb))
+                return GameValue(static_cast<float>(-1));
+            int hi = rgb[0], lo = rgb[0];
+            for (int i = 1; i < 3; i++)
+            {
+                if (rgb[i] > hi)
+                    hi = rgb[i];
+                if (rgb[i] < lo)
+                    lo = rgb[i];
+            }
+            if (hi < minBright)
+                continue;
+            sum += hi - lo;
+            ++counted;
+        }
+    if (counted == 0)
+        return GameValue(static_cast<float>(-1));
+    const float mean = static_cast<float>(sum / counted);
+    LOG_INFO(Core, "[tri] triGetRegionChroma rect=({},{})-({},{}) min={} px={} mean={:.4f}", u0, v0, u1, v1, minBright,
+             counted, mean);
+    return GameValue(mean);
+}
+
 /// triAssertPixelNotWhite [u, v, threshold] — passes when at least one RGB
 /// channel is below threshold. Useful for catching missing white placeholder
 /// textures without depending on the exact face artwork.
@@ -557,6 +624,7 @@ INIT_MODULE(GameStateExtTestGetters, 3)
     // Pixel
     GGameState.NewFunction(GameFunction(GameScalar, "triGetPixelMaxChannel", TriGetPixelMaxChannel, GameArray));
     GGameState.NewFunction(GameFunction(GameScalar, "triGetPixelMaxDiff", TriGetPixelMaxDiff, GameArray));
+    GGameState.NewFunction(GameFunction(GameScalar, "triGetRegionChroma", TriGetRegionChroma, GameArray));
     GGameState.NewFunction(GameFunction(GameString, "triAssertPixelNotWhite", TriAssertPixelNotWhite, GameArray));
 
     // UI / controls

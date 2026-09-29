@@ -256,6 +256,8 @@ bool GraphicsConfig::Load(const std::string& path)
         msaaSamples = (int)*e;
     if (auto* e = cfg.FindEntry("multitexturing"))
         multitexturing = (int)*e != 0;
+    if (auto* e = cfg.FindEntry("nightEye"))
+        nightEye = (int)*e != 0;
     if (auto* e = cfg.FindEntry("brightness"))
         brightness = (float)*e;
     if (auto* e = cfg.FindEntry("gamma"))
@@ -278,6 +280,7 @@ bool GraphicsConfig::Save(const std::string& path) const
     cfg.Add("renderScale", renderScale);
     cfg.Add("msaaSamples", msaaSamples);
     cfg.Add("multitexturing", multitexturing ? 1 : 0);
+    cfg.Add("nightEye", nightEye ? 1 : 0);
     cfg.Add("brightness", brightness);
     cfg.Add("gamma", gamma);
     cfg.Add("version", version);

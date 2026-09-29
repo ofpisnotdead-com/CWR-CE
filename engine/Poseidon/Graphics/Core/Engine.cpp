@@ -32,7 +32,7 @@ int gShadowFrozenRouted = 0;
 
 Engine::Engine()
     : _showTextFont(nullptr), _showTextColor(Color(HBlack)), _showTextSize(0), _showFps(0), _messageHandle(-1),
-      _multitexturing(true), _nightVision(false), _accomodateEye(HWhite), _shadowFactor(0),
+      _multitexturing(true), _nightEyeEnabled(true), _nightVision(false), _accomodateEye(HWhite), _shadowFactor(0),
 
       _usrBrightness(1),
 
@@ -88,6 +88,11 @@ DWORD Engine::GetAvgFrameDuration(int nFrames) const
 void Engine::SetMultitexturing(bool set)
 {
     _multitexturing = set;
+}
+
+void Engine::SetNightEyeEnabled(bool set)
+{
+    _nightEyeEnabled = set;
 }
 
 void Engine::FontDestroyed(Font* font)

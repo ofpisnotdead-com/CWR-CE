@@ -96,6 +96,7 @@ void ApplyGraphicsConfigToEngine(const GraphicsConfig& cfg)
         GEngine->SetRenderScale(cfg.renderScale);
         GEngine->SetMsaaSamples(cfg.msaaSamples);
         GEngine->SetMultitexturing(cfg.multitexturing);
+        GEngine->SetNightEyeEnabled(cfg.nightEye);
     }
     gUserFpsCap = cfg.fpsCap;
 }
