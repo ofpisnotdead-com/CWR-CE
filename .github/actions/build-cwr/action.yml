@@ -52,11 +52,18 @@ runs:
 
     - name: Setup LLVM and Clang
       if: runner.os == 'Windows'
-      uses: KyleMayes/install-llvm-action@v2
-      with:
-        version: '19'
-        arch: 'x64'
-        directory: 'C:\Program Files\LLVM'
+      shell: pwsh
+      env:
+        LLVM_VERSION: '19.1.7'
+        LLVM_DIR: 'C:\Program Files\LLVM'
+      run: |
+        $installer = Join-Path $env:RUNNER_TEMP "LLVM-$env:LLVM_VERSION-win64.exe"
+        Invoke-WebRequest -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-$env:LLVM_VERSION/LLVM-$env:LLVM_VERSION-win64.exe" -OutFile $installer
+        7z x $installer "-o$env:LLVM_DIR" -y | Out-Null
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Add-Content $env:GITHUB_PATH "$env:LLVM_DIR\bin"
+        Add-Content $env:GITHUB_ENV "LLVM_PATH=$env:LLVM_DIR"
+        & "$env:LLVM_DIR\bin\clang-cl.exe" --version
 
     # clang-cl bakes the cl.exe file version into the PCH target triple, but
     # ccache does not hash it, so a runner image with a patched MSVC would
