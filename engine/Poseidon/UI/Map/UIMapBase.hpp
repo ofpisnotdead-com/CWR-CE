@@ -4,6 +4,7 @@
 #include <Poseidon/Core/Global.hpp>
 #include <Poseidon/Graphics/Core/Engine.hpp>
 #include <Poseidon/World/World.hpp>
+#include <Poseidon/World/MapTypes.hpp>
 
 #include <Poseidon/AI/ArcadeTemplate.hpp>
 #include <Poseidon/AI/AI.hpp>
@@ -256,6 +257,10 @@ public:
 	MapTypeInfo _infoWaypoint;
 	MapTypeInfo _infoWaypointCompleted;
 
+	AutoArray<Vertex2DPixel> _objectPolys;
+	AutoArray<Vector3> _objectSigns[NMapTypes];
+	AutoArray<Object *> _objectIds;
+
 public:
 
 	CStaticMap
@@ -357,7 +362,9 @@ protected:
 
 	void DrawForests(int i, int j, float x, float y, float w, float h);
 
-	void DrawObjects(int i, int j);
+	MapTypeInfo *ObjectSignInfo(MapType type);
+	void StageObjects(int i, int j);
+	void DrawObjects();
 
 	void DrawForestBorders(int i, int j, float x, float y, float w, float h);
 
