@@ -80,6 +80,20 @@ jobs:
           path: ${{ env.CWR_DIST_DIR }}/PoseidonServer
           if-no-files-found: error
 
+      - name: Upload Tools
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Tools-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ env.CWR_DIST_DIR }}/PoseidonTools
+          if-no-files-found: error
+
+      - name: Upload Studio
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Studio-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ env.CWR_DIST_DIR }}/PoseidonStudio
+          if-no-files-found: error
+
   build-linux-sanitizers:
     strategy:
       fail-fast: false
@@ -170,6 +184,26 @@ jobs:
           path: ${{ env.CWR_DIST_DIR }}/PoseidonServer
           if-no-files-found: error
 
+      - name: Upload Tools
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Tools-${{ steps.build_metadata.outputs.sha_short }}
+          path: |
+            ${{ env.CWR_DIST_DIR }}/PoseidonTools
+            ${{ env.CWR_DIST_DIR }}/libopenal.dylib
+            ${{ env.CWR_DIST_DIR }}/OpenAL-Soft.LICENSE.txt
+          if-no-files-found: error
+
+      - name: Upload Studio
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Studio-${{ steps.build_metadata.outputs.sha_short }}
+          path: |
+            ${{ env.CWR_DIST_DIR }}/PoseidonStudio
+            ${{ env.CWR_DIST_DIR }}/libopenal.dylib
+            ${{ env.CWR_DIST_DIR }}/OpenAL-Soft.LICENSE.txt
+          if-no-files-found: error
+
   build-windows:
     name: Windows RelWithDebInfo
     runs-on: windows-2022
@@ -225,6 +259,26 @@ jobs:
           path: ${{ env.CWR_DIST_DIR }}/PoseidonServer.exe
           if-no-files-found: error
 
+      - name: Upload Tools
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Tools-${{ steps.build_metadata.outputs.sha_short }}
+          path: |
+            ${{ env.CWR_DIST_DIR }}/PoseidonTools.exe
+            ${{ env.CWR_DIST_DIR }}/OpenAL32.dll
+            ${{ env.CWR_DIST_DIR }}/OpenAL-Soft.LICENSE.txt
+          if-no-files-found: error
+
+      - name: Upload Studio
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Studio-${{ steps.build_metadata.outputs.sha_short }}
+          path: |
+            ${{ env.CWR_DIST_DIR }}/PoseidonStudio.exe
+            ${{ env.CWR_DIST_DIR }}/OpenAL32.dll
+            ${{ env.CWR_DIST_DIR }}/OpenAL-Soft.LICENSE.txt
+          if-no-files-found: error
+
       - name: Upload symbols
         uses: actions/upload-artifact@v7
         with:
@@ -233,6 +287,8 @@ jobs:
             ${{ env.CWR_DIST_DIR }}/PoseidonGame.pdb
             ${{ env.CWR_DIST_DIR }}/PoseidonGameDemo.pdb
             ${{ env.CWR_DIST_DIR }}/PoseidonServer.pdb
+            ${{ env.CWR_DIST_DIR }}/PoseidonTools.pdb
+            ${{ env.CWR_DIST_DIR }}/PoseidonStudio.pdb
           if-no-files-found: error
 
   trident:
