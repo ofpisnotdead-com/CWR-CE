@@ -86,7 +86,7 @@ runs:
 
     - name: Restore vcpkg binary cache
       if: inputs.use-vcpkg-binary-cache == 'true'
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: .vcpkg-bincache/${{ inputs.vcpkg-triplet }}
         key: vcpkg-${{ runner.os }}-${{ inputs.vcpkg-triplet }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/vcpkg-triplets/**', 'cmake/vcpkg-overlay-ports/**') }}
