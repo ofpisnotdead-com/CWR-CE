@@ -53,7 +53,7 @@ source ~/.zprofile
 
 ### Downloading the repository
 
-The CWR-CE [source code repository](https://github.com/ofpisnotdead-com/CWR-CE) can be cloned with [Git](https://git-scm.com/) using the following command, run in Terminal:
+Clone the CWR-CE [source code repository](https://github.com/ofpisnotdead-com/CWR-CE) using the following command, run in Terminal:
 
 ```shell
 cd ~; git clone https://github.com/ofpisnotdead-com/CWR-CE.git
