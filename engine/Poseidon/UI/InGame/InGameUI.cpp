@@ -987,7 +987,7 @@ InGameUI::InGameUI() : _mode(UIFire), _modeAuto(UIFire), _groundPointValid(false
     }
     _lastUnitInfoTime = Glob.uiTime;
     _lastMenuTime = Glob.uiTime;
-    _timeToPlay = Glob.uiTime + GRandGen.PlusMinus(60, 30);
+    _timeToPlay = Glob.uiTime + GFxRandGen.PlusMinus(60, 30);
 
     _target = nullptr;
     _lockTarget = nullptr;

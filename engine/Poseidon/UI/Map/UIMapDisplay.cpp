@@ -455,7 +455,7 @@ bool WeaponsInfo::Import(const ParamEntry& superclass)
                 magazine->_reload = 0;
                 if (type->_modes.Size() > 0)
                 {
-                    float reload = 0.8 + 0.2 * GRandGen.RandomValue();
+                    float reload = 0.8 + 0.2 * GFxRandGen.RandomValue();
                     magazine->_reload = reload * type->_modes[0]->_reloadTime;
                 }
                 _magazinesPool.Add(magazine);

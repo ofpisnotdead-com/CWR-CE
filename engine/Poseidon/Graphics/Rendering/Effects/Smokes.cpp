@@ -103,13 +103,13 @@ bool SmokeSource::Simulate(Vector3Par pos, Vector3Par speed, float deltaT, Simul
             _nextTime += _interval * _generalize * _generalize;
             float size05 = 0.5 * _sourceSize;
             Vector3Val windSpeed = GLandscape->GetWind() * 0.5;
-            Vector3 speed(GRandGen.RandomValue() * (1 + _sourceSize) - (0.5 + size05) + _speed[0],
-                          GRandGen.RandomValue() - 0.5 + _speed[1],
-                          GRandGen.RandomValue() * (1 + _sourceSize) - (0.5 + size05) + _speed[2]);
-            Vector3 offset((GRandGen.RandomValue() * 2 - 1) * _sourceSize,
-                           (GRandGen.RandomValue() * 2 - 1) * _sourceSize,
-                           (GRandGen.RandomValue() * 2 - 1) * _sourceSize);
-            CloudletSource::SetSize((GRandGen.RandomValue() + 2) * _size * 2);
+            Vector3 speed(GFxRandGen.RandomValue() * (1 + _sourceSize) - (0.5 + size05) + _speed[0],
+                          GFxRandGen.RandomValue() - 0.5 + _speed[1],
+                          GFxRandGen.RandomValue() * (1 + _sourceSize) - (0.5 + size05) + _speed[2]);
+            Vector3 offset((GFxRandGen.RandomValue() * 2 - 1) * _sourceSize,
+                           (GFxRandGen.RandomValue() * 2 - 1) * _sourceSize,
+                           (GFxRandGen.RandomValue() * 2 - 1) * _sourceSize);
+            CloudletSource::SetSize((GFxRandGen.RandomValue() + 2) * _size * 2);
             CloudletSource::SetAlpha(_inOutDensity * _density * 0.7);
             //  simulate cloudlet source
             Cloudlet* cloudlet = Drop(pos + offset, speed);
@@ -261,7 +261,7 @@ void SmokeSourceVehicle::SimulateExplosion()
         AmmoType type = *aType;
         if (GetObject())
         {
-            float gauss = GRandGen.RandomValue() + GRandGen.RandomValue();
+            float gauss = GFxRandGen.RandomValue() + GFxRandGen.RandomValue();
             float randomFactor = gauss * (_maxExplosionFactor - _minExplosionFactor) + _minExplosionFactor;
 
             float hit = GetObject()->GetExplosives() * randomFactor;
@@ -280,13 +280,13 @@ void SmokeSourceVehicle::SimulateExplosion()
             _darkFire.SetSize(fireSize);
             _fire.Start(fireTime);
             _darkFire.Start(fireTime);
-            float rndTime = GRandGen.RandomValue() * 0.4 + 0.8;
+            float rndTime = GFxRandGen.RandomValue() * 0.4 + 0.8;
             SetSourceTimes(0, 40 * rndTime, 40 * rndTime);
             // sound of explosion
             const ParamEntry& par = Pars >> "CfgDestroy" >> "EngineHit";
             SoundPars soundPars;
             GetValue(soundPars, par >> "sound");
-            float rndFreq = GRandGen.RandomValue() * 0.1 + 0.95;
+            float rndFreq = GFxRandGen.RandomValue() * 0.1 + 0.95;
             IWave* sound = GSoundScene->OpenAndPlayOnce(soundPars.name, Position(), VZero, soundPars.vol,
                                                         soundPars.freq * rndFreq);
             if (sound)
@@ -865,7 +865,7 @@ Cloudlet* CloudletSource::Drop(Vector3Par pos, Vector3Par speed)
     Color colorA0 = _cloudletColor;
     colorA0.SetA(0);
     cloudlet->SetColor(PackedColor(colorA0));
-    float delta = _cloudletDeltaT * (0.7 + 0.6 * GRandGen.RandomValue());
+    float delta = _cloudletDeltaT * (0.7 + 0.6 * GFxRandGen.RandomValue());
     cloudlet->SetTemperature(_cloudletInitT, delta, _cloudletTTable);
     cloudlet->SetPosition(pos);
     return cloudlet;
@@ -1077,13 +1077,13 @@ void DustSource::Simulate(Vector3Par pos, Vector3Par speed, float density, float
         const float size2 = 2 * _size;
         const float size05 = 0.5 * _size;
         Vector3Val windSpeed = GLandscape->GetWind() * _windCoef;
-        Vector3 cSpeed((GRandGen.RandomValue() * (1 + _size) - (0.5 + size05)) * 2,
-                       GRandGen.RandomValue() * 1 + size2 * 1,
-                       (GRandGen.RandomValue() * (1 + _size) - (0.5 + size05)) * 2);
-        Vector3 offset((GRandGen.RandomValue() * 2 - 1) * _sourceSize, (GRandGen.RandomValue() * 2 - 1) * _sourceSize,
-                       (GRandGen.RandomValue() * 2 - 1) * _sourceSize);
+        Vector3 cSpeed((GFxRandGen.RandomValue() * (1 + _size) - (0.5 + size05)) * 2,
+                       GFxRandGen.RandomValue() * 1 + size2 * 1,
+                       (GFxRandGen.RandomValue() * (1 + _size) - (0.5 + size05)) * 2);
+        Vector3 offset((GFxRandGen.RandomValue() * 2 - 1) * _sourceSize, (GFxRandGen.RandomValue() * 2 - 1) * _sourceSize,
+                       (GFxRandGen.RandomValue() * 2 - 1) * _sourceSize);
         float cSize = floatMax(_size, _size * 3 * density);
-        CloudletSource::SetSize((GRandGen.RandomValue() + 2) * cSize);
+        CloudletSource::SetSize((GFxRandGen.RandomValue() + 2) * cSize);
         // simulate cloudlet source
         Cloudlet* cloudlet = Drop(pos + offset, cSpeed * density * 0.5 + windSpeed + speed);
         cloudlet->SetClimbRate(_cloudletAccY, _cloudletMinYSpeed, _cloudletMaxYSpeed);
@@ -1144,18 +1144,18 @@ void WeaponCloudsSource::Simulate(Vector3Par pos, Vector3Par speed, float densit
         const float size = GetSize();
         const float size2 = 2 * size;
         const float size05 = 0.5 * size;
-        Vector3 cSpeed((GRandGen.RandomValue() * (1 + size) - (0.5 + size05)) * 2,
-                       GRandGen.RandomValue() * 1 + size2 * 1,
-                       (GRandGen.RandomValue() * (1 + size) - (0.5 + size05)) * 2);
+        Vector3 cSpeed((GFxRandGen.RandomValue() * (1 + size) - (0.5 + size05)) * 2,
+                       GFxRandGen.RandomValue() * 1 + size2 * 1,
+                       (GFxRandGen.RandomValue() * (1 + size) - (0.5 + size05)) * 2);
         const float sourceSize = GetSourceSize();
-        Vector3 offset((GRandGen.RandomValue() * 2 - 1) * sourceSize, (GRandGen.RandomValue() * 2 - 1) * sourceSize,
-                       (GRandGen.RandomValue() * 2 - 1) * sourceSize);
+        Vector3 offset((GFxRandGen.RandomValue() * 2 - 1) * sourceSize, (GFxRandGen.RandomValue() * 2 - 1) * sourceSize,
+                       (GFxRandGen.RandomValue() * 2 - 1) * sourceSize);
         float cSize = floatMax(size, size * 3 * density);
-        CloudletSource::SetSize((GRandGen.RandomValue() + 2) * cSize);
+        CloudletSource::SetSize((GFxRandGen.RandomValue() + 2) * cSize);
         // simulate cloudlet source
         Cloudlet* cloudlet = Drop(pos + offset, speed);
 
-        float newSize = GetSize() * _generalize * (0.5 + 1.0 * GRandGen.RandomValue());
+        float newSize = GetSize() * _generalize * (0.5 + 1.0 * GFxRandGen.RandomValue());
         cloudlet->SetGrowUp(_cloudletGrowUp, newSize);
         Vector3 dir = cloudlet->Position() - pos;
         saturateMax(dir[1], 0);
@@ -1226,7 +1226,7 @@ void WeaponLightSource::Simulate(Vector3Par pos, float deltaT)
                 float intensity = _lightIntensity;
                 if (_lightMGun)
                 {
-                    intensity *= GRandGen.PlusMinus(0.8, 0.2);
+                    intensity *= GFxRandGen.PlusMinus(0.8, 0.2);
                 }
                 else
                 {
@@ -1320,7 +1320,7 @@ void Crater::Init(float timeToLive, float size, bool smoke, bool blood, bool wat
         _dustTimeToLive = 0.1;
         _dust.Load(Pars >> "CfgCloudlets" >> "CraterBlood");
 
-        float angle = 2.0 * H_PI * GRandGen.RandomValue();
+        float angle = 2.0 * H_PI * GFxRandGen.RandomValue();
         Vector3 dir(sin(angle), 0, cos(angle));
 
         _dust.SetSpeed(-VUp * 0.5 + dir * 0.5);
@@ -1348,13 +1348,13 @@ void Crater::Init(float timeToLive, float size, bool smoke, bool blood, bool wat
         saturate(cloudletSize, 0.5, 1.2);
         _smoke1.Load(Pars >> "CfgCloudlets" >> "CraterSmoke1");
         _smoke1.SetSize(2.0 * cloudletSize, 1.5 * size);
-        _smoke1.SetColor(_smoke1.GetColor() * GRandGen.RandomValue());
+        _smoke1.SetColor(_smoke1.GetColor() * GFxRandGen.RandomValue());
         _smoke2.Load(Pars >> "CfgCloudlets" >> "CraterSmoke2");
         _smoke2.SetSize(2.0 * cloudletSize, 1.5 * size);
-        _smoke2.SetColor(_smoke2.GetColor() * (0.6 + 0.4 * GRandGen.RandomValue()));
+        _smoke2.SetColor(_smoke2.GetColor() * (0.6 + 0.4 * GFxRandGen.RandomValue()));
         _smoke3.Load(Pars >> "CfgCloudlets" >> "CraterSmoke3");
         _smoke3.SetSize(1.0 * cloudletSize, 1.5 * size);
-        _smoke3.SetColor(_smoke3.GetColor() * (0.6 + 0.4 * GRandGen.RandomValue()));
+        _smoke3.SetColor(_smoke3.GetColor() * (0.6 + 0.4 * GFxRandGen.RandomValue()));
     }
     else
     {
@@ -1391,8 +1391,8 @@ void Crater::Simulate(float deltaT, SimulationImportance prec)
     if (_dustTimeToLive > 0)
     {
         const float scale = 0.8;
-        Vector3 up((GRandGen.RandomValue() * 6 * scale - 3 * scale) * _size, 10 * scale * _size,
-                   (GRandGen.RandomValue() * 6 * scale - 3 * scale) * _size);
+        Vector3 up((GFxRandGen.RandomValue() * 6 * scale - 3 * scale) * _size, 10 * scale * _size,
+                   (GFxRandGen.RandomValue() * 6 * scale - 3 * scale) * _size);
         float density = floatMax(_size, 0.02);
         _dustTimeToLive -= deltaT;
         if (!_isSmoke)

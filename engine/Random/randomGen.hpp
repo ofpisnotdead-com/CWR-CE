@@ -57,4 +57,22 @@ inline RandomGenerator& GRandGen()
 // Let call sites spell the singleton as `GRandGen.Foo()`; expands to `GRandGen().Foo()`.
 #define GRandGen GRandGen()
 
+// Separate RNG stream for cosmetic render-side effects (smoke/dust/cloudlet particles).
+// These consume a nondeterministic number of random values per frame — particle spawn
+// and lifecycle depend on camera, visibility and frame timing — so sharing the sim's
+// GRandGen desynced the MP-critical simulation RNG stream from the first seconds of a
+// mission.  A fixed seed alone could not keep two rendered runs in lockstep: the sim
+// consumed GRandGen a different number of times each run, which rarely (~10%) shifted an
+// AI soldier's head-look timer by one tick, altering its skinned head collision geometry
+// and hence a collision response — a determinism divergence only ever reproducible in the
+// rendered client (never under --simulate, which spawns no particles).  Effects now draw
+// from this independent stream; the simulation owns GRandGen exclusively.  Never use this
+// for anything that influences simulation state.
+inline RandomGenerator& GFxRandGen()
+{
+    static RandomGenerator instance;
+    return instance;
+}
+#define GFxRandGen GFxRandGen()
+
 #endif
