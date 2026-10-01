@@ -92,6 +92,18 @@ extern bool gSoftAssert;
 #define NET_ERROR(expr) POSEIDON_LOG_CHECK(Network, expr)
 #define AI_ERROR(expr) POSEIDON_LOG_CHECK(AI, expr)
 
+// AI_HEAVY_CHECK: like AI_ERROR, but for expensive O(n) validators such as
+// AssertValid() / CheckVehicleStructure() that would otherwise run every frame.
+// Unlike AI_ERROR (evaluated in release by design), this compiles out under
+// NDEBUG so the structural sweep costs nothing in shipping builds. Reserve it
+// for heavy validators; keep AI_ERROR for cheap one-liners that should stay in
+// release logs.
+#ifdef NDEBUG
+#define AI_HEAVY_CHECK(expr) ((void)0)
+#else
+#define AI_HEAVY_CHECK(expr) POSEIDON_LOG_CHECK(AI, expr)
+#endif
+
 #include <stdio.h>
 
 #pragma warning(disable : 4996)
