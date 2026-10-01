@@ -631,6 +631,10 @@ bool EntityAI::CanLock(TargetType* type, int weapon) const
         // FIX
         // if there is no mode, use some other way to check if it is LAW
         // check weapon typical magazine
+        if (weapon >= NMagazineSlots())
+        {
+            return false;
+        }
         const MagazineSlot& slot = GetMagazineSlot(weapon);
         const MuzzleType* muzzle = slot._muzzle;
         if (!muzzle)
@@ -1355,7 +1359,7 @@ int EntityAI::NextWeapon(int weapon) const
     // check max. primary level
     int maxPrimary = MaxPrimaryLevel();
 
-    if (weapon >= 0)
+    if (weapon >= 0 && weapon < NMagazineSlots())
     {
         const MagazineSlot& slot = GetMagazineSlot(weapon);
         if (slot._muzzle->_primary < maxPrimary)
@@ -1406,7 +1410,7 @@ int EntityAI::NextWeapon(int weapon) const
 int EntityAI::PrevWeapon(int weapon) const
 {
     int maxPrimary = MaxPrimaryLevel();
-    if (weapon >= 0)
+    if (weapon >= 0 && weapon < NMagazineSlots())
     {
         const MagazineSlot& slot = GetMagazineSlot(weapon);
         if (slot._muzzle->_primary < maxPrimary)

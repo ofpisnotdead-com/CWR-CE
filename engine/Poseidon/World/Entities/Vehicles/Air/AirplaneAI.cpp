@@ -103,6 +103,10 @@ bool AirplaneAuto::CalculateAimWeapon(int weapon, Vector3& dir, Target* target)
         }
         weapon = 0;
     }
+    else if (weapon >= NMagazineSlots())
+    {
+        return false;
+    }
     _fire.SetTarget(CommanderUnit(), target);
     Vector3 tgtPos = target->AimingPosition();
     Vector3 weaponPos = Type()->_gunPos;
@@ -1106,6 +1110,11 @@ bool AirplaneAuto::FireWeapon(int weapon, TargetType* target)
 
 void AirplaneAuto::FireWeaponEffects(int weapon, const Magazine* magazine, EntityAI* target)
 {
+    if (weapon < 0 || weapon >= NMagazineSlots())
+    {
+        return;
+    }
+
     const MagazineSlot& slot = GetMagazineSlot(weapon);
     if (!magazine || slot._magazine != magazine)
     {
