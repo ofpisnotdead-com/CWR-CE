@@ -220,6 +220,14 @@ add_subdirectory(engine/Poseidon)
 add_subdirectory(engine/PoseidonGL33)
 add_subdirectory(engine/PoseidonOpenAL)
 add_subdirectory(engine/PoseidonFormats)
+
+if(APPLE)
+    # Native Metal renderer backend for Apple platforms, registered through
+    # GraphicsEngineFactory (see GraphicsBackendMTL.cpp).
+    add_subdirectory(engine/PoseidonMTL)
+    add_subdirectory(apps/tools/MetalSmokeTest)
+endif()
+
 add_subdirectory(tests/unit/engine/Poseidon/Foundation)
 add_subdirectory(apps/tools/Evaluator)
 add_subdirectory(tests/unit/apps/Evaluator)

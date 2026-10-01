@@ -1815,6 +1815,7 @@ bool TextureSourcePac::Init(const char* name, PacLevelMem* mips, int maxMips)
     if (nFormat != PacFormatN)
     {
         format = nFormat;
+        _isPaa = true; // marker-bearing .pac files carry PAA-style level data
     }
     else
     {
