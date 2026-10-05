@@ -289,6 +289,27 @@ GameValue TriGetControlEnabled(const GameState* /*state*/, GameValuePar arg)
     return GameValue(ctrl->IsEnabled() ? "1" : "0");
 }
 
+GameValue TriGetControlTextColor(const GameState* /*state*/, GameValuePar arg)
+{
+    const int idc = static_cast<int>(static_cast<GameScalarType>(arg));
+    UITestEngine tmp;
+    ControlsContainer* display = tmp.GetActiveDisplay();
+    if (!display)
+        return GameValue("");
+    IControl* ctrl = display->GetCtrl(idc);
+    PackedColor color;
+    if (auto* text = dynamic_cast<C3DStatic*>(ctrl))
+        color = text->GetColor();
+    else if (auto* text = dynamic_cast<CStatic*>(ctrl))
+        color = text->GetFtColor();
+    else
+        return GameValue("");
+
+    char buffer[32];
+    snprintf(buffer, sizeof(buffer), "%d,%d,%d,%d", color.R8(), color.G8(), color.B8(), color.A8());
+    return GameValue(buffer);
+}
+
 GameValue TriGetCommandMenuOpen(const GameState* /*state*/)
 {
     AbstractUI* ui = GWorld ? GWorld->GetUI() : nullptr;
@@ -563,6 +584,7 @@ INIT_MODULE(GameStateExtTestGetters, 3)
     GGameState.NewFunction(GameFunction(GameString, "triGetControlVisible", TriGetControlVisible, GameScalar));
     GGameState.NewFunction(GameFunction(GameString, "triGetControlFocused", TriGetControlFocused, GameScalar));
     GGameState.NewFunction(GameFunction(GameString, "triGetControlEnabled", TriGetControlEnabled, GameScalar));
+    GGameState.NewFunction(GameFunction(GameString, "triGetControlTextColor", TriGetControlTextColor, GameScalar));
     GGameState.NewNularOp(GameNular(GameString, "triGetControllerScene", TriGetControllerScene));
     GGameState.NewNularOp(GameNular(GameString, "triGetControllerSection", TriGetControllerSection));
     GGameState.NewNularOp(GameNular(GameString, "triGetControllerPrompts", TriGetControllerPrompts));
