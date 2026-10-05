@@ -105,7 +105,7 @@ class SDLEventWindow
                 // standard desktop quit and must close — as do the title-bar X / taskbar
                 // / menu Quit, which carry no Alt.
                 const bool altDown = (SDL_GetModState() & SDL_KMOD_ALT) != 0;
-                if (!::Poseidon::ShouldHonorWindowClose(altDown, GApp->IsInGameplay()))
+                if (!::Poseidon::ShouldHonorWindowClose(altDown, GApp->IsInGameplay(), GApp->IsUserInputEnabled()))
                 {
                     LOG_INFO(Input, "SDLEventWindow: ignoring Alt+F4 close (valid in-game shortcut)");
                     continue;

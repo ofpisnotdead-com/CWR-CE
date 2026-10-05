@@ -73,6 +73,10 @@ class Application
     // are valid game shortcuts. False in menus, briefing, the Esc dialog, and loading.
     bool IsInGameplay() const;
 
+    // False while a script holds disableUserInput: the keyboard buffer is dropped
+    // whole, so no key reaches the game until it is released.
+    bool IsUserInputEnabled() const;
+
     // Windows handles (public for now - backwards compatibility)
     HINSTANCE m_hInstance = 0;
     HWND m_hwnd = 0;
@@ -169,9 +173,11 @@ class Application
 // A window close request (the OS turns Alt+F4 into one on Windows) is honoured unless
 // Alt is held during active gameplay, where Alt+F4 is a real in-game shortcut, not a
 // quit. The title-bar X / taskbar close / menu Quit carry no Alt and always close.
-inline bool ShouldHonorWindowClose(bool altDown, bool inGameplay)
+// Disabled user input is the exception: the shortcut cannot fire and neither can the
+// Esc menu, so ignoring the close leaves a fullscreen player no way out at all.
+inline bool ShouldHonorWindowClose(bool altDown, bool inGameplay, bool userInputEnabled)
 {
-    return !(altDown && inGameplay);
+    return !(altDown && inGameplay && userInputEnabled);
 }
 
 // Runtime gate that feeds ShouldHonorWindowClose. A world with enabled UI is gameplay only

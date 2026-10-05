@@ -8,8 +8,9 @@ using Poseidon::ShouldReportInGameplayForWindowClose;
 // Alt+F4 must quit from non-game contexts (menus, briefing, the Esc dialog) but
 // stay a valid in-game shortcut (Alt = freelook, F4 = select unit 4) during active
 // gameplay. On Windows the OS turns Alt+F4 into a window-close request, so the
-// window layer decides whether to honour a close from (altDown, inGameplay): honour
-// unless Alt is held AND the player is in active gameplay.
+// window layer decides whether to honour a close from (altDown, inGameplay,
+// userInputEnabled): honour unless Alt is held AND the player is in active gameplay
+// AND the game can actually receive the shortcut.
 //
 // ShouldHonorWindowClose is the pure predicate tested here.  IsInGameplay() is
 // the runtime gate that feeds inGameplay — tested via triInGameplay in the
@@ -24,12 +25,25 @@ using Poseidon::ShouldReportInGameplayForWindowClose;
 TEST_CASE("Alt+F4 window close is honoured everywhere except active gameplay", "[core][application][window]")
 {
     // No Alt: always a deliberate close (title-bar X, taskbar, menu Quit).
-    REQUIRE(ShouldHonorWindowClose(false, false)); // menu, plain close
-    REQUIRE(ShouldHonorWindowClose(false, true));  // in-game, deliberate X / taskbar
+    REQUIRE(ShouldHonorWindowClose(false, false, true)); // menu, plain close
+    REQUIRE(ShouldHonorWindowClose(false, true, true));  // in-game, deliberate X / taskbar
 
     // Alt held: quit from menus/briefing/Esc; reserved as a shortcut only in gameplay.
-    REQUIRE(ShouldHonorWindowClose(true, false));      // the fix: Alt+F4 in a menu quits
-    REQUIRE_FALSE(ShouldHonorWindowClose(true, true)); // Alt+F4 in gameplay = shortcut, ignored
+    REQUIRE(ShouldHonorWindowClose(true, false, true));      // the fix: Alt+F4 in a menu quits
+    REQUIRE_FALSE(ShouldHonorWindowClose(true, true, true)); // Alt+F4 in gameplay = shortcut, ignored
+}
+
+TEST_CASE("Alt+F4 quits while a script holds disableUserInput", "[core][application][window]")
+{
+    // KeyboardState::Update drops the whole key buffer while input is disabled, so the
+    // F4 half of the shortcut never reaches the game and Esc cannot open the interrupt
+    // menu either. Keeping the close ignored there strands a fullscreen player, which is
+    // what a CTI mission does to anyone it blocks.
+    REQUIRE(ShouldHonorWindowClose(/*altDown*/ true, /*inGameplay*/ true, /*userInputEnabled*/ false));
+
+    // Input disabled outside gameplay is unchanged: the close was already honoured.
+    REQUIRE(ShouldHonorWindowClose(/*altDown*/ true, /*inGameplay*/ false, /*userInputEnabled*/ false));
+    REQUIRE(ShouldHonorWindowClose(/*altDown*/ false, /*inGameplay*/ true, /*userInputEnabled*/ false));
 }
 
 TEST_CASE("startup splash/progress is not treated as active gameplay for Alt+F4",
@@ -43,7 +57,8 @@ TEST_CASE("startup splash/progress is not treated as active gameplay for Alt+F4"
     REQUIRE(ShouldHonorWindowClose(/*altDown*/ true,
                                    ShouldReportInGameplayForWindowClose(/*hasWorld*/ true, /*introMode*/ false,
                                                                         /*uiEnabled*/ true,
-                                                                        /*startupProgressActive*/ true)));
+                                                                        /*startupProgressActive*/ true),
+                                   /*userInputEnabled*/ true));
 
     // Once progress is gone, the same non-intro world with UI enabled is real gameplay;
     // this preserves the existing Alt+F4 shortcut behavior.
@@ -53,5 +68,6 @@ TEST_CASE("startup splash/progress is not treated as active gameplay for Alt+F4"
                                          ShouldReportInGameplayForWindowClose(/*hasWorld*/ true,
                                                                               /*introMode*/ false,
                                                                               /*uiEnabled*/ true,
-                                                                              /*startupProgressActive*/ false)));
+                                                                              /*startupProgressActive*/ false),
+                                         /*userInputEnabled*/ true));
 }
