@@ -1724,6 +1724,10 @@ float Landscape::CheckUnderLand(Vector3Par beg, Vector3Par dir, float tMin, floa
 float Landscape::Visible(Vector3Par from, Vector3Par to, float toRadius, const Object* skip1, const Object* target,
                          ObjIntersect isect) const
 {
+    if (!from.IsFinite() || !to.IsFinite() || !std::isfinite(toRadius))
+    {
+        return 0;
+    }
 #if DIAG
     LOG_DEBUG(Physics, "***From {} to {}, type {}", skip1 ? (const char*)skip1->GetDebugName() : "<null>",
               target ? (const char*)target->GetDebugName() : "<null>", isect);
