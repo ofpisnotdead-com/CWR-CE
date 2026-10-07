@@ -334,6 +334,7 @@ void EngineGL33::EmitDraw(const Poseidon::render::frame::Draw& d)
     {
         glDrawElementsInstanced(GL_TRIANGLES, d.indexCount, GL_UNSIGNED_SHORT, reinterpret_cast<void*>(offsetBytes),
                                 _instCount);
+        ++_instSubmitted;
     }
     else
     {
