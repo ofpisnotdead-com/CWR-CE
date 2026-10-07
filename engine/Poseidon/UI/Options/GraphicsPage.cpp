@@ -55,6 +55,9 @@ const GraphicsRowText kRows[] = {
     {"STR_DISP_MAIN_OPT_GRAPHICS_MULTITEXTURING", "STR_DISP_MAIN_OPT_GRAPHICS_MULTITEXTURING_DESC", "Multitexturing",
      "Detail and specular texture stages on terrain and objects. Off falls back to the base texture like the "
      "original compatibility switch."},
+    {"STR_DISP_MAIN_OPT_GRAPHICS_NIGHT_EYE", "STR_DISP_MAIN_OPT_GRAPHICS_NIGHT_EYE_DESC", "Night Color Loss",
+     "Simulates night vision by draining color from unlit surfaces after dark. Off keeps night scenes in full "
+     "color but renders them darker."},
 };
 constexpr int kFpsCapValues[] = {0, 30, 60, 90, 120, 144, 240};
 constexpr int kMsaaValues[] = {0, 2, 4, 8};
@@ -225,6 +228,8 @@ OptionsScrollList::RowDef GraphicsPage::GraphicsProvider::RowFor(int row) const
             return {612, m_page->m_renderScaleCStrs.data(), 5};
         case kRowMultitexturing:
             return {622, m_page->m_offOnCStrs.data(), 2};
+        case kRowNightEye:
+            return {632, m_page->m_offOnCStrs.data(), 2};
     }
     return {-1, nullptr, 0};
 }
@@ -233,7 +238,7 @@ OptionsScrollList::Kind GraphicsPage::GraphicsProvider::RowKind(int row) const
 {
     if (row == kRowAdvanced)
         return OptionsScrollList::KindHeader;
-    if (row == kRowMultitexturing)
+    if (row == kRowMultitexturing || row == kRowNightEye)
         return OptionsScrollList::KindBoolean;
     return OptionsScrollList::Provider::RowKind(row);
 }
@@ -277,6 +282,8 @@ int GraphicsPage::GraphicsProvider::RowValue(int row) const
             return GraphicsPage::RenderScaleToIndex(c.renderScale);
         case kRowMultitexturing:
             return c.multitexturing ? 1 : 0;
+        case kRowNightEye:
+            return c.nightEye ? 1 : 0;
         case kRowVsync:
             return (int)c.vsync;
         case kRowFpsCap:
@@ -369,6 +376,9 @@ void GraphicsPage::GraphicsProvider::SetRowValue(int row, int v)
             break;
         case kRowMultitexturing:
             c.multitexturing = v != 0;
+            break;
+        case kRowNightEye:
+            c.nightEye = v != 0;
             break;
         case kRowVsync:
             if (v >= 0 && v <= 2)
