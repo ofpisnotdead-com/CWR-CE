@@ -2234,32 +2234,37 @@ bool ContinueSaved = true;
 
 void StartRandomCutscene(RString world)
 {
+    const RString menuWorld = GetMenuInitWorld();
     if (world.GetLength() == 0)
     {
-        world = GetMenuInitWorld();
+        world = menuWorld;
+    }
+    if (!WorldInstalled(world))
+    {
+        return;
     }
 
     const ParamEntry& cls = Pars >> "CfgWorlds" >> world >> "cutscenes";
     int n = cls.GetSize();
     int i = toIntFloor(n * GRandGen.RandomValue());
 
-    RString name = cls[i];
+    RString name = n > 0 ? cls[i] : RString();
 
     // A mod that ships Anims/<name>.<world> hosts the cutscene from its own root; else the base
     // anims/ bank. Clear the base dir first so SetMission's own reads resolve from the same place.
     SetBaseDirectory("");
     SetMission(world, name, ResolveCutsceneAnimsSubdir(world, name));
 
-    ParseIntro();
-
-    if (CurrentTemplate.groups.Size() > 0)
+    if (!ParseIntro() && stricmp(world, menuWorld) != 0 && WorldInstalled(menuWorld))
     {
-        GLOB_WORLD->SwitchLandscape(GetWorldName(world));
-        GWorld->ActivateAddons(CurrentTemplate.addOns);
-        GLOB_WORLD->InitGeneral(CurrentTemplate.intel);
-        GLOB_WORLD->InitVehicles(GModeIntro, CurrentTemplate);
-        //		GWorld->EnableSimulation(true);
+        StartRandomCutscene(menuWorld);
+        return;
     }
+
+    GLOB_WORLD->SwitchLandscape(GetWorldName(world));
+    GWorld->ActivateAddons(CurrentTemplate.addOns);
+    GLOB_WORLD->InitGeneral(CurrentTemplate.intel);
+    GLOB_WORLD->InitVehicles(GModeIntro, CurrentTemplate);
 }
 
 } // namespace Poseidon

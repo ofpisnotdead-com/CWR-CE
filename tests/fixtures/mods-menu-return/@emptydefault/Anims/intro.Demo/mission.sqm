@@ -1,0 +1,3 @@
+version=11;
+class Mission { class Intel {}; };
+class Intro { class Intel {}; };
