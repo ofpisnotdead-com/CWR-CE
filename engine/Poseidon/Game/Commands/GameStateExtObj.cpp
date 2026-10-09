@@ -955,6 +955,160 @@ GameValue ObjMagazinesArray(const GameState* state, GameValuePar oper1)
     return value;
 }
 
+GameValue ObjUnitLoadout(const GameState* state, GameValuePar oper1)
+{
+    GameValue value = state->CreateGameValue(GameArray);
+    GameArrayType& loadout = value;
+
+    Object* obj = GetObject(oper1);
+    if (!obj)
+    {
+        return value;
+    }
+    EntityAI* ai = dyn_cast<EntityAI>(obj);
+    if (!ai)
+    {
+        return value;
+    }
+
+    GameValue weapons = state->CreateGameValue(GameArray);
+    GameArrayType& weaponArray = weapons;
+    for (int i = 0; i < ai->NWeaponSystems(); i++)
+    {
+        const WeaponType* weapon = ai->GetWeaponSystem(i);
+        if (!weapon || weapon->_weaponType == 0)
+        {
+            continue;
+        }
+        weaponArray.Add(weapon->GetName());
+    }
+
+    GameValue magazines = state->CreateGameValue(GameArray);
+    GameArrayType& magazineArray = magazines;
+    for (int i = 0; i < ai->NMagazines(); i++)
+    {
+        const Magazine* magazine = ai->GetMagazine(i);
+        if (!magazine || !magazine->_type)
+        {
+            continue;
+        }
+        magazineArray.Add(magazine->_type->GetName());
+        magazineArray.Add(static_cast<float>(magazine->_ammo));
+    }
+
+    RString selectedWeapon;
+    const int selected = ai->SelectedWeapon();
+    if (selected >= 0 && selected < ai->NMagazineSlots())
+    {
+        const MuzzleType* muzzle = ai->GetMagazineSlot(selected)._muzzle;
+        if (muzzle)
+        {
+            selectedWeapon = muzzle->GetName();
+        }
+    }
+
+    loadout.Add(weapons);
+    loadout.Add(magazines);
+    loadout.Add(selectedWeapon);
+    return value;
+}
+
+GameValue ObjSetUnitLoadout(const GameState* state, GameValuePar oper1, GameValuePar oper2)
+{
+    Object* obj = GetObject(oper1);
+    if (!obj)
+    {
+        return NOTHING;
+    }
+    EntityAI* ai = dyn_cast<EntityAI>(obj);
+    if (!ai)
+    {
+        return NOTHING;
+    }
+
+    const GameArrayType& loadout = oper2;
+    if (loadout.Size() < 2)
+    {
+        state->SetError(EvalDim, loadout.Size(), 2);
+        return NOTHING;
+    }
+    if (!CheckType(state, loadout[0], GameArray) || !CheckType(state, loadout[1], GameArray))
+    {
+        return NOTHING;
+    }
+    if (loadout.Size() >= 3 && loadout[2].GetType() != GameString)
+    {
+        state->TypeError(GameString, loadout[2].GetType());
+        return NOTHING;
+    }
+
+    const GameArrayType& weapons = loadout[0];
+    const GameArrayType& magazines = loadout[1];
+    for (int i = 0; i < weapons.Size(); ++i)
+    {
+        if (!CheckType(state, weapons[i], GameString))
+        {
+            return NOTHING;
+        }
+    }
+    if ((magazines.Size() % 2) != 0)
+    {
+        state->SetError(EvalDim, magazines.Size(), magazines.Size() + 1);
+        return NOTHING;
+    }
+    for (int i = 0; i < magazines.Size(); i += 2)
+    {
+        if (!CheckType(state, magazines[i], GameString) || !CheckType(state, magazines[i + 1], GameScalar))
+        {
+            return NOTHING;
+        }
+    }
+
+    ai->RemoveAllWeapons();
+    ai->RemoveAllMagazines();
+
+    for (int i = 0; i < magazines.Size(); i += 2)
+    {
+        GameStringType magazineName = magazines[i];
+        const int ammo = toInt(static_cast<float>(magazines[i + 1]));
+        Ref<MagazineType> magazineType = MagazineTypes.New(magazineName);
+        if (!magazineType)
+        {
+            continue;
+        }
+        Ref<Magazine> magazine = new Magazine(magazineType);
+        magazine->_ammo = ammo >= 0 ? ammo : magazineType->_maxAmmo;
+        ai->AddMagazine(magazine, false);
+    }
+
+    for (int i = 0; i < weapons.Size(); ++i)
+    {
+        GameStringType weaponName = weapons[i];
+        ai->AddWeapon(weaponName);
+    }
+
+    ai->AutoReloadAll();
+
+    if (loadout.Size() >= 3)
+    {
+        GameStringType selectedWeapon = loadout[2];
+        if (selectedWeapon.GetLength() > 0)
+        {
+            for (int i = 0; i < ai->NMagazineSlots(); i++)
+            {
+                const MuzzleType* muzzle = ai->GetMagazineSlot(i)._muzzle;
+                if (muzzle && stricmp(muzzle->GetName(), selectedWeapon) == 0)
+                {
+                    ai->SelectWeapon(i);
+                    break;
+                }
+            }
+        }
+    }
+
+    return NOTHING;
+}
+
 GameValue ObjAmmoArray(const GameState* state, GameValuePar oper1, GameValuePar oper2)
 {
     GameValue value = state->CreateGameValue(GameArray);
