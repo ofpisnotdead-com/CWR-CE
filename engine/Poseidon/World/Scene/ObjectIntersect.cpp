@@ -680,6 +680,10 @@ void Object::Intersect(CollisionBuffer& result, Vector3Par beg, Vector3Par end, 
 void Object::Intersect(const FrameBase& pos, CollisionBuffer& result, Vector3Par beg, Vector3Par end, float radius,
                        ObjIntersect type, int hierLevel) const
 {
+    if (!pos.Transform().IsFinite() || !std::isfinite(pos.Scale()) || pos.Scale() == 0)
+    {
+        return;
+    }
     LODShape* thisShape = this->GetShape();
     if (!thisShape)
     {
