@@ -500,7 +500,7 @@ void Shape::Reverse()
         AnimationPhase& phase = _phase[i];
         for (int p = 0; p < phase.Size(); p++)
         {
-            ReverseVector(phase[i]);
+            ReverseVector(phase[p]);
         }
     }
 }

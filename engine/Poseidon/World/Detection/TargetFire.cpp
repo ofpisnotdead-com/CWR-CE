@@ -1340,6 +1340,10 @@ bool EntityAI::WhatFireResult(FireResult& result, const Target& target, int weap
 #if DIAG_RESULT
     LOG_DEBUG(AI, " inRange {:.3f}", inRange);
 #endif
+    if (weapon < 0 || weapon >= NMagazineSlots())
+    {
+        return false;
+    }
     const Magazine* magazine = GetMagazineSlot(weapon)._magazine;
     if (!magazine)
     {
@@ -2042,7 +2046,7 @@ void EntityAI::SelectFireWeapon(FireDecision& fire)
     }
     else
     {
-        if (fire._fireMode >= 0)
+        if (fire._fireMode >= 0 && fire._fireMode < NMagazineSlots())
         {
             const Magazine* magazine = GetMagazineSlot(fire._fireMode)._magazine;
             if (!magazine || magazine->_ammo == 0)

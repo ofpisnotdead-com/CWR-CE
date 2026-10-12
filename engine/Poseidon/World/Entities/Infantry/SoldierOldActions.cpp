@@ -203,7 +203,7 @@ void Soldier::KeyboardPilot(float deltaT, SimulationImportance prec)
                 FireAttemptWhenNotPossible();
             }
         }
-        else if (_currentWeapon >= 0 && EnableWeaponManipulation())
+        else if (_currentWeapon >= 0 && _currentWeapon < NMagazineSlots() && EnableWeaponManipulation())
         {
             const MagazineSlot& slot = GetMagazineSlot(_currentWeapon);
             const Magazine* magazine = slot._magazine;

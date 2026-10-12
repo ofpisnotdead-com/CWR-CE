@@ -705,7 +705,7 @@ void EntityAI::TrackTargets(TargetList& res, AIUnit* unit, int canSee, bool init
 
     if (canSee & CanSeeOptics)
     {
-        if (_currentWeapon >= 0 && EnableViewThroughOptics())
+        if (_currentWeapon >= 0 && _currentWeapon < NMagazineSlots() && EnableViewThroughOptics())
         {
             const MagazineSlot& slot = GetMagazineSlot(_currentWeapon);
             if (slot._muzzle)
@@ -1553,6 +1553,10 @@ bool EntityAI::WhatShootResult(FireResult& result, const Target& target, int wea
               (const char*)target.type->GetName(), weapon);
 #endif
 
+    if (weapon < 0 || weapon >= NMagazineSlots())
+    {
+        return false;
+    }
     const Magazine* magazine = GetMagazineSlot(weapon)._magazine;
     if (!magazine)
     {

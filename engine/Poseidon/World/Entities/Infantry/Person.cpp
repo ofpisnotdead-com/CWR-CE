@@ -88,7 +88,7 @@ LODShapeWithShadow* Person::GetOpticsModel(Person* person)
 {
     PoseidonAssert(person == this);
 
-    if (_currentWeapon < 0)
+    if (_currentWeapon < 0 || _currentWeapon >= NMagazineSlots())
     {
         return nullptr;
     }
@@ -104,7 +104,7 @@ bool Person::GetForceOptics(Person* person) const
 {
     PoseidonAssert(person == this);
 
-    if (_currentWeapon < 0)
+    if (_currentWeapon < 0 || _currentWeapon >= NMagazineSlots())
     {
         return false;
     }

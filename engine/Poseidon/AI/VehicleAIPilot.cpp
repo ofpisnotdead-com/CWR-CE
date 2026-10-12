@@ -1219,6 +1219,11 @@ int EntityAI::FindBestMagazine(const MagazineType* type, int ammo) const
 
 static void GetReloadActions(EntityAI* veh, UIActions& actions, int iSlot, const MuzzleType* currentMuzzle)
 {
+    if (iSlot < 0 || iSlot >= veh->NMagazineSlots())
+    {
+        return;
+    }
+
     const MagazineSlot& slot = veh->GetMagazineSlot(iSlot);
     const Magazine* magazine = slot._magazine;
     const MagazineType* mType = magazine ? magazine->_type : nullptr;
@@ -1383,7 +1388,7 @@ void EntityAI::GetActions(UIActions& actions, AIUnit* unit, bool now)
                 }
             }
             // primary weapon
-            if (_currentWeapon >= 0)
+            if (_currentWeapon >= 0 && _currentWeapon < NMagazineSlots())
             {
                 const MagazineSlot& slot = GetMagazineSlot(_currentWeapon);
                 const MuzzleType* muzzle = slot._muzzle;
@@ -1421,7 +1426,7 @@ void EntityAI::GetActions(UIActions& actions, AIUnit* unit, bool now)
             }
             // magazines
             const MuzzleType* currentMuzzle = nullptr;
-            if (_currentWeapon >= 0)
+            if (_currentWeapon >= 0 && _currentWeapon < NMagazineSlots())
             {
                 currentMuzzle = GetMagazineSlot(_currentWeapon)._muzzle;
                 GetReloadActions(this, actions, _currentWeapon, currentMuzzle);
