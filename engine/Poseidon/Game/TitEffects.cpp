@@ -367,7 +367,10 @@ void TitleEffectBasic::DrawObject()
     GScene->SetCamera(cam);
     PackedColor color(Color(1, 1, 1, _alpha));
     _object->SetConstantColor(color);
+    const render::PassKindHint savedHint = GEngine->GetPassKindHint();
+    GEngine->SetPassKindHint(render::PassKindHint::ScreenSpace3D);
     _object->Draw(0, ClipAll, *_object);
+    GEngine->SetPassKindHint(savedHint);
     Object::DrawWidescreenPillarbox(/*requireGameplayActive*/ false, /*force*/ true);
     // restore camera
     GScene->SetCamera(oldCam);

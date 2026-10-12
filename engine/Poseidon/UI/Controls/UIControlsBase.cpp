@@ -456,7 +456,10 @@ void ControlObject::OnDraw(float alpha)
     // Force SW T&L path for UI 3D objects — HW-TL shader doesn't support
     // the per-object point light that ControlsContainer::OnDraw creates,
     // and UI objects may gain VBOs during mission OptimizeAll().
+    const render::PassKindHint savedHint = GEngine->GetPassKindHint();
+    GEngine->SetPassKindHint(render::PassKindHint::ScreenSpace3D);
     Draw(level, ClipAll | ClipUser0, *this);
+    GEngine->SetPassKindHint(savedHint);
 }
 
 ControlObjectWithZoom::ControlObjectWithZoom(ControlsContainer* parent, int idc, const ParamEntry& cls)
@@ -764,6 +767,18 @@ IControl* ControlObjectContainer::GetFocused()
     return _controls[_indexFocused]._control;
 }
 
+bool ControlObjectContainer::WantsTextInput() const
+{
+    // GetFocused() falls back to `this` when nothing is focused, so check
+    // _indexFocused directly here to avoid recursing into this override.
+    if (_indexFocused < 0 || _indexFocused >= _controls.Size())
+    {
+        return false;
+    }
+    IControl* ctrl = _controls[_indexFocused]._control;
+    return ctrl && ctrl->WantsTextInput();
+}
+
 int ControlObjectContainer::GetFocusedIdc()
 {
     if (_indexFocused < 0)
@@ -777,16 +792,6 @@ int ControlObjectContainer::GetFocusedIdc()
     }
     IControl* ctrl = _controls[_indexFocused]._control;
     return ctrl ? ctrl->IDC() : IDC();
-}
-
-bool ControlObjectContainer::WantsTextInput() const
-{
-    if (_indexFocused < 0 || _indexFocused >= _controls.Size())
-    {
-        return false;
-    }
-    IControl* ctrl = _controls[_indexFocused]._control;
-    return ctrl && ctrl->WantsTextInput();
 }
 
 bool ControlObjectContainer::CanBeDefault() const
