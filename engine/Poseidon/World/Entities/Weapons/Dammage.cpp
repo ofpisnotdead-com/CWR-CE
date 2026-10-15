@@ -54,6 +54,37 @@ void Object::SetSmoke(Vehicle* smoke)
     _canSmoke = false;
 }
 
+void Object::AddSmokeSource()
+{
+    if(CanSmoke() && !GetSmoke())
+    {
+        // start destruction
+        Vector3Val com = _shape->CenterOfMass();
+        float objSize = GetRadius();
+        float density = objSize * (1.0 / 3);
+        float size = objSize * (1.0 / 3);
+        saturate(density, 0.25, 2.0);
+        saturate(size, 0.25, 4.0);
+        size *= GRandGen.RandomValue() * 0.4 + 0.8;
+        density *= GRandGen.RandomValue() * 0.4 + 0.8;
+        float rndTime = GRandGen.RandomValue() * 0.4 + 0.8;
+        LODShapeWithShadow* smokeShape = GLOB_SCENE->Preloaded(CloudletBasic);
+        SmokeSourceVehicle* smoke = new SmokeSourceOnVehicle(smokeShape, density, size, nullptr, this, com);
+        smoke->SetClimbRate(-0.8, 0, 5);
+        float smokeSourceCoef = 0.2;
+        rndTime *= smokeSourceCoef;
+        smoke->SetSourceTimes(5 * rndTime, 30 * rndTime, 30 * rndTime);
+        float color = GRandGen.RandomValue();
+        smoke->SetColor(Color(0.15, 0.15, 0.10) * color);
+        smoke->SetPosition(PositionModelToWorld(com));
+        smoke->SetTimes(0.5, 3);
+        smoke->SetFades(1.5, 0.5, 3);
+        GLOB_WORLD->AddAnimal(smoke);
+        SetSmoke(smoke);
+        GetNetworkManager().CreateVehicle(smoke, VLTAnimal, "", -1);
+    }
+}
+
 float Object::GetExplosives() const
 {
     return 0;
@@ -542,16 +573,6 @@ bool Object::IsDammageDestroyed() const
 
 void Object::Destroy(EntityAI* owner, float overkill, float minExp, float maxExp)
 {
-    // start destruction
-    Vector3Val com = _shape->CenterOfMass();
-    float objSize = GetRadius();
-    float density = objSize * (1.0 / 3);
-    float size = objSize * (1.0 / 3);
-    saturate(density, 0.25, 2.0);
-    saturate(size, 0.25, 4.0);
-    size *= GRandGen.RandomValue() * 0.4 + 0.8;
-    density *= GRandGen.RandomValue() * 0.4 + 0.8;
-    float rndTime = GRandGen.RandomValue() * 0.4 + 0.8;
     switch (GetDestructType())
     {
         case DestructTree:
@@ -589,20 +610,8 @@ void Object::Destroy(EntityAI* owner, float overkill, float minExp, float maxExp
         {
             if (CanSmoke() && !GetSmoke())
             {
-                LODShapeWithShadow* smokeShape = GLOB_SCENE->Preloaded(CloudletBasic);
-                SmokeSourceVehicle* smoke = new SmokeSourceOnVehicle(smokeShape, density, size, owner, this, com);
-                smoke->SetClimbRate(-0.8, 0, 5);
-                float smokeSourceCoef = 0.2;
-                rndTime *= smokeSourceCoef;
-                smoke->SetSourceTimes(5 * rndTime, 30 * rndTime, 30 * rndTime);
-                float color = GRandGen.RandomValue();
-                smoke->SetColor(Color(0.15, 0.15, 0.10) * color);
-                smoke->SetPosition(PositionModelToWorld(com));
-                smoke->SetTimes(0.5, 3);
-                smoke->SetFades(1.5, 0.5, 3);
-                GLOB_WORLD->AddAnimal(smoke);
-                SetSmoke(smoke);
-                GetNetworkManager().CreateVehicle(smoke, VLTAnimal, "", -1);
+                AddSmokeSource();
+                GetNetworkManager().AddSmokeSource(this);
                 SoundPars soundPars;
                 soundPars.name = RString(nullptr); // no sound
                 soundPars.vol = soundPars.freq = 0;
