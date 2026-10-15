@@ -168,9 +168,8 @@ void HarnessServer::Stop()
         _listenSock = HARNESS_INVALID_SOCKET;
     }
 
-    // Give the thread a moment to exit
-    for (int i = 0; i < 20 && _running.load(); ++i)
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    // Wait for the worker thread to finish.
+    Foundation::poThreadJoin(_threadId, nullptr);
 
     _running.store(false);
     LOG_INFO(Core, "[Harness] Server stopped");

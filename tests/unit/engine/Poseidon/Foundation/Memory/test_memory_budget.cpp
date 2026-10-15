@@ -171,6 +171,7 @@ TEST_CASE("ProcessMemoryBudget - concurrent reserve/release stays exact", "[memo
     constexpr int kIters = 20000;
     constexpr size_t kChunk = 64;
 
+    std::atomic<bool> allReserved{true};
     std::vector<std::thread> threads;
     threads.reserve(kThreads);
     for (int t = 0; t < kThreads; ++t)
@@ -180,7 +181,8 @@ TEST_CASE("ProcessMemoryBudget - concurrent reserve/release stays exact", "[memo
             {
                 for (int i = 0; i < kIters; ++i)
                 {
-                    REQUIRE(b.Reserve(kChunk));
+                    if (!b.Reserve(kChunk))
+                        allReserved = false;
                     b.Reconcile(kChunk, kChunk);
                     b.Release(kChunk);
                 }
@@ -191,6 +193,7 @@ TEST_CASE("ProcessMemoryBudget - concurrent reserve/release stays exact", "[memo
 
     // Every reserve was balanced by a release — used must return to exactly 0,
     // and peak must have climbed at least one chunk (something was live).
+    REQUIRE(allReserved);
     REQUIRE(b.Used() == 0);
     REQUIRE(b.Peak() >= kChunk);
 }
