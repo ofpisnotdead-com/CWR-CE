@@ -2549,7 +2549,7 @@ GameValue ParticleDrop(const GameState* state, GameValuePar oper1)
         }
         else
         {
-            if (!GetVector3(Position, Array[5]))
+            if (!::GetPos(Position, Array[5]))
             {
                 state->SetError(EvalGen);
                 return GameValue();
