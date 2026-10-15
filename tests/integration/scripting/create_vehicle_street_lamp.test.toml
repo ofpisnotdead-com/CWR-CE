@@ -1,0 +1,4 @@
+binary = "PoseidonGame"
+mission = "tests/integration/missions/action_menu_weapon.Demo"
+timeout = 60
+tags = ["headless"]

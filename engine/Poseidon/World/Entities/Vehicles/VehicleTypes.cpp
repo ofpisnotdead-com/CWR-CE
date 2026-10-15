@@ -744,6 +744,12 @@ Object* NewNonAIVehicleQuiet(RString typeName, RString shapeName, bool fullCreat
     }
     else if (!strcmp(simName, "streetlamp"))
     {
+        if (shapeName.GetLength() == 0 && !type->GetShape())
+        {
+            LOG_ERROR(World, "Cannot create '{}': street lamp has no model", (const char*)typeName);
+            type->VehicleRelease();
+            return nullptr;
+        }
         v = new StreetLamp(TempShape(shapeName), dynamic_cast<StreetLampType*>(type), -1);
     }
     else if (!strcmp(simName, "seagull"))
