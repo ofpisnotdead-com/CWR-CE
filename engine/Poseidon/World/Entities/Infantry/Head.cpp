@@ -244,6 +244,18 @@ Head::Head(const HeadType& type, LODShape* lShape)
     SetGlasses(type, lShape, "None");
     SetMimic("Default");
 
+    // Random-lip state MUST be initialised: Head::Simulate reads all four fields
+    // every tick (the _wanted/_actual lerp and the `Glob.time >= _nextChangeRandomLip`
+    // trigger) unconditionally, not gated on _randomLip. Left uninitialised (the
+    // entity is heap-allocated with non-zeroing operator new), the trigger can fire
+    // spuriously and call NextRandomLip() -> GRandGen.RandomValue(), advancing the
+    // shared RNG stream by a run-dependent amount and desyncing MP / replays. The
+    // far-future _nextChangeRandomLip keeps the block a deterministic no-op until
+    // SetRandomLip() enables the feature (which re-initialises all four).
+    _actualRandomLip = 0;
+    _wantedRandomLip = 0;
+    _speedRandomLip = 0;
+    _nextChangeRandomLip = Glob.time + 1e10f;
     _randomLip = false;
 }
 
