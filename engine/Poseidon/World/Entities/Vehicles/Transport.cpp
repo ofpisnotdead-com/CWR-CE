@@ -275,7 +275,7 @@ const EnumName* Foundation::GetEnumNames(UIActionType dummy)
                                              EnumName(ATEngineOff, "ENGINE OFF"),
                                              EnumName(ATSwitchWeapon, "SWITCH WEAPON"),
                                              EnumName(ATUseWeapon, "USE WEAPON"),
-                                             EnumName(ATLoadMagazine, "LOAD MAGAZINE"),
+                                             EnumName(ATLoadMagazine, "LOADMAGAZINE"),
                                              EnumName(ATTakeWeapon, "TAKE WEAPON"),
                                              EnumName(ATTakeMagazine, "TAKE MAGAZINE"),
                                              EnumName(ATTakeFlag, "TAKE FLAG"),
