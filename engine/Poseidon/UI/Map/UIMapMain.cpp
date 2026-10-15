@@ -2135,6 +2135,7 @@ void CStaticMapMain::OnLButtonClick(float x, float y)
 
         bool alt = InputSubsystem::Instance().IsKeyDown(SDL_SCANCODE_LALT);
         bool shift = InputSubsystem::Instance().IsKeyDown(SDL_SCANCODE_LSHIFT);
+        bool ctrl = InputSubsystem::Instance().IsKeyDown(SDL_SCANCODE_LCTRL);
         bool issueMove = true;
         if (GMapOnSingleClick.GetLength() > 0)
         {
@@ -2169,6 +2170,7 @@ void CStaticMapMain::OnLButtonClick(float x, float y)
             state->VarSetLocal("_pos", posArray, true);
             state->VarSetLocal("_alt", alt, true);
             state->VarSetLocal("_shift", shift, true);
+			state->VarSetLocal("_ctrl",ctrl,true);
             issueMove = !state->EvaluateMultipleBool(GMapOnSingleClick);
             state->EndContext();
         }
