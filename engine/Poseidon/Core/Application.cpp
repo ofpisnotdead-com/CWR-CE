@@ -83,6 +83,11 @@ bool Application::IsInGameplay() const
                                                 GWorld && GWorld->IsUIEnabled(), progressActive);
 }
 
+bool Application::IsUserInputEnabled() const
+{
+    return !GWorld || GWorld->IsUserInputEnabled();
+}
+
 Engine* Application::CreateGraphicsEngine(const GraphicsEngineParams& /*params*/)
 {
     // Default: headless dummy engine (server, tools)
