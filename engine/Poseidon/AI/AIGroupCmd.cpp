@@ -1487,6 +1487,19 @@ void AIGroup::AssignVehicles()
             {
                 continue;
             }
+            // A driverless vehicle (static weapon) can never satisfy the test
+            // above - GetDriverAssigned() stays null forever - so its crew
+            // would be offered to the assignment loop below on every think.
+            // With two such vehicles in one group they keep stealing each
+            // other's gunner, and the resulting "wrong vehicle" verdict in
+            // GetInVehicles makes him get out and back in once per think.
+            // A unit already sitting in the seat it is assigned to is settled.
+            if (unit->GetVehicle() == veh &&
+                (veh->GetGunnerAssigned() == unit || veh->GetCommanderAssigned() == unit ||
+                 veh->GetDriverAssigned() == unit))
+            {
+                continue;
+            }
             // we need to remove this vehicle
         }
 
