@@ -6,7 +6,6 @@
 #include <Poseidon/Foundation/Platform/FPUSetup.hpp>
 #include <Poseidon/Foundation/Platform/PoseidonInit.hpp>
 #include <Poseidon/Foundation/Platform/AppConfig.hpp>
-#include <Poseidon/Foundation/Platform/GamePaths.hpp>
 #include <Poseidon/Core/Application.hpp>
 #include <Poseidon/Core/Version.hpp>
 #include <Poseidon/Core/Config/Config.hpp>
@@ -32,7 +31,6 @@
 #include <exception>
 #include <string>
 #include <vector>
-#include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <Poseidon/Foundation/Framework/AppFrame.hpp>
 #include <Poseidon/Foundation/Framework/DebugLog.hpp>
 #include <Poseidon/Foundation/Framework/GlobalAlive.hpp>
@@ -43,7 +41,6 @@
 
 #ifndef _WIN32
 #include <csignal>
-#include <chrono>
 #include <thread>
 #include <unistd.h>
 
@@ -66,7 +63,6 @@ using namespace Poseidon;
 #include <memory>
 
 #include <spdlog/sinks/stdout_color_sinks.h>
-#include <spdlog/sinks/basic_file_sink.h>
 
 #include <mimalloc.h>
 
@@ -264,35 +260,9 @@ bool ServerApplication::CreateServerConsole()
 
         std::vector<spdlog::sink_ptr> sinks{console_sink};
 
-        try
-        {
-            auto now = std::chrono::system_clock::now();
-            auto tt = std::chrono::system_clock::to_time_t(now);
-            std::tm tm{};
-#ifdef _WIN32
-            localtime_s(&tm, &tt);
-#else
-            localtime_r(&tt, &tm);
-#endif
-            char timestamp[32];
-            std::snprintf(timestamp, sizeof(timestamp), "%04d%02d%02d_%02d%02d%02d", tm.tm_year + 1900, tm.tm_mon + 1,
-                          tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
-
-            int port = AppConfig::Instance().GetNetworkPort();
-            std::string logPath =
-                GamePaths::Instance().UserDir() + "server_" + timestamp + "_" + std::to_string(port) + ".log";
-
-            auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logPath, true);
-            file_sink->set_level(spdlog::level::debug);
-            file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
-            sinks.push_back(file_sink);
-            LOG_INFO(Core, "Server log: {}", logPath);
-        }
-        catch (const spdlog::spdlog_ex& ex)
-        {
-            LOG_WARN(Core, "File logging not available: {}", ex.what());
-        }
-
+        // No file sink: this logger is registered and never fetched, since every
+        // LOG_ macro goes to the engine's own category loggers. The server's log
+        // file comes from GameBase, like every other app's.
         auto server_logger = std::make_shared<spdlog::logger>("Server", sinks.begin(), sinks.end());
         server_logger->set_level(spdlog::level::debug);
         try
