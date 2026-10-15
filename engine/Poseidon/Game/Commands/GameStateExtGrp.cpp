@@ -1942,3 +1942,26 @@ GameValue ObjGetSpeed(const GameState* state, GameValuePar oper1)
 
     return 3.6f * veh->ModelSpeed().Z();
 }
+
+GameValue SelectPlayer(const GameState* state, GameValuePar oper1)
+{
+    Object* obj = GetObject(oper1);
+    EntityAI* ai = dyn_cast<EntityAI>(obj);
+    if (!ai)
+    {
+        return NOTHING;
+    }
+
+    AIUnit* unit = ai->CommanderUnit();
+    if (!unit)
+    {
+        return NOTHING;
+    }
+
+    GWorld->SwitchCameraTo(unit->GetVehicle(), CamInternal);
+    GWorld->SetPlayerManual(true);
+    GWorld->SwitchPlayerTo(unit->GetPerson());
+    GWorld->SetRealPlayer(unit->GetPerson());
+
+    return NOTHING;
+}
