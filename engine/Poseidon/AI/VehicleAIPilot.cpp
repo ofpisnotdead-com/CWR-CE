@@ -1078,8 +1078,15 @@ void EntityAI::PerformAction(const UIAction& action, AIUnit* unit)
             {
                 const UserTypeAction& act = GetType()->_userTypeActions[action.param];
                 GameState* gstate = GWorld->GetGameState();
+                // Declaring "GameVarSpace local" here to execute statement locally. This is learnt from
+                // "CreateUnit" script command. Since CreateUnit works normally, maybe userActions can 
+                // have similar design and can thus uses "_this" to indicate the action caller
+                GameVarSpace local;
+                gstate->BeginContext(&local);
                 gstate->VarSet("this", GameValueExt(this), true);
+                gstate->VarSetLocal("_this", GameValueExt(unit->GetPerson()), true);
                 gstate->Execute(act.statement);
+                gstate->EndContext();
             }
             return;
     }
