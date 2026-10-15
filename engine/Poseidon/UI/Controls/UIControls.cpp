@@ -1196,6 +1196,13 @@ void CEditContainer::SetCaretPos(int pos)
     EnsureVisible(pos);
 }
 
+void CEditContainer::SelectAll()
+{
+    _blockBegin = 0;
+    _blockEnd = strlen(GetText());
+    EnsureVisible(_blockEnd);
+}
+
 int CEditContainer::NextPos(int pos)
 {
     return NextTextElementPos(GetText(), pos, _font ? _font->GetLangID() : Poseidon::Foundation::GetLangID());
