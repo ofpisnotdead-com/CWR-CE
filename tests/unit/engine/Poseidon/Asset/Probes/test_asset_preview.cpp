@@ -224,7 +224,7 @@ TEST_CASE("PreviewImage::saveToFile writes PNG", "[tools-preview][save]")
     img.height = 2;
     img.data.assign(2 * 2 * 4, 0xAA);
 
-    std::string path = std::string(std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp") + "/test_save.png";
+    std::string path = TestFixtures::GetTempFilePath("test_save.png");
     REQUIRE(img.saveToFile(path));
 
     // Verify file exists and has PNG signature
@@ -235,7 +235,7 @@ TEST_CASE("PreviewImage::saveToFile writes PNG", "[tools-preview][save]")
     CHECK(sig[1] == 'P');
     CHECK(sig[2] == 'N');
     CHECK(sig[3] == 'G');
-    std::remove(path.c_str());
+    TestFixtures::CleanupTempFile(path.c_str());
 }
 
 TEST_CASE("PreviewImage::saveToFile writes BMP", "[tools-preview][save]")
@@ -245,7 +245,7 @@ TEST_CASE("PreviewImage::saveToFile writes BMP", "[tools-preview][save]")
     img.height = 2;
     img.data.assign(2 * 2 * 4, 0xBB);
 
-    std::string path = std::string(std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp") + "/test_save.bmp";
+    std::string path = TestFixtures::GetTempFilePath("test_save.bmp");
     REQUIRE(img.saveToFile(path));
 
     std::ifstream f(path, std::ios::binary);
@@ -254,7 +254,7 @@ TEST_CASE("PreviewImage::saveToFile writes BMP", "[tools-preview][save]")
     f.read(sig, 2);
     CHECK(sig[0] == 'B');
     CHECK(sig[1] == 'M');
-    std::remove(path.c_str());
+    TestFixtures::CleanupTempFile(path.c_str());
 }
 
 TEST_CASE("PreviewImage::saveToFile writes TGA", "[tools-preview][save]")
@@ -264,7 +264,7 @@ TEST_CASE("PreviewImage::saveToFile writes TGA", "[tools-preview][save]")
     img.height = 2;
     img.data.assign(2 * 2 * 4, 0xCC);
 
-    std::string path = std::string(std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp") + "/test_save.tga";
+    std::string path = TestFixtures::GetTempFilePath("test_save.tga");
     REQUIRE(img.saveToFile(path));
 
     std::ifstream f(path, std::ios::binary);
@@ -273,7 +273,7 @@ TEST_CASE("PreviewImage::saveToFile writes TGA", "[tools-preview][save]")
     uint8_t hdr[3];
     f.read(reinterpret_cast<char*>(hdr), 3);
     CHECK(hdr[2] == 10);
-    std::remove(path.c_str());
+    TestFixtures::CleanupTempFile(path.c_str());
 }
 
 TEST_CASE("PreviewImage::saveToFile rejects unknown extension", "[tools-preview][save]")
@@ -299,7 +299,7 @@ TEST_CASE("PreviewImageRGB::saveToFile writes PNG", "[tools-preview][save]")
     img.height = 4;
     img.data.assign(4 * 4 * 3, 0x55);
 
-    std::string path = std::string(std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp") + "/test_save_rgb.png";
+    std::string path = TestFixtures::GetTempFilePath("test_save_rgb.png");
     REQUIRE(img.saveToFile(path));
 
     std::ifstream f(path, std::ios::binary);
@@ -309,5 +309,5 @@ TEST_CASE("PreviewImageRGB::saveToFile writes PNG", "[tools-preview][save]")
     CHECK(sig[1] == 'P');
     CHECK(sig[2] == 'N');
     CHECK(sig[3] == 'G');
-    std::remove(path.c_str());
+    TestFixtures::CleanupTempFile(path.c_str());
 }
