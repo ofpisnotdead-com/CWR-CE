@@ -52,6 +52,8 @@
 #include <Poseidon/Foundation/Types/Pointers.hpp>
 #include <Poseidon/Foundation/platform.hpp>
 
+#include <Poseidon/Input/InputSubsystem.hpp>
+
 using Poseidon::Foundation::EnumName;
 using Poseidon::Foundation::GetEnumNames;
 using Poseidon::Foundation::GetEnumValue;
@@ -59,6 +61,7 @@ using Poseidon::Foundation::GetEnumValue;
 using namespace Poseidon;
 namespace Poseidon
 {
+extern RString GetKeyName(int dikCode);
 } // namespace Poseidon
 
 #ifdef _WIN32
@@ -368,6 +371,18 @@ GameValue PlayerClearInjured(const GameState* state)
 GameValue UsedVersion(const GameState* state)
 {
     return float(APP_VERSION_MAJOR) * 1000.0f + float(APP_VERSION_MINOR) * 10.0f;
+}
+
+GameValue KeyPressing(const GameState *state)
+{
+    // Modifier keys state
+    // bool ctrl = false, shift = false, alt = false;
+
+    int i = SDL_SCANCODE_UNKNOWN;
+    for (; i < SDL_SCANCODE_COUNT; ++i)
+        if (InputSubsystem::Instance().IsKeyDown(static_cast<SDL_Scancode>(i)))
+            break;
+    return GetKeyName(i);
 }
 
 GameValue ObjGetMass(const GameState* state, GameValuePar oper1)
