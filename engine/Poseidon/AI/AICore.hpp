@@ -12,6 +12,7 @@
 #include <Poseidon/Game/TitEffects.hpp>
 
 #include <Poseidon/AI/Path/ArcadeWaypoint.hpp>
+#include <Poseidon/AI/MarkerArrayWithHash.hpp>
 
 #include <Poseidon/Core/FSM/Fsm.hpp>
 
@@ -91,7 +92,7 @@ struct SynchronizedItem
 
 extern OLinkArray<EntityAI> vehiclesMap;
 extern OLinkArray<Vehicle> sensorsMap;
-extern AutoArray<ArcadeMarkerInfo> markersMap;
+extern GlobalMarkerArrayWithHash markersMap;
 extern AutoArray<SynchronizedItem> synchronized;
 
 template <class Task, class ContextType>
