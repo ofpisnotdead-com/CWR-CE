@@ -2003,6 +2003,42 @@ GameValue TriPlayerDammage(const GameState* /*state*/)
     return GameValue(p->GetTotalDammage());
 }
 
+GameValue TriPlayerFeedback(const GameState* /*state*/)
+{
+    if (!GWorld || !GWorld->UI())
+        return GameValue("FAIL:no_ui");
+    return GameValue(GWorld->UI()->GetPlayerFeedbackStateText());
+}
+
+GameValue TriSetPlayerFeedback(const GameState* /*state*/, GameValuePar arg)
+{
+    const GameArrayType& args = arg;
+    if (args.Size() != 2 || args[0].GetType() != GameBool || args[1].GetType() != GameBool)
+        return GameValue("FAIL:expected_health_and_kills_booleans");
+    SetShowPlayerHealth(static_cast<bool>(args[0]));
+    SetShowKillConfirmation(static_cast<bool>(args[1]));
+    return GameValue("OK");
+}
+
+// Exercise the normal damage / destruction / kill-attribution path with a
+// specific attacker. Registered only for test and harness sessions below.
+GameValue TriInflictDamage(const GameState* /*state*/, GameValuePar arg)
+{
+    const GameArrayType& args = arg;
+    if (args.Size() != 3 || args[0].GetType() != GameObject || args[1].GetType() != GameObject ||
+        args[2].GetType() != GameScalar)
+        return GameValue("FAIL:expected_victim_attacker_damage");
+    Object* victimObject = GetObject(args[0]);
+    Object* attackerObject = GetObject(args[1]);
+    EntityAI* victim = victimObject ? dyn_cast<EntityAI>(victimObject) : nullptr;
+    EntityAI* attacker = attackerObject ? dyn_cast<EntityAI>(attackerObject) : nullptr;
+    const float damage = static_cast<float>(static_cast<GameScalarType>(args[2]));
+    if (!victim || !attacker || !std::isfinite(damage) || damage <= 0.0f)
+        return GameValue("FAIL:invalid_damage_or_entity");
+    victim->DoDammage(attacker, VZero, damage, -2.0f * damage, RString("test"));
+    return GameValue("OK");
+}
+
 /// triPlayerAuthority — checks the local multiplayer player has a role, a real
 /// person/brain/vehicle, and owns the controlled person/vehicle locally.
 GameValue TriPlayerAuthority(const GameState* /*state*/)
@@ -3153,6 +3189,9 @@ INIT_MODULE(GameStateExtTest, 3)
     GGameState.NewFunction(GameFunction(GameString, "triDoDammageToPlayer", TriDoDammageToPlayer, GameScalar));
     GGameState.NewFunction(GameFunction(GameString, "triDamagePlayer", TriDamagePlayer, GameScalar));
     GGameState.NewNularOp(GameNular(GameScalar, "triPlayerDammage", TriPlayerDammage));
+    GGameState.NewNularOp(GameNular(GameString, "triPlayerFeedback", TriPlayerFeedback));
+    GGameState.NewFunction(GameFunction(GameString, "triSetPlayerFeedback", TriSetPlayerFeedback, GameArray));
+    GGameState.NewFunction(GameFunction(GameString, "triInflictDamage", TriInflictDamage, GameArray));
     GGameState.NewNularOp(GameNular(GameString, "triPlayerAuthority", TriPlayerAuthority));
     GGameState.NewFunction(GameFunction(GameString, "triAssertCheatActive", TriAssertCheatActive, GameArray));
     GGameState.NewFunction(GameFunction(GameString, "triAssertCheatAvailable", TriAssertCheatAvailable, GameArray));

@@ -1296,6 +1296,7 @@ UserActionDesc* InputSubsystem::GetUserActionDesc()
         UserActionDesc("Cheat1", IDS_USRACT_CHEAT_1, SDL_SCANCODE_RGUI, -1),
         UserActionDesc("Cheat2", IDS_USRACT_CHEAT_2, SDL_SCANCODE_RALT, -1),
 #endif
+        UserActionDesc("TogglePlayerFeedback", IDS_USRACT_TOGGLE_PLAYER_FEEDBACK, SDL_SCANCODE_U, -1),
     };
     // The table is indexed by UserAction, and per-action arrays (bindings, KeyList
     // userKeys[UAN]) are sized by UAN. If a new action is added to the enum without
@@ -1319,6 +1320,8 @@ const char* InputSubsystem::GetUserActionLabel(UserAction action)
             return LocalizeStringWithFallback("STR_USRACT_CHAT_HISTORY_UP", "Chat history up");
         case UAChatHistoryDown:
             return LocalizeStringWithFallback("STR_USRACT_CHAT_HISTORY_DOWN", "Chat history down");
+        case UATogglePlayerFeedback:
+            return LocalizeStringWithFallback("STR_USRACT_TOGGLE_PLAYER_FEEDBACK", "Toggle health / kill HUD");
         default:
             return LocalizeString(GetUserActionDesc()[action].desc);
     }

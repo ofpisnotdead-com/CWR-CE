@@ -38,7 +38,9 @@ class GamePage : public ScrollListPage
             kRowBlood = 4,
             kRowSubtitles = 5,
             kRowRadioSubtitles = 6,
-            kRowCount = 7,
+            kRowPlayerHealth = 7,
+            kRowKillConfirmation = 8,
+            kRowCount = 9,
         };
 
         int RowCount() const override { return kRowCount; }

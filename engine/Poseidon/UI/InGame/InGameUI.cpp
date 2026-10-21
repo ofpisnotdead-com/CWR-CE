@@ -1347,6 +1347,8 @@ void InGameUI::OnWeaponRemoved(int slot)
 
 void InGameUI::ResetHUD()
 {
+    _playerFeedback.Reset();
+    _feedbackPlayer = nullptr;
     _target = nullptr;
     _lockTarget = nullptr;
 

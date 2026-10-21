@@ -178,7 +178,7 @@ TEST_CASE("ContextControlsConfig: an older config keeps its bindings and default
 // added since (map zoom, cheat entry, chat navigation). It parses across every context; the actions
 // it lists are kept, the ones it predates are seeded to their defaults, and a save
 // then reload comes up current with the fill persisted.
-TEST_CASE("ContextControlsConfig: a full version-2 config parses and migrates to 5",
+TEST_CASE("ContextControlsConfig: a full version-2 config parses and migrates to the current version",
           "[Settings][ContextControlsConfig]")
 {
     REQUIRE_FIXTURE("cfg/contextControls_v2_full.cfg");
@@ -216,6 +216,34 @@ TEST_CASE("ContextControlsConfig: a full version-2 config parses and migrates to
     CHECK(reloaded.profiles[inf].HasBinding(UAMapZoomIn, InputCode::Key(SDL_SCANCODE_KP_PLUS)));
     CHECK(reloaded.profiles[inf].HasBinding(UAVoiceOverNetPushToTalk, InputCode::Key(SDL_SCANCODE_CAPSLOCK)));
 
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("ContextControlsConfig: existing profiles gain the HUD key without replacing custom bindings",
+          "[Settings][ContextControlsConfig][PlayerFeedback]")
+{
+    REQUIRE_FIXTURE("cfg/contextControls_v5_player_feedback.cfg");
+    ContextControlsConfig migrated;
+    REQUIRE(migrated.Load(GET_FIXTURE("cfg/contextControls_v5_player_feedback.cfg")));
+    CHECK(migrated.migratedOnLoad);
+    for (const auto& profile : migrated.profiles)
+        CHECK(profile.HasBinding(UATogglePlayerFeedback, InputCode::Key(SDL_SCANCODE_U)));
+
+    auto& infantry = migrated.profiles[(int)InputContext::Infantry];
+    CHECK(infantry.HasBinding(UAMap, InputCode::Key(SDL_SCANCODE_K)));
+    CHECK_FALSE(infantry.HasBinding(UAMap, InputCode::Key(SDL_SCANCODE_M)));
+    CHECK(infantry.BindingCount(UAFire) == 0);
+
+    // A deliberately cleared HUD binding must stay cleared after a reload.
+    infantry.ClearBindings(UATogglePlayerFeedback);
+    const std::string path = TmpPath("context_controls_hud_migrated.cfg");
+    REQUIRE(migrated.Save(path));
+    ContextControlsConfig reloaded;
+    REQUIRE(reloaded.Load(path));
+    CHECK_FALSE(reloaded.migratedOnLoad);
+    CHECK(reloaded.profiles[(int)InputContext::Infantry].BindingCount(UATogglePlayerFeedback) == 0);
+    CHECK(reloaded.profiles[(int)InputContext::CarDriver].HasBinding(UATogglePlayerFeedback,
+                                                                     InputCode::Key(SDL_SCANCODE_U)));
     std::filesystem::remove(path);
 }
 

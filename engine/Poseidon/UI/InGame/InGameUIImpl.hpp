@@ -1,5 +1,6 @@
 #pragma once
 #include <Poseidon/UI/InGame/InGameUI.hpp>
+#include <Poseidon/UI/InGame/PlayerFeedbackState.hpp>
 #include <Poseidon/Core/Global.hpp>
 #include <Poseidon/World/Entities/Vehicles/Vehicle.hpp>
 
@@ -232,6 +233,8 @@ class InGameUI: public AbstractUI
 
 	Ref<Font> _font24;
 	Ref<Font> _font36;
+	PlayerFeedbackState _playerFeedback;
+	LLink<Person> _feedbackPlayer;
 
 	const TargetList *VisibleList() const
 	{
@@ -323,6 +326,7 @@ class InGameUI: public AbstractUI
 	~InGameUI() override;
 
 	RString GetActionMenuTexts() const override;
+	RString GetPlayerFeedbackStateText() const override;
 	RString GetCommandMenuTexts() const override;
 
 	void DrawHUD
@@ -452,6 +456,8 @@ private:
 	);
 	void DrawCompass(EntityAI *vehicle);
 	void DrawUnitInfo(EntityAI *vehicle);
+	void UpdatePlayerFeedback();
+	void DrawPlayerFeedback();
 	void DrawGroupDir(const Camera &camera, AIGroup *grp);
 	void DrawHint();
 	void DrawGroupUnit(AIUnit *u, float xScreen, float yScreen, float alpha, int align);

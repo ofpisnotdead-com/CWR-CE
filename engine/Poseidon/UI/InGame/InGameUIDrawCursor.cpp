@@ -1104,6 +1104,8 @@ void InGameUI::DrawHUD(const Camera& camera, EntityAI* vehicle, CameraType cam)
     if (_showUnitInfo && !isMap)
     {
         DrawUnitInfo(vehicle);
+        if (unit->GetPerson() == GWorld->GetRealPlayer())
+            DrawPlayerFeedback();
     }
 
     DrawHint();
