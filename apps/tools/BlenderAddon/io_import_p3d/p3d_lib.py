@@ -9,7 +9,10 @@ def _find_dll():
     """Locate PoseidonFormats shared library next to this script or via env var."""
     import sys
 
-    lib_name = "PoseidonFormats.dll" if sys.platform == "win32" else "PoseidonFormats.so"
+    lib_name = {
+        "win32": "PoseidonFormats.dll",
+        "darwin": "PoseidonFormats.dylib",
+    }.get(sys.platform, "PoseidonFormats.so")
 
     candidates = []
     env = os.environ.get("POSEIDON_FORMATS_DLL")
@@ -183,7 +186,7 @@ def load():
         # the existing handle with RTLD_NOLOAD.
         import sys
 
-        if sys.platform != "win32":
+        if sys.platform.startswith("linux"):
             RTLD_NOLOAD = 0x00004  # glibc constant
             for noload_path in [os.path.basename(path), path]:
                 try:

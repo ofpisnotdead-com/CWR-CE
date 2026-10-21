@@ -5,11 +5,40 @@ Supports both MLOD (source) and ODOL v7 (binarized) formats with textures, selec
 
 ## Quick Install
 
+### macOS (native Apple Silicon)
+
+From the repository root (use `x64` for an Intel build; Blender must match):
+
+```sh
+cmake --preset macos-arm64-clang-rwdi
+cmake --build build/macos-arm64-clang-rwdi --target PoseidonFormatsDLL
+python3 apps/tools/BlenderAddon/package.py \
+  --library dist/arm64-macos-rwdi/PoseidonFormats.dylib \
+  --output dist/Poseidon-Blender-macos-arm64.zip
+```
+
+Install the ZIP via **Preferences > Add-ons > Install from Disk**, then enable
+**Poseidon P3D Model Importer**. In **N > Poseidon**, select the game-data directory
+and **Scan P3D Models** to import models and textures directly from archives.
+
+CI runs this smoke test on macOS arm64 with Blender 5.2.2 and the free demo:
+
+```sh
+/Applications/Blender.app/Contents/MacOS/Blender \
+  --background --factory-startup --python-exit-code 1 \
+  --python apps/tools/BlenderAddon/tests/smoke_import.py -- \
+  --addon dist/Poseidon-Blender-macos-arm64.zip --game-data /path/to/Demo
+```
+
+It checks the pine tree's meshes and textures without saving preferences;
+add `--output build/reference-tree.blend` to save the result. P3D export is
+unsupported, and animated-character round trips are unverified.
+
 ### Option A: Install from ZIP
 
 1. Build the DLL (if not already):
    ```
-   cmake --build build\win-x64-clang-rwdi --target PoseidonFormats_shared
+   cmake --build build\win-x64-clang-rwdi --target PoseidonFormatsDLL
    ```
 
 2. Package the addon:

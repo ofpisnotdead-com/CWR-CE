@@ -154,6 +154,44 @@ jobs:
           build-dir: ${{ env.CWR_BUILD_DIR }}
           ctest-exclude: ${{ env.CWR_CTEST_EXCLUDE }}
 
+      - name: Download Blender test data
+        if: matrix.arch == 'arm64'
+        uses: ./.github/actions/download-extract
+        with:
+          url: ${{ env.DEMO_ASSETS_URL }}
+          path: packages/Demo
+          archive-name: CWR-demo-assets-v2.zip
+
+      - name: Install Blender
+        if: matrix.arch == 'arm64'
+        timeout-minutes: 10
+        shell: bash
+        env:
+          BLENDER_VERSION: '5.2.2'
+        working-directory: ${{ runner.temp }}
+        run: |
+          archive="blender-$BLENDER_VERSION-macos-arm64.dmg"
+          url="https://download.blender.org/release/Blender${BLENDER_VERSION%.*}"
+          curl -fsSL --retry 3 "$url/$archive" -o "$archive"
+          curl -fsSL --retry 3 "$url/blender-$BLENDER_VERSION.sha256" -o blender.sha256
+          awk -v archive="$archive" '$2 == archive || $2 == "*" archive' blender.sha256 | shasum -a 256 -c
+          mkdir -p blender-mount
+          hdiutil attach "$archive" -readonly -nobrowse -mountpoint "$RUNNER_TEMP/blender-mount"
+          trap 'hdiutil detach "$RUNNER_TEMP/blender-mount"' EXIT
+          ditto blender-mount/Blender.app Blender.app
+
+      - name: Smoke test Blender add-on
+        if: matrix.arch == 'arm64'
+        timeout-minutes: 5
+        run: |
+          python3 apps/tools/BlenderAddon/package.py \
+            --library "$CWR_DIST_DIR/PoseidonFormats.dylib" \
+            --output "$RUNNER_TEMP/Poseidon-Blender.zip"
+          "$RUNNER_TEMP/Blender.app/Contents/MacOS/Blender" \
+            --background --factory-startup --python-exit-code 1 \
+            --python apps/tools/BlenderAddon/tests/smoke_import.py -- \
+            --addon "$RUNNER_TEMP/Poseidon-Blender.zip" --game-data packages/Demo
+
       - name: Upload Game
         uses: actions/upload-artifact@v7
         with:

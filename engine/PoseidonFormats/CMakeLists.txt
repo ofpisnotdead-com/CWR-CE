@@ -12,7 +12,7 @@ target_include_directories(PoseidonFormats PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(PoseidonFormats PUBLIC Poseidon)
 target_compile_features(PoseidonFormats PRIVATE cxx_std_20)
 
-# Shared library / DLL (for Blender addon, x64 only)
+# Shared library / DLL (for Blender addon, 64-bit hosts)
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     add_library(PoseidonFormatsDLL SHARED ${PF_SOURCES})
     target_include_directories(PoseidonFormatsDLL PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -21,6 +21,14 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     if(WIN32)
         target_link_libraries(PoseidonFormatsDLL PRIVATE Poseidon winmm)
     elseif(APPLE)
+        # Match the host allocator and expose only the C API.
+        target_sources(PoseidonFormatsDLL PRIVATE MacHostAllocator.cpp)
+        target_link_options(PoseidonFormatsDLL PRIVATE
+            "LINKER:-exported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/macos.exports"
+        )
+        set_property(TARGET PoseidonFormatsDLL APPEND PROPERTY LINK_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/macos.exports"
+        )
         set_target_properties(PoseidonFormatsDLL PROPERTIES
             POSITION_INDEPENDENT_CODE ON
         )
