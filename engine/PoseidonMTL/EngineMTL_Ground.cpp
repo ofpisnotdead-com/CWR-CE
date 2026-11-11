@@ -271,7 +271,16 @@ void EngineMTL::PrepareTerrain(const TerrainSetup& setup)
         return;
 
     _groundFailed = false;
-    LOG_INFO(Graphics, "MTL ground: {} surface textures in {} arrays", setup.nTextures - 1, g.batches.size());
+    size_t bytes = 0;
+    for (const SurfaceBatch& batch : g.batches)
+    {
+        for (int level = 0; level < batch.levels; level++)
+            bytes += batch.textureIndices.size() *
+                     static_cast<size_t>(batch.width >> level > 1 ? batch.width >> level : 1) *
+                     static_cast<size_t>(batch.height >> level > 1 ? batch.height >> level : 1) * 4;
+    }
+    LOG_INFO(Graphics, "MTL ground: {} surface textures in {} arrays, {} MB", setup.nTextures - 1, g.batches.size(),
+             bytes >> 20);
 }
 
 void EngineMTL::BeginGround(const LightList& /*lights*/)
