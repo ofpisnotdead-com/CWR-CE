@@ -830,12 +830,13 @@ static inline float groundHeight(texture2d<float> heightMap, int2 t)
     return heightMap.read(uint2(c.x, c.y)).r;
 }
 
-// Sun, the segment's local-light set, sun specular and fog for one ground
-// vertex -- the per-vertex lighting vsMesh does, with the lights selected
-// through the light-set buffer instead of packed indices.
-static inline void lightGround(VSOutGround& out, float3 worldPos, float3 worldNorm, uint lightSet,
-                               constant ObjectConstants& obj, constant FrameConstants& frame,
-                               constant LocalLightTable& lightTable, const device uint* lightSets)
+// Projects one ground vertex and lights it: sun, the segment's local-light
+// set, sun specular and fog -- the per-vertex lighting vsMesh does, with the
+// lights selected through the light-set buffer instead of packed indices.
+// The caller fills in the texture coordinates.
+static inline VSOutGround lightGround(float3 worldPos, float3 worldNorm, uint lightSet,
+                                      constant ObjectConstants& obj, constant FrameConstants& frame,
+                                      constant LocalLightTable& lightTable, const device uint* lightSets)
 {
     float sunEnabled = frame.sunDirAndEnabled.w;
     float3 toSun = -frame.sunDirAndEnabled.xyz;
@@ -861,11 +862,18 @@ static inline void lightGround(VSOutGround& out, float3 worldPos, float3 worldNo
     }
 
     float dist = length(worldPos);
+    VSOutGround out;
+    out.position = mulRowVec4(mulRowVec4(float4(worldPos, 1.0), frame.view), frame.projection);
+    out.uv = float2(0.0);
+    out.uv1 = float2(0.0);
     out.color = float4(clamp(lit, 0.0, 1.0), litAlpha);
     out.specColor = float4(clamp(specOut, 0.0, 1.0), 0.0);
     out.fogFactor =
         frame.fogParams.z > 0.5 ? clamp((dist - frame.fogParams.x) * frame.fogParams.y, 0.0, 1.0) : 0.0;
     out.worldRel = worldPos;
+    out.layer = 0.0;
+    out.simple = 1.0;
+    return out;
 }
 
 static inline VSOutGround culledGroundVertex()
@@ -918,8 +926,7 @@ vertex VSOutGround vsTerrain(uint vid [[vertex_id]], uint iid [[instance_id]],
     float zd = groundHeight(heightMap, tIdx + int2(0, 1)) - groundHeight(heightMap, tIdx + int2(0, -1));
     float3 worldNorm = -normalize(cross(float3(terrainGrid, xd, 0.0), float3(0.0, zd, terrainGrid)));
 
-    VSOutGround out;
-    out.position = mulRowVec4(mulRowVec4(float4(worldPos, 1.0), frame.view), frame.projection);
+    VSOutGround out = lightGround(worldPos, worldNorm, seg.lightSet, obj, frame, lightTable, lightSets);
 
     // Bilinear, clamp-to-edge lookup of the per-land-point UV jitter.
     float2 baseUV = gridIJ * ground.terrainParams.z;
@@ -936,7 +943,6 @@ vertex VSOutGround vsTerrain(uint vid [[vertex_id]], uint iid [[instance_id]],
     out.uv1 = out.uv * ground.terrainParams.w;
     out.layer = float(ci.x);
     out.simple = float((flags >> 1) & 1u);
-    lightGround(out, worldPos, worldNorm, seg.lightSet, obj, frame, lightTable, lightSets);
     return out;
 }
 
@@ -958,14 +964,11 @@ vertex VSOutGround vsWaterInst(uint vid [[vertex_id]], uint iid [[instance_id]],
     float3 worldPos =
         float3(cellOrigin.x + localXZ.x, ground.waterParams.x - frame.hmParams.w, cellOrigin.y + localXZ.y);
 
-    VSOutGround out;
-    out.position = mulRowVec4(mulRowVec4(float4(worldPos, 1.0), frame.view), frame.projection);
+    VSOutGround out =
+        lightGround(worldPos, float3(0.0, 1.0, 0.0), seg.lightSet, obj, frame, lightTable, lightSets);
     // The surface texture tiles once per land cell; U runs along Z, V along X.
     out.uv = float2(gridIJ.y, gridIJ.x) * ground.waterParams.y;
     out.uv1 = out.uv * ground.waterParams.z;
-    out.layer = 0.0;
-    out.simple = 1.0;
-    lightGround(out, worldPos, float3(0.0, 1.0, 0.0), seg.lightSet, obj, frame, lightTable, lightSets);
     return out;
 }
 
