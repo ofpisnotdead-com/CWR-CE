@@ -1,7 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
+#include <Poseidon/Graphics/Dummy/EngineDummy.hpp>
 #include <Poseidon/Graphics/Rendering/Shape/Shape.hpp>
 #include <Poseidon/World/Scene/ObjectClasses.hpp>
 #include <PoseidonGL33/EngineGL33.hpp>
+
+#include <vector>
 
 using namespace Poseidon;
 
@@ -57,4 +60,74 @@ TEST_CASE("Objects select their GPU land-clip mode", "[Graphics][GL33][LandClip]
 
     Ref<ForestPlain> forest = new ForestPlain(lod, 2);
     CHECK(forest->GetLandClipMode(0) == Object::LandClipPlane);
+}
+
+namespace
+{
+class GlobalEngineScope
+{
+  public:
+    explicit GlobalEngineScope(Engine* engine) : _previous(GEngine) { GEngine = engine; }
+    ~GlobalEngineScope() { GEngine = _previous; }
+
+  private:
+    Engine* _previous;
+};
+
+// Records what Object::UpdateLandClipParams hands the renderer.
+class RecordingEngine : public EngineDummy
+{
+  public:
+    bool LandClipInVS() const override { return _landClipInVS; }
+
+    void SetLandClipParams(float mode, Vector3Par /*boundingCenter*/) override { _modes.push_back(mode); }
+
+    void DisableLandClipInVS() { _landClipInVS = false; }
+    const std::vector<float>& Modes() const { return _modes; }
+
+  private:
+    bool _landClipInVS = true;
+    std::vector<float> _modes;
+};
+
+Ref<LODShapeWithShadow> MakeShape(ClipFlags orHints)
+{
+    Ref<LODShapeWithShadow> lod = new LODShapeWithShadow();
+    Shape* level = new Shape();
+    level->SetHints(orHints, ClipNone);
+    lod->AddShape(level, 0.0f);
+    return lod;
+}
+} // namespace
+
+TEST_CASE("Objects publish their own land clip mode to the renderer", "[Graphics][GL33][LandClip]")
+{
+    RecordingEngine engine;
+    GlobalEngineScope engineScope(&engine);
+
+    Ref<ObjectPlain> rigid = new ObjectPlain(MakeShape(ClipNone), 1);
+    rigid->UpdateLandClipParams(0);
+    REQUIRE(engine.Modes().size() == 1);
+    CHECK(engine.Modes().back() == float(Object::LandClipNone));
+
+    Ref<ObjectPlain> landClipped = new ObjectPlain(MakeShape(ClipLandKeep), 2);
+    landClipped->UpdateLandClipParams(0);
+    REQUIRE(engine.Modes().size() == 2);
+    CHECK(engine.Modes().back() == float(Object::LandClipVertex));
+
+    Ref<ForestPlain> forest = new ForestPlain(MakeShape(ClipNone), 3);
+    forest->UpdateLandClipParams(0);
+    REQUIRE(engine.Modes().size() == 3);
+    CHECK(engine.Modes().back() == float(Object::LandClipPlane));
+}
+
+TEST_CASE("Land clip publishing stays off the renderer when it is not GPU side", "[Graphics][GL33][LandClip]")
+{
+    RecordingEngine engine;
+    engine.DisableLandClipInVS();
+    GlobalEngineScope engineScope(&engine);
+
+    Ref<ForestPlain> forest = new ForestPlain(MakeShape(ClipNone), 1);
+    forest->UpdateLandClipParams(0);
+    CHECK(engine.Modes().empty());
 }

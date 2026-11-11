@@ -11,7 +11,6 @@
 #include <Poseidon/Graphics/Core/MipmapLayout.hpp>
 
 extern int MipmapSizeGL33(PacFormat format, int w, int h);
-extern void InitGLPixelFormat(TextureDescGL33& desc, PacFormat format, bool enableDXT);
 
 namespace
 {

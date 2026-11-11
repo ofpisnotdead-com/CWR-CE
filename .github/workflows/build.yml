@@ -1,10 +1,7 @@
 name: C++ / Build
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -44,7 +41,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build metadata
         id: build_metadata
@@ -80,6 +77,20 @@ jobs:
           path: ${{ env.CWR_DIST_DIR }}/PoseidonServer
           if-no-files-found: error
 
+      - name: Upload Tools
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Tools-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ env.CWR_DIST_DIR }}/PoseidonTools
+          if-no-files-found: error
+
+      - name: Upload Studio
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Studio-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ env.CWR_DIST_DIR }}/PoseidonStudio
+          if-no-files-found: error
+
   build-linux-sanitizers:
     strategy:
       fail-fast: false
@@ -98,7 +109,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build
         uses: ./.github/actions/build-cwr
@@ -128,7 +139,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build metadata
         id: build_metadata
@@ -170,6 +181,26 @@ jobs:
           path: ${{ env.CWR_DIST_DIR }}/PoseidonServer
           if-no-files-found: error
 
+      - name: Upload Tools
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Tools-${{ steps.build_metadata.outputs.sha_short }}
+          path: |
+            ${{ env.CWR_DIST_DIR }}/PoseidonTools
+            ${{ env.CWR_DIST_DIR }}/libopenal.dylib
+            ${{ env.CWR_DIST_DIR }}/OpenAL-Soft.LICENSE.txt
+          if-no-files-found: error
+
+      - name: Upload Studio
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Studio-${{ steps.build_metadata.outputs.sha_short }}
+          path: |
+            ${{ env.CWR_DIST_DIR }}/PoseidonStudio
+            ${{ env.CWR_DIST_DIR }}/libopenal.dylib
+            ${{ env.CWR_DIST_DIR }}/OpenAL-Soft.LICENSE.txt
+          if-no-files-found: error
+
   build-windows:
     name: Windows RelWithDebInfo
     runs-on: windows-2022
@@ -183,7 +214,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build metadata
         id: build_metadata
@@ -225,6 +256,26 @@ jobs:
           path: ${{ env.CWR_DIST_DIR }}/PoseidonServer.exe
           if-no-files-found: error
 
+      - name: Upload Tools
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Tools-${{ steps.build_metadata.outputs.sha_short }}
+          path: |
+            ${{ env.CWR_DIST_DIR }}/PoseidonTools.exe
+            ${{ env.CWR_DIST_DIR }}/OpenAL32.dll
+            ${{ env.CWR_DIST_DIR }}/OpenAL-Soft.LICENSE.txt
+          if-no-files-found: error
+
+      - name: Upload Studio
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Studio-${{ steps.build_metadata.outputs.sha_short }}
+          path: |
+            ${{ env.CWR_DIST_DIR }}/PoseidonStudio.exe
+            ${{ env.CWR_DIST_DIR }}/OpenAL32.dll
+            ${{ env.CWR_DIST_DIR }}/OpenAL-Soft.LICENSE.txt
+          if-no-files-found: error
+
       - name: Upload symbols
         uses: actions/upload-artifact@v7
         with:
@@ -233,6 +284,8 @@ jobs:
             ${{ env.CWR_DIST_DIR }}/PoseidonGame.pdb
             ${{ env.CWR_DIST_DIR }}/PoseidonGameDemo.pdb
             ${{ env.CWR_DIST_DIR }}/PoseidonServer.pdb
+            ${{ env.CWR_DIST_DIR }}/PoseidonTools.pdb
+            ${{ env.CWR_DIST_DIR }}/PoseidonStudio.pdb
           if-no-files-found: error
 
   trident:
@@ -241,7 +294,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -269,14 +322,14 @@ jobs:
         run: echo "sha_short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Upload Trident
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.CWR_ARTIFACT_PREFIX }}-Trident-${{ steps.build_metadata.outputs.sha_short }}
           path: target/debug/tri
           if-no-files-found: error
 
       - name: Upload MasterService
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.CWR_ARTIFACT_PREFIX }}-MasterService-${{ steps.build_metadata.outputs.sha_short }}
           path: target/debug/papa-bear-master-service
@@ -298,7 +351,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download demo game data
         uses: ./.github/actions/download-extract
@@ -338,31 +391,31 @@ jobs:
         run: echo "sha_short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Download Game
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.CWR_ARTIFACT_PREFIX }}-Game-${{ steps.build_metadata.outputs.sha_short }}
           path: exe
 
       - name: Download GameDemo
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.CWR_ARTIFACT_PREFIX }}-GameDemo-${{ steps.build_metadata.outputs.sha_short }}
           path: exe
 
       - name: Download Server
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.CWR_ARTIFACT_PREFIX }}-Server-${{ steps.build_metadata.outputs.sha_short }}
           path: exe
 
       - name: Download Trident
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.CWR_ARTIFACT_PREFIX }}-Trident-${{ steps.build_metadata.outputs.sha_short }}
           path: exe
 
       - name: Download MasterService
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.CWR_ARTIFACT_PREFIX }}-MasterService-${{ steps.build_metadata.outputs.sha_short }}
           path: exe
@@ -397,7 +450,7 @@ jobs:
 
       - name: Upload Trident output
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: trident-output-${{ steps.build_metadata.outputs.sha_short }}-shard${{ matrix.shard }}
           path: trident-output
@@ -411,13 +464,13 @@ jobs:
       STEAMRT4_VCPKG_TRIPLET: x64-linux-clang
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build SteamRT4 SDK image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: docker/steamrt4
           load: true
@@ -426,7 +479,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=steamrt4-sdk
 
       - name: Restore SteamRT4 compiler cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: tmp/steamrt4-ccache
           key: ccache-SteamRT4-${{ env.STEAMRT4_PRESET }}-${{ github.sha }}
@@ -434,7 +487,7 @@ jobs:
             ccache-SteamRT4-${{ env.STEAMRT4_PRESET }}-
 
       - name: Restore SteamRT4 vcpkg binary cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .vcpkg-bincache/${{ env.STEAMRT4_VCPKG_TRIPLET }}
           key: vcpkg-SteamRT4-${{ env.STEAMRT4_VCPKG_TRIPLET }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/vcpkg-triplets/**', 'cmake/vcpkg-overlay-ports/**') }}
@@ -457,7 +510,7 @@ jobs:
 
       - name: Upload SteamRT4 build log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: steamrt4-build-log
           path: steamrt4-build.log

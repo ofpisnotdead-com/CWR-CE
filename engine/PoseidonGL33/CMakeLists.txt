@@ -6,6 +6,7 @@ set(POSEIDON_GL33_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/EngineGL33.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GLVertexAttribLayouts.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SDLEventWindow.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ShaderSources.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/TextureGL33.hpp
 )
 
@@ -39,11 +40,9 @@ if(MSVC OR (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_CXX_COMPILER_FRONTEN
         $<$<CXX_COMPILER_ID:Clang>:-Wno-error=non-pod-varargs>
         $<$<CXX_COMPILER_ID:Clang>:-Wno-error=c++11-narrowing>
         $<$<CXX_COMPILER_ID:Clang>:-Wno-error=ordered-compare-function-pointers>
-        $<$<CXX_COMPILER_ID:Clang>:-Wno-error>
     )
 else()
     target_compile_options(PoseidonGL33 PRIVATE
-        -Wno-error
         -Wno-c++11-narrowing
         -Wno-non-pod-varargs
         -Wno-char-subscripts

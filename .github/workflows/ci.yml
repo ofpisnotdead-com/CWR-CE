@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: C++ / Build
+    uses: ./.github/workflows/build.yml
+
+  lint:
+    name: C++ / Lint
+    uses: ./.github/workflows/lint.yml
+
+  rust:
+    name: Rust
+    uses: ./.github/workflows/rust.yml
+
+  gate:
+    name: CI gate
+    if: always()
+    needs: [build, lint, rust]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for result in $RESULTS; do
+            [ "$result" = success ] || exit 1
+          done

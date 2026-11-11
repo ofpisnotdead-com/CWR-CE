@@ -320,6 +320,7 @@ public:
 		LandClipPlane = 2,
 	};
 	virtual LandClipMode GetLandClipMode( int level ) const;
+	void UpdateLandClipParams( int level );
 	static bool RenderHandlesLandClip();
 
 	// Change object position. Used when object is already present in landscape.

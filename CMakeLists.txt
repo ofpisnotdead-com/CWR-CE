@@ -164,6 +164,10 @@ add_compile_options(
     -Wno-format                           # Format string mismatches (MSVC vs clang differences)
 )
 
+# Whatever the suppressions above do not cover is a defect, on every preset and platform.
+# Bypass a local build with --compile-no-warning-as-error.
+set(CMAKE_COMPILE_WARNING_AS_ERROR ON CACHE BOOL "Treat compiler warnings as errors")
+
 enable_testing()
 
 # Backend availability — driven by platform, overridable

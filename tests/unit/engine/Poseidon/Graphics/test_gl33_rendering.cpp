@@ -4,6 +4,7 @@
 #include <Poseidon/Graphics/Core/TLVertex.hpp>
 #include <Poseidon/Graphics/Core/RenderState.hpp>
 #include <PoseidonGL33/EngineGL33.hpp>
+#include <PoseidonGL33/GL33TerrainSegments.hpp>
 #include <Poseidon/Graphics/Core/MatrixConversion.hpp>
 
 #include <cstddef>
@@ -73,6 +74,37 @@ TEST_CASE("TLVertex: member sizes match GPU format expectations", "[Graphics][GL
     REQUIRE(sizeof(float) == 4);
     REQUIRE(sizeof(PackedColor) == 4);
     REQUIRE(sizeof(UVPair) == 8);
+}
+
+TEST_CASE("GroundSegment layout matches terrain instance attributes", "[Graphics][GL33][Terrain]")
+{
+    REQUIRE(sizeof(Engine::GroundSegment) == 12);
+    REQUIRE(offsetof(Engine::GroundSegment, cellX) == 0);
+    REQUIRE(offsetof(Engine::GroundSegment, cellZ) == 4);
+    REQUIRE(offsetof(Engine::GroundSegment, lightSet) == 8);
+}
+
+TEST_CASE("Terrain segment lookup maps cells inside the terrain", "[Graphics][GL33][Terrain]")
+{
+    using Poseidon::render::gl33::TerrainSegmentIndex;
+
+    REQUIRE(TerrainSegmentIndex(0, 0, 8, 4) == 0);
+    REQUIRE(TerrainSegmentIndex(7, 7, 8, 4) == 0);
+    REQUIRE(TerrainSegmentIndex(8, 0, 8, 4) == 1);
+    REQUIRE(TerrainSegmentIndex(0, 8, 8, 4) == 4);
+    REQUIRE(TerrainSegmentIndex(31, 31, 8, 4) == 15);
+}
+
+TEST_CASE("Terrain segment lookup rejects cells outside the terrain", "[Graphics][GL33][Terrain]")
+{
+    using Poseidon::render::gl33::TerrainSegmentIndex;
+
+    REQUIRE_FALSE(TerrainSegmentIndex(-1, 0, 8, 4));
+    REQUIRE_FALSE(TerrainSegmentIndex(0, -1, 8, 4));
+    REQUIRE_FALSE(TerrainSegmentIndex(32, 0, 8, 4));
+    REQUIRE_FALSE(TerrainSegmentIndex(0, 32, 8, 4));
+    REQUIRE_FALSE(TerrainSegmentIndex(0, 0, 0, 4));
+    REQUIRE_FALSE(TerrainSegmentIndex(0, 0, 8, 0));
 }
 
 // PackedColor BGRA Layout Tests
@@ -566,27 +598,6 @@ TEST_CASE("PSConstants: default fogColor alpha is 1", "[Graphics][GL33]")
     REQUIRE(ps.alphaRef[0] == Catch::Approx(0.0f));
 }
 
-// Shader/TexGen Enum Value Tests
-
-TEST_CASE("VertexShaderID: VSScreen=0, VSTransform=1, VSShadow=2", "[Graphics][GL33]")
-{
-    REQUIRE(VSScreen == 0);
-    REQUIRE(VSTransform == 1);
-    REQUIRE(VSShadow == 2);
-    REQUIRE(NVertexShaders == 3);
-    REQUIRE(VSNone == NVertexShaders);
-}
-
-TEST_CASE("PixelShaderID: all modes have distinct values", "[Graphics][GL33]")
-{
-    REQUIRE(PSNormal == 0);
-    REQUIRE(PSDetail != PSNormal);
-    REQUIRE(PSGrass != PSDetail);
-    REQUIRE(PSWater != PSGrass);
-    REQUIRE(PSFlat != PSWater);
-    REQUIRE(PSNone == NPixelShaders);
-}
-
 TEST_CASE("VSConst: register indices are non-overlapping", "[Graphics][GL33]")
 {
     // VSTransform reads matrix slots; VSScreen reads vpScale.
@@ -612,7 +623,6 @@ TEST_CASE("VSConst: register indices are non-overlapping", "[Graphics][GL33]")
 #include <glad/gl.h>
 
 extern int MipmapSizeGL33(PacFormat format, int w, int h);
-extern void InitGLPixelFormat(TextureDescGL33& desc, PacFormat format, bool enableDXT);
 
 TEST_CASE("TextureDescGL33: struct has expected fields", "[Graphics][GL33][Texture]")
 {

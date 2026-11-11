@@ -37,6 +37,8 @@ struct TextureDescGL33
 
 Poseidon::PacFormat UploadFormatForTextureGL33(Poseidon::PacFormat format, bool interpolate);
 
+void InitGLPixelFormat(TextureDescGL33& desc, Poseidon::PacFormat format, bool enableDXT);
+
 class SurfaceInfoGL33
 {
   private:

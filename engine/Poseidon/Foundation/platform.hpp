@@ -65,6 +65,10 @@ int Utf8FindNext(intptr_t handle, _finddata_t* info);
 int Utf8FindClose(intptr_t handle);
 } // namespace Poseidon
 
+// These names are already macros in the CRT; undefine them before defining our own.
+#undef _findfirst
+#undef _findnext
+#undef _findclose
 #define _findfirst ::Poseidon::Utf8FindFirst
 #define _findnext ::Poseidon::Utf8FindNext
 #define _findclose ::Poseidon::Utf8FindClose

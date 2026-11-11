@@ -166,13 +166,13 @@ inline bool VoteSelectionComplete(int first, int second, int rest)
 // Unlocked-path accept condition: may a client move the target slot from `currentRolePlayer`
 // to `newPlayer`? Allowed when claiming a free/AI slot for yourself, vacating your own slot,
 // or toggling a slot between AI and disabled. aiPlayer/noPlayer are AI_PLAYER/NO_PLAYER at
-// the call site. Extracted verbatim (operator precedence preserved).
+// the call site. Extracted from the original condition (operator precedence preserved).
 inline bool RoleSwapAllowed(int currentRolePlayer, int newPlayer, int from, int aiPlayer, int noPlayer)
 {
-    return (currentRolePlayer == aiPlayer || currentRolePlayer == noPlayer) && newPlayer == from ||
-           currentRolePlayer == from && (newPlayer == aiPlayer || newPlayer == noPlayer) ||
-           currentRolePlayer == aiPlayer && newPlayer == noPlayer ||
-           currentRolePlayer == noPlayer && newPlayer == aiPlayer;
+    return ((currentRolePlayer == aiPlayer || currentRolePlayer == noPlayer) && newPlayer == from) ||
+           (currentRolePlayer == from && (newPlayer == aiPlayer || newPlayer == noPlayer)) ||
+           (currentRolePlayer == aiPlayer && newPlayer == noPlayer) ||
+           (currentRolePlayer == noPlayer && newPlayer == aiPlayer);
 }
 
 inline bool RoleSelfRefreshAllowed(int currentRolePlayer, int newPlayer, int from)
