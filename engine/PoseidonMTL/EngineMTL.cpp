@@ -184,6 +184,8 @@ EngineMTL::~EngineMTL()
     LOG_INFO(Graphics, "MTL: Destroying engine");
     SaveConfig();
 
+    FreeGround();
+
     delete _textBank;
     _textBank = nullptr;
 
@@ -980,12 +982,45 @@ void EngineMTL::PrepareMeshTL(const LightList& /*lights*/, const Matrix4& modelT
     // looked lit because SetMaterial bakes the sun's color into them
     // unconditionally (see PrepareMeshTL's vertex-shader comment).
     EnableSunLight(!render::Has(spec.material, render::Material::DisableSun));
-    if (GScene == nullptr)
+    if (!UpdateFrameConstants())
         return;
+    Camera* camera = GScene->GetCamera();
+
+    // Per-object: camera-relative world matrix (translation has the camera
+    // position subtracted), same as GL33's PrepareMeshTLImpl.
+    GfxMatrix world;
+    ConvertMatrix(world, modelToWorld);
+    const Vector3 camPos = camera->Position();
+    world._41 -= static_cast<float>(camPos.X());
+    world._42 -= static_cast<float>(camPos.Y());
+    world._43 -= static_cast<float>(camPos.Z());
+    std::memcpy(_tlObject.world.m, &world, sizeof(world));
+
+    // IsColored objects carry their opacity + fade in the scene constant
+    // colour (GL33's PrepareMeshTL does the same upload).
+    Color constColor = HWhite;
+    if (render::Has(spec.routing, render::Routing::IsColored))
+        constColor = GScene->GetConstantColor();
+    _tlObject.constColor[0] = constColor.R();
+    _tlObject.constColor[1] = constColor.G();
+    _tlObject.constColor[2] = constColor.B();
+    _tlObject.constColor[3] = constColor.A();
+
+    _currentDrawItem.worldMatrix = world;
+    _currentDrawItem.specFlags = spec;
+    _currentDrawItem.bias = _bias;
+}
+
+// The frame half of PrepareMeshTL: view, sun, fog, projection and the
+// heightmap scales in _tlFrame. False when there is no camera or sun yet.
+bool EngineMTL::UpdateFrameConstants()
+{
+    if (GScene == nullptr)
+        return false;
     Camera* camera = GScene->GetCamera();
     LightSun* sun = GScene->MainLight();
     if (camera == nullptr || sun == nullptr)
-        return;
+        return false;
 
     if (!_tlFrameValid)
     {
@@ -1026,10 +1061,6 @@ void EngineMTL::PrepareMeshTL(const LightList& /*lights*/, const Matrix4& modelT
     _tlFrame.sunDirAndEnabled[3] = _sunEnabled ? 1.0f : 0.0f;
     std::memcpy(_tlFrame.nightEyeCoef, _nightEyeCoef, sizeof(_nightEyeCoef));
 
-    // Per-object: camera-relative world matrix (translation has the camera
-    // position subtracted), same as GL33's PrepareMeshTLImpl.
-    GfxMatrix world;
-    ConvertMatrix(world, modelToWorld);
     const Vector3 camPos = camera->Position();
     _tlFrame.hmParams[0] = _heightmapValid ? _hmInvGrid : 0.0f;
     _tlFrame.hmParams[1] = static_cast<float>(camPos.X());
@@ -1037,24 +1068,7 @@ void EngineMTL::PrepareMeshTL(const LightList& /*lights*/, const Matrix4& modelT
     _tlFrame.hmParams[3] = static_cast<float>(camPos.Y());
     _tlFrame.landGrid[0] = _hmInvLandGrid;
     _tlFrame.landGrid[1] = (_heightmapValid && _hmInvLandGrid > 0) ? _hmInvGrid / _hmInvLandGrid : 0.0f;
-    world._41 -= static_cast<float>(camPos.X());
-    world._42 -= static_cast<float>(camPos.Y());
-    world._43 -= static_cast<float>(camPos.Z());
-    std::memcpy(_tlObject.world.m, &world, sizeof(world));
-
-    // IsColored objects carry their opacity + fade in the scene constant
-    // colour (GL33's PrepareMeshTL does the same upload).
-    Color constColor = HWhite;
-    if (render::Has(spec.routing, render::Routing::IsColored))
-        constColor = GScene->GetConstantColor();
-    _tlObject.constColor[0] = constColor.R();
-    _tlObject.constColor[1] = constColor.G();
-    _tlObject.constColor[2] = constColor.B();
-    _tlObject.constColor[3] = constColor.A();
-
-    _currentDrawItem.worldMatrix = world;
-    _currentDrawItem.specFlags = spec;
-    _currentDrawItem.bias = _bias;
+    return true;
 }
 
 void EngineMTL::BeginMeshTL(const Shape& sMesh, int /*spec*/, bool dynamic)

@@ -245,6 +245,18 @@ class EngineMTL : public Engine
     // to it, so the CPU deform is skipped (Object::SkipCpuLandClip) and
     // land-clipped shapes can instance.
     void SetTerrainHeightmap(const float* heights, int width, int height, float invGrid, float invLandGrid) override;
+
+    // Instanced ground (GL33's EngineGL33_Terrain.cpp): one grid mesh per
+    // segment, displaced from the height map in the vertex stage. Reports
+    // false once a map's setup has failed, so the landscape falls back to
+    // the mesh-based ground.
+    bool DrawsInstancedGround() const override { return !_groundFailed; }
+    void PrepareTerrain(const TerrainSetup& setup) override;
+    void DrawTerrain(const GroundSegment* segments, size_t count, const TLMaterial& mat) override;
+    void DrawWater(const GroundSegment* segments, size_t count, const TLMaterial& mat, Texture* surfaceTex,
+                   float seaLevel) override;
+    void BeginGround(const LightList& lights) override;
+    unsigned AddTerrainLightSet(const LightList& lights) override;
     bool LandClipInVS() const override { return _heightmapValid; }
     void SetLandClipParams(float mode, Vector3Par boundingCenter) override;
 
@@ -444,6 +456,14 @@ class EngineMTL : public Engine
     // Snapshots the shadow-map lit state into _tlFrame at frame start, so a
     // depth pass queued mid-frame is not paired with the previous map.
     void UpdateShadowMapLitState();
+
+    struct GroundMTL* _ground = nullptr;
+    bool _groundFailed = false;
+    void FreeGround();
+    // Frame constants and the material half of the object constants for a
+    // ground draw; false when the scene has no camera or sun.
+    bool PrepareGroundDraw(const TLMaterial& mat, ObjectConstantsMTL& obj);
+    bool UpdateFrameConstants();
 
     bool _heightmapValid = false;
     float _hmInvGrid = 0.0f;

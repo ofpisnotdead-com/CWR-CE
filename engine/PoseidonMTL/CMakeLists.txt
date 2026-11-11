@@ -8,6 +8,7 @@ add_library(PoseidonMTL STATIC
     EngineMTLBootstrap.hpp
     EngineMTL.cpp
     EngineMTL.hpp
+    EngineMTL_Ground.cpp
     GraphicsBackendMTL.cpp
     TextureMTL.cpp
     TextureMTL.hpp

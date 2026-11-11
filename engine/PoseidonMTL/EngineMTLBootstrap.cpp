@@ -796,6 +796,212 @@ fragment float4 fsShadow(VSOutMesh in [[stage_in]], texture2d<float> tex [[textu
         discard_fragment();
     return float4(0.0, 0.0, 0.0, a);
 }
+
+// Instanced ground (GL33's vsTerrain/psTerrain/vsWaterInst): one grid mesh
+// per 8x8-cell segment, displaced from the height map in the vertex stage.
+struct GroundConstants {
+    float4 terrainParams;  // {landGrid, subdivCount, 1/subdivCount, detailScale}
+    float4 terrainParams2; // {jitterScale, 0, drawBatch, 0}
+    float4 waterParams;    // {seaLevel, 1/subdivCount, specTile, landGrid}
+};
+
+struct GroundSegment {
+    int cellX;
+    int cellZ;
+    uint lightSet; // offset of a {count, idx...} run in the light-set buffer; 0 = none
+};
+
+struct VSOutGround {
+    float4 position [[position]];
+    float2 uv;
+    float2 uv1;
+    float4 color;
+    float4 specColor;
+    float fogFactor;
+    float3 worldRel;
+    float layer [[flat]];
+    float simple [[flat]];
+};
+
+static inline float groundHeight(texture2d<float> heightMap, int2 t)
+{
+    int2 sz = int2(heightMap.get_width(), heightMap.get_height());
+    int2 c = clamp(t, int2(0), sz - 1);
+    return heightMap.read(uint2(c.x, c.y)).r;
+}
+
+// Sun, the segment's local-light set, sun specular and fog for one ground
+// vertex -- the per-vertex lighting vsMesh does, with the lights selected
+// through the light-set buffer instead of packed indices.
+static inline void lightGround(VSOutGround& out, float3 worldPos, float3 worldNorm, uint lightSet,
+                               constant ObjectConstants& obj, constant FrameConstants& frame,
+                               constant LocalLightTable& lightTable, const device uint* lightSets)
+{
+    float sunEnabled = frame.sunDirAndEnabled.w;
+    float3 toSun = -frame.sunDirAndEnabled.xyz;
+    float NdotL = max(dot(worldNorm, toSun), 0.0) * sunEnabled;
+    float3 lit = obj.ambient.rgb + NdotL * obj.diffuse.rgb + obj.emissive.rgb;
+    float litAlpha = clamp(obj.ambient.w + NdotL * obj.diffuse.w + obj.emissive.w, 0.0, 1.0);
+
+    uint nLights = lightSets[lightSet];
+    for (uint i = 0u; i < nLights; i++)
+    {
+        LocalLight l = lightTable.lights[lightSets[lightSet + 1u + i] & 63u];
+        l.diffuse.rgb *= obj.matDiffuseRaw.rgb;
+        l.ambient.rgb *= obj.matAmbientRaw.rgb;
+        lit += localLightContrib(l, worldPos, worldNorm);
+    }
+
+    float3 specOut = float3(0.0);
+    if (obj.specEnabled.x > 0.5 && sunEnabled > 0.0)
+    {
+        float3 halfVec = normalize(toSun + normalize(-worldPos));
+        float NdotH = max(dot(worldNorm, halfVec), 0.0);
+        specOut = obj.specular.rgb * pow(NdotH, max(1.0, obj.specular.w)) * sunEnabled;
+    }
+
+    float dist = length(worldPos);
+    out.color = float4(clamp(lit, 0.0, 1.0), litAlpha);
+    out.specColor = float4(clamp(specOut, 0.0, 1.0), 0.0);
+    out.fogFactor =
+        frame.fogParams.z > 0.5 ? clamp((dist - frame.fogParams.x) * frame.fogParams.y, 0.0, 1.0) : 0.0;
+    out.worldRel = worldPos;
+}
+
+static inline VSOutGround culledGroundVertex()
+{
+    VSOutGround out;
+    out.position = float4(2.0, 2.0, 2.0, 1.0);
+    out.uv = float2(0.0);
+    out.uv1 = float2(0.0);
+    out.color = float4(0.0);
+    out.specColor = float4(0.0);
+    out.fogFactor = 0.0;
+    out.worldRel = float3(0.0);
+    out.layer = 0.0;
+    out.simple = 0.0;
+    return out;
+}
+
+vertex VSOutGround vsTerrain(uint vid [[vertex_id]], uint iid [[instance_id]],
+                             const device float4* grid [[buffer(0)]], constant ObjectConstants& obj [[buffer(1)]],
+                             constant FrameConstants& frame [[buffer(2)]],
+                             const device GroundSegment* segments [[buffer(3)]],
+                             constant LocalLightTable& lightTable [[buffer(4)]],
+                             const device uint* lightSets [[buffer(5)]], constant GroundConstants& ground [[buffer(6)]],
+                             texture2d<float> heightMap [[texture(0)]], texture2d<float> jitterMap [[texture(1)]],
+                             texture2d<uint> cellInfo [[texture(2)]])
+{
+    float4 segVert = grid[vid]; // cellX, cellZ within the segment, gridI, gridJ within the cell
+    GroundSegment seg = segments[iid];
+    int2 worldCell = int2(seg.cellX, seg.cellZ) + int2(segVert.xy);
+    int2 cs = int2(cellInfo.get_width(), cellInfo.get_height());
+    if (worldCell.x < 0 || worldCell.y < 0 || worldCell.x >= cs.x || worldCell.y >= cs.y)
+        return culledGroundVertex();
+    // R = array layer, G = batch << 2 | simple << 1 | valid
+    uint2 ci = cellInfo.read(uint2(worldCell.x, worldCell.y)).rg;
+    uint flags = ci.y;
+    if ((flags & 1u) == 0u || int((flags >> 2) & 0x3Fu) != int(ground.terrainParams2.z + 0.5))
+        return culledGroundVertex();
+
+    float2 gridIJ = segVert.zw;
+    float terrainGrid = 1.0 / frame.hmParams.x;
+    int subdiv = int(ground.terrainParams.y);
+    int2 tIdx = worldCell * subdiv + int2(gridIJ + 0.5);
+
+    float h = groundHeight(heightMap, tIdx);
+    float2 localXZ = gridIJ * terrainGrid;
+    float2 cellOrigin = float2(worldCell) * ground.terrainParams.x - frame.hmParams.yz;
+    float3 worldPos = float3(cellOrigin.x + localXZ.x, h - frame.hmParams.w, cellOrigin.y + localXZ.y);
+
+    float xd = groundHeight(heightMap, tIdx + int2(1, 0)) - groundHeight(heightMap, tIdx + int2(-1, 0));
+    float zd = groundHeight(heightMap, tIdx + int2(0, 1)) - groundHeight(heightMap, tIdx + int2(0, -1));
+    float3 worldNorm = -normalize(cross(float3(terrainGrid, xd, 0.0), float3(0.0, zd, terrainGrid)));
+
+    VSOutGround out;
+    out.position = mulRowVec4(mulRowVec4(float4(worldPos, 1.0), frame.view), frame.projection);
+
+    // Bilinear, clamp-to-edge lookup of the per-land-point UV jitter.
+    float2 baseUV = gridIJ * ground.terrainParams.z;
+    float2 jp = float2(worldCell) + baseUV;
+    float2 jBase = floor(jp);
+    float2 jf = jp - jBase;
+    int2 js = int2(jitterMap.get_width(), jitterMap.get_height()) - 1;
+    int2 j0 = clamp(int2(jBase), int2(0), js);
+    int2 j1 = clamp(int2(jBase) + 1, int2(0), js);
+    float2 jit = mix(mix(jitterMap.read(uint2(j0.x, j0.y)).rg, jitterMap.read(uint2(j1.x, j0.y)).rg, jf.x),
+                     mix(jitterMap.read(uint2(j0.x, j1.y)).rg, jitterMap.read(uint2(j1.x, j1.y)).rg, jf.x), jf.y) *
+                 ground.terrainParams2.x;
+    out.uv = baseUV + jit;
+    out.uv1 = out.uv * ground.terrainParams.w;
+    out.layer = float(ci.x);
+    out.simple = float((flags >> 1) & 1u);
+    lightGround(out, worldPos, worldNorm, seg.lightSet, obj, frame, lightTable, lightSets);
+    return out;
+}
+
+// The same instance layout drawn flat at sea level with an up normal.
+vertex VSOutGround vsWaterInst(uint vid [[vertex_id]], uint iid [[instance_id]],
+                               const device float4* grid [[buffer(0)]], constant ObjectConstants& obj [[buffer(1)]],
+                               constant FrameConstants& frame [[buffer(2)]],
+                               const device GroundSegment* segments [[buffer(3)]],
+                               constant LocalLightTable& lightTable [[buffer(4)]],
+                               const device uint* lightSets [[buffer(5)]],
+                               constant GroundConstants& ground [[buffer(6)]])
+{
+    float4 segVert = grid[vid];
+    GroundSegment seg = segments[iid];
+    int2 worldCell = int2(seg.cellX, seg.cellZ) + int2(segVert.xy);
+    float2 gridIJ = segVert.zw;
+    float2 localXZ = gridIJ / frame.hmParams.x;
+    float2 cellOrigin = float2(worldCell) * ground.waterParams.w - frame.hmParams.yz;
+    float3 worldPos =
+        float3(cellOrigin.x + localXZ.x, ground.waterParams.x - frame.hmParams.w, cellOrigin.y + localXZ.y);
+
+    VSOutGround out;
+    out.position = mulRowVec4(mulRowVec4(float4(worldPos, 1.0), frame.view), frame.projection);
+    // The surface texture tiles once per land cell; U runs along Z, V along X.
+    out.uv = float2(gridIJ.y, gridIJ.x) * ground.waterParams.y;
+    out.uv1 = out.uv * ground.waterParams.z;
+    out.layer = 0.0;
+    out.simple = 1.0;
+    lightGround(out, worldPos, float3(0.0, 1.0, 0.0), seg.lightSet, obj, frame, lightTable, lightSets);
+    return out;
+}
+
+static inline float4 shadeGround(float4 t0, VSOutGround in, constant FrameConstants& frame,
+                                 texture2d<float> detailTex, sampler detailSamp, depth2d_array<float> shadowMap,
+                                 sampler shadowSamp)
+{
+    float3 rgb = t0.rgb * in.color.rgb * (detailTex.sample(detailSamp, in.uv1).a * 2.0) + in.specColor.rgb;
+    rgb *= shadowMapFactor(frame, in.worldRel, in.fogFactor, shadowMap, shadowSamp);
+    float3 finalColor = mix(applyNightEye(rgb, frame.nightEyeCoef), frame.fogColor.rgb, in.fogFactor);
+    if (frame.fogParams.w > 0.5)
+        return float4(1.0, 0.0, 0.0, 1.0);
+    return float4(finalColor, 1.0);
+}
+
+// Tileable (simple) cells sample the surface array with the repeat sampler,
+// pre-blended ones with the clamp sampler.
+fragment float4 fsTerrain(VSOutGround in [[stage_in]], constant FrameConstants& frame [[buffer(0)]],
+                          texture2d_array<float> surface [[texture(0)]], texture2d<float> detailTex [[texture(1)]],
+                          depth2d_array<float> shadowMap [[texture(2)]], sampler clampSamp [[sampler(0)]],
+                          sampler detailSamp [[sampler(1)]], sampler shadowSamp [[sampler(2)]],
+                          sampler wrapSamp [[sampler(3)]])
+{
+    uint layer = uint(in.layer + 0.5);
+    float4 wrapped = surface.sample(wrapSamp, in.uv, layer);
+    float4 clamped = surface.sample(clampSamp, in.uv, layer);
+    return shadeGround(in.simple > 0.5 ? wrapped : clamped, in, frame, detailTex, detailSamp, shadowMap, shadowSamp);
+}
+
+fragment float4 fsWaterInst(VSOutGround in [[stage_in]], constant FrameConstants& frame [[buffer(0)]],
+                            texture2d<float> surface [[texture(0)]], texture2d<float> detailTex [[texture(1)]],
+                            depth2d_array<float> shadowMap [[texture(2)]], sampler surfaceSamp [[sampler(0)]],
+                            sampler detailSamp [[sampler(1)]], sampler shadowSamp [[sampler(2)]])
+{
+    return shadeGround(surface.sample(surfaceSamp, in.uv), in, frame, detailTex, detailSamp, shadowMap, shadowSamp);
+}
 )";
 
 // Shadow-map depth pass (GL33's EngineGL33_ShadowDepth.cpp programs): solid
@@ -1100,6 +1306,15 @@ struct EngineMTLBootstrap::Impl
     MTL::Buffer* fallbackInstance = nullptr;
     MTL::Buffer* fallbackLightTable = nullptr;
     MTL::Texture* heightMap = nullptr; // SetTerrainHeightmap; fallbackWhite stands in until then
+
+    MTL::RenderPipelineState* pipelineStateTerrain = nullptr;   // vsTerrain/fsTerrain
+    MTL::RenderPipelineState* pipelineStateWaterInst = nullptr; // vsWaterInst/fsWaterInst
+    MTL::Buffer* groundGrid = nullptr;
+    MTL::Buffer* groundIndices = nullptr;
+    int groundIndexCount = 0;
+    MTL::Texture* groundCellInfo = nullptr; // RG16Uint, one texel per land cell
+    MTL::Texture* groundJitter = nullptr;   // RG32Float, one texel per land-grid point
+    std::vector<MTL::Texture*> groundSurfaceArrays;
 
     // Shadow-map depth pass (see QueueShadowCascades). The pipelines are
     // sample-count independent (depth-only targets) so they survive
@@ -1566,7 +1781,8 @@ void EngineMTLBootstrap::ReleaseRenderPipelines()
     MTL::RenderPipelineState** states[] = {&_impl->pipelineState,           &_impl->pipelineState2DAdditive,
                                            &_impl->pipelineState2DShadow,   &_impl->pipelineStateTL,
                                            &_impl->pipelineStateTLA2C,      &_impl->pipelineStateTLBlend,
-                                           &_impl->pipelineStateTLAdditive, &_impl->pipelineStateTLShadow};
+                                           &_impl->pipelineStateTLAdditive, &_impl->pipelineStateTLShadow,
+                                           &_impl->pipelineStateTerrain,    &_impl->pipelineStateWaterInst};
     for (MTL::RenderPipelineState** state : states)
     {
         if (*state != nullptr)
@@ -2059,6 +2275,33 @@ void EngineMTLBootstrap::EnsureTLPipeline()
                   error ? error->localizedDescription()->utf8String() : "(unknown)");
     }
 
+    // Instanced ground: opaque, same attachments as the mesh pipelines.
+    auto makeGroundPipeline = [&](const char* vsName, const char* fsName) -> MTL::RenderPipelineState*
+    {
+        MTL::Function* vs = library->newFunction(NS::String::string(vsName, NS::StringEncoding::UTF8StringEncoding));
+        MTL::Function* fs = library->newFunction(NS::String::string(fsName, NS::StringEncoding::UTF8StringEncoding));
+        MTL::RenderPipelineState* state = nullptr;
+        if (vs != nullptr && fs != nullptr)
+        {
+            desc->setVertexFunction(vs);
+            desc->setFragmentFunction(fs);
+            desc->setAlphaToCoverageEnabled(false);
+            colorDesc->setBlendingEnabled(false);
+            colorDesc->setWriteMask(MTL::ColorWriteMaskAll);
+            state = _impl->device->newRenderPipelineState(desc, &error);
+        }
+        if (state == nullptr)
+            LOG_ERROR(Graphics, "EngineMTLBootstrap: {} pipeline state creation failed: {}", vsName,
+                      error ? error->localizedDescription()->utf8String() : "(unknown)");
+        if (vs != nullptr)
+            vs->release();
+        if (fs != nullptr)
+            fs->release();
+        return state;
+    };
+    _impl->pipelineStateTerrain = makeGroundPipeline("vsTerrain", "fsTerrain");
+    _impl->pipelineStateWaterInst = makeGroundPipeline("vsWaterInst", "fsWaterInst");
+
     desc->release();
     vsFn->release();
     if (fsFnOpaque != nullptr)
@@ -2073,7 +2316,8 @@ bool EngineMTLBootstrap::ValidateMeshPipelines()
 {
     EnsureTLPipeline();
     return _impl->pipelineStateTL != nullptr && _impl->pipelineStateTLBlend != nullptr &&
-           _impl->pipelineStateTLAdditive != nullptr && _impl->pipelineStateTLShadow != nullptr;
+           _impl->pipelineStateTLAdditive != nullptr && _impl->pipelineStateTLShadow != nullptr &&
+           _impl->pipelineStateTerrain != nullptr && _impl->pipelineStateWaterInst != nullptr;
 }
 
 void EngineMTLBootstrap::EnsureFallbackResources()
@@ -3125,6 +3369,220 @@ bool EngineMTLBootstrap::SetTerrainHeightmap(const float* heights, int width, in
     return true;
 }
 
+bool EngineMTLBootstrap::SetGroundSegmentMesh(const float* cellAndGrid, int vertexCount, const uint16_t* indices,
+                                              int indexCount)
+{
+    if (_impl->device == nullptr || cellAndGrid == nullptr || indices == nullptr || vertexCount <= 0 || indexCount <= 0)
+        return false;
+    if (_impl->groundGrid != nullptr)
+        _impl->groundGrid->release();
+    if (_impl->groundIndices != nullptr)
+        _impl->groundIndices->release();
+    _impl->groundGrid = _impl->device->newBuffer(
+        cellAndGrid, static_cast<NS::UInteger>(vertexCount) * 4 * sizeof(float), MTL::ResourceStorageModeShared);
+    _impl->groundIndices = _impl->device->newBuffer(indices, static_cast<NS::UInteger>(indexCount) * sizeof(uint16_t),
+                                                    MTL::ResourceStorageModeShared);
+    _impl->groundIndexCount = (_impl->groundGrid != nullptr && _impl->groundIndices != nullptr) ? indexCount : 0;
+    return _impl->groundIndexCount > 0;
+}
+
+namespace
+{
+// (Re)creates a single-level 2D data texture and fills it.
+bool UploadDataTexture(MTL::Device* device, MTL::Texture*& tex, MTL::PixelFormat format, int width, int height,
+                       const void* data, size_t bytesPerRow)
+{
+    if (device == nullptr || data == nullptr || width <= 0 || height <= 0)
+        return false;
+    if (tex != nullptr && (static_cast<int>(tex->width()) != width || static_cast<int>(tex->height()) != height))
+    {
+        tex->release();
+        tex = nullptr;
+    }
+    if (tex == nullptr)
+    {
+        MTL::TextureDescriptor* desc = MTL::TextureDescriptor::texture2DDescriptor(
+            format, static_cast<NS::UInteger>(width), static_cast<NS::UInteger>(height), false);
+        desc->setUsage(MTL::TextureUsageShaderRead);
+        desc->setStorageMode(MTL::StorageModeShared);
+        tex = device->newTexture(desc);
+        desc->release();
+        if (tex == nullptr)
+            return false;
+    }
+    tex->replaceRegion(MTL::Region::Make2D(0, 0, static_cast<NS::UInteger>(width), static_cast<NS::UInteger>(height)),
+                       0, data, static_cast<NS::UInteger>(bytesPerRow));
+    return true;
+}
+} // namespace
+
+bool EngineMTLBootstrap::SetGroundCellInfo(const uint16_t* layerAndFlags, int range)
+{
+    return UploadDataTexture(_impl->device, _impl->groundCellInfo, MTL::PixelFormatRG16Uint, range, range,
+                             layerAndFlags, static_cast<size_t>(range) * 2 * sizeof(uint16_t));
+}
+
+bool EngineMTLBootstrap::SetGroundJitter(const float* uv, int width, int height)
+{
+    return UploadDataTexture(_impl->device, _impl->groundJitter, MTL::PixelFormatRG32Float, width, height, uv,
+                             static_cast<size_t>(width) * 2 * sizeof(float));
+}
+
+void EngineMTLBootstrap::ReleaseGroundSurfaceArrays()
+{
+    for (MTL::Texture* tex : _impl->groundSurfaceArrays)
+    {
+        if (tex != nullptr)
+            tex->release(); // command buffers retain what their draws reference
+    }
+    _impl->groundSurfaceArrays.clear();
+}
+
+int EngineMTLBootstrap::CreateGroundSurfaceArray(int width, int height, int levels, int layers)
+{
+    if (_impl->device == nullptr || width <= 0 || height <= 0 || levels <= 0 || layers <= 0)
+        return -1;
+    MTL::TextureDescriptor* desc = MTL::TextureDescriptor::alloc()->init();
+    desc->setTextureType(MTL::TextureType2DArray);
+    desc->setPixelFormat(MTL::PixelFormatRGBA8Unorm);
+    desc->setWidth(static_cast<NS::UInteger>(width));
+    desc->setHeight(static_cast<NS::UInteger>(height));
+    desc->setArrayLength(static_cast<NS::UInteger>(layers));
+    desc->setMipmapLevelCount(static_cast<NS::UInteger>(levels));
+    desc->setUsage(MTL::TextureUsageShaderRead);
+    desc->setStorageMode(MTL::StorageModeShared);
+    MTL::Texture* tex = _impl->device->newTexture(desc);
+    desc->release();
+    if (tex == nullptr)
+        return -1;
+    _impl->groundSurfaceArrays.push_back(tex);
+    return static_cast<int>(_impl->groundSurfaceArrays.size()) - 1;
+}
+
+void EngineMTLBootstrap::UploadGroundSurfaceLevel(int array, int layer, int level, int width, int height,
+                                                  const uint8_t* rgba)
+{
+    if (array < 0 || static_cast<size_t>(array) >= _impl->groundSurfaceArrays.size() || rgba == nullptr)
+        return;
+    MTL::Texture* tex = _impl->groundSurfaceArrays[static_cast<size_t>(array)];
+    tex->replaceRegion(MTL::Region::Make2D(0, 0, static_cast<NS::UInteger>(width), static_cast<NS::UInteger>(height)),
+                       static_cast<NS::UInteger>(level), static_cast<NS::UInteger>(layer), rgba,
+                       static_cast<NS::UInteger>(width) * 4, 0);
+}
+
+void EngineMTLBootstrap::ReleaseGround()
+{
+    ReleaseGroundSurfaceArrays();
+    MTL::Texture** textures[] = {&_impl->groundCellInfo, &_impl->groundJitter};
+    for (MTL::Texture** tex : textures)
+    {
+        if (*tex != nullptr)
+        {
+            (*tex)->release();
+            *tex = nullptr;
+        }
+    }
+    MTL::Buffer** buffers[] = {&_impl->groundGrid, &_impl->groundIndices};
+    for (MTL::Buffer** buf : buffers)
+    {
+        if (*buf != nullptr)
+        {
+            (*buf)->release();
+            *buf = nullptr;
+        }
+    }
+    _impl->groundIndexCount = 0;
+}
+
+bool EngineMTLBootstrap::GroundReady() const
+{
+    return _impl->groundIndexCount > 0 && _impl->groundCellInfo != nullptr && _impl->groundJitter != nullptr &&
+           _impl->heightMap != nullptr && !_impl->groundSurfaceArrays.empty();
+}
+
+void EngineMTLBootstrap::DrawGroundSegments(int surfaceArray, int surfaceTexture, int detailTexture,
+                                            const GroundSegmentMTL* segments, int segmentCount,
+                                            const uint32_t* lightSets, int lightSetCount, const ObjectConstantsMTL& obj,
+                                            const FrameConstantsMTL& frame, const GroundConstantsMTL& ground)
+{
+    if (_impl->currentEncoder == nullptr || segments == nullptr || segmentCount <= 0 || lightSets == nullptr ||
+        lightSetCount <= 0 || !GroundReady())
+        return;
+
+    FlushTriangles2D();
+    EnsureTLPipeline();
+    const bool water = surfaceArray < 0;
+    MTL::RenderPipelineState* pipeline = water ? _impl->pipelineStateWaterInst : _impl->pipelineStateTerrain;
+    if (pipeline == nullptr)
+        return;
+    if (!water && static_cast<size_t>(surfaceArray) >= _impl->groundSurfaceArrays.size())
+        return;
+
+    auto lookup = [this](int handle) -> MTL::Texture*
+    {
+        if (handle > 0 && static_cast<size_t>(handle) <= _impl->textures.size() &&
+            _impl->textures[static_cast<size_t>(handle) - 1] != nullptr)
+            return _impl->textures[static_cast<size_t>(handle) - 1];
+        return _impl->fallbackWhite;
+    };
+
+    MTL::Buffer* segBuf = nullptr;
+    MTL::Buffer* setBuf = nullptr;
+    size_t segOffset = 0, setOffset = 0;
+    const size_t segBytes = static_cast<size_t>(segmentCount) * sizeof(GroundSegmentMTL);
+    const size_t setBytes = static_cast<size_t>(lightSetCount) * sizeof(uint32_t);
+    if (!_impl->StreamAlloc(segBytes, segBuf, segOffset))
+        return;
+    std::memcpy(static_cast<uint8_t*>(segBuf->contents()) + segOffset, segments, segBytes);
+    if (!_impl->StreamAlloc(setBytes, setBuf, setOffset))
+        return;
+    std::memcpy(static_cast<uint8_t*>(setBuf->contents()) + setOffset, lightSets, setBytes);
+
+    MTL::RenderCommandEncoder* enc = _impl->currentEncoder;
+    enc->setRenderPipelineState(pipeline);
+    enc->setDepthStencilState(_impl->depthStateTL);
+    enc->setDepthBias(0.0f, 0.0f, 0.0f);
+    enc->setCullMode(MTL::CullModeBack);
+    enc->setFrontFacingWinding(MTL::WindingClockwise);
+    MTL::ScissorRect scissor;
+    scissor.x = 0;
+    scissor.y = 0;
+    scissor.width = static_cast<NS::UInteger>(_impl->frameWidth);
+    scissor.height = static_cast<NS::UInteger>(_impl->frameHeight);
+    enc->setScissorRect(scissor);
+
+    enc->setVertexBuffer(_impl->groundGrid, 0, 0);
+    enc->setVertexBytes(&obj, sizeof(obj), 1);
+    enc->setVertexBytes(&frame, sizeof(frame), 2);
+    enc->setVertexBuffer(segBuf, segOffset, 3);
+    enc->setVertexBuffer(_impl->lightTableBuffer != nullptr ? _impl->lightTableBuffer : _impl->fallbackLightTable, 0,
+                         4);
+    enc->setVertexBuffer(setBuf, setOffset, 5);
+    enc->setVertexBytes(&ground, sizeof(ground), 6);
+    enc->setVertexTexture(_impl->heightMap, 0);
+    enc->setVertexTexture(_impl->groundJitter, 1);
+    enc->setVertexTexture(_impl->groundCellInfo, 2);
+
+    enc->setFragmentBytes(&frame, sizeof(frame), 0);
+    enc->setFragmentTexture(
+        water ? lookup(surfaceTexture) : _impl->groundSurfaceArrays[static_cast<size_t>(surfaceArray)], 0);
+    enc->setFragmentTexture(lookup(detailTexture), 1);
+    MTL::Texture* shadowTex = _impl->shadowCascadeRendered && _impl->shadowCascadeArray != nullptr
+                                  ? _impl->shadowCascadeArray
+                                  : _impl->shadowFallbackArray;
+    enc->setFragmentTexture(shadowTex, 2);
+    // Linear samplers: 3 clamps both axes, 0 repeats. Water tiles its surface.
+    enc->setFragmentSamplerState(_impl->samplerStates[water ? 0 : 3], 0);
+    enc->setFragmentSamplerState(_impl->samplerStates[0], 1);
+    enc->setFragmentSamplerState(_impl->samplerStates[7], 2);
+    if (!water)
+        enc->setFragmentSamplerState(_impl->samplerStates[0], 3);
+
+    enc->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, static_cast<NS::UInteger>(_impl->groundIndexCount),
+                               MTL::IndexTypeUInt16, _impl->groundIndices, 0, static_cast<NS::UInteger>(segmentCount));
+    ++Poseidon::gPerfDrawCalls;
+}
+
 void EngineMTLBootstrap::UploadLocalLightTable(const LocalLightTableMTL& table)
 {
     if (_impl->device == nullptr)
@@ -3398,6 +3856,15 @@ void EngineMTLBootstrap::Shutdown()
     _impl->instanceBuffer = nullptr;
     _impl->instanceCount = 0;
     _impl->lightTableBuffer = nullptr;
+    ReleaseGround();
+    for (MTL::RenderPipelineState** state : {&_impl->pipelineStateTerrain, &_impl->pipelineStateWaterInst})
+    {
+        if (*state != nullptr)
+        {
+            (*state)->release();
+            *state = nullptr;
+        }
+    }
     if (_impl->heightMap != nullptr)
     {
         _impl->heightMap->release();

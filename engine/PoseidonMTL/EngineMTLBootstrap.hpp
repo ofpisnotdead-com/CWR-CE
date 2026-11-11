@@ -185,6 +185,21 @@ struct LocalLightTableMTL
     LightMTL lights[kMaxLightTableMTL];
 };
 
+// Instanced ground constants (GL33's terrainParams/terrainParams2/waterParams).
+struct GroundConstantsMTL
+{
+    float terrainParams[4];  // {landGrid, subdivCount, 1/subdivCount, detailScale}
+    float terrainParams2[4]; // {jitterScale, 0, drawBatch, 0}
+    float waterParams[4];    // {seaLevel, 1/subdivCount, specTile, landGrid}
+};
+
+// One visible ground segment, laid out as Engine::GroundSegment.
+struct GroundSegmentMTL
+{
+    int32_t cellX, cellZ;
+    uint32_t lightSet;
+};
+
 // Native Metal device/layer/queue wrapper (macOS / Apple Silicon). Used two
 // ways:
 //  - Milestone 0 (MetalSmokeTest): Init() creates its own SDL_WINDOW_METAL
@@ -539,6 +554,24 @@ class EngineMTLBootstrap
     // land clipping; the frame's hmParams/landGrid carry the grid scales.
     bool SetTerrainHeightmap(const float* heights, int width, int height);
     void UploadLocalLightTable(const LocalLightTableMTL& table);
+
+    // Instanced ground. The segment grid, the per-cell info and jitter maps
+    // and the surface arrays (one per texture size class, RGBA8) are built
+    // once per map; DrawGroundSegments draws one instance per segment with
+    // vsTerrain (surfaceArray >= 0) or vsWaterInst (surfaceArray < 0, sampling
+    // the 2D `surfaceTexture` handle instead).
+    bool SetGroundSegmentMesh(const float* cellAndGrid, int vertexCount, const uint16_t* indices, int indexCount);
+    bool SetGroundCellInfo(const uint16_t* layerAndFlags, int range);
+    bool SetGroundJitter(const float* uv, int width, int height);
+    void ReleaseGroundSurfaceArrays();
+    int CreateGroundSurfaceArray(int width, int height, int levels, int layers); // index, or -1
+    void UploadGroundSurfaceLevel(int array, int layer, int level, int width, int height, const uint8_t* rgba);
+    void ReleaseGround();
+    bool GroundReady() const;
+    void DrawGroundSegments(int surfaceArray, int surfaceTexture, int detailTexture, const GroundSegmentMTL* segments,
+                            int segmentCount, const uint32_t* lightSets, int lightSetCount,
+                            const ObjectConstantsMTL& obj, const FrameConstantsMTL& frame,
+                            const GroundConstantsMTL& ground);
     void UploadInstances(const InstanceMTL* instances, int count);
     void EndInstancedRun();
     int InstanceCount() const;

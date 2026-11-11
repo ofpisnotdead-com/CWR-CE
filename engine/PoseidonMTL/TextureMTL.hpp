@@ -158,6 +158,16 @@ class TextureMTL : public Texture
     // handle on first use) -- mirrors GL33's TextureGL33::CacheUse exactly.
     void CacheUse(CLList<HMipCacheMTL>& list);
 
+    // CPU-side RGBA8 pixels of one decoded level; null when not resident.
+    const uint8_t* LevelPixels(int level, int& width, int& height) const
+    {
+        if (level < 0 || static_cast<size_t>(level) >= _levelPixels.size() || _levelPixels[level].empty())
+            return nullptr;
+        width = _levels[level].width;
+        height = _levels[level].height;
+        return _levelPixels[level].data();
+    }
+
     int64_t BigSurfaceBytes() const { return _bigSurfaceBytes; }
     bool HasBigSurface() const { return _bigGpuHandle != 0; }
     int SmallGpuHandle() const { return _smallGpuHandle; }
