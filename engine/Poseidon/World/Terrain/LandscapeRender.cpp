@@ -1745,7 +1745,7 @@ void Landscape::DrawRect(Scene& scene, const LandBegEnd& bigRect)
         GEngine->EnableNightEye(nightEye);
 
         GroundLayerInfo opaqueLayer;
-        if (GGl33TerrainInstanced)
+        if (GGl33TerrainInstanced && _engine->DrawsInstancedGround())
         {
             DrawGroundInstanced(bigRect, scene);
         }
@@ -1770,7 +1770,7 @@ void Landscape::DrawRect(Scene& scene, const LandBegEnd& bigRect)
         if (!ENGINE_CONFIG.noLandscape)
         {
             GEngine->EnableReorderQueues(true);
-            if (!GGl33TerrainInstanced)
+            if (!GGl33TerrainInstanced || !_engine->DrawsInstancedGround())
             {
                 DrawWater(bigRect, scene);
             }

@@ -49,6 +49,15 @@ set_source_files_properties(
     PROPERTIES
         COMPILE_FLAGS "-fno-objc-arc"
 )
+# The vendored backend's __bridge_retained/__bridge_transfer casts are plain
+# __bridge casts without ARC.
+# TODO: DestroyTexture never releases the MetalTexture CreateTexture allocated,
+# so each destroyed ImGui texture leaks its wrapper object.
+set_source_files_properties(
+    ${CMAKE_SOURCE_DIR}/thirdparty/imgui_backends/imgui_impl_metal.mm
+    PROPERTIES
+        COMPILE_OPTIONS "-Wno-arc-bridge-casts-disallowed-in-nonarc"
+)
 
 set_target_properties(PoseidonMTL PROPERTIES
     CXX_STANDARD 20

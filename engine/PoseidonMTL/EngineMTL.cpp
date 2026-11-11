@@ -233,6 +233,7 @@ void EngineMTL::InitDraw(bool clear, PackedColor color)
     // Force PrepareMeshTL to rebuild its cached view/sun/fog constants at
     // least once this frame (camera/sun/fog can change between frames).
     _tlFrameValid = false;
+    _localLightsUploaded = false;
     UpdateShadowMapLitState();
 
     Engine::InitDraw(clear, color);
@@ -744,6 +745,7 @@ void EngineMTL::SetMaterial(const TLMaterial& mat, const LightList& lights, cons
 {
     if (GScene == nullptr)
         return;
+    EnsureLocalLightsUploaded();
     LightSun* sun = GScene->MainLight();
     if (sun == nullptr)
         return;
@@ -1140,6 +1142,14 @@ void EngineMTL::UploadLocalLights(const LightList& aLights)
     _bootstrap.UploadLocalLightTable(table);
 }
 
+void EngineMTL::EnsureLocalLightsUploaded()
+{
+    if (_localLightsUploaded || GScene == nullptr)
+        return;
+    _localLightsUploaded = true;
+    UploadLocalLights(GScene->ActiveLights());
+}
+
 void EngineMTL::UpdateShadowMapLitState()
 {
     float ctl[4] = {0.0f, 0.0f, 1.0f, 0.0f};
@@ -1263,6 +1273,7 @@ bool EngineMTL::InstancedRunAdd(const Matrix4& modelToWorld, const LightList& li
 {
     if (_instPending >= kMaxInstancesMTL || GScene == nullptr || GScene->GetCamera() == nullptr)
         return false;
+    EnsureLocalLightsUploaded();
     InstanceMTL& inst = _instArray[_instPending];
     GfxMatrix world;
     ConvertMatrix(world, modelToWorld);

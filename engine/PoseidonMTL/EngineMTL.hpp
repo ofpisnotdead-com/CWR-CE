@@ -210,7 +210,7 @@ class EngineMTL : public Engine
     // Legacy (vertex-soup) emission inside the run marks it impure so the
     // scene redraws the tail scalar. Lights come from the frame table
     // UploadLocalLights builds, selected per instance by index.
-    void UploadLocalLights(const LightList& aLights) override;
+    void UploadLocalLights(const LightList& aLights);
     void InstancedRunReset() override { _instPending = 0; }
     bool InstancedRunAdd(const Matrix4& modelToWorld, const LightList& lights) override;
     void BeginInstancedRunUpload() override;
@@ -454,6 +454,11 @@ class EngineMTL : public Engine
     bool _instImpure = false;
     // Light -> index into this frame's light table, rebuilt by UploadLocalLights.
     std::unordered_map<const Light*, int> _localLightIndices;
+    // The light table ring holds one slot per frame in flight, so upload once
+    // per frame, on the first draw that packs light indices (the scene selects
+    // its active lights after InitDraw).
+    bool _localLightsUploaded = false;
+    void EnsureLocalLightsUploaded();
     std::array<std::uint32_t, 4> PackLightIndices(const LightList& lights) const;
 
     void CreateWindowAndDevice();
