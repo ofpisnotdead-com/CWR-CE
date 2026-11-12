@@ -839,12 +839,20 @@ class EngineGL33 : public Engine
     {
         _instCount = count;
         _instImpure = false;
+        _instSubmitted = 0;
     }
-    bool EndInstancedRun() override
+    RunOutcome EndInstancedRun() override
     {
-        const bool pure = !_instImpure;
+        // A head that returns before reaching either EmitDraw or QueueAdd leaves the run
+        // empty, so completion needs an actual submission. Such a head never reached the
+        // screen itself, hence RedrawAll rather than RedrawMembers.
+        RunOutcome outcome = RunOutcome::Complete;
+        if (_instImpure)
+            outcome = RunOutcome::RedrawMembers;
+        else if (_instSubmitted == 0)
+            outcome = RunOutcome::RedrawAll;
         _instCount = 0;
-        return pure;
+        return outcome;
     }
     void UploadWorldInstances(const float* matrices, int count);
     // Run accumulation: Scene adds model-to-world transforms; the engine converts
@@ -856,6 +864,7 @@ class EngineGL33 : public Engine
     bool InstancedRunActive() const override { return _instCount > 1; }
     int _instCount = 0;
     bool _instImpure = false;
+    int _instSubmitted = 0;
     int _instPending = 0;
     GfxMatrix _instArray[256];
     // Per-instance packed light indices for the pending batch.

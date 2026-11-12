@@ -480,10 +480,18 @@ class Engine : public IGraphicsEngine
     // identical static shapes; backends that support it draw every TL section
     // once with K instances. Defaults keep unsupporting backends scalar
     // (InstancedRunAdd refusing = the scene never arms a batch).
+    //
+    // What the caller still has to draw itself once the run closes.
+    enum class RunOutcome
+    {
+        Complete,      // every instance was submitted
+        RedrawMembers, // the head reached the screen, the other instances did not
+        RedrawAll,     // nothing was submitted, the head included
+    };
     virtual void InstancedRunReset() {}
     virtual bool InstancedRunAdd(const Matrix4& /*modelToWorld*/, const LightList& /*lights*/) { return false; }
     virtual void BeginInstancedRunUpload() {}
-    virtual bool EndInstancedRun() { return true; }
+    virtual RunOutcome EndInstancedRun() { return RunOutcome::Complete; }
     virtual bool InstancedRunActive() const { return false; }
 
     // Explicit pass-kind routing.  Producers (Man::DrawProxies for first-person,
