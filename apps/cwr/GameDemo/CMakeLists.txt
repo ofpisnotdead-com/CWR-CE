@@ -45,8 +45,13 @@ if(WIN32)
         winmm.lib version.lib ws2_32.lib legacy_stdio_definitions.lib
     )
 elseif(APPLE)
+    # Apple's linker has no GNU --start-group/--end-group equivalent (and
+    # doesn't need one — it resolves the same circular static-lib
+    # dependencies without help). GameApplication.cpp (compiled into this
+    # target) calls RegisterMetalGraphicsBackend() under __APPLE__, so
+    # PoseidonMTL must be linked too.
     target_link_libraries(PoseidonGameDemo PRIVATE
-        GameBase PoseidonGL33 Poseidon PoseidonOpenAL
+        GameBase PoseidonGL33 PoseidonMTL Poseidon PoseidonOpenAL
         pthread dl
     )
 else()

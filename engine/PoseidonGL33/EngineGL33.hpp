@@ -632,6 +632,7 @@ class EngineGL33 : public Engine
     void FinishDraw() override;
     void NextFrame() override;
     void SetTerrainHeightmap(const float* heights, int width, int height, float invGrid, float invLandGrid) override;
+    bool DrawsInstancedGround() const override { return true; }
     void PrepareTerrain(const TerrainSetup& setup) override;
     void DrawTerrain(const GroundSegment* segments, size_t count, const TLMaterial& mat) override;
     void DrawWater(const GroundSegment* segments, size_t count, const TLMaterial& mat, Texture* surfaceTex,

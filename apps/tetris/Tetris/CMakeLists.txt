@@ -56,7 +56,7 @@ if(WIN32)
     )
 elseif(APPLE)
     target_link_libraries(PoseidonTetris PRIVATE
-        GameBase PoseidonGL33 Poseidon PoseidonOpenAL
+        GameBase PoseidonGL33 PoseidonMTL Poseidon PoseidonOpenAL
         pthread dl
     )
 else()

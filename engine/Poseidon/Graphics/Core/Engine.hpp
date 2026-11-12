@@ -394,6 +394,9 @@ class Engine : public IGraphicsEngine
         int cellRange;
     };
 
+    // True when the backend implements the instanced ground pass below; the
+    // landscape otherwise keeps the mesh-based ground and water.
+    virtual bool DrawsInstancedGround() const { return false; }
     virtual void PrepareTerrain(const TerrainSetup& setup) {}
     virtual void DrawTerrain(const GroundSegment* segments, size_t count, const TLMaterial& mat) {}
     virtual void DrawWater(const GroundSegment* segments, size_t count, const TLMaterial& mat, Texture* surfaceTex, float seaLevel) {}
@@ -896,6 +899,12 @@ class Engine : public IGraphicsEngine
     /// a fullscreen transition completes).  Backends that need to resize their
     /// swap chain should override this.
     virtual void OnWindowResized(int /*w*/, int /*h*/) {}
+
+    /// Called when the platform's safe area changes without a pixel-size
+    /// resize (for example, macOS fullscreen display cutouts / menu-bar
+    /// reservations). Backends that derive their renderable surface from the
+    /// safe area can refresh it here.
+    virtual void OnWindowSafeAreaChanged() {}
 
     /// Post-resize hook — fires after OnWindowResized has finished updating
     /// _w/_h.  Apps register a function pointer here at boot to re-run the
