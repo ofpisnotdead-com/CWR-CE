@@ -82,6 +82,12 @@ struct GlyphQuad
     int atlasPage;
 };
 
+struct GlyphBounds
+{
+    float top = 0.0f;
+    float bottom = 0.0f;
+};
+
 class FontRenderer
 {
   public:
@@ -111,6 +117,9 @@ class FontRenderer
 
     // Check if a font is loaded
     bool IsLoaded() const { return _face != nullptr; }
+
+    // Returns the bounds of the visible glyphs in the layout.
+    GlyphBounds MeasureGlyphBounds(const std::vector<GlyphQuad>& quads) const;
 
     // Rasterize a single glyph into the atlas. Returns metrics.
     const GlyphMetrics* GetGlyph(uint32_t codepoint, int pixelSize);

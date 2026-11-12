@@ -320,6 +320,24 @@ float FontRenderer::GetCapHeight(int pixelSize)
     return GetAscent(pixelSize);
 }
 
+GlyphBounds FontRenderer::MeasureGlyphBounds(const std::vector<GlyphQuad>& quads) const
+{
+    if (quads.empty())
+        return {};
+
+    GlyphBounds bounds;
+    bounds.top = quads[0].y;
+    bounds.bottom = quads[0].y + quads[0].h;
+
+    for (const GlyphQuad& q : quads)
+    {
+        bounds.top = std::min(bounds.top, q.y);
+        bounds.bottom = std::max(bounds.bottom, q.y + q.h);
+    }
+
+    return bounds;
+}
+
 std::vector<GlyphQuad> FontRenderer::LayoutText(const char* utf8Text, float x, float y, int pixelSize, float widthScale,
                                                 float letterSpacing)
 {
