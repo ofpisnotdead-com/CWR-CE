@@ -46,6 +46,8 @@ TEST_CASE("GameSettingsConfig: defaults follow detected language", "[Settings][G
     CHECK(cfg.blood == true);
     CHECK(cfg.preferredViewDistance == 900.0f);
     CHECK(cfg.respectMissionViewDistance == true);
+    CHECK_FALSE(cfg.showPlayerHealth);
+    CHECK_FALSE(cfg.showKillConfirmation);
 }
 
 TEST_CASE("GameSettingsConfig: defaults normalize unsupported detected language", "[Settings][GameSettings]")
@@ -126,6 +128,8 @@ TEST_CASE("GameSettingsConfig: save and load round-trip every field", "[Settings
     src.blood = false;
     src.preferredViewDistance = 1700.0f;
     src.respectMissionViewDistance = false;
+    src.showPlayerHealth = true;
+    src.showKillConfirmation = true;
     REQUIRE(src.Save(path));
 
     GameSettingsConfig dst;
@@ -136,6 +140,21 @@ TEST_CASE("GameSettingsConfig: save and load round-trip every field", "[Settings
     CHECK(dst.blood == src.blood);
     CHECK(dst.preferredViewDistance == src.preferredViewDistance);
     CHECK(dst.respectMissionViewDistance == src.respectMissionViewDistance);
+    CHECK(dst.showPlayerHealth == src.showPlayerHealth);
+    CHECK(dst.showKillConfirmation == src.showKillConfirmation);
+}
+
+TEST_CASE("GameSettingsConfig: existing configurations retain the classic HUD", "[Settings][GameSettings]")
+{
+    const std::string path = TmpPath("classic.cfg");
+    {
+        std::ofstream file(path);
+        file << "textLanguage=\"English\";\nvoiceLanguage=\"English\";\nblood=1;\n";
+    }
+    GameSettingsConfig cfg;
+    REQUIRE(cfg.Load(path));
+    CHECK_FALSE(cfg.showPlayerHealth);
+    CHECK_FALSE(cfg.showKillConfirmation);
 }
 
 TEST_CASE("GameSettingsConfig: saves under a UTF-8 user directory", "[Settings][GameSettings][utf8]")

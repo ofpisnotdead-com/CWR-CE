@@ -101,6 +101,10 @@ const char* GamePage::GameProvider::RowLabel(int row) const
             return LocalizeString("STR_DISP_MAIN_OPT_GAME_SUBTITLES");
         case kRowRadioSubtitles:
             return LocalizeString("STR_DISP_MAIN_OPT_GAME_RADIO_SUBTITLES");
+        case kRowPlayerHealth:
+            return LocalizeStringWithFallback("STR_DISP_MAIN_OPT_GAME_PLAYER_HEALTH", "Player health HUD");
+        case kRowKillConfirmation:
+            return LocalizeStringWithFallback("STR_DISP_MAIN_OPT_GAME_KILL_CONFIRMATION", "Kill confirmations");
         default:
             return "";
     }
@@ -124,6 +128,13 @@ const char* GamePage::GameProvider::RowDescription(int row) const
             return LocalizeString("STR_DISP_MAIN_OPT_GAME_SUBTITLES_DESC");
         case kRowRadioSubtitles:
             return LocalizeString("STR_DISP_MAIN_OPT_GAME_RADIO_SUBTITLES_DESC");
+        case kRowPlayerHealth:
+            return LocalizeStringWithFallback("STR_DISP_MAIN_OPT_GAME_PLAYER_HEALTH_DESC",
+                                              "Show your health percentage and a compact bar during gameplay.");
+        case kRowKillConfirmation:
+            return LocalizeStringWithFallback(
+                "STR_DISP_MAIN_OPT_GAME_KILL_CONFIRMATION_DESC",
+                "Show a notice and mission count for enemy infantry kills credited to you.");
         default:
             return "";
     }
@@ -152,6 +163,10 @@ OptionsScrollList::RowDef GamePage::GameProvider::RowFor(int row) const
             return {552, m_toggleOptions.data(), 2};
         case kRowRadioSubtitles:
             return {562, m_toggleOptions.data(), 2};
+        case kRowPlayerHealth:
+            return {572, m_toggleOptions.data(), 2};
+        case kRowKillConfirmation:
+            return {582, m_toggleOptions.data(), 2};
         default:
             return {-1, nullptr, 0};
     }
@@ -188,6 +203,10 @@ int GamePage::GameProvider::RowValue(int row) const
             return USER_CONFIG.showTitles ? 1 : 0;
         case kRowRadioSubtitles:
             return GChatList.Enabled() ? 1 : 0;
+        case kRowPlayerHealth:
+            return GetShowPlayerHealth() ? 1 : 0;
+        case kRowKillConfirmation:
+            return GetShowKillConfirmation() ? 1 : 0;
         default:
             return 0;
     }
@@ -195,7 +214,8 @@ int GamePage::GameProvider::RowValue(int row) const
 
 void GamePage::GameProvider::SetRowValue(int row, int value)
 {
-    if (row == kRowBlood || row == kRowSubtitles || row == kRowRadioSubtitles || row == kRowRespectMissionViewDistance)
+    if (row == kRowBlood || row == kRowSubtitles || row == kRowRadioSubtitles ||
+        row == kRowRespectMissionViewDistance || row == kRowPlayerHealth || row == kRowKillConfirmation)
     {
         if (value < 0 || value >= 2)
             return;
@@ -240,6 +260,12 @@ void GamePage::GameProvider::SetRowValue(int row, int value)
         case kRowRadioSubtitles:
             GChatList.Enable(value != 0);
             return;
+        case kRowPlayerHealth:
+            SetShowPlayerHealth(value != 0);
+            return;
+        case kRowKillConfirmation:
+            SetShowKillConfirmation(value != 0);
+            return;
     }
 }
 
@@ -247,7 +273,8 @@ OptionsScrollList::Kind GamePage::GameProvider::RowKind(int row) const
 {
     if (row == kRowViewDistance)
         return OptionsScrollList::KindSlider;
-    if (row == kRowBlood || row == kRowSubtitles || row == kRowRadioSubtitles || row == kRowRespectMissionViewDistance)
+    if (row == kRowBlood || row == kRowSubtitles || row == kRowRadioSubtitles ||
+        row == kRowRespectMissionViewDistance || row == kRowPlayerHealth || row == kRowKillConfirmation)
         return OptionsScrollList::KindBoolean;
     return OptionsScrollList::Provider::RowKind(row);
 }

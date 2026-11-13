@@ -20,6 +20,8 @@ class GameSettingsConfig
     bool blood = true;
     float preferredViewDistance = 900.0f;
     bool respectMissionViewDistance = true;
+    bool showPlayerHealth = false;
+    bool showKillConfirmation = false;
 
     static constexpr float kMinViewDistance = 100.0f;
     static constexpr float kMaxViewDistance = 5000.0f;
@@ -45,6 +47,10 @@ float GetSelectedPreferredViewDistance();
 void SetSelectedPreferredViewDistance(float distance);
 bool GetRespectMissionViewDistance();
 void SetRespectMissionViewDistance(bool enabled);
+bool GetShowPlayerHealth();
+void SetShowPlayerHealth(bool enabled);
+bool GetShowKillConfirmation();
+void SetShowKillConfirmation(bool enabled);
 float ClampPreferredViewDistance(float distance);
 float ResolveEffectiveViewDistance(float preferredViewDistance, bool respectMissionViewDistance,
                                    const std::optional<float>& missionViewDistance);

@@ -74,6 +74,8 @@ public:
 
 	// in-game command menu visible labels, one per line (empty when closed). For tri tests.
 	virtual RString GetCommandMenuTexts() const { return RString(); }
+	// Player feedback presentation diagnostics for the integration harness.
+	virtual RString GetPlayerFeedbackStateText() const { return RString(); }
 
 	// used to handle mouse movements
 	virtual Vector3 GetCursorDirection() const = 0;

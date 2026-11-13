@@ -57,6 +57,18 @@ bool& RespectMissionViewDistanceStorage()
     return enabled;
 }
 
+bool& ShowPlayerHealthStorage()
+{
+    static bool enabled = false;
+    return enabled;
+}
+
+bool& ShowKillConfirmationStorage()
+{
+    static bool enabled = false;
+    return enabled;
+}
+
 std::string GameSettingsPath()
 {
     const std::string& dir = GamePaths::Instance().UserDir();
@@ -113,6 +125,8 @@ void ApplyToRuntime(const GameSettingsConfig& cfg)
     ENGINE_CONFIG.blood = cfg.blood;
     SelectedPreferredViewDistanceStorage() = ClampPreferredViewDistance(cfg.preferredViewDistance);
     RespectMissionViewDistanceStorage() = cfg.respectMissionViewDistance;
+    ShowPlayerHealthStorage() = cfg.showPlayerHealth;
+    ShowKillConfirmationStorage() = cfg.showKillConfirmation;
     if (GScene)
         GScene->SetPreferredViewDistance(SelectedPreferredViewDistanceStorage());
 }
@@ -144,6 +158,8 @@ void GameSettingsConfig::LoadDefaults(const Environment& env)
     blood = true;
     preferredViewDistance = 900.0f;
     respectMissionViewDistance = true;
+    showPlayerHealth = false;
+    showKillConfirmation = false;
 }
 
 bool GameSettingsConfig::Normalize()
@@ -202,6 +218,10 @@ bool GameSettingsConfig::Load(const std::string& path)
         preferredViewDistance = (float)*entry;
     if (auto* entry = cfg.FindEntry("respectMissionViewDistance"))
         respectMissionViewDistance = (bool)*entry;
+    if (auto* entry = cfg.FindEntry("showPlayerHealth"))
+        showPlayerHealth = (bool)*entry;
+    if (auto* entry = cfg.FindEntry("showKillConfirmation"))
+        showKillConfirmation = (bool)*entry;
 
     return true;
 }
@@ -215,6 +235,8 @@ bool GameSettingsConfig::Save(const std::string& path) const
     cfg.Add("blood", blood);
     cfg.Add("preferredViewDistance", preferredViewDistance);
     cfg.Add("respectMissionViewDistance", respectMissionViewDistance);
+    cfg.Add("showPlayerHealth", showPlayerHealth);
+    cfg.Add("showKillConfirmation", showKillConfirmation);
 
     return WriteSettingsFile(path, cfg);
 }
@@ -283,6 +305,8 @@ void SaveGameSettings()
     cfg.blood = ENGINE_CONFIG.blood;
     cfg.preferredViewDistance = GetSelectedPreferredViewDistance();
     cfg.respectMissionViewDistance = GetRespectMissionViewDistance();
+    cfg.showPlayerHealth = GetShowPlayerHealth();
+    cfg.showKillConfirmation = GetShowKillConfirmation();
 
     if (!cfg.Save(path))
     {
@@ -354,6 +378,26 @@ bool GetRespectMissionViewDistance()
 void SetRespectMissionViewDistance(bool enabled)
 {
     RespectMissionViewDistanceStorage() = enabled;
+}
+
+bool GetShowPlayerHealth()
+{
+    return ShowPlayerHealthStorage();
+}
+
+void SetShowPlayerHealth(bool enabled)
+{
+    ShowPlayerHealthStorage() = enabled;
+}
+
+bool GetShowKillConfirmation()
+{
+    return ShowKillConfirmationStorage();
+}
+
+void SetShowKillConfirmation(bool enabled)
+{
+    ShowKillConfirmationStorage() = enabled;
 }
 
 float ClampPreferredViewDistance(float distance)

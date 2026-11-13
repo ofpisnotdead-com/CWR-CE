@@ -1,0 +1,5 @@
+# Requires retail Malden assets; CI supplies demo data only.
+tags = ["exclusive", "ui", "player-feedback", "savegame", "full_game", "ci-host-blocked"]
+binary = "PoseidonGame"
+mission = "tests/integration/missions/player_feedback.Abel"
+timeout = 120

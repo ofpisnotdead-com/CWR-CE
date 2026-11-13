@@ -36,6 +36,8 @@ struct GamePageStateSnapshot
     bool radioSubtitles;
     float preferredViewDistance;
     bool respectMissionViewDistance;
+    bool showPlayerHealth;
+    bool showKillConfirmation;
 
     GamePageStateSnapshot()
     {
@@ -44,6 +46,8 @@ struct GamePageStateSnapshot
         radioSubtitles = GChatList.Enabled();
         preferredViewDistance = GetSelectedPreferredViewDistance();
         respectMissionViewDistance = GetRespectMissionViewDistance();
+        showPlayerHealth = GetShowPlayerHealth();
+        showKillConfirmation = GetShowKillConfirmation();
     }
 
     ~GamePageStateSnapshot()
@@ -53,6 +57,8 @@ struct GamePageStateSnapshot
         GChatList.Enable(radioSubtitles);
         SetSelectedPreferredViewDistance(preferredViewDistance);
         SetRespectMissionViewDistance(respectMissionViewDistance);
+        SetShowPlayerHealth(showPlayerHealth);
+        SetShowKillConfirmation(showKillConfirmation);
     }
 };
 
@@ -73,11 +79,11 @@ void LoadMainMenuStringtable()
 }
 } // namespace
 
-TEST_CASE("GamePage: provider exposes 7 rows + close", "[UI][GamePage]")
+TEST_CASE("GamePage: provider exposes 9 rows + close", "[UI][GamePage]")
 {
     TestableGamePage page;
     auto& p = page.Provider();
-    CHECK(p.RowCount() == 8);
+    CHECK(p.RowCount() == 10);
 }
 
 TEST_CASE("GamePage: row labels include view-distance controls", "[UI][GamePage]")
@@ -89,6 +95,28 @@ TEST_CASE("GamePage: row labels include view-distance controls", "[UI][GamePage]
     CHECK(std::string(page.TitleText()) == "Game");
     CHECK(std::string(p.RowLabel(2)) == "Visibility distance");
     CHECK(std::string(p.RowLabel(3)) == "Respect mission visibility");
+    CHECK(std::string(p.RowLabel(7)) == "Player health HUD");
+    CHECK(std::string(p.RowLabel(8)) == "Kill confirmations");
+}
+
+TEST_CASE("GamePage: player feedback controls toggle independently", "[UI][GamePage]")
+{
+    GamePageStateSnapshot snap;
+    SetShowPlayerHealth(false);
+    SetShowKillConfirmation(false);
+    TestableGamePage page;
+    auto& p = page.Provider();
+    CHECK(p.RowKind(7) == OptionsScrollList::KindBoolean);
+    CHECK(p.RowKind(8) == OptionsScrollList::KindBoolean);
+    p.SetRowValue(7, 1);
+    CHECK(GetShowPlayerHealth());
+    CHECK_FALSE(GetShowKillConfirmation());
+    p.SetRowValue(8, 1);
+    CHECK(p.RowValue(7) == 1);
+    CHECK(p.RowValue(8) == 1);
+    p.SetRowValue(7, 0);
+    CHECK_FALSE(GetShowPlayerHealth());
+    CHECK(GetShowKillConfirmation());
 }
 
 TEST_CASE("GamePage: view-distance row is a slider with metre text", "[UI][GamePage]")

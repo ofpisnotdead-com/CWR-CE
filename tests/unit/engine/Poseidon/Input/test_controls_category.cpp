@@ -115,6 +115,20 @@ TEST_CASE("ControlsCategory: chat navigation lives in Common", "[Input][Controls
     CHECK(IsActionInControlsCategory(UAChatHistoryDown, ControlsCategoryCommon));
 }
 
+TEST_CASE("ControlsCategory: HUD visibility uses an otherwise unbound U key",
+          "[Input][ControlsCategory][PlayerFeedback]")
+{
+    CHECK(IsActionInControlsCategory(UATogglePlayerFeedback, ControlsCategoryCommon));
+    InputProfile profile;
+    profile.LoadDefaults();
+    REQUIRE(profile.HasBinding(UATogglePlayerFeedback, InputCode::Key(SDL_SCANCODE_U)));
+    for (int action = 0; action < UAN; ++action)
+    {
+        if (action != UATogglePlayerFeedback)
+            CHECK_FALSE(profile.HasBinding(static_cast<UserAction>(action), InputCode::Key(SDL_SCANCODE_U)));
+    }
+}
+
 // Keyboard and gamepad controls pages share the same category lists; KbmPage /
 // GamepadPage IsActionVisible delegate to IsActionVisibleOn{Keyboard,Gamepad}. These
 // guard the "one shared source" invariant so a new action cannot silently go missing
