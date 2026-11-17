@@ -133,8 +133,8 @@ public:
 	void Load(int idd);
 	void NextCtrl();
 	void PrevCtrl();
-	void NextDefaultCtrl();
-	void PrevDefaultCtrl();
+	bool MoveFocusInDirection(Poseidon::FocusNavigation::Direction dir);
+	bool MoveFocusByOrder(bool forward);
 	virtual bool CanDestroy();
 	virtual void Destroy();
 	void Exit(int code)
