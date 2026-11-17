@@ -935,6 +935,10 @@ bool ParseCutscene(RString cutscene, bool multiplayer)
         RString message = MissingAddonMessage(CurrentTemplate.missingAddOns);
         LOG_WARN(Mission, "Cannot load {} from {}: {}", (const char*)cutscene, (const char*)name, (const char*)message);
         Poseidon::Foundation::WarningMessage(message);
+        if (multiplayer)
+        {
+            MsgBox(message, MB_BUTTON_OK, -1);
+        }
     }
     else if (result != LSOK)
     {
