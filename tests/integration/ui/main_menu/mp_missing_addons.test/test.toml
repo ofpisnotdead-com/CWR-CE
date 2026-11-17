@@ -1,0 +1,14 @@
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 60
+
+[[instances]]
+name = "client"
+type = "client"
+use_mission = false
+no_autotest = true
+extra_args = ["--nosound", "--no-menu-scene"]
+copy_files = [
+  { source = "missing_addons.Demo/mission.sqm", target = "content/MPMissions/missing_addons.Demo/mission.sqm" },
+  { source = "available.Demo/mission.sqm", target = "content/MPMissions/available.Demo/mission.sqm" },
+]
