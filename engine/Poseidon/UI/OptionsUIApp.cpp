@@ -124,6 +124,8 @@ RString GetAppVersion()
     const char* platform = "x64";
 #elif defined(__aarch64__)
     const char* platform = "aarch64";
+#elif defined(__powerpc64__) && defined(__LITTLE_ENDIAN__)
+    const char* platform = "ppc64le";
 #else
     const char* platform = "x86";
 #endif
