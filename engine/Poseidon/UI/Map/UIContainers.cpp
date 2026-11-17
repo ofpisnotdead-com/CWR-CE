@@ -33,6 +33,18 @@ using Poseidon::Foundation::UITime;
 #include <Poseidon/Foundation/Strings/Mbcs.hpp>
 
 using namespace Poseidon;
+namespace FocusNav = Poseidon::FocusNavigation;
+
+namespace
+{
+// The arrow keys pass over static text, even the multi-line kind that takes focus to
+// scroll, which Tab still reaches.
+bool IsArrowTarget(IControl* ctrl)
+{
+    return ctrl && ctrl->IsVisible() && ctrl->IsEnabled() && ctrl->GetType() != CT_STATIC;
+}
+} // namespace
+
 extern const float CameraZoom;
 extern const float InvCameraZoom;
 
@@ -1006,21 +1018,21 @@ bool ControlsContainer::OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFl
                 ok = true;
                 break;
             case SDLK_LEFT:
-            case SDLK_UP:
-            case SDLK_PAGEUP:
-                if (!_indexFocused.IsNull() && GetFocused()->CanBeDefault())
-                {
-                    PrevDefaultCtrl();
-                }
+                MoveFocusInDirection(FocusNav::Direction::Left);
                 ok = true;
                 break;
             case SDLK_RIGHT:
+                MoveFocusInDirection(FocusNav::Direction::Right);
+                ok = true;
+                break;
+            case SDLK_UP:
+            case SDLK_PAGEUP:
+                MoveFocusInDirection(FocusNav::Direction::Up);
+                ok = true;
+                break;
             case SDLK_DOWN:
             case SDLK_PAGEDOWN:
-                if (!_indexFocused.IsNull() && GetFocused()->CanBeDefault())
-                {
-                    NextDefaultCtrl();
-                }
+                MoveFocusInDirection(FocusNav::Direction::Down);
                 ok = true;
                 break;
             case SDLK_ESCAPE:
@@ -1168,50 +1180,110 @@ void ControlsContainer::PrevCtrl()
     SetFocus(ci, false);
 }
 
-void ControlsContainer::NextDefaultCtrl()
+bool ControlsContainer::MoveFocusInDirection(FocusNav::Direction dir)
 {
-    int n = _controlsBackground.Size() + _objects.Size() + _controlsForeground.Size();
-    if (n == 0)
+    if (_indexFocused.IsNull())
     {
-        return;
+        return false;
     }
+    const bool forward = dir == FocusNav::Direction::Right || dir == FocusNav::Direction::Down;
 
+    FocusNav::Rect from;
+    if (!GetFocusNavRect(GetFocused(), from))
+    {
+        return MoveFocusByOrder(forward);
+    }
+    // A notebook page keeps to the controls that line up and steps on in its own
+    // order; a flat menu takes the nearest control that way and stops at the edge.
+    const bool inObject = dynamic_cast<ControlObjectContainer*>(Ctrl(_indexFocused)) != nullptr;
+    const FocusNav::Reach reach = inObject ? FocusNav::Reach::LinedUp : FocusNav::Reach::Nearest;
+
+    ControlId bestId = ControlId::Null();
+    ControlObjectContainer* bestOwner = nullptr;
+    int bestSub = -1;
+    FocusNav::Score bestScore;
+    const int n = _controlsBackground.Size() + _objects.Size() + _controlsForeground.Size();
     ControlId id = _indexFocused;
     for (int i = 0; i < n; i++)
     {
         id = Next(id);
         IControl* ctrl = Ctrl(id);
-        if (ctrl->IsVisible() && ctrl->IsEnabled() && ctrl->CanBeDefault())
+        if (!IsArrowTarget(ctrl))
         {
-            SetFocus(id, true, true);
-            return;
+            continue;
+        }
+        // An object container holds its own controls, so its sub-controls are the
+        // targets rather than the object itself.
+        ControlObjectContainer* owner = dynamic_cast<ControlObjectContainer*>(ctrl);
+        int sub = -1;
+        FocusNav::Score score;
+        if (owner)
+        {
+            sub = owner->FindFocusNavTarget(dir, from, score);
+            if (sub < 0)
+            {
+                continue;
+            }
+        }
+        else
+        {
+            FocusNav::Rect to;
+            if (!GetFocusNavRect(ctrl, to) || !FocusNav::ScoreCandidate(dir, from, to, score, reach))
+            {
+                continue;
+            }
+        }
+        if (bestId.IsNull() || FocusNav::IsCloser(score, bestScore))
+        {
+            bestId = id;
+            bestOwner = owner;
+            bestSub = sub;
+            bestScore = score;
         }
     }
-    ControlId ci = ControlId::Null();
-    SetFocus(ci, true, true);
+    if (bestId.IsNull())
+    {
+        if (inObject)
+        {
+            return MoveFocusByOrder(forward);
+        }
+        return false;
+    }
+    if (!SetFocus(bestId, forward))
+    {
+        return false;
+    }
+    if (bestOwner && bestSub >= 0)
+    {
+        bestOwner->FocusCtrlByIndex(bestSub);
+    }
+    return true;
 }
 
-void ControlsContainer::PrevDefaultCtrl()
+bool ControlsContainer::MoveFocusByOrder(bool forward)
 {
-    int n = _controlsBackground.Size() + _objects.Size() + _controlsForeground.Size();
-    if (n == 0)
+    // A list owns the vertical keys and a text field the horizontal ones, so a
+    // column of them has directions that reach nothing. The load order still
+    // does, which is what keeps every control reachable.
+    if (!_indexFocused.IsNull())
     {
-        return;
-    }
-
-    ControlId id = _indexFocused;
-    for (int i = 0; i < n; i++)
-    {
-        id = Prev(id);
-        IControl* ctrl = Ctrl(id);
-        if (ctrl->IsVisible() && ctrl->IsEnabled() && ctrl->CanBeDefault())
+        if (auto* owner = dynamic_cast<ControlObjectContainer*>(Ctrl(_indexFocused)))
         {
-            SetFocus(id, false, true);
-            return;
+            if (owner->FocusCtrlByOrder(forward))
+            {
+                return true;
+            }
         }
     }
-    ControlId ci = ControlId::Null();
-    SetFocus(ci, false, true);
+    if (forward)
+    {
+        NextCtrl();
+    }
+    else
+    {
+        PrevCtrl();
+    }
+    return true;
 }
 
 ControlObject* ControlsContainer::OnCreateObject(int type, int idc, const ParamEntry& cls)

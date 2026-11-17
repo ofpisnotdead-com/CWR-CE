@@ -59,14 +59,9 @@ triSetLanguage "English"
 triWaitFrames 5
 
 // Activate the pause-menu Abort action with gamepad navigation + A,
-// then cancel back to the editor.
-triGpadPov 4
-triWaitFrames 5
-triGpadPov 4
-triWaitFrames 5
-triGpadPov 4
-triWaitFrames 5
-triGpadPov 4
+// then cancel back to the editor. The buttons stand in one row with the focus on
+// Continue at its right end, so Abort is one step left.
+triGpadPov 6
 triWaitFrames 5
 triAssert [(triGetControlFocused 104)]
 triGpadButton 0

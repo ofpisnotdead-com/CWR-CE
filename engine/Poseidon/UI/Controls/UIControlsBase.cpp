@@ -46,6 +46,8 @@ RString FindShape(RString name);
 //
 //	 Implementation
 //
+namespace FocusNav = Poseidon::FocusNavigation;
+
 int ResolveLegacyControlInt(const ParamEntry& entry)
 {
     const RStringB raw = entry.GetValueRaw();
@@ -53,6 +55,20 @@ int ResolveLegacyControlInt(const ParamEntry& entry)
     if (rawText && strcmp(rawText, "IDC_STATIC") == 0)
         return -1;
     return entry.GetInt();
+}
+
+bool GetFocusNavRect(IControl* ctrl, FocusNav::Rect& rect)
+{
+    Control* control = dynamic_cast<Control*>(ctrl);
+    if (!control)
+    {
+        return false;
+    }
+    rect.x = control->X();
+    rect.y = control->Y();
+    rect.w = control->W();
+    rect.h = control->H();
+    return true;
 }
 
 void DrawFrame(Texture* corner, PackedColor color, const Rect2DPixel& frame);
@@ -714,6 +730,57 @@ bool ControlObjectContainer::FocusCtrlByIdc(int idc)
     return false;
 }
 
+bool ControlObjectContainer::FocusCtrlByIndex(int index)
+{
+    if (index < 0 || index >= _controls.Size())
+    {
+        return false;
+    }
+    SetFocus(index);
+    return true;
+}
+
+bool ControlObjectContainer::FocusCtrlByOrder(bool forward)
+{
+    const int step = forward ? 1 : -1;
+    for (int i = _indexFocused + step; i >= 0 && i < _controls.Size(); i += step)
+    {
+        Control* ctrl = _controls[i]._control;
+        if (ctrl && ctrl->IsVisible() && ctrl->IsEnabled())
+        {
+            SetFocus(i);
+            return true;
+        }
+    }
+    return false;
+}
+
+int ControlObjectContainer::FindFocusNavTarget(FocusNav::Direction dir, const FocusNav::Rect& from,
+                                               FocusNav::Score& score)
+{
+    int best = -1;
+    for (int i = 0; i < _controls.Size(); ++i)
+    {
+        Control* ctrl = _controls[i]._control;
+        if (!ctrl || !ctrl->IsVisible() || !ctrl->IsEnabled())
+        {
+            continue;
+        }
+        FocusNav::Rect to;
+        FocusNav::Score candidate;
+        if (!GetFocusNavRect(ctrl, to) || !FocusNav::ScoreCandidate(dir, from, to, candidate))
+        {
+            continue;
+        }
+        if (best < 0 || FocusNav::IsCloser(candidate, score))
+        {
+            best = i;
+            score = candidate;
+        }
+    }
+    return best;
+}
+
 int ControlObjectContainer::GetHoveredIdc() const
 {
     if (_indexMove < 0 || _indexMove >= _controls.Size())
@@ -814,36 +881,18 @@ bool ControlObjectContainer::OnSetFocus(bool up, bool def)
     {
         return true;
     }
-    if (up)
+    const int step = up ? 1 : -1;
+    for (int i = up ? 0 : n - 1; i >= 0 && i < n; i += step)
     {
-        for (int i = 0; i < n; i++)
+        IControl* ctrl = _controls[i]._control;
+        if (ctrl->IsVisible() && ctrl->IsEnabled() && (!def || ctrl->CanBeDefault()))
         {
-            IControl* ctrl = _controls[i]._control;
-            if (ctrl->IsVisible() && ctrl->IsEnabled() && (!def || ctrl->CanBeDefault()))
-            {
-                ctrl->OnSetFocus();
-                _indexFocused = i;
-                return true;
-            }
+            SetFocus(i);
+            return true;
         }
-        _indexFocused = -1;
-        return true;
     }
-    else
-    {
-        for (int i = n - 1; i >= 0; i--)
-        {
-            IControl* ctrl = _controls[i]._control;
-            if (ctrl->IsVisible() && ctrl->IsEnabled() && (!def || ctrl->CanBeDefault()))
-            {
-                ctrl->OnSetFocus();
-                _indexFocused = i;
-                return true;
-            }
-        }
-        _indexFocused = -1;
-        return true;
-    }
+    SetFocus(-1);
+    return true;
 }
 
 Control* ControlObjectContainer::LoadControl(const ParamEntry& ctrlCls)
@@ -1171,12 +1220,9 @@ void ControlObjectContainer::OnMouseZChanged(float dz)
 
 void ControlObjectContainer::SetFocus(int i, bool def)
 {
-    if (i == _indexFocused)
-    {
-        return;
-    }
-
-    if (_indexFocused >= 0 && _indexFocused < _controls.Size())
+    // A sub-control loses its focus while this index still points at it, so the same
+    // index is focused again rather than left alone.
+    if (i != _indexFocused && _indexFocused >= 0 && _indexFocused < _controls.Size())
     {
         if (!_controls[_indexFocused]._control->OnKillFocus())
         {
@@ -1243,46 +1289,6 @@ bool ControlObjectContainer::PrevCtrl()
     return false;
 }
 
-bool ControlObjectContainer::NextDefaultCtrl()
-{
-    int n = _controls.Size();
-    if (n == 0)
-    {
-        return false;
-    }
-    for (int i = _indexFocused + 1; i < n; i++)
-    {
-        IControl* ctrl = _controls[i]._control;
-        if (ctrl->IsVisible() && ctrl->IsEnabled() && ctrl->CanBeDefault())
-        {
-            SetFocus(i, true);
-            return true;
-        }
-    }
-    //	SetFocus(-1);
-    return false;
-}
-
-bool ControlObjectContainer::PrevDefaultCtrl()
-{
-    int n = _controls.Size();
-    if (n == 0)
-    {
-        return false;
-    }
-    for (int i = _indexFocused - 1; i >= 0; i--)
-    {
-        IControl* ctrl = _controls[i]._control;
-        if (ctrl->IsVisible() && ctrl->IsEnabled() && ctrl->CanBeDefault())
-        {
-            SetFocus(i, true);
-            return true;
-        }
-    }
-    //	SetFocus(-1);
-    return false;
-}
-
 bool ControlObjectContainer::OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
 {
     int n = _controls.Size();
@@ -1308,29 +1314,9 @@ bool ControlObjectContainer::OnKeyDown(unsigned nChar, unsigned nRepCnt, unsigne
                 {
                     return NextCtrl();
                 }
-            case SDLK_LEFT:
-            case SDLK_UP:
-            case SDLK_PAGEUP:
-                if (_indexFocused >= 0 && _controls[_indexFocused]._control->CanBeDefault())
-                {
-                    return PrevDefaultCtrl();
-                }
-                else
-                {
-                    return true;
-                }
-            case SDLK_RIGHT:
-            case SDLK_DOWN:
-            case SDLK_PAGEDOWN:
-                if (_indexFocused >= 0 && _controls[_indexFocused]._control->CanBeDefault())
-                {
-                    return NextDefaultCtrl();
-                }
-                else
-                {
-                    return true;
-                }
             default:
+                // The arrows move the focus by position, which spans the object and the
+                // 2D controls around it, so the owning container drives them.
                 return false;
         }
     }
