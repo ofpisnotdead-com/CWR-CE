@@ -34,6 +34,8 @@ struct TerrainProfile {
         int64_t val;
         __asm__ __volatile__("mrs %0, cntvct_el0" : "=r"(val));
         return val;
+#elif defined(__powerpc64__)
+        return static_cast<int64_t>(__builtin_ppc_get_timebase());
 #else
         return 0;
 #endif

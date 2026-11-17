@@ -127,6 +127,36 @@
         "VCPKG_TARGET_TRIPLET": "x64-linux-clang",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-x64-clang.cmake"
       }
+    },
+    {
+      "name": "linux-ppc64le-clang",
+      "displayName": "Linux ppc64le Clang Debug",
+      "inherits": "linux-clang-debug",
+      "binaryDir": "${sourceDir}/build/linux-ppc64le-clang",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "ppc64le-linux-clang",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-ppc64le-clang.cmake"
+      }
+    },
+    {
+      "name": "linux-ppc64le-clang-rwdi",
+      "displayName": "Linux ppc64le Clang RelWithDebInfo",
+      "inherits": "linux-clang-relwithdebinfo",
+      "binaryDir": "${sourceDir}/build/linux-ppc64le-clang-rwdi",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "ppc64le-linux-clang",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-ppc64le-clang.cmake"
+      }
+    },
+    {
+      "name": "linux-ppc64le-clang-rel",
+      "displayName": "Linux ppc64le Clang Release",
+      "inherits": "linux-clang-release",
+      "binaryDir": "${sourceDir}/build/linux-ppc64le-clang-rel",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "ppc64le-linux-clang",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-ppc64le-clang.cmake"
+      }
     }
   ]
 }

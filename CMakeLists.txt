@@ -80,6 +80,14 @@ if(UNIX AND NOT APPLE)
     endif()
 endif()
 
+# The engine's SSE code builds on POWER through clang's PowerPC <xmmintrin.h>/
+# <emmintrin.h> compatibility headers, which refuse to compile without this.
+# Kept out of the toolchain so vcpkg ports don't detect SSE and pick x86 paths
+# the headers only partly cover.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(ppc64le|powerpc64le)$")
+    add_compile_definitions(NO_WARN_X86_INTRINSICS)
+endif()
+
 # Make __FILE__ repo-root-relative so log/assert lines (Fail(), DoAssert(), LOG_*)
 # read "engine/Poseidon/...:NN" instead of an absolute build-machine path. Affects only
 # the __FILE__ macro string, not debug info.
