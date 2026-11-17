@@ -98,8 +98,13 @@ TEST_CASE("DownloadProgress::FormatBytes is human readable", "[download][format]
 {
     CHECK(DownloadProgress::FormatBytes(0) == "0 B");
     CHECK(DownloadProgress::FormatBytes(900) == "900 B");
+    CHECK(DownloadProgress::FormatBytes(1023) == "1023 B");
+    CHECK(DownloadProgress::FormatBytes(1024) == "1 KB");
     CHECK(DownloadProgress::FormatBytes(524288) == "512 KB");
+    CHECK(DownloadProgress::FormatBytes(939649) == "918 KB");
+    CHECK(DownloadProgress::FormatBytes(1048576) == "1.0 MB");
     CHECK(DownloadProgress::FormatBytes(2202010) == "2.1 MB");
+    CHECK(DownloadProgress::FormatBytes(1073741824) == "1.0 GB");
     CHECK(DownloadProgress::FormatBytes(1610612736) == "1.5 GB");
 }
 
