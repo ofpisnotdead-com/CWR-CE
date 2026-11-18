@@ -254,7 +254,7 @@ TEST_CASE("getUserDataDir respects XDG_CONFIG_HOME", "[platformPaths]")
 
 TEST_CASE("getUserDocumentsDir respects XDG_DATA_HOME", "[platformPaths]")
 {
-    auto tmpDir = fs::temp_directory_path() / "test_xdg_data";
+    auto tmpDir = fs::temp_directory_path() / "test_xdg_documents";
     fs::create_directories(tmpDir);
 
     ScopedEnv env("XDG_DATA_HOME", tmpDir.c_str());
