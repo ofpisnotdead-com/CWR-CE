@@ -2290,6 +2290,15 @@ bool GetVector3(Vector3& ret, GameValuePar oper)
     return true;
 }
 
+bool GetParticlePosition(Vector3& position, GameValuePar value, bool modelRelative)
+{
+    if (value.GetType() != GameArray)
+    {
+        return false;
+    }
+    return modelRelative ? GetVector3(position, value) : GetPos(position, value);
+}
+
 bool GetColor(Color& ret, GameValuePar oper)
 {
     const GameArrayType& Array = oper;
@@ -2519,7 +2528,7 @@ GameValue ParticleDrop(const GameState* state, GameValuePar oper1)
         }
         if (Array[5].GetType() == GameArray)
         {
-            if (!GetVector3(Position, Array[5]))
+            if (!GetParticlePosition(Position, Array[5], true))
             {
                 state->SetError(EvalGen);
                 return GameValue();
@@ -2549,7 +2558,7 @@ GameValue ParticleDrop(const GameState* state, GameValuePar oper1)
         }
         else
         {
-            if (!GetVector3(Position, Array[5]))
+            if (!GetParticlePosition(Position, Array[5], false))
             {
                 state->SetError(EvalGen);
                 return GameValue();

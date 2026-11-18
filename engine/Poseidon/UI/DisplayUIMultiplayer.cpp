@@ -40,6 +40,7 @@ using namespace Poseidon;
 #include <Poseidon/Core/ModCollection.hpp>
 #include <Poseidon/Core/ModSystem.hpp>
 #include <Poseidon/Core/PendingConnect.hpp>
+#include <Poseidon/Core/DownloadProgress.hpp>
 #include <Poseidon/Core/Application.hpp>
 #include "ModDownloadSupport.hpp"
 #include <ctype.h>
@@ -1178,9 +1179,9 @@ bool DisplayMultiplayer::BeginModdedJoin(const SessionInfo& info)
         diff += "  [ok] @" + id.Value() + "   " + (const char*)LocalizeString("STR_DISP_MODS_JOIN_INSTALLED") + "\n";
     for (const Poseidon::ModDownload& d : res.ToDownload())
     {
-        const std::string mb = std::to_string(d.sizeBytes / (1024 * 1024));
         diff += "  [dl] " + (d.name.empty() ? ("@" + d.id.Value()) : d.name) + "   " +
-                (const char*)LocalizeString("STR_DISP_MODS_JOIN_DOWNLOAD") + " " + mb + " MB\n";
+                (const char*)LocalizeString("STR_DISP_MODS_JOIN_DOWNLOAD") + " " +
+                Poseidon::DownloadProgress::FormatBytes(d.sizeBytes) + "\n";
     }
     if (!res.ToDisable().empty())
     {

@@ -12,6 +12,7 @@
 
 #include <Poseidon/World/Scene/Object.hpp>
 #include <Poseidon/Foundation/Math/Interpol.hpp>
+#include <Poseidon/UI/Controls/FocusNavigation.hpp>
 #include <Poseidon/World/Simulation/Animation/RtAnimation.hpp>
 #include <SDL3/SDL_keycode.h>
 
@@ -135,6 +136,9 @@ public:
 
 	static void PlaySound(SoundPars &pars);
 };
+
+// False for a control with no 2D bounds, which is every 3D object.
+bool GetFocusNavRect(IControl *ctrl, Poseidon::FocusNavigation::Rect &rect);
 
 class Control : public RemoveOLinks, public IControl
 {
@@ -286,6 +290,16 @@ public:
 
 	bool FocusCtrlByIdc(int idc);
 
+	bool FocusCtrlByIndex(int index);
+
+	// Focus the next sub-control in load order, false when the end is reached
+	// with the focus left where it was.
+	bool FocusCtrlByOrder(bool forward);
+
+	// Index of the sub-control to move the focus to, -1 when none lies that way.
+	int FindFocusNavTarget(Poseidon::FocusNavigation::Direction dir,
+		const Poseidon::FocusNavigation::Rect &from, Poseidon::FocusNavigation::Score &score);
+
 	int GetLeftPressedIdc() const;
 
 	bool DebugSetLeftPressedIdc(int idc);
@@ -327,8 +341,6 @@ protected:
 	void SetFocus(int i, bool def = false);
 	bool NextCtrl();
 	bool PrevCtrl();
-	bool NextDefaultCtrl();
-	bool PrevDefaultCtrl();
 };
 
 using Poseidon::AnimationRT;

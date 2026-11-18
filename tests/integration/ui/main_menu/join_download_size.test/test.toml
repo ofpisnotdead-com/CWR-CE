@@ -1,0 +1,44 @@
+mission = "tests/integration/missions/mp_browser_basic.Demo"
+data_dir = "packages/Demo"
+game_port = 0
+timeout = 60
+
+[[services]]
+name = "master"
+type = "master-server"
+port = 0
+db = "${output}/master.sqlite3"
+extra_args = ["--mods-dir", "${output}/master-mods"]
+
+[[services.seed_mods]]
+id = "fixturemod"
+name = "Fixture Mod"
+version = "1.2.3"
+app = "CWR-CE"
+actver = 305
+folder = "@fixturemod"
+source = "tests/fixtures/mods/@fixturemod"
+
+[[instances]]
+name = "dedicated"
+type = "server"
+after = "master"
+extra_args = [
+    "--no-strict", "--no-public", "--master-server", "${master.url}",
+    "--mods-dir", "../../tests/fixtures/mods", "--mod", "@fixturemod",
+]
+
+[[instances]]
+name = "client"
+type = "client"
+after = "dedicated"
+use_mission = false
+no_autotest = true
+start_delay_ms = 1000
+extra_args = [
+    "--no-strict", "--nosound", "--no-menu-scene", "--name", "client",
+    "--master-server", "${master.url}",
+    "--mods-dir", "${output}/client-local-mods",
+    "--workshop-dir", "${output}/client-workshop",
+]
+copy_files = [{ source = "UserInfo.cfg", target = "Users/client/UserInfo.cfg" }]
