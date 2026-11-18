@@ -3,4 +3,4 @@ binary = "PoseidonGame"
 mission = "tests/integration/missions/cutobj_tvset.Demo"
 data_dir = "packages/Demo"
 timeout = 120
-extra_args = ["--dev", "--width", "3840", "--height", "1080"]
+extra_args = ["--dev", "--width", "640", "--height", "270"]
