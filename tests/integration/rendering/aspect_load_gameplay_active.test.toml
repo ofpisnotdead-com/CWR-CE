@@ -2,4 +2,4 @@ tags = ["exclusive", "headful", "aspect-ratio", "save-load", "optics", "ci-host-
 binary = "PoseidonGame"
 mission = "tests/integration/missions/aspect_overlays.Demo"
 timeout = 180
-extra_args = ["--dev", "--width", "3840", "--height", "1080"]
+extra_args = ["--dev", "--width", "640", "--height", "270"]
