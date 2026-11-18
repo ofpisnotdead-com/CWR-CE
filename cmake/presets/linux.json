@@ -157,6 +157,16 @@
         "VCPKG_TARGET_TRIPLET": "ppc64le-linux-clang",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-ppc64le-clang.cmake"
       }
+    },
+    {
+      "name": "linux-ppc64le-clang-cross-rwdi",
+      "displayName": "Linux ppc64le Clang RelWithDebInfo (cross)",
+      "inherits": "linux-clang-relwithdebinfo",
+      "binaryDir": "${sourceDir}/build/linux-ppc64le-clang-cross-rwdi",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "ppc64le-linux-clang-cross",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-ppc64le-clang-cross.cmake"
+      }
     }
   ]
 }

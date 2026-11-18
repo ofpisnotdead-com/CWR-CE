@@ -129,3 +129,17 @@ innoextract -d ~/Games/cwa setup.exe
 The extracted directory contains the game data with a `Remastered` folder at its top level, which is where the binaries go. The `app`, `tmp`, `commonappdata` and `__redist` folders belong to the installer and aren't needed to run the game.
 
 The `Remastered` folder ships with GOG's own x64 `PoseidonGame` and `PoseidonServer` binaries. On other architectures, such as arm64 or ppc64le, replace them with binaries built for that architecture.
+
+## Cross-compiling for ppc64le
+
+An x64 machine can build the ppc64le binaries and run the unit tests under [QEMU](https://www.qemu.org/) user-mode emulation. Besides the dependencies above, this needs `lld`, `qemu-user-static` with its binfmt handlers registered, and Docker, or Podman with `CONTAINER_ENGINE=podman`. The target libraries come from an Ubuntu ppc64le container exported as a sysroot:
+
+```shell
+docker/ppc64le-sysroot/export-sysroot.sh tmp/ppc64le-sysroot
+export CWR_PPC64LE_SYSROOT=$PWD/tmp/ppc64le-sysroot QEMU_LD_PREFIX=$PWD/tmp/ppc64le-sysroot
+cmake --preset linux-ppc64le-clang-cross-rwdi
+cmake --build build/linux-ppc64le-clang-cross-rwdi
+SDL_CPU_FEATURE_MASK=-altivec ctest --test-dir build/linux-ppc64le-clang-cross-rwdi -E 'PoseidonTests - OAL -'
+```
+
+QEMU raises an illegal instruction for the data stream hints in SDL's AltiVec blitters, so `SDL_CPU_FEATURE_MASK=-altivec` keeps SDL on its scalar paths under emulation. The network tests resolve the machine's host name through the sysroot's `/etc/hosts`, so add it there first with `echo "127.0.1.1 $(hostname)" >> tmp/ppc64le-sysroot/etc/hosts`.
