@@ -1622,10 +1622,12 @@ void ParamClass::Parse(QIStream& in, ParamFile* file)
                     return;
                 }
                 section->_base = dynamic_cast<ParamClass*>(entry);
+                // Name lookup ignores case, so `class Burst: Burst` can resolve to an inherited `burst=1`
+                // value; the class is then kept without a base.
                 if (!section->_base)
                 {
-                    ErrorMessage("%s: '%s' is not class", (const char*)GetContext(word), (const char*)base);
-                    return;
+                    LOG_WARN(Core, "{}: '{}' is not class, ignoring the base", (const char*)GetContext(word),
+                             (const char*)base);
                 }
                 c = in.get();
             }
