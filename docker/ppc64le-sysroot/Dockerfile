@@ -20,4 +20,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wayland-protocols \
     libasound2-dev \
     libpulse-dev \
+    libopenal1 \
     && rm -rf /var/lib/apt/lists/*

@@ -139,7 +139,9 @@ docker/ppc64le-sysroot/export-sysroot.sh tmp/ppc64le-sysroot
 export CWR_PPC64LE_SYSROOT=$PWD/tmp/ppc64le-sysroot QEMU_LD_PREFIX=$PWD/tmp/ppc64le-sysroot
 cmake --preset linux-ppc64le-clang-cross-rwdi
 cmake --build build/linux-ppc64le-clang-cross-rwdi
-SDL_CPU_FEATURE_MASK=-altivec ctest --test-dir build/linux-ppc64le-clang-cross-rwdi -E 'PoseidonTests - OAL -'
+ALSOFT_DRIVERS=null SDL_CPU_FEATURE_MASK=-altivec ctest --test-dir build/linux-ppc64le-clang-cross-rwdi
 ```
 
 QEMU raises an illegal instruction for the data stream hints in SDL's AltiVec blitters, so `SDL_CPU_FEATURE_MASK=-altivec` keeps SDL on its scalar paths under emulation. The network tests resolve the machine's host name through the sysroot's `/etc/hosts`, so add it there first with `echo "127.0.1.1 $(hostname)" >> tmp/ppc64le-sysroot/etc/hosts`.
+
+Under QEMU each start of a test binary takes most of a second, so the cross preset sets `OFPR_CTEST_PER_BINARY`, which registers each Catch2 binary as one CTest test instead of one test per case.

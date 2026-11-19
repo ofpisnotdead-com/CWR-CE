@@ -165,7 +165,8 @@
       "binaryDir": "${sourceDir}/build/linux-ppc64le-clang-cross-rwdi",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "ppc64le-linux-clang-cross",
-        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-ppc64le-clang-cross.cmake"
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/linux-ppc64le-clang-cross.cmake",
+        "OFPR_CTEST_PER_BINARY": "ON"
       }
     }
   ]
