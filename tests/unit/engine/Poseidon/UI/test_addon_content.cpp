@@ -4,9 +4,11 @@
 #include <Poseidon/Core/ModSystem.hpp>
 #include <Poseidon/Foundation/Strings/RString.hpp>
 #include <Poseidon/Game/Mission/MissionTemplateCatalog.hpp>
+#include <Poseidon/IO/Streams/QBStream.hpp>
 #include <Poseidon/Network/NetworkServerCommon.hpp>
 #include <Poseidon/UI/DisplayUI.hpp>
 #include <Poseidon/UI/OptionsUICommon.hpp>
+#include "../Support/test_fixtures.hpp"
 
 #include <cctype>
 #include <filesystem>
@@ -166,23 +168,170 @@ TEST_CASE("a content mod surfaces MP missions and both template kinds", "[ui][mi
     CHECK(TemplateListHas(false, "tri", "mod_sptpl"));
 }
 
-TEST_CASE("a mod's Anims folder hosts a bare-name island intro", "[ui][cutscene][anims]")
+namespace
 {
-    ContentModFixture mod;
+// A temp game root holding loose island intros in every layout the community packs ship, under the base
+// root and under two enabled mods whose folder names differ from the ones the configs were written for.
+// Each mission.sqm holds its own location, so a read shows which copy the file banks served.
+struct LooseIntroFixture
+{
+    fs::path root;
+    fs::path packMod;
+    fs::path renamedMod;
+    fs::path prevCwd;
 
-    // A bare cutscenes[] name resolves to the mod's Anims/<name>.<world>/.
-    const std::string hosted = (const char*)ResolveCutsceneAnimsSubdir(RString("tri"), RString("intro"));
-    CHECK(hosted.find("@triContent") != std::string::npos);
+    void WriteIntro(const std::string& introDir)
+    {
+        fs::create_directories(root / introDir);
+        std::ofstream(root / introDir / "mission.sqm") << introDir;
+    }
 
-    // Windows-authored configs differ in case from the on-disk folder, so the loose resolution must fold
-    // case (world "TRI"/name "Intro" against the on-disk intro.tri).
-    const std::string folded = (const char*)ResolveCutsceneAnimsSubdir(RString("TRI"), RString("Intro"));
-    CHECK(folded.find("@triContent") != std::string::npos);
+    LooseIntroFixture()
+    {
+        std::random_device rd;
+        root = fs::temp_directory_path() / ("cwr_loose_intro_" + std::to_string(rd()) + "_" + std::to_string(rd()));
+        packMod = root / "Mods" / "@TER_IslandPack";
+        renamedMod = root / "Mods" / "@renamed";
 
-    // The "..\addons\.." packed form and an unknown intro both fall back to the base anims/ bank.
-    const std::string packed =
-        (const char*)ResolveCutsceneAnimsSubdir(RString("tri"), RString("..\\addons\\triisl\\intro"));
-    const std::string missing = (const char*)ResolveCutsceneAnimsSubdir(RString("noe"), RString("intro"));
-    CHECK(packed.find("@triContent") == std::string::npos);
-    CHECK(missing.find("@triContent") == std::string::npos);
+        WriteIntro("Mods/@TER_IslandPack/Anims/intro.tri");
+        WriteIntro("Mods/@TER_IslandPack/AddOns/Tri_Anim/Intro.TRI");
+        WriteIntro("Mods/@TER_IslandPack/AddOns/CJE_Anims/Intro1.tri");
+        WriteIntro("Mods/@TER_IslandPack/AddOns/saruanims/intro.tri");
+        WriteIntro("Mods/@TER_IslandPack/Anims/RAZIsland_intro/intro.tri");
+        WriteIntro("Mods/@TER_IslandPack/Dta/HV_anim/intro.tri");
+        WriteIntro("Mods/@renamed/DTA/anims/SLX_intro.tri");
+        WriteIntro("Mods/@renamed/addons/PMC_anims/intro1.tri");
+        WriteIntro("Mods/@renamed/Island_Anims/HC1_Caen_anim/intro.tri");
+        WriteIntro("Mods/@renamed/DTA/anims/llx.tri");
+        WriteIntro("Mods/@renamed/AddOns/Shared_Anim/intro.tri");
+        WriteIntro("addons/Base_Anim/intro.tri");
+        WriteIntro("Res/addons/Res_Anim/intro.tri");
+        WriteIntro("addons/Shared_Anim/intro.tri");
+        WriteIntro("Anims/rootonly.tri");
+
+        prevCwd = fs::current_path();
+        fs::current_path(root);
+        const std::string mods = packMod.string() + ";" + renamedMod.string();
+        ModSystem::SetModPath(mods.c_str());
+    }
+
+    ~LooseIntroFixture()
+    {
+        ModSystem::SetModPath("");
+        std::error_code ec;
+        fs::current_path(prevCwd);
+        fs::remove_all(root, ec);
+    }
+};
+
+std::string ReadThroughBanks(const std::string& path)
+{
+    if (!QIFStreamB::FileExist(path.c_str()))
+        return {};
+    QIFStreamB in;
+    in.AutoOpen(path.c_str());
+    std::string out(static_cast<size_t>(in.rest()), '\0');
+    in.read(out.data(), static_cast<int>(out.size()));
+    return out;
+}
+
+// The mission.sqm StartRandomCutscene opens for a cutscenes[] entry, read through the file banks.
+std::string ReadIntro(const char* world, const char* configName)
+{
+    const CutsceneLocation location =
+        ResolveCutsceneLocation(RString(world), RootAnchoredCutsceneName(RString(configName)));
+    return ReadThroughBanks(std::string((const char*)location.subdir) + (const char*)location.name + "." + world +
+                            "/mission.sqm");
+}
+} // namespace
+
+TEST_CASE("a bare island intro name resolves to a mod's Anims folder", "[ui][cutscene][anims]")
+{
+    LooseIntroFixture fixture;
+
+    CHECK(ReadIntro("tri", "intro") == "Mods/@TER_IslandPack/Anims/intro.tri");
+    CHECK(ReadIntro("TRI", "Intro") == "Mods/@TER_IslandPack/Anims/intro.tri");
+}
+
+TEST_CASE("an addons-relative island intro resolves to a loose folder in a mod or the game root",
+          "[ui][cutscene][anims]")
+{
+    LooseIntroFixture fixture;
+
+    CHECK(ReadIntro("tri", "..\\ADDONS\\tri_anim\\intro") == "Mods/@TER_IslandPack/AddOns/Tri_Anim/Intro.TRI");
+    CHECK(ReadIntro("tri", "..\\addons\\Base_Anim\\intro") == "addons/Base_Anim/intro.tri");
+    CHECK(ReadIntro("tri", "..\\ADDONS\\saruanims\\\\intro") == "Mods/@TER_IslandPack/AddOns/saruanims/intro.tri");
+    CHECK(ReadIntro("tri", "..\\Dta\\HV_anim\\intro") == "Mods/@TER_IslandPack/Dta/HV_anim/intro.tri");
+}
+
+TEST_CASE("a Res-relative island intro resolves below every enabled mod", "[ui][cutscene][anims]")
+{
+    LooseIntroFixture fixture;
+
+    CHECK(ReadIntro("tri", "..\\Res\\addons\\CJE_Anims\\intro1") == "Mods/@TER_IslandPack/AddOns/CJE_Anims/Intro1.tri");
+    CHECK(ReadIntro("tri", "..\\RES\\Addons\\Res_Anim\\intro") == "Res/addons/Res_Anim/intro.tri");
+}
+
+TEST_CASE("an island intro naming another mod folder resolves inside a renamed mod", "[ui][cutscene][anims]")
+{
+    LooseIntroFixture fixture;
+
+    CHECK(ReadIntro("tri", "..\\@SLX\\DTA\\anims\\SLX_intro") == "Mods/@renamed/DTA/anims/SLX_intro.tri");
+    CHECK(ReadIntro("tri", "..\\x_pmc\\addons\\PMC_anims\\intro1") == "Mods/@renamed/addons/PMC_anims/intro1.tri");
+    CHECK(ReadIntro("tri", "..\\HC1_Europe_Island_Pack\\Island_Anims\\HC1_Caen_anim\\intro") ==
+          "Mods/@renamed/Island_Anims/HC1_Caen_anim/intro.tri");
+}
+
+TEST_CASE("a root-anchored or anims-relative island intro resolves inside a mod", "[ui][cutscene][anims]")
+{
+    LooseIntroFixture fixture;
+
+    CHECK(ReadIntro("tri", "\\@LLX\\DTA\\anims\\llx") == "Mods/@renamed/DTA/anims/llx.tri");
+    CHECK(ReadIntro("tri", "RAZIsland_intro\\INTRO") == "Mods/@TER_IslandPack/Anims/RAZIsland_intro/intro.tri");
+}
+
+TEST_CASE("the game root's loose island intro wins over an enabled mod's", "[ui][cutscene][anims]")
+{
+    LooseIntroFixture fixture;
+
+    CHECK(ReadIntro("tri", "..\\addons\\Shared_Anim\\intro") == "addons/Shared_Anim/intro.tri");
+}
+
+TEST_CASE("an island intro packed in a bank resolves through anims", "[ui][cutscene][anims][pbo]")
+{
+    REQUIRE_FIXTURE("pbo/mission_fixture.Intro.pbo");
+    const std::string pbo =
+        fs::absolute(TestFixtures::GetTestFixturePath("pbo/mission_fixture.Intro.pbo")).replace_extension().string();
+    LooseIntroFixture fixture;
+
+    const bool origUseBanks = GUseFileBanks;
+    GUseFileBanks = true;
+    const int origSize = GFileBanks.Size();
+    for (const char* prefix : {"triisl\\intro.tri\\", "bin_map1\\intro.tri\\", "anims\\intro1.tri\\"})
+    {
+        QFBank& bank = GFileBanks.Set(GFileBanks.Add());
+        bank.SetPrefix(prefix);
+        REQUIRE(bank.open(pbo.c_str(), nullptr, nullptr));
+        bank.Lock();
+        REQUIRE(bank.FileExists("mission.sqm"));
+    }
+    const std::string packed = ReadThroughBanks("triisl\\intro.tri\\mission.sqm");
+    REQUIRE_FALSE(packed.empty());
+
+    CHECK(ReadIntro("tri", "..\\addons\\triisl\\intro") == packed);
+    CHECK(ReadIntro("tri", "..\\Binmod\\addons\\BIN_Map1\\Intro") == packed);
+    CHECK(ReadIntro("tri", "..\\@Minustah\\DTA\\Anims\\Intro1") == packed);
+    CHECK(ReadIntro("tri", "rootonly") == "Anims/rootonly.tri");
+
+    while (GFileBanks.Size() > origSize)
+        GFileBanks.Delete(GFileBanks.Size() - 1);
+    GUseFileBanks = origUseBanks;
+}
+
+TEST_CASE("an island intro found nowhere stays unresolved", "[ui][cutscene][anims]")
+{
+    LooseIntroFixture fixture;
+
+    CHECK(ReadIntro("noe", "..\\Res\\addons\\Gone\\intro").empty());
+    CHECK(ReadIntro("noe", "intro").empty());
 }

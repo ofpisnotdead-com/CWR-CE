@@ -301,6 +301,35 @@ TEST_CASE("QIFStreamB FileExist - mod path escaping its prefix", "[qstream][path
     std::filesystem::remove_all(root, ec);
 }
 
+// ResolveGameRootFolder finds a game-root folder in an enabled mod, with a leading install folder that is
+// not a content root (Res, or a pack's own mod folder name) dropped; plain FileExist does not.
+TEST_CASE("ResolveGameRootFolder - game-root folder found in an enabled mod", "[qstream][path][mod]")
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / "cwr_gamerootfolder";
+    const std::filesystem::path modDir = root / "@islands";
+    const std::filesystem::path animDir = modDir / "AddOns" / "Isle_Anim" / "intro.isle";
+    const char payload[] = "sqm";
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    REQUIRE(std::filesystem::create_directories(animDir, ec));
+    REQUIRE(Poseidon::WriteFileUtf8((animDir / "mission.sqm").string().c_str(), payload, sizeof(payload)));
+
+    Poseidon::ModSystem::SetModPath(modDir.string().c_str());
+
+    const std::string expected = modDir.string() + "/addons/Isle_Anim/";
+    CHECK(Poseidon::ResolveGameRootFolder("anims/..\\addons\\Isle_Anim", "intro.isle\\mission.sqm") == expected);
+    CHECK(Poseidon::ResolveGameRootFolder("anims/..\\Res\\addons\\Isle_Anim", "intro.isle\\mission.sqm") == expected);
+    CHECK(Poseidon::ResolveGameRootFolder("anims/..\\@OldName\\addons\\Isle_Anim", "intro.isle\\mission.sqm") ==
+          expected);
+    CHECK(Poseidon::ResolveGameRootFolder("anims/..\\dta\\Isle_Anim", "intro.isle\\mission.sqm").empty());
+    CHECK(Poseidon::ResolveGameRootFolder("addons\\Isle_Anim", "intro.isle\\mission.sqm").empty());
+    CHECK_FALSE(QIFStreamB::FileExist("anims/..\\Res\\addons\\Isle_Anim\\intro.isle\\mission.sqm"));
+
+    Poseidon::ModSystem::SetModPath("");
+    std::filesystem::remove_all(root, ec);
+}
+
 TEST_CASE("QIFStreamB FileExist - filesystem fallback", "[qstream][path][bankexist]")
 {
     REQUIRE_FIXTURE("qstream/test_input.txt");
