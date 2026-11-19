@@ -7,7 +7,23 @@ set(
 )
 include("${_CATCH_DISCOVER_TESTS_SCRIPT}")
 
+option(OFPR_CTEST_PER_BINARY "Register each Catch2 binary as one CTest test instead of one per case" OFF)
+
 function(ofpr_catch_discover_tests TARGET)
+    if(OFPR_CTEST_PER_BINARY)
+        cmake_parse_arguments(PARSE_ARGV 1 ARG "" "WORKING_DIRECTORY" "TEST_SPEC;PROPERTIES")
+        if(NOT ARG_WORKING_DIRECTORY)
+            set(ARG_WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+        endif()
+        add_test(NAME ${TARGET}
+            COMMAND ${TARGET} --allow-running-no-tests ${ARG_TEST_SPEC}
+            WORKING_DIRECTORY ${ARG_WORKING_DIRECTORY}
+        )
+        if(ARG_PROPERTIES)
+            set_tests_properties(${TARGET} PROPERTIES ${ARG_PROPERTIES})
+        endif()
+        return()
+    endif()
     catch_discover_tests(${TARGET}
         TEST_PREFIX "${TARGET} - "
         DISCOVERY_MODE PRE_TEST

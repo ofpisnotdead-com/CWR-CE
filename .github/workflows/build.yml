@@ -142,12 +142,7 @@ jobs:
         env:
           ALSOFT_DRIVERS: 'null'
           SDL_CPU_FEATURE_MASK: '-altivec'
-        run: >
-          ctest
-          --test-dir "$CWR_BUILD_DIR"
-          --output-on-failure
-          --parallel 4
-          -E 'PoseidonTests - OAL -'
+        run: ctest --test-dir "$CWR_BUILD_DIR" --output-on-failure --parallel 4
 
   build-linux-sanitizers:
     strategy:
