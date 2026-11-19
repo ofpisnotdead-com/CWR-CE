@@ -287,6 +287,44 @@ TEST_CASE("ParamFile - Handle missing base class", "[paramfile][inherit][errors]
     }
 }
 
+TEST_CASE("ParamFile - Base name resolving to a value leaves the class baseless", "[paramfile][inherit][errors]")
+{
+    const char* config = "class CfgWeapons {\n"
+                         "    class Default { burst = 1; };\n"
+                         "    class Rifle : Default { class Single { ammo = \"ball\"; }; };\n"
+                         "    class Tracer : Rifle {\n"
+                         "        class Single : Single { ammo = \"tracer\"; };\n"
+                         "        class Burst : Burst { ammo = \"tracerBurst\"; };\n"
+                         "    };\n"
+                         "    class After { value = 2; };\n"
+                         "};\n"
+                         "class CfgVehicles { class Car { value = 3; }; };\n";
+
+    ParamFile pf;
+    QIStream in(config, strlen(config));
+    pf.Parse(in);
+
+    const ParamClass* weapons = pf.GetClass("CfgWeapons");
+    REQUIRE(weapons != nullptr);
+    const ParamClass* tracer = weapons->GetClass("Tracer");
+    REQUIRE(tracer != nullptr);
+    const ParamClass* burst = tracer->GetClass("Burst");
+    REQUIRE(burst != nullptr);
+    CHECK(std::string(burst->GetBaseName()).empty());
+    CHECK(burst->FindEntry("burst") == nullptr);
+    REQUIRE(burst->FindEntry("ammo") != nullptr);
+    CHECK(std::string(burst->FindEntry("ammo")->GetValue()) == "tracerBurst");
+    CHECK(std::string(tracer->GetClass("Single")->GetBaseName()) == "Single");
+
+    const ParamClass* after = weapons->GetClass("After");
+    REQUIRE(after != nullptr);
+    CHECK(after->FindEntry("value")->GetInt() == 2);
+    const ParamClass* vehicles = pf.GetClass("CfgVehicles");
+    REQUIRE(vehicles != nullptr);
+    REQUIRE(vehicles->GetClass("Car") != nullptr);
+    CHECK(vehicles->GetClass("Car")->FindEntry("value")->GetInt() == 3);
+}
+
 TEST_CASE("ParamFile - Delete from derived class", "[paramfile][inherit][delete]")
 {
     ParamFile pf;
