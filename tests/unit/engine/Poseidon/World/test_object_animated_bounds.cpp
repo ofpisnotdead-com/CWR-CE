@@ -53,9 +53,13 @@ class CountingObject : public ObjectPlain
         _destroyPhase = 255;
     }
 
+    USE_FAST_ALLOCATOR
+
   private:
     int _animateCalls = 0;
 };
+
+DEFINE_FAST_ALLOCATOR(CountingObject)
 
 void SetBounds(Shape& shape, Vector3Val min, Vector3Val max)
 {
