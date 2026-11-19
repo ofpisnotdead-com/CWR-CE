@@ -163,6 +163,7 @@ class SoundSystemOAL : public IAudioSystem
     void SetEnvironment(const SoundEnvironment& env) override;
     float ListenerGainForTest() const { return _listenerGain; }
     bool ContextSuspendedForTest() const { return _contextSuspended; }
+    void StopStreamPumpForTest() { StopStreamThread(); }
 
     float GetCDVolume() const override { return _cdVolume; }
     void SetCDVolume(float v) override;
