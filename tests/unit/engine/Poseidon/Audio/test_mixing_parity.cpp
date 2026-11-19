@@ -936,6 +936,7 @@ TEST_CASE("OAL - streamed wave starts from the requested offset", "[Audio][parit
     }
     REQUIRE(wave->IsStreamed());
 
+    sys->StopStreamPumpForTest();
     wave->Repeat(1);
     wave->Skip(0.5f);
     wave->OpenStreamingForTest();
