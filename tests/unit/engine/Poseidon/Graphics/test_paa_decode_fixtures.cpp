@@ -7,6 +7,29 @@
 
 using namespace Poseidon;
 
+// --- AI88 ---
+
+// The original gun textures are AI88 inside .pac files (e.g. o\guns\handle_bmp.pac);
+// the loader must follow the header's format marker, not the extension. The
+// fixture is an 8x8 LZSS-packed AI88 level with intensity = x*32+16 and
+// alpha = y*32+16.
+TEST_CASE("Decode AI88: format marker wins over a .pac extension", "[graphics][decode]")
+{
+    auto img = DecodePAAFile(GET_FIXTURE("paa/synthetic_ai88_lzss.pac"));
+    REQUIRE(img.valid());
+    REQUIRE(img.width == 8);
+    REQUIRE(img.height == 8);
+    for (int y = 0; y < 8; y++)
+        for (int x = 0; x < 8; x++)
+        {
+            const uint8_t* p = &img.rgba[(y * 8 + x) * 4];
+            REQUIRE(int(p[0]) == x * 32 + 16);
+            REQUIRE(int(p[1]) == x * 32 + 16);
+            REQUIRE(int(p[2]) == x * 32 + 16);
+            REQUIRE(int(p[3]) == y * 32 + 16);
+        }
+}
+
 // --- DXT1 ---
 
 TEST_CASE("Decode DXT1: synthetic texture", "[graphics][decode]")

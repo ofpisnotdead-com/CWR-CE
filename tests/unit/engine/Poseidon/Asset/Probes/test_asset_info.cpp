@@ -2,7 +2,9 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <Poseidon/Asset/Probes/AssetInfo.hpp>
 #include "test_fixtures.hpp"
+#include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -12,6 +14,35 @@
 
 using namespace Poseidon;
 using Catch::Matchers::ContainsSubstring;
+
+namespace
+{
+// FormatTime() formats via localtime(), so tests need TZ pinned to UTC to
+// be deterministic across machines/CI runners instead of the local one.
+class ScopedUtcTimezone
+{
+  public:
+    ScopedUtcTimezone()
+    {
+#ifdef _WIN32
+        _putenv_s("TZ", "UTC");
+#else
+        setenv("TZ", "UTC", 1);
+#endif
+        tzset();
+    }
+
+    ~ScopedUtcTimezone()
+    {
+#ifdef _WIN32
+        _putenv_s("TZ", "");
+#else
+        unsetenv("TZ");
+#endif
+        tzset();
+    }
+};
+} // namespace
 
 // Format Helpers
 
@@ -29,6 +60,8 @@ TEST_CASE("FormatSize returns human-readable sizes", "[tools][helpers]")
 TEST_CASE("FormatTime handles zero and valid timestamps", "[tools][helpers]")
 {
     CHECK(FormatTime(0) == "-");
+
+    ScopedUtcTimezone utc;
     // 2020-01-01 00:00:00 UTC = 1577836800
     std::string result = FormatTime(1577836800);
     CHECK_THAT(result, ContainsSubstring("2020"));
