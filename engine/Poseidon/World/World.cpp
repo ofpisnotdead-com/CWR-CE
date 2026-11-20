@@ -1323,7 +1323,7 @@ void World::Simulate(float deltaT, bool& enableDraw)
                 _map->SimulateHUD(camAI);
             }
         }
-        if (_options)
+        if (_options && !HasMenuDialog())
         {
             _options->SimulateHUD(nullptr);
         }

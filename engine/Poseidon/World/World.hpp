@@ -603,6 +603,7 @@ class World
 	bool IsDisplayEnabled() const;
 	bool IsUIEnabled() const;
 	bool HasOptions() const;
+	bool HasMenuDialog() const {return _userDlg && _mode == GModeIntro && _cameraOn != nullptr && !HasOptions();}
 	bool HasMap() const {return (_showMap || _forceMap) && _map != nullptr;}
 	bool HasCompass() const;
 	bool HasWatch() const;
