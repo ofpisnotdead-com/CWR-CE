@@ -222,7 +222,7 @@ TEST_CASE("RandomGenerator value generation", "[common][random][randomgen]")
 
 TEST_CASE("RandomGenerator seed management", "[common][random][randomgen][seed]")
 {
-    RandomGenerator gen;
+    RandomGenerator gen(42, 1337);
 
     SECTION("SetSeed() affects RandomValue()")
     {
