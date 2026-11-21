@@ -50,7 +50,16 @@ void AddDeadIdentity(RString identity);
 void SetMissionDisplayName(RString campaign, RString battle, RString mission, RString displayName);
 void AddMission(RString campaign, RString battle, RString mission, RString displayName);
 void StartRandomCutscene(RString world);
+RString RootAnchoredCutsceneName(RString name);
 RString ResolveCutsceneAnimsSubdir(RString world, RString name);
+
+// Where a CfgWorlds cutscenes[] entry lives: SetMission(world, name, subdir) opens it.
+struct CutsceneLocation
+{
+    RString subdir;
+    RString name;
+};
+CutsceneLocation ResolveCutsceneLocation(RString world, RString name);
 RString GetCampaignMissionDirectory(RString campaign, RString mission);
 
 struct CountedString : SerializeClass

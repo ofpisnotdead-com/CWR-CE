@@ -180,6 +180,27 @@ std::string NormalizeAddonBankPath(const char* name)
 
     return collapsed.substr(sep + 1);
 }
+
+bool IsContentRoot(const std::string& part)
+{
+    return EqualPathComponent(part, "addons", 6) || EqualPathComponent(part, "anims", 5) ||
+           EqualPathComponent(part, "dta", 3);
+}
+
+// The game-root forms of a collapsed path: the path itself and, when its first folder is not a
+// content root, the rest of it. That first folder names where the pack was installed (Res, or the
+// author's mod folder), and the pack may sit in any enabled mod instead.
+std::vector<std::string> GameRootForms(const std::string& collapsed)
+{
+    std::vector<std::string> forms;
+    if (collapsed.empty())
+        return forms;
+    forms.push_back(collapsed);
+    const size_t sep = collapsed.find('\\');
+    if (sep != std::string::npos && !IsContentRoot(collapsed.substr(0, sep)))
+        forms.push_back(collapsed.substr(sep + 1));
+    return forms;
+}
 } // namespace
 
 std::string ResolveModOverride(const char* relPath)
@@ -195,6 +216,37 @@ std::string ResolveModOverride(const char* relPath)
 
     ModSystem::EnumDirectories(ResolveModOverrideCallback, &context);
     return context.resolved;
+}
+
+std::string ResolveGameRootFolder(const char* folder, const char* file)
+{
+    const std::string path = std::string(folder) + "\\" + file;
+    const std::string collapsed = CollapseParentDirs(path.c_str());
+    const size_t fileLen = strlen(file) + 1;
+    for (const std::string& form : GameRootForms(collapsed))
+    {
+        if (QIFStream::FileExists(form.c_str()))
+            return form.substr(0, form.size() - fileLen + 1);
+        const std::string modCopy = ResolveModOverride(form.c_str());
+        if (!modCopy.empty())
+            return modCopy.substr(0, modCopy.size() - fileLen + 1);
+    }
+    if (!GUseFileBanks)
+        return {};
+    for (const std::string& form : GameRootForms(collapsed))
+    {
+        const size_t sep = form.find('\\');
+        if (sep == std::string::npos)
+            continue;
+        const std::string root = form.substr(0, sep);
+        if (!EqualPathComponent(root, "addons", 6) && !EqualPathComponent(root, "dta", 3))
+            continue;
+        const std::string bankPath = form.substr(sep + 1);
+        QFBank* bank = QIFStreamB::AutoBank(bankPath.c_str());
+        if (bank && bank->FileExists(bankPath.c_str() + bank->GetPrefix().GetLength()))
+            return bankPath.substr(0, bankPath.size() - fileLen + 1);
+    }
+    return {};
 }
 
 QFBank::QFBank()

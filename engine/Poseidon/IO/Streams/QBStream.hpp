@@ -296,6 +296,12 @@ extern RString GFileBankPrefix;
 // Resolve a base-relative path to an enabled mod's copy of the same file, "" if none.
 std::string ResolveModOverride(const char* relPath);
 
+// Where a game-root folder holding `file` is found, for paths leaving their prefix through ".." as
+// island cutscenes[] entries do: loose in the game root or an enabled mod, else packed in an addons or
+// dta bank, also with a leading install folder other than a content root (Res, or a pack's own mod
+// folder) dropped. Returns the folder with a trailing separator, in a form QIFStreamB opens; "" if none.
+std::string ResolveGameRootFolder(const char* folder, const char* file);
+
 } // namespace Poseidon
 
 using ::Poseidon::QIFStreamB;

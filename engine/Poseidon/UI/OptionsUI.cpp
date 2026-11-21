@@ -38,6 +38,7 @@
 #include <string.h>
 #include <optional>
 #include <string>
+#include <Poseidon/Foundation/Common/Filenames.hpp>
 #include <Poseidon/Foundation/Common/FltOpts.hpp>
 #include <Poseidon/Foundation/Common/GamePaths.hpp>
 #include <Poseidon/Foundation/Containers/Array.hpp>
@@ -988,11 +989,20 @@ static bool FindCutsceneRootCallback(RStringB dir, void* ctx)
     return true;
 }
 
+RString RootAnchoredCutsceneName(RString name)
+{
+    // A cutscenes[] entry starting with a separator starts at the game root, like one leaving anims
+    // through "..".
+    if (name[0] == '\\' || name[0] == '/')
+        return RString("..") + name;
+    return name;
+}
+
 RString ResolveCutsceneAnimsSubdir(RString world, RString name)
 {
-    // A "..\addons\..." cutscene is a packed-bank path resolved through the base anims/ mount; only a
-    // bare cutscene name lives in a mod's Anims/ folder, hosted like any other mission type.
-    if (strpbrk(name, "\\/"))
+    // A cutscene leaving anims through ".." is a game-root path; one inside anims may live in a mod's
+    // Anims/ folder, hosted like any other mission.
+    if (strstr(name, ".."))
         return GetAnimsDir();
     char rel[512];
     snprintf(rel, sizeof(rel), "Anims\\%s.%s\\mission.sqm", (const char*)name, (const char*)world);
@@ -1001,6 +1011,20 @@ RString ResolveCutsceneAnimsSubdir(RString world, RString name)
     if (::EnumModDirectories(FindCutsceneRootCallback, &ctx))
         return ctx.result;
     return GetAnimsDir();
+}
+
+CutsceneLocation ResolveCutsceneLocation(RString world, RString name)
+{
+    if (!strstr(name, ".."))
+        return {ResolveCutsceneAnimsSubdir(world, name), name};
+
+    const char* intro = Foundation::GetFilenameExt(name);
+    const RString parent = GetAnimsDir() + RString(name, static_cast<int>(intro - (const char*)name));
+    const std::string folder =
+        ResolveGameRootFolder(parent, RString(intro) + RString(".") + world + RString("\\mission.sqm"));
+    if (folder.empty())
+        return {GetAnimsDir(), name};
+    return {RString(folder.c_str()), RString(intro)};
 }
 
 RString CreateSingleMissionBank(RString filename)
@@ -2243,12 +2267,12 @@ void StartRandomCutscene(RString world)
     int n = cls.GetSize();
     int i = toIntFloor(n * GRandGen.RandomValue());
 
-    RString name = cls[i];
+    RString name = RootAnchoredCutsceneName(cls[i]);
 
-    // A mod that ships Anims/<name>.<world> hosts the cutscene from its own root; else the base
-    // anims/ bank. Clear the base dir first so SetMission's own reads resolve from the same place.
+    // Clear the base dir first so SetMission's own reads resolve from the located folder.
     SetBaseDirectory("");
-    SetMission(world, name, ResolveCutsceneAnimsSubdir(world, name));
+    const CutsceneLocation location = ResolveCutsceneLocation(world, name);
+    SetMission(world, location.name, location.subdir);
 
     ParseIntro();
 
