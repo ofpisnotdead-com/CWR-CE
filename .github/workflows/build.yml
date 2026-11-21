@@ -99,12 +99,19 @@ jobs:
       CWR_PRESET: linux-ppc64le-clang-cross-rwdi
       CWR_VCPKG_TRIPLET: ppc64le-linux-clang-cross
       CWR_BUILD_DIR: build/linux-ppc64le-clang-cross-rwdi
+      CWR_DIST_DIR: dist/ppc64le-linux-cross-rwdi
+      CWR_ARTIFACT_PREFIX: Linux-ppc64le-rwdi
       CWR_PPC64LE_SYSROOT: ${{ github.workspace }}/tmp/ppc64le-sysroot
       QEMU_LD_PREFIX: ${{ github.workspace }}/tmp/ppc64le-sysroot
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Build metadata
+        id: build_metadata
+        shell: bash
+        run: echo "sha_short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Install QEMU and lld
         shell: bash
@@ -143,6 +150,41 @@ jobs:
           ALSOFT_DRIVERS: 'null'
           SDL_CPU_FEATURE_MASK: '-altivec'
         run: ctest --test-dir "$CWR_BUILD_DIR" --output-on-failure --parallel 4
+
+      - name: Upload Game
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Game-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ env.CWR_DIST_DIR }}/PoseidonGame
+          if-no-files-found: error
+
+      - name: Upload GameDemo
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-GameDemo-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ env.CWR_DIST_DIR }}/PoseidonGameDemo
+          if-no-files-found: error
+
+      - name: Upload Server
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Server-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ env.CWR_DIST_DIR }}/PoseidonServer
+          if-no-files-found: error
+
+      - name: Upload Tools
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Tools-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ env.CWR_DIST_DIR }}/PoseidonTools
+          if-no-files-found: error
+
+      - name: Upload Studio
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.CWR_ARTIFACT_PREFIX }}-Studio-${{ steps.build_metadata.outputs.sha_short }}
+          path: ${{ env.CWR_DIST_DIR }}/PoseidonStudio
+          if-no-files-found: error
 
   build-linux-sanitizers:
     strategy:
