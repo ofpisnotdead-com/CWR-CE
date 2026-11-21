@@ -107,7 +107,41 @@ Note that these may take a while, especially the first time they are run. Afterw
 
 The game expects to be run alongside remastered game data, including the [Steam game](https://store.steampowered.com/app/65790/Arma_Cold_War_Assault_Remastered/), [GOG game](https://www.gog.com/en/game/arma_cold_war_assault), and [Steam demo](https://store.steampowered.com/app/4819000/Arma_Cold_War_Assault_Remastered_Demo/). To install the binaries, you must:
 
-1. Install the [game](https://store.steampowered.com/app/65790/Arma_Cold_War_Assault_Remastered/) or [demo](https://store.steampowered.com/app/4819000/Arma_Cold_War_Assault_Remastered_Demo/) within Steam, or the [game from GOG](https://www.gog.com/en/game/arma_cold_war_assault).
+1. Install the [game](https://store.steampowered.com/app/65790/Arma_Cold_War_Assault_Remastered/) or [demo](https://store.steampowered.com/app/4819000/Arma_Cold_War_Assault_Remastered_Demo/) within Steam, or the [game from GOG](https://www.gog.com/en/game/arma_cold_war_assault). The GOG offline installer is a Windows executable, but it can be [extracted without Windows](#extracting-the-gog-offline-installer).
 2. Copy the binaries into the `Remastered` folder in the game's files, or the top level of the demo's downloaded files. If you aren't sure how to find these on Steam, follow the instructions in the [Steam Support article for finding bonus content](https://help.steampowered.com/en/faqs/view/720F-F7D3-0EB2-059F).
 
 After the binaries are in place, they may be run directly, or you may press play in Steam/GOG Galaxy.
+
+### Extracting the GOG offline installer
+
+GOG's offline installer is an Inno Setup executable, which [innoextract](https://constexpr.org/innoextract/) can unpack directly, without Windows, Wine or GOG Galaxy. It is packaged as `innoextract` on Arch Linux, Debian/Ubuntu and Fedora.
+
+Run the following commands in a terminal, replacing `setup.exe` with the path to the downloaded installer:
+
+```shell
+# Check the installer is intact before extracting it
+innoextract --test setup.exe
+# Extract the game files into a new directory
+mkdir -p ~/Games/cwa
+innoextract -d ~/Games/cwa setup.exe
+```
+
+The extracted directory contains the game data with a `Remastered` folder at its top level, which is where the binaries go. The `app`, `tmp`, `commonappdata` and `__redist` folders belong to the installer and aren't needed to run the game.
+
+The `Remastered` folder ships with GOG's own x64 `PoseidonGame` and `PoseidonServer` binaries. On other architectures, such as arm64 or ppc64le, replace them with binaries built for that architecture.
+
+## Cross-compiling for ppc64le
+
+An x64 machine can build the ppc64le binaries and run the unit tests under [QEMU](https://www.qemu.org/) user-mode emulation. Besides the dependencies above, this needs `lld`, `qemu-user-static` with its binfmt handlers registered, and Docker, or Podman with `CONTAINER_ENGINE=podman`. The target libraries come from an Ubuntu ppc64le container exported as a sysroot:
+
+```shell
+docker/ppc64le-sysroot/export-sysroot.sh tmp/ppc64le-sysroot
+export CWR_PPC64LE_SYSROOT=$PWD/tmp/ppc64le-sysroot QEMU_LD_PREFIX=$PWD/tmp/ppc64le-sysroot
+cmake --preset linux-ppc64le-clang-cross-rwdi
+cmake --build build/linux-ppc64le-clang-cross-rwdi
+ALSOFT_DRIVERS=null SDL_CPU_FEATURE_MASK=-altivec ctest --test-dir build/linux-ppc64le-clang-cross-rwdi
+```
+
+QEMU raises an illegal instruction for the data stream hints in SDL's AltiVec blitters, so `SDL_CPU_FEATURE_MASK=-altivec` keeps SDL on its scalar paths under emulation. The network tests resolve the machine's host name through the sysroot's `/etc/hosts`, so add it there first with `echo "127.0.1.1 $(hostname)" >> tmp/ppc64le-sysroot/etc/hosts`.
+
+Under QEMU each start of a test binary takes most of a second, so the cross preset sets `OFPR_CTEST_PER_BINARY`, which registers each Catch2 binary as one CTest test instead of one test per case.
