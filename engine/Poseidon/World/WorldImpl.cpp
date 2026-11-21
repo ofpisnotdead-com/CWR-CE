@@ -1899,7 +1899,7 @@ void World::DoKeyDown(unsigned wParam, unsigned nRepCnt, unsigned nFlags)
             }
         }
     }
-    if (_options)
+    if (_options && !HasMenuDialog())
     {
         if (_options->DoKeyDown(wParam, nRepCnt, nFlags))
         {
@@ -2011,7 +2011,7 @@ void World::DoKeyUp(unsigned wParam, unsigned nRepCnt, unsigned nFlags)
             }
         }
     }
-    if (_options)
+    if (_options && !HasMenuDialog())
     {
         if (_options->DoKeyUp(wParam, nRepCnt, nFlags))
         {
@@ -2067,7 +2067,7 @@ void World::DoChar(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
             }
         }
     }
-    if (_options)
+    if (_options && !HasMenuDialog())
     {
         if (_options->DoChar(nChar, nRepCnt, nFlags))
         {
@@ -2123,7 +2123,7 @@ void World::DoIMEChar(unsigned nChar, unsigned nRepCnt, unsigned nFlags)
             }
         }
     }
-    if (_options)
+    if (_options && !HasMenuDialog())
     {
         if (_options->DoIMEChar(nChar, nRepCnt, nFlags))
         {
@@ -2179,7 +2179,7 @@ void World::DoIMEComposition(unsigned nChar, unsigned nFlags)
             }
         }
     }
-    if (_options)
+    if (_options && !HasMenuDialog())
     {
         if (_options->DoIMEComposition(nChar, nFlags))
         {
