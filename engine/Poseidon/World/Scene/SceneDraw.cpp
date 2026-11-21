@@ -1687,6 +1687,19 @@ void Scene::DrawObjectsAndShadowsPass1()
             }
             return SelectLights(o->object->Transform(), o->object, o->drawLOD, lightProbe);
         };
+        // The run draws the head once and renders every member from that state, so a member
+        // that would not qualify as a head must not join it - otherwise it is drawn with
+        // settings that are not its own.
+        auto batchEligible = [&](SortObject* o, Shape* s, int special) -> bool
+        {
+            const render::LegacySpec spec = render::SplitLegacy(special);
+            const bool cpuDeform = o->object->IsAnimated(o->drawLOD);
+            const bool vsDeform =
+                GEngine->LandClipInVS() && o->object->GetLandClipMode(o->drawLOD) != Object::LandClipNone;
+            return !o->object->DeformsSharedShape(o->drawLOD) && (!cpuDeform || vsDeform) && o->object->Static() &&
+                   s->NProxies() == 0 && !render::Has(spec.routing, render::Routing::OnSurface) &&
+                   !render::Has(spec.routing, render::Routing::IsColored) && o->object != GWorld->CameraOn();
+        };
         const int kMinInstanceRun = 2;
         for (int i = 0; i < _drawMergers.Size();)
         {
@@ -1712,15 +1725,7 @@ void Scene::DrawObjectsAndShadowsPass1()
 
             int runEnd = i + 1;
             const int headSpecial = sShape->Special() | oi->object->GetObjSpecial();
-            const render::LegacySpec headSpec = render::SplitLegacy(headSpecial);
-            const bool cpuDeform = oi->object->IsAnimated(oi->drawLOD);
-            const bool vsDeform =
-                GEngine->LandClipInVS() && oi->object->GetLandClipMode(oi->drawLOD) != Object::LandClipNone;
-            const bool cheapPass =
-                !oi->object->DeformsSharedShape(oi->drawLOD) && (!cpuDeform || vsDeform) && oi->object->Static() &&
-                sShape->NProxies() == 0 && !render::Has(headSpec.routing, render::Routing::OnSurface) &&
-                !render::Has(headSpec.routing, render::Routing::IsColored) && oi->object != GWorld->CameraOn();
-            const bool headBatchable = cheapPass;
+            const bool headBatchable = batchEligible(oi, sShape, headSpecial);
             if (headBatchable)
             {
                 GEngine->InstancedRunReset();
@@ -1730,9 +1735,9 @@ void Scene::DrawObjectsAndShadowsPass1()
                     {
                         SortObject* oj = _drawMergers[runEnd];
                         if (oj->object->GetShape() != shape || oj->drawLOD != oi->drawLOD ||
-                            oj->passNum != oi->passNum || !oj->object->Static() ||
-                            oj->object->DeformsSharedShape(oj->drawLOD) ||
-                            (sShape->Special() | oj->object->GetObjSpecial()) != headSpecial)
+                            oj->passNum != oi->passNum ||
+                            (sShape->Special() | oj->object->GetObjSpecial()) != headSpecial ||
+                            !batchEligible(oj, sShape, headSpecial))
                         {
                             break;
                         }
@@ -1751,11 +1756,15 @@ void Scene::DrawObjectsAndShadowsPass1()
             {
                 GEngine->BeginInstancedRunUpload();
                 DrawSortObject(oi);
-                if (!GEngine->EndInstancedRun())
+                const Engine::RunOutcome outcome = GEngine->EndInstancedRun();
+                if (outcome != Engine::RunOutcome::Complete)
                 {
-                    // Vertex-soup sections can't instance — those drew only for the
-                    // head; redraw the rest scalar (TL overdraw is z-equal opaque).
-                    for (int k = i + 1; k < runEnd; k++)
+                    // Vertex-soup sections can't instance - those drew only for the head, so
+                    // the rest redraw scalar. A head that emitted nothing at all never reached
+                    // the screen either, so that case starts from the head. Overdraw is
+                    // z-equal opaque.
+                    const int first = outcome == Engine::RunOutcome::RedrawAll ? i : i + 1;
+                    for (int k = first; k < runEnd; k++)
                     {
                         DrawSortObject(_drawMergers[k]);
                     }

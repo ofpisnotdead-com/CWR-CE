@@ -1,0 +1,6 @@
+tags = ["rendering"]
+binary = "PoseidonGame"
+data_dir = "packages/Demo"
+mission = "tests/integration/missions/instanced_batch_drop.Demo"
+timeout = 120
+extra_args = ["--sw-tl"]
