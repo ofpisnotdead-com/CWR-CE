@@ -584,6 +584,9 @@ class EngineGL33 : public Engine
     void EmitDraw(const Poseidon::render::frame::Draw& d) override;
 
     // --- Properties ---
+    // False when the constructor bailed before a GL context came up
+    // (no video device, window or context creation failed).
+    bool IsInitialized() const { return _glContext != nullptr; }
     RString GetDebugName() const override;
     RString GetRendererName() const override;
     size_t GetDrawItemCount() const override { return _drawItems.size(); }

@@ -1116,7 +1116,12 @@ Engine* CreateEngineGL33(int w, int h, bool windowed, int bpp)
     // sprite (menu Arrow, in-game crosshair, viewer crosshair).
     // SDL_HideCursor before the window exists is a no-op on some SDL3
     // backends, so the order matters.
-    Engine* engine = new EngineGL33(w, h, windowed, bpp);
+    EngineGL33* engine = new EngineGL33(w, h, windowed, bpp);
+    if (!engine->IsInitialized())
+    {
+        delete engine;
+        return nullptr;
+    }
     SDL_HideCursor();
     return engine;
 }
