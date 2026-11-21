@@ -1568,8 +1568,18 @@ Engine* GameApplication::CreateGraphicsEngine(const GraphicsEngineParams& params
     Engine* engine = GraphicsEngineFactory::Create(renderBackend, params);
     if (!engine && !renderBackend.empty() && _stricmp(renderBackend.c_str(), "auto") != 0)
     {
-        RptF("Unknown or unavailable render backend '%s', defaulting to Auto", renderBackend.c_str());
-        engine = GraphicsEngineFactory::Create(GraphicsBackend::Auto, params);
+        // Only fall back for a name that is unknown or unavailable.  A requested
+        // backend that exists but failed to start (e.g. no display) must not land
+        // on the dummy backend, which would leave the game running with no window.
+        const auto available = GraphicsEngineFactory::EnumerateAvailable();
+        const bool backendAvailable =
+            std::any_of(available.begin(), available.end(), [&](const GraphicsBackendInfo& backend)
+                        { return _stricmp(backend.codeName, renderBackend.c_str()) == 0; });
+        if (!backendAvailable)
+        {
+            RptF("Unknown or unavailable render backend '%s', defaulting to Auto", renderBackend.c_str());
+            engine = GraphicsEngineFactory::Create(GraphicsBackend::Auto, params);
+        }
     }
 
     if (engine && AppConfig::Instance().NoMouseGrab())

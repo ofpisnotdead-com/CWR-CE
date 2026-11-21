@@ -394,6 +394,7 @@ EngineGL33::EngineGL33(int width, int height, bool windowed, int bpp)
     if (!gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress))
     {
         LOG_ERROR(Graphics, "GL33: gladLoadGL failed");
+        SDL_GL_DestroyContext((SDL_GLContext)_glContext);
         _glContext = nullptr;
         return;
     }
@@ -472,6 +473,18 @@ EngineGL33::ShutdownGuard::~ShutdownGuard()
 EngineGL33::~EngineGL33()
 {
     LOG_INFO(Graphics, "GL33: Destroying engine");
+
+    // Init failed before the GL context came up: no config was loaded and
+    // no GL objects exist, so only the window (if any) needs releasing.
+    if (!_glContext)
+    {
+        if (_sdlWindow)
+        {
+            SDL_DestroyWindow(_sdlWindow);
+            _sdlWindow = nullptr;
+        }
+        return;
+    }
 
     SaveConfig();
 
