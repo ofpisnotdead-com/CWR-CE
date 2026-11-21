@@ -1223,6 +1223,7 @@ static void GetReloadActions(EntityAI* veh, UIActions& actions, int iSlot, const
     const Magazine* magazine = slot._magazine;
     const MagazineType* mType = magazine ? magazine->_type : nullptr;
     bool empty = false;
+
     if (mType && slot._mode >= 0 && slot._mode < mType->_modes.Size())
     {
         const WeaponModeType* mode = mType->_modes[slot._mode];
@@ -1235,10 +1236,10 @@ static void GetReloadActions(EntityAI* veh, UIActions& actions, int iSlot, const
         {
             // do not offer reload HandGrenade etc.
         }
-        else
+        else if (magazine->_ammo < mType->_maxAmmo)
         {
             // magazine of the same type
-            int best = veh->FindBestMagazine(mType, 0);
+            int best = veh->FindBestMagazine(mType, magazine->_ammo);
             if (best >= 0)
             {
                 float prior = empty ? 1.5 : 0.35;
