@@ -1,0 +1,5 @@
+triReturnMissionTicks = 0
+#loop
+triReturnMissionTicks = triReturnMissionTicks + 1
+~0.02
+goto "loop"
