@@ -988,13 +988,14 @@ void CStaticMap::DrawBackground()
                     int i = oiMin;
                     while (i < LandRange && x <= _x + _w)
                     {
-                        DrawObjects(i, j);
+                        StageObjects(i, j);
                         i += objStep;
                         x += oxStep;
                     }
                     j -= objStep;
                     y += oyStep;
                 }
+                DrawObjects();
             }
         }
     }
@@ -1579,7 +1580,48 @@ void CStaticMap::DrawForests(int i, int j, float x, float y, float w, float h)
     }
 }
 
-void CStaticMap::DrawObjects(int i, int j)
+MapTypeInfo* CStaticMap::ObjectSignInfo(MapType type)
+{
+    switch (type)
+    {
+        case MapTree:
+            return &_infoTree;
+        case MapSmallTree:
+            return &_infoSmallTree;
+        case MapBush:
+            return &_infoBush;
+        case MapChurch:
+            return &_infoChurch;
+        case MapChapel:
+            return &_infoChapel;
+        case MapCross:
+            return &_infoCross;
+        case MapRock:
+            return &_infoRock;
+        case MapBunker:
+            return &_infoBunker;
+        case MapFortress:
+            return &_infoFortress;
+        case MapFountain:
+            return &_infoFountain;
+        case MapViewTower:
+            return &_infoViewTower;
+        case MapLighthouse:
+            return &_infoLighthouse;
+        case MapQuay:
+            return &_infoQuay;
+        case MapFuelstation:
+            return &_infoFuelstation;
+        case MapHospital:
+            return &_infoHospital;
+        case MapBusStop:
+            return &_infoBusStop;
+        default:
+            return nullptr;
+    }
+}
+
+void CStaticMap::StageObjects(int i, int j)
 {
     if (!InRange(i, j - 1))
     {
@@ -1596,7 +1638,8 @@ void CStaticMap::DrawObjects(int i, int j)
         }
         if (obj->GetType() == Primary)
         {
-            switch (obj->GetShape()->GetMapType())
+            MapType type = obj->GetShape()->GetMapType();
+            switch (type)
             {
                 case MapBuilding:
                 case MapHouse:
@@ -1614,112 +1657,96 @@ void CStaticMap::DrawObjects(int i, int j)
                     DrawCoord mapBL = WorldToScreen(obj->PositionModelToWorld(ptBL));
                     DrawCoord mapBR = WorldToScreen(obj->PositionModelToWorld(ptBR));
 
-                    const int n = 4;
-                    Vertex2DPixel vs[n];
-                    // 0
-                    vs[0].x = mapTL.x * _wScreen;
-                    vs[0].y = mapTL.y * _hScreen;
-                    vs[0].u = 0;
-                    vs[0].v = 0;
-                    vs[0].color = color;
-                    // 1
-                    vs[1].x = mapBL.x * _wScreen;
-                    vs[1].y = mapBL.y * _hScreen;
-                    vs[1].u = 0;
-                    vs[1].v = 0;
-                    vs[1].color = color;
-                    // 2
-                    vs[2].x = mapBR.x * _wScreen;
-                    vs[2].y = mapBR.y * _hScreen;
-                    vs[2].u = 0;
-                    vs[2].v = 0;
-                    vs[2].color = color;
-                    // 3
-                    vs[3].x = mapTR.x * _wScreen;
-                    vs[3].y = mapTR.y * _hScreen;
-                    vs[3].u = 0;
-                    vs[3].v = 0;
-                    vs[3].color = color;
-
-                    MipInfo mip = GLOB_ENGINE->TextBank()->UseMipmap(nullptr, 0, 0);
-                    GLOB_ENGINE->DrawPoly(mip, vs, n, _clipRect);
+                    const DrawCoord corners[4] = {mapTL, mapBL, mapBR, mapTR};
+                    for (const DrawCoord& corner : corners)
+                    {
+                        Vertex2DPixel& v = _objectPolys.Append();
+                        v.x = corner.x * _wScreen;
+                        v.y = corner.y * _hScreen;
+                        v.u = 0;
+                        v.v = 0;
+                        v.color = color;
+                    }
                 }
                 break;
-                case MapTree:
-                    DrawSign(_infoTree, obj->Position());
-                    break;
-                case MapSmallTree:
-                    DrawSign(_infoSmallTree, obj->Position());
-                    break;
-                case MapBush:
-                    DrawSign(_infoBush, obj->Position());
-                    break;
-                case MapChurch:
-                    DrawSign(_infoChurch, obj->Position());
-                    break;
-                case MapChapel:
-                    DrawSign(_infoChapel, obj->Position());
-                    break;
-                case MapCross:
-                    DrawSign(_infoCross, obj->Position());
-                    break;
-                case MapRock:
-                    DrawSign(_infoRock, obj->Position());
-                    break;
-                case MapBunker:
-                    DrawSign(_infoBunker, obj->Position());
-                    break;
-                case MapFortress:
-                    DrawSign(_infoFortress, obj->Position());
-                    break;
-                case MapFountain:
-                    DrawSign(_infoFountain, obj->Position());
-                    break;
-                case MapViewTower:
-                    DrawSign(_infoViewTower, obj->Position());
-                    break;
-                case MapLighthouse:
-                    DrawSign(_infoLighthouse, obj->Position());
-                    break;
-                case MapQuay:
-                    DrawSign(_infoQuay, obj->Position());
-                    break;
-                case MapFuelstation:
-                    DrawSign(_infoFuelstation, obj->Position());
-                    break;
-                case MapHospital:
-                    DrawSign(_infoHospital, obj->Position());
-                    break;
-                case MapBusStop:
-                    DrawSign(_infoBusStop, obj->Position());
+                default:
+                    if (ObjectSignInfo(type))
+                    {
+                        _objectSigns[type].Add(obj->Position());
+                    }
                     break;
             }
 
             if (_showIds)
             {
-                float invLandRange = 1.0 / LandRange;
-                float ptsLand = 800.0 * _invScaleX * invLandRange; // avoid dependece on video resolution
-                float invPtsLand = 1.0 / ptsLand;
+                _objectIds.Add(obj);
+            }
+        }
+    }
+}
 
-                int iStep = toIntCeil(ptsPerSquareCost * invPtsLand);
-                float xStep = iStep * invLandRange * _invScaleX;
-                if (xStep > 0.15)
+void CStaticMap::DrawObjects()
+{
+    MipInfo white = GLOB_ENGINE->TextBank()->UseMipmap(nullptr, 0, 0);
+    for (int v = 0; v + 4 <= _objectPolys.Size(); v += 4)
+    {
+        GLOB_ENGINE->DrawPoly(white, &_objectPolys[v], 4, _clipRect);
+    }
+    _objectPolys.Resize(0);
+
+    for (int type = 0; type < NMapTypes; type++)
+    {
+        AutoArray<Vector3>& positions = _objectSigns[type];
+        if (positions.Size() == 0)
+        {
+            continue;
+        }
+        MapTypeInfo& info = *ObjectSignInfo(static_cast<MapType>(type));
+        for (int s = 0; s < positions.Size(); s++)
+        {
+            DrawSign(info, positions[s]);
+        }
+        positions.Resize(0);
+    }
+
+    if (_objectIds.Size() > 0)
+    {
+        float invLandRange = 1.0 / LandRange;
+        float ptsLand = 800.0 * _invScaleX * invLandRange; // avoid dependece on video resolution
+        float invPtsLand = 1.0 / ptsLand;
+
+        int iStep = toIntCeil(ptsPerSquareCost * invPtsLand);
+        float xStep = iStep * invLandRange * _invScaleX;
+        if (xStep > 0.15)
+        {
+            const float size = 0.02;
+            Rect2DPixel clip(_x * _wScreen, _y * _hScreen, _w * _wScreen, _h * _hScreen);
+
+            // draw all backgrounds, then all texts.
+            for (int pass = 0; pass < 2; pass++)
+            {
+                for (int k = 0; k < _objectIds.Size(); k++)
                 {
-                    // draw object ID
+                    Object* obj = _objectIds[k];
                     DrawCoord pos = WorldToScreen(obj->Position());
-                    const float size = 0.02;
                     float width = GEngine->GetTextWidthF(size, _fontGrid, "%d", obj->ID());
                     float x = pos.x - 0.5 * width;
                     float y = pos.y - 0.5 * size;
-                    MipInfo mip = GLOB_ENGINE->TextBank()->UseMipmap(nullptr, 0, 0);
-                    GEngine->Draw2D(mip, PackedWhite,
-                                    Rect2DPixel(x * _wScreen, y * _hScreen, width * _wScreen, size * _hScreen),
-                                    Rect2DPixel(_x * _wScreen, _y * _hScreen, _w * _wScreen, _h * _hScreen));
-                    GEngine->DrawTextF(Point2DFloat(x, y), size, Rect2DFloat(_x, _y, _w, _h), _fontGrid, PackedBlack,
-                                       "%d", obj->ID());
+                    if (pass == 0)
+                    {
+                        GEngine->Draw2D(white, PackedWhite,
+                                        Rect2DPixel(x * _wScreen, y * _hScreen, width * _wScreen, size * _hScreen),
+                                        clip);
+                    }
+                    else
+                    {
+                        GEngine->DrawTextF(Point2DFloat(x, y), size, Rect2DFloat(_x, _y, _w, _h), _fontGrid,
+                                           PackedBlack, "%d", obj->ID());
+                    }
                 }
             }
         }
+        _objectIds.Resize(0);
     }
 }
 
